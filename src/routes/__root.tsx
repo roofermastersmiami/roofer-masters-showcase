@@ -9,6 +9,16 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { useRouterState } from "@tanstack/react-router";
+
+import { supabase } from "@/integrations/supabase/client";
+import { Toaster } from "@/components/ui/sonner";
+import { SiteHeader } from "@/components/site/SiteHeader";
+import { SiteFooter } from "@/components/site/SiteFooter";
+import { MobileActionBar } from "@/components/site/MobileActionBar";
+import { ChatWidget } from "@/components/site/ChatWidget";
+import { IntroLoader } from "@/components/site/IntroLoader";
+import { siteContentQuery } from "@/lib/content.functions";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -81,23 +91,40 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { name: "theme-color", content: "#003F6A" },
+      { title: "Roofer Masters | Roofing Company Miami-Dade & Broward" },
+      {
+        name: "description",
+        content:
+          "Roofer Masters is a Homestead, FL roofing company serving Miami-Dade and Broward: metal, tile, shingle and flat roofs, replacements, repairs and gutters.",
+      },
+      { name: "author", content: "Roofer Masters" },
+      { property: "og:site_name", content: "Roofer Masters" },
+      { property: "og:title", content: "Roofer Masters | Roofing Company Miami-Dade & Broward" },
+      {
+        property: "og:description",
+        content: "Storm-ready roofing for South Florida. Your Roof, Our Masterpiece.",
+      },
       { property: "og:type", content: "website" },
+      { property: "og:locale", content: "en_US" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..900&family=Manrope:wght@400..800&display=swap",
+      },
     ],
   }),
+  loader: ({ context }) => context.queryClient.ensureQueryData(siteContentQuery),
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -118,13 +145,41 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+const APP_ONLY = ["/dashboard", "/auth", "/reset-password"];
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const appOnly = APP_ONLY.some((p) => pathname.startsWith(p));
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      router.invalidate();
+      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [router, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      {appOnly ? (
+        <Outlet />
+      ) : (
+        <>
+          <IntroLoader />
+          <SiteHeader />
+          <main>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </main>
+          <SiteFooter />
+          <MobileActionBar />
+          <ChatWidget />
+        </>
+      )}
+      <Toaster richColors position="top-center" />
     </QueryClientProvider>
   );
 }
