@@ -15,6 +15,13 @@
       "when": 1795194427204,
       "tag": "0001_add_lead_address",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795195852608,
+      "tag": "0002_roofing_proposals",
+      "breakpoints": true
     }
   ]
 }

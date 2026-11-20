@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Mail, MessageSquare, Phone, Trash2 } from "lucide-react";
+import { FileText, Mail, MessageSquare, Phone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ function waLink(phone: string) {
   return `https://wa.me/${digits}`;
 }
 
-export function LeadSheet({ lead, onClose, onOpenChat }: { lead: Lead | null; onClose: () => void; onOpenChat?: (id: string) => void }) {
+export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead: Lead | null; onClose: () => void; onOpenChat?: (id: string) => void; onOpenProposals?: (id: string) => void }) {
   const update = useUpdateLead();
   const del = useDeleteLead();
   const [notes, setNotes] = useState("");
@@ -71,6 +71,7 @@ export function LeadSheet({ lead, onClose, onOpenChat }: { lead: Lead | null; on
                 <MessageSquare /> Open chat conversation
               </Button>
             )}
+            {onOpenProposals && <Button variant="navy" className="mt-4 w-full" onClick={() => onOpenProposals(lead.id)}><FileText /> Roofing proposals</Button>}
 
             <div className="mt-6 grid gap-2">
               <label className="text-sm font-bold text-foreground">Pipeline stage</label>

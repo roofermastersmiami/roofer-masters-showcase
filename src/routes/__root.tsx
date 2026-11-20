@@ -145,7 +145,7 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-const APP_ONLY = ["/dashboard", "/auth", "/reset-password"];
+const APP_ONLY = ["/dashboard", "/auth", "/reset-password", "/proposal/"];
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();

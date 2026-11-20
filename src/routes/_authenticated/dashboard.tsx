@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { ExternalLink, Inbox, KanbanSquare, LogOut, MessageSquare, PenSquare, Users } from "lucide-react";
+import { ExternalLink, FileText, Inbox, KanbanSquare, LogOut, MessageSquare, PenSquare, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,7 @@ import { Contacts } from "@/components/dashboard/Contacts";
 import { ChatInbox } from "@/components/dashboard/ChatInbox";
 import { ContentEditor } from "@/components/dashboard/ContentEditor";
 import { LeadSheet } from "@/components/dashboard/LeadSheet";
+import { Proposals } from "@/components/dashboard/Proposals";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/lead-schema";
 import { BUSINESS } from "@/lib/site";
 
@@ -24,6 +25,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
       { property: "og:title", content: "Owner Dashboard | Roofer Masters" },
       { property: "og:description", content: "Manage leads, contacts, chats and website content." },
       { name: "robots", content: "noindex" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Dashboard,
@@ -83,6 +86,7 @@ function OwnerArea() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [tab, setTab] = useState("pipeline");
   const [chatId, setChatId] = useState<string | null>(null);
+  const [proposalLeadId, setProposalLeadId] = useState<string | null>(null);
   const openLead = leads.find((l) => l.id === openId) ?? null;
   const open = (l: Lead) => setOpenId(l.id);
 
@@ -116,6 +120,7 @@ function OwnerArea() {
           <TabsTrigger value="inbox" className="h-10 gap-2 rounded-lg px-4"><Inbox className="size-4" /> Submissions</TabsTrigger>
           <TabsTrigger value="chat" className="h-10 gap-2 rounded-lg px-4"><MessageSquare className="size-4" /> Chat</TabsTrigger>
           <TabsTrigger value="contacts" className="h-10 gap-2 rounded-lg px-4"><Users className="size-4" /> Contacts</TabsTrigger>
+          <TabsTrigger value="proposals" className="h-10 gap-2 rounded-lg px-4"><FileText className="size-4" /> Proposals</TabsTrigger>
           <TabsTrigger value="content" className="h-10 gap-2 rounded-lg px-4"><PenSquare className="size-4" /> Site content</TabsTrigger>
         </TabsList>
 
@@ -126,6 +131,7 @@ function OwnerArea() {
               <TabsContent value="inbox"><LeadsTable leads={leads} onOpen={open} /></TabsContent>
               <TabsContent value="chat"><ChatInbox leads={leads} selectedId={chatId} onSelect={setChatId} onOpenLead={open} /></TabsContent>
               <TabsContent value="contacts"><Contacts leads={leads} onOpen={open} /></TabsContent>
+              <TabsContent value="proposals"><Proposals leads={leads} requestedLeadId={proposalLeadId} onRequestHandled={() => setProposalLeadId(null)} /></TabsContent>
             </>
           )}
           <TabsContent value="content"><ContentEditor /></TabsContent>
@@ -136,6 +142,7 @@ function OwnerArea() {
         lead={openLead}
         onClose={() => setOpenId(null)}
         onOpenChat={(id) => { setOpenId(null); setChatId(id); setTab("chat"); }}
+        onOpenProposals={(id) => { setOpenId(null); setProposalLeadId(id); setTab("proposals"); }}
       />
     </>
   );

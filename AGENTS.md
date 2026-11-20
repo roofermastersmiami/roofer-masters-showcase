@@ -35,3 +35,7 @@ use the editor.
 - Owner access = `admin` row in `user_roles`, granted by a trigger when the business email confirms; dashboard data is read via the browser client under admin-only RLS.
 - Editable site text lives in `site_content` and is read via `getSiteContent` (publishable client) in the root loader, with code defaults as fallback.
 - Visitor chat uses a per-lead `chat_token` kept in localStorage; replies are polled, not realtime, to keep the chat simple.
+- Proposals and reusable templates share an admin-only library with private PDF storage; new revisions use unique object paths so saved edits cannot expose another document.
+- PDF rendering is dynamically imported in the browser; pdf-lib performs additive annotations, form filling and page operations, never claims to replace existing PDF text or securely redact it.
+- Customer proposal access uses server-issued expiring, revocable capability tokens checked before signing a short-lived file URL; public responses never expose lead records or the library.
+- Proposal sharing opens an email draft or WhatsApp message, not an automatic send; no delivery or pipeline transition is claimed without a verified sending service.

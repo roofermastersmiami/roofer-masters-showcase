@@ -100,6 +100,91 @@ export type Database = {
         }
         Relationships: []
       }
+      proposal_shares: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          proposal_id: string
+          revoked_at: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          proposal_id: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          proposal_id?: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_shares_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposals: {
+        Row: {
+          amount: number | null
+          category: string
+          created_at: string
+          file_path: string | null
+          id: string
+          is_template: boolean
+          lead_id: string | null
+          scope: string
+          terms: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          category: string
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          is_template?: boolean
+          lead_id?: string | null
+          scope?: string
+          terms?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          category?: string
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          is_template?: boolean
+          lead_id?: string | null
+          scope?: string
+          terms?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_content: {
         Row: {
           key: string
