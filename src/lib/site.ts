@@ -14,8 +14,7 @@ export const BUSINESS = {
   phoneE164: "+13059423093",
   email: "roofermasters@gmail.com",
   whatsappHref:
-    "https://wa.me/13059423093?text=" +
-    encodeURIComponent("Hi Roofer Masters! I'd like a roofing estimate."),
+    "https://wa.me/13059423093?text=" + encodeURIComponent("Hi Roofer Masters! I'd like a roofing estimate."),
   baseCity: "Homestead, FL",
   counties: ["Miami-Dade", "Broward"],
   hours: [
@@ -25,7 +24,7 @@ export const BUSINESS = {
   ],
   socials: {
     instagram: "https://www.instagram.com/roofermasters/",
-    facebook: "https://www.facebook.com/roofermasters/",
+    facebook: "https://www.facebook.com/people/Roofer-Masters/61582342154995/",
     tiktok: "https://www.tiktok.com/@roofermasters",
   },
 } as const;
@@ -113,12 +112,7 @@ export const SERVICES: Service[] = [
     image: replacementImg,
     description:
       "When it's time for a new roof, we handle everything: permits, full tear-off down to the deck, wood replacement, secondary water barrier, new roof system and city inspections. Roof replacement in Miami-Dade and Broward with clean job sites and clear communication from start to finish.",
-    benefits: [
-      "We pull all permits",
-      "Rotten wood replaced",
-      "Daily job-site cleanup",
-      "Wind mitigation ready",
-    ],
+    benefits: ["We pull all permits", "Rotten wood replaced", "Daily job-site cleanup", "Wind mitigation ready"],
   },
   {
     slug: "roof-repairs",
@@ -150,11 +144,7 @@ export const SERVICES: Service[] = [
   },
 ];
 
-export const SERVICE_OPTIONS = [
-  ...SERVICES.map((s) => s.name),
-  "Free Roof Inspection",
-  "Other / Not sure",
-];
+export const SERVICE_OPTIONS = [...SERVICES.map((s) => s.name), "Free Roof Inspection", "Other / Not sure"];
 
 export const AREAS: { county: "Miami-Dade" | "Broward"; cities: string[] }[] = [
   {
