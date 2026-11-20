@@ -36,6 +36,13 @@
       "when": 1795197811466,
       "tag": "0004_crm_operations_and_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795197913681,
+      "tag": "0005_invoice_checkout_sessions",
+      "breakpoints": true
     }
   ]
 }

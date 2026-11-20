@@ -22,6 +22,7 @@ export type Database = {
           customer_name: string
           deposit_cents: number
           due_date: string
+          environment: string
           expires_at: string
           id: string
           items: Json
@@ -44,6 +45,7 @@ export type Database = {
           customer_name: string
           deposit_cents?: number
           due_date: string
+          environment?: string
           expires_at?: string
           id?: string
           items: Json
@@ -66,6 +68,7 @@ export type Database = {
           customer_name?: string
           deposit_cents?: number
           due_date?: string
+          environment?: string
           expires_at?: string
           id?: string
           items?: Json
@@ -133,10 +136,52 @@ export type Database = {
           },
         ]
       }
+      invoice_checkouts: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          environment: string
+          expires_at: string
+          id: string
+          invoice_id: string
+          session_id: string | null
+          status: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          environment: string
+          expires_at?: string
+          id?: string
+          invoice_id: string
+          session_id?: string | null
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          environment?: string
+          expires_at?: string
+          id?: string
+          invoice_id?: string
+          session_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_checkouts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "crm_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_payments: {
         Row: {
           amount_cents: number
           created_at: string
+          environment: string
           id: string
           invoice_id: string
           method: string
@@ -147,6 +192,7 @@ export type Database = {
         Insert: {
           amount_cents: number
           created_at?: string
+          environment?: string
           id?: string
           invoice_id: string
           method: string
@@ -157,6 +203,7 @@ export type Database = {
         Update: {
           amount_cents?: number
           created_at?: string
+          environment?: string
           id?: string
           invoice_id?: string
           method?: string
@@ -512,6 +559,14 @@ export type Database = {
           p_reference: string
         }
         Returns: string
+      }
+      settle_invoice_checkout: {
+        Args: {
+          p_amount_cents: number
+          p_environment: string
+          p_session_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {
