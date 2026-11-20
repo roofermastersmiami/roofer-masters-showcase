@@ -19,6 +19,7 @@ import { FollowUps } from "@/components/dashboard/FollowUps";
 import { Estimates } from "@/components/dashboard/Estimates";
 import { Jobs } from "@/components/dashboard/Jobs";
 import { SalesReport } from "@/components/dashboard/SalesReport";
+import { InstantEstimateSettings } from '@/components/dashboard/InstantEstimateSettings';
 import { FollowUpAlert } from "@/components/dashboard/FollowUpAlert";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/lead-schema";
 import { BUSINESS } from "@/lib/site";
@@ -125,6 +126,7 @@ function OwnerArea() {
           <TabsTrigger value="invoices" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Receipt className="size-4" /> Invoices & payments</TabsTrigger>
           <TabsTrigger value="followups" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Clock className="size-4" /> Follow-ups</TabsTrigger>
           <TabsTrigger value="estimates" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Calculator className="size-4" /> Estimates</TabsTrigger>
+          <TabsTrigger value="instant" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Calculator className="size-4" /> Instant estimator</TabsTrigger>
           <TabsTrigger value="jobs" className="h-10 shrink-0 gap-2 rounded-lg px-4"><HardHat className="size-4" /> Jobs</TabsTrigger>
           <TabsTrigger value="sales" className="h-10 shrink-0 gap-2 rounded-lg px-4"><TrendingUp className="size-4" /> Sales</TabsTrigger>
           <TabsTrigger value="pipeline" className="h-10 gap-2 rounded-lg px-4"><KanbanSquare className="size-4" /> Pipeline</TabsTrigger>
@@ -141,6 +143,7 @@ function OwnerArea() {
               <TabsContent value="invoices"><Invoices leads={leads} /></TabsContent>
               <TabsContent value="followups"><FollowUps leads={leads} onOpenLead={open} onOpenProposals={() => setTab("proposals")} /></TabsContent>
               <TabsContent value="estimates"><Estimates leads={leads} onOpenProposals={() => setTab("proposals")} /></TabsContent>
+              <TabsContent value="instant"><InstantEstimateSettings /></TabsContent>
               <TabsContent value="jobs"><Jobs leads={leads} /></TabsContent>
               <TabsContent value="sales"><SalesReport leads={leads} /></TabsContent>
               <TabsContent value="pipeline"><Pipeline leads={leads} onOpen={open} /></TabsContent>

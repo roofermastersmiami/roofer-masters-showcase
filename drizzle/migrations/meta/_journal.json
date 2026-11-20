@@ -64,6 +64,20 @@
       "when": 1795199207961,
       "tag": "0008_invoice_status_and_payment_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795200633358,
+      "tag": "0009_instant_estimates_and_change_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795200787673,
+      "tag": "0010_instant_estimate_optional_price_guard",
+      "breakpoints": true
     }
   ]
 }

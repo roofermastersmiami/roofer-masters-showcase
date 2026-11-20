@@ -1,0 +1,7 @@
+import { createFileRoute } from '@tanstack/react-router';
+import { InstantEstimator } from '@/components/site/InstantEstimator';
+import { instantRatesQuery } from '@/lib/instant-estimate.functions';
+import { pageMeta } from '@/lib/seo';
+import roofImage from '@/assets/hero-metal-roof.webp';
+export const Route=createFileRoute('/instant-estimator')({head:()=>({meta:pageMeta('Instant Roof Estimator | Roofer Masters','Request a preliminary roof estimate for metal, tile, shingle, TPO and flat roofing in Miami-Dade and Broward. English and Spanish.')}),loader:({context})=>context.queryClient.ensureQueryData(instantRatesQuery),component:EstimatorPage});
+function EstimatorPage(){return <><section className="relative isolate overflow-hidden bg-navy py-12 text-navy-foreground"><img src={roofImage} alt="Finished standing seam metal roof in South Florida" className="absolute inset-0 -z-10 size-full object-cover"/><div className="bg-gradient-hero absolute inset-0 -z-10"/><div className="mx-auto max-w-7xl px-4 sm:px-6"><p className="text-sm font-bold">ROOFER MASTERS</p><h1 className="mt-3 text-4xl font-black sm:text-5xl">Instant Roof Estimator</h1><p className="mt-4">Miami-Dade &amp; Broward · Hablamos español</p></div></section><div className="px-4 pb-16 sm:px-6"><InstantEstimator/></div></>;}

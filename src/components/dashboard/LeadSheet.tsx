@@ -9,6 +9,7 @@ import { LEAD_STATUSES, LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/lead-s
 import { WhatsAppIcon } from "@/components/site/SocialIcons";
 import { formatWhen, useDeleteLead, useUpdateLead, type Lead } from "./data";
 import { SourceBadge, StatusBadge } from "./StatusBadge";
+import { instantInputSchema, qualifyRoofLead } from '@/lib/instant-estimate-schema';
 
 function waLink(phone: string) {
   let digits = phone.replace(/\D/g, "");
@@ -20,6 +21,7 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
   const update = useUpdateLead();
   const del = useDeleteLead();
   const [notes, setNotes] = useState("");
+  const qualification=instantInputSchema.safeParse(lead?.qualification);
 
   useEffect(() => setNotes(lead?.notes ?? ""), [lead?.id, lead?.notes]);
 
@@ -60,6 +62,7 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
               <Row label="Address" value={lead.address} />
               <Row label="Service" value={lead.service} />
               <Row label="From page" value={lead.page} />
+              {qualification.success&&<><Row label="Qualification" value={qualifyRoofLead(qualification.data).replaceAll('_',' ')}/><Row label="Roof area" value={`${qualification.data.sqft} sq ft`}/><Row label="Timeline" value={qualification.data.timeline}/><Row label="Language" value={qualification.data.language==='es'?'Spanish':'English'}/></>}
               <div>
                 <dt className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Message</dt>
                 <dd className="mt-1 whitespace-pre-wrap text-foreground">{lead.message || "—"}</dd>

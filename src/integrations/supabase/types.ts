@@ -136,6 +136,27 @@ export type Database = {
           },
         ]
       }
+      instant_roof_rates: {
+        Row: {
+          category: string
+          enabled: boolean
+          high_cents: number
+          low_cents: number
+        }
+        Insert: {
+          category: string
+          enabled?: boolean
+          high_cents: number
+          low_cents: number
+        }
+        Update: {
+          category?: string
+          enabled?: boolean
+          high_cents?: number
+          low_cents?: number
+        }
+        Relationships: []
+      }
       invoice_checkouts: {
         Row: {
           amount_cents: number
@@ -221,6 +242,53 @@ export type Database = {
           },
         ]
       }
+      job_change_orders: {
+        Row: {
+          amount_cents: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          days_added: number
+          id: string
+          job_id: string
+          scope: string
+          status: string
+          title: string
+        }
+        Insert: {
+          amount_cents?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          days_added?: number
+          id?: string
+          job_id: string
+          scope: string
+          status?: string
+          title: string
+        }
+        Update: {
+          amount_cents?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          days_added?: number
+          id?: string
+          job_id?: string
+          scope?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_change_orders_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "roof_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_messages: {
         Row: {
           body: string
@@ -266,6 +334,7 @@ export type Database = {
           notes: string | null
           page: string | null
           phone: string | null
+          qualification: Json | null
           service: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: Database["public"]["Enums"]["lead_status"]
@@ -283,6 +352,7 @@ export type Database = {
           notes?: string | null
           page?: string | null
           phone?: string | null
+          qualification?: Json | null
           service?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
@@ -300,6 +370,7 @@ export type Database = {
           notes?: string | null
           page?: string | null
           phone?: string | null
+          qualification?: Json | null
           service?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
@@ -543,6 +614,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      capture_instant_roof_lead: {
+        Args: {
+          p_category: string
+          p_lead: Json
+          p_qualification: Json
+          p_total: number
+        }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -44,3 +44,5 @@ use the editor.
 - Invoice checkout uses embedded payments through the shared gateway client, with server-derived deposit/balance amounts and inclusive tax; test and live records must never mix.
 - Invoice payment settlement is row-locked and idempotent per checkout session, confirmed with the provider rather than a redirect; manual payments cannot overlap a pending online checkout.
 - Sales reporting counts each signed proposal once and uses only the latest active proposal per lead for open proposal value, avoiding duplicated revisions.
+- Instant estimates use only owner-enabled installed rates; lead, qualification, preliminary estimate and unscheduled on-hold job capture are atomic through a service-only RPC called by validated lead server functions.
+- Change orders record independent scope, price and schedule deltas with explicit manually recorded approval; they never mutate issued invoices or imply a customer signature.

@@ -74,6 +74,7 @@ function Home() {
                   <WhatsAppIcon /> WhatsApp us
                 </a>
               </Button>
+              <Button asChild variant="light" size="xl"><Link to="/instant-estimator">Instant roof estimate <ArrowRight /></Link></Button>
             </div>
             <ul className="animate-fade-up mt-10 hidden grid-cols-2 gap-4 sm:grid" style={{ animationDelay: "320ms" }}>
               {TRUST.map(({ icon: Icon, title, text }) => (

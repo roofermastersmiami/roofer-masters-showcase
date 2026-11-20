@@ -1,7 +1,8 @@
 # Roadmap
-- [ ] Add public bilingual Instant Estimator with owner-approved pricing and lead qualification
-- [ ] Add job change orders with amount, scope, schedule and approval tracking
-- [ ] Connect bilingual missed-call AI receptionist — waiting on calling service connection and call forwarding
+- [x] Add public bilingual Instant Estimator with owner-approved pricing and lead qualification
+- [x] Apply owner prices: Metal $1,400/square, Shingle $700/square, Tile $1,200/square, TPO $1,700/square including insulation, Flat Roof $8/sq ft
+- [x] Add job change orders with amount, scope, schedule and manually recorded approval tracking
+- [ ] Connect bilingual missed-call AI receptionist — connection declined; needs receptionist service connection and T-Mobile forwarding
 - [x] Add invoices, deposits, payment records and customer invoice links
 - [x] Connect Stripe embedded checkout, signed payment events and idempotent reconciliation
 - [ ] Verify completed online payment — blocked: owner must claim payment account and add business address for tax calculation; live also requires account activation

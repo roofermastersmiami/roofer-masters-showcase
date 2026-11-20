@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from 'zod';
+import { instantInputSchema, instantRange, qualifyRoofLead } from './instant-estimate-schema';
 import {
   chatFetchSchema,
   chatMessageSchema,
@@ -10,6 +12,23 @@ async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
 }
+
+export const submitInstantEstimate = createServerFn({ method: 'POST' })
+  .inputValidator((raw:unknown)=>z.object({lead:leadFormSchema,input:instantInputSchema}).parse(raw))
+  .handler(async({data})=>{
+    if(data.lead.company)throw new Error('Please try again.');
+    if(data.lead.address.length<5)throw new Error('Property address is required.');
+    if(await tooManyRecent(data.lead.phone,data.lead.email))throw new Error('We already received your request. Please call 305-942-3093.');
+    const db=await admin();
+    const {data:rate,error:rateError}=await db.from('instant_roof_rates').select('low_cents,high_cents,enabled').eq('category',data.input.category).maybeSingle();
+    if(rateError)throw new Error('Please call 305-942-3093 to request your estimate.');
+    const range=instantRange(data.input,rate);
+    const qualification={...data.input,qualification:qualifyRoofLead(data.input),range,preliminary:true};
+    const summary=`Instant estimate request: ${data.input.sqft} sq ft, ${data.input.category}. ${data.input.county}; ${data.input.timeline}. ${data.input.owner?'Owner/authorized representative':'Owner authorization needed'}. Preferred language: ${data.input.language==='es'?'Spanish':'English'}. ${range?`Preliminary range: $${(range.low/100).toFixed(2)}–$${(range.high/100).toFixed(2)}.`:'Team review required; no approved price available.'}`;
+    const {error}=await db.rpc('capture_instant_roof_lead',{p_lead:{name:data.lead.name,phone:data.lead.phone,email:data.lead.email,address:data.lead.address,message:summary},p_qualification:qualification,p_category:data.input.category,p_total:range?.low??0});
+    if(error)throw new Error('Could not save your request. Please call 305-942-3093.');
+    return {range};
+  });
 
 /** Simple abuse guard: max 5 leads from the same phone/email in 10 minutes. */
 async function tooManyRecent(phone: string, email: string) {
