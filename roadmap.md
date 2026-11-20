@@ -1,4 +1,5 @@
 # Roadmap
+- [ ] Add private client portal and owner-controlled sharing for estimates, signed proposals, job status and invoice payments
 - [x] Add public bilingual Instant Estimator with owner-approved pricing and lead qualification
 - [x] Apply owner prices: Metal $1,400/square, Shingle $700/square, Tile $1,200/square, TPO $1,700/square including insulation, Flat Roof $8/sq ft
 - [x] Add job change orders with amount, scope, schedule and manually recorded approval tracking

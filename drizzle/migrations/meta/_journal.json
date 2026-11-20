@@ -85,6 +85,13 @@
       "when": 1795202561957,
       "tag": "0011_job_material_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795206989269,
+      "tag": "0012_client_portal_links",
+      "breakpoints": true
     }
   ]
 }
