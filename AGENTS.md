@@ -28,3 +28,10 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Public forms and chat write leads only through server functions in `src/lib/leads.functions.ts` (service-role client, zod-validated); browsers have no insert access to `leads`/`lead_messages`, so validation and abuse checks can't be bypassed.
+- Lead form rules (required fields, pipeline stages) live in `src/lib/lead-schema.ts` and are shared by client and server; tests in `src/test/lead-rules.test.ts` cover them.
+- Owner access = `admin` row in `user_roles`, granted by a trigger when the business email confirms; dashboard data is read via the browser client under admin-only RLS.
+- Editable site text lives in `site_content` and is read via `getSiteContent` (publishable client) in the root loader, with code defaults as fallback.
+- Visitor chat uses a per-lead `chat_token` kept in localStorage; replies are polled, not realtime, to keep the chat simple.

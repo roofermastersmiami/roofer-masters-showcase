@@ -48,6 +48,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          address: string | null
           chat_token: string
           created_at: string
           email: string | null
@@ -64,6 +65,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address?: string | null
           chat_token?: string
           created_at?: string
           email?: string | null
@@ -80,6 +82,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address?: string | null
           chat_token?: string
           created_at?: string
           email?: string | null

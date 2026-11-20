@@ -1,9 +1,11 @@
 # Roadmap
 - [x] Rebuild 3D logo from the uploaded company logo
-- [ ] Design system, 3D logo, intro loader, header/footer
-- [ ] Pages: Home, Services, Gallery, About, Reviews, Service Areas, Contact
-- [ ] Lead capture forms + chat widget saving to the lead system
-- [ ] Owner login + dashboard (leads pipeline, contacts, chat inbox, site content)
-- [ ] Emails (customer confirmation + owner notification) — blocked: needs a verified email domain
-- [ ] SEO head tags + local business schema
-- [ ] Verify forms end-to-end, commit
+- [x] Design system, 3D logo, intro loader, header/footer
+- [x] Pages: Home, Services, Gallery, About, Reviews, Service Areas, Contact
+- [x] Lead capture forms + chat widget saving to the lead system
+- [x] Owner login + dashboard (leads pipeline, contacts, chat inbox, site content)
+- [ ] Emails (customer confirmation + owner notification) — blocked: needs a verified email domain the owner controls
+- [x] SEO head tags + local business schema
+- [x] Add required property address to the call-back form (show in dashboard)
+- [x] Verify forms end-to-end, commit
+- [ ] Swap sample reviews and AI photos for real ones — waiting on owner

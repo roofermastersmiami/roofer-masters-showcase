@@ -18,7 +18,7 @@ import { leadFormSchema, type LeadSource } from "@/lib/lead-schema";
 import { BUSINESS, SERVICE_OPTIONS } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
-type Errors = Partial<Record<"name" | "phone" | "email" | "service" | "message", string>>;
+type Errors = Partial<Record<"name" | "phone" | "email" | "address" | "service" | "message", string>>;
 
 export function LeadForm({
   source,
@@ -43,6 +43,7 @@ export function LeadForm({
     name: "",
     phone: "",
     email: "",
+    address: "",
     service: defaultService ?? "",
     message: "",
     company: "",
@@ -113,6 +114,14 @@ export function LeadForm({
         </FieldWrap>
         <FieldWrap id={`${source}-phone`} label="Phone" error={errors.phone}>
           <Input id={`${source}-phone`} type="tel" inputMode="tel" autoComplete="tel" value={values.phone} onChange={(e) => set("phone")(e.target.value)} className={field} placeholder="(305) 555-0123" aria-invalid={!!errors.phone} />
+        </FieldWrap>
+        <FieldWrap
+          id={`${source}-address`}
+          label={source === "callback" ? "Property address" : "Property address (optional)"}
+          error={errors.address}
+          className={!compact ? "sm:col-span-2" : ""}
+        >
+          <Input id={`${source}-address`} autoComplete="street-address" required={source === "callback"} value={values.address} onChange={(e) => set("address")(e.target.value)} className={field} placeholder="Street, city, ZIP" aria-invalid={!!errors.address} />
         </FieldWrap>
         <FieldWrap id={`${source}-email`} label="Email (optional)" error={errors.email}>
           <Input id={`${source}-email`} type="email" inputMode="email" autoComplete="email" value={values.email} onChange={(e) => set("email")(e.target.value)} className={field} placeholder="you@email.com" aria-invalid={!!errors.email} />

@@ -39,6 +39,7 @@ export const submitLead = createServerFn({ method: "POST" })
       name: data.name,
       phone: data.phone,
       email: data.email || null,
+      address: data.address || null,
       service: data.service || null,
       message: data.message || null,
       source: data.source,

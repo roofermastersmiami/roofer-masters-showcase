@@ -129,10 +129,10 @@ export function ChatWidget() {
               <p className="text-sm text-muted-foreground">
                 Hi! 👋 Send us a message and we'll get back to you here, by phone or by email.
               </p>
-              <Input placeholder="Your name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-11" />
-              <Input type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-11" />
-              <Input type="email" placeholder="Email (optional if phone given)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="h-11" />
-              <Textarea placeholder="How can we help?" rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+              <Input aria-label="Your name" placeholder="Your name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-11" />
+              <Input aria-label="Phone" type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-11" />
+              <Input aria-label="Email" type="email" placeholder="Email (optional if phone given)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="h-11" />
+              <Textarea aria-label="Your message" placeholder="How can we help?" rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
               {error && <p className="text-xs font-medium text-destructive">{error}</p>}
               <Button type="submit" variant="hero" size="lg" disabled={busy}>
                 {busy ? <Loader2 className="animate-spin" /> : <Send />} Start chat

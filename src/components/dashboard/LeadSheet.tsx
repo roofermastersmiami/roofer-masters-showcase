@@ -57,6 +57,7 @@ export function LeadSheet({ lead, onClose, onOpenChat }: { lead: Lead | null; on
             <dl className="mt-6 grid gap-3 rounded-2xl border border-border bg-muted/40 p-4 text-sm">
               <Row label="Phone" value={lead.phone} />
               <Row label="Email" value={lead.email} />
+              <Row label="Address" value={lead.address} />
               <Row label="Service" value={lead.service} />
               <Row label="From page" value={lead.page} />
               <div>

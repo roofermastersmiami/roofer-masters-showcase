@@ -17,7 +17,7 @@ export function LeadsTable({ leads, onOpen }: { leads: Lead[]; onOpen: (l: Lead)
       (l) =>
         (status === "all" || l.status === status) &&
         (source === "all" || l.source === source) &&
-        (!term || [l.name, l.phone, l.email, l.service, l.message].some((v) => v?.toLowerCase().includes(term))),
+        (!term || [l.name, l.phone, l.email, l.address, l.service, l.message].some((v) => v?.toLowerCase().includes(term))),
     );
   }, [leads, q, status, source]);
 
@@ -26,7 +26,7 @@ export function LeadsTable({ leads, onOpen }: { leads: Lead[]; onOpen: (l: Lead)
       <div className="grid gap-2 sm:grid-cols-[1fr_180px_200px]">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, phone, email…" className="h-11 pl-9" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, phone, address…" className="h-11 pl-9" />
         </div>
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>

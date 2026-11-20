@@ -18,8 +18,18 @@ describe("lead rules", () => {
     expect(r.success).toBe(false);
   });
 
-  it("a call-back request with name and phone is accepted", () => {
-    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", source: "callback" });
+  it("a call-back request with name, phone and address is accepted", () => {
+    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", address: "123 SW 1st St, Homestead, FL 33030", source: "callback" });
+    expect(r.success).toBe(true);
+  });
+
+  it("a call-back request without an address is rejected", () => {
+    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", address: "", source: "callback" });
+    expect(r.success).toBe(false);
+  });
+
+  it("a contact form does not require an address", () => {
+    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", source: "contact" });
     expect(r.success).toBe(true);
   });
 
