@@ -33,7 +33,7 @@ export function LeadForm({
   title?: string;
   subtitle?: string;
   submitLabel?: string;
-  defaultService?: string;
+  defaultService?: string | undefined;
   compact?: boolean;
   className?: string;
 }) {
@@ -170,7 +170,7 @@ function FieldWrap({
 }: {
   id: string;
   label: string;
-  error?: string;
+  error?: string | undefined;
   children: React.ReactNode;
   className?: string;
 }) {

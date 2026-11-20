@@ -33,7 +33,9 @@ export const getSiteContent = createServerFn({ method: "GET" }).handler(
       const { data } = await client.from("site_content").select("key, value");
       const out: SiteContent = { ...CONTENT_DEFAULTS };
       for (const row of data ?? []) {
-        if (row.key in out && row.value.trim()) out[row.key as keyof SiteContent] = row.value;
+        if (!(row.key in out)) continue;
+        // The announcement may be blanked to hide the bar; headlines fall back to defaults.
+        if (row.key === "announcement" || row.value.trim()) out[row.key as keyof SiteContent] = row.value;
       }
       return out;
     } catch (e) {

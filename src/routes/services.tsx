@@ -64,7 +64,7 @@ function ServicesPage() {
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button asChild variant="hero" size="xl">
                   <Link to="/contact" search={{ service: s.name }}>
-                    Get a {s.name.split(" (")[0].toLowerCase()} quote
+                    Get a {(s.name.split(" (")[0] ?? s.name).toLowerCase()} quote
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="xl">
