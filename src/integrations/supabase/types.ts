@@ -14,6 +14,166 @@ export type Database = {
   }
   public: {
     Tables: {
+      crm_invoices: {
+        Row: {
+          created_at: string
+          customer_address: string
+          customer_email: string
+          customer_name: string
+          deposit_cents: number
+          due_date: string
+          expires_at: string
+          id: string
+          items: Json
+          lead_id: string | null
+          notes: string
+          number: number
+          paid_cents: number
+          proposal_id: string | null
+          status: string
+          subtotal_cents: number
+          tax_cents: number
+          title: string
+          token: string
+          total_cents: number
+        }
+        Insert: {
+          created_at?: string
+          customer_address?: string
+          customer_email?: string
+          customer_name: string
+          deposit_cents?: number
+          due_date: string
+          expires_at?: string
+          id?: string
+          items: Json
+          lead_id?: string | null
+          notes?: string
+          number?: never
+          paid_cents?: number
+          proposal_id?: string | null
+          status?: string
+          subtotal_cents: number
+          tax_cents?: number
+          title: string
+          token?: string
+          total_cents: number
+        }
+        Update: {
+          created_at?: string
+          customer_address?: string
+          customer_email?: string
+          customer_name?: string
+          deposit_cents?: number
+          due_date?: string
+          expires_at?: string
+          id?: string
+          items?: Json
+          lead_id?: string | null
+          notes?: string
+          number?: never
+          paid_cents?: number
+          proposal_id?: string | null
+          status?: string
+          subtotal_cents?: number
+          tax_cents?: number
+          title?: string
+          token?: string
+          total_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_invoices_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_invoices_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          due_at: string
+          id: string
+          lead_id: string | null
+          title: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          due_at: string
+          id?: string
+          lead_id?: string | null
+          title: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          due_at?: string
+          id?: string
+          lead_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          id: string
+          invoice_id: string
+          method: string
+          provider_event_id: string | null
+          received_at: string
+          reference: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          method: string
+          provider_event_id?: string | null
+          received_at?: string
+          reference?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          method?: string
+          provider_event_id?: string | null
+          received_at?: string
+          reference?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "crm_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_messages: {
         Row: {
           body: string
@@ -194,6 +354,107 @@ export type Database = {
           },
         ]
       }
+      roof_estimates: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          inputs: Json
+          lead_id: string | null
+          title: string
+          total_cents: number
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          inputs: Json
+          lead_id?: string | null
+          title: string
+          total_cents: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          inputs?: Json
+          lead_id?: string | null
+          title?: string
+          total_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roof_estimates_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roof_jobs: {
+        Row: {
+          checklist: Json
+          created_at: string
+          crew: string
+          id: string
+          inspection_at: string | null
+          lead_id: string | null
+          notes: string
+          permit_status: string
+          photos: Json
+          proposal_id: string | null
+          start_date: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          checklist?: Json
+          created_at?: string
+          crew?: string
+          id?: string
+          inspection_at?: string | null
+          lead_id?: string | null
+          notes?: string
+          permit_status?: string
+          photos?: Json
+          proposal_id?: string | null
+          start_date?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          checklist?: Json
+          created_at?: string
+          crew?: string
+          id?: string
+          inspection_at?: string | null
+          lead_id?: string | null
+          notes?: string
+          permit_status?: string
+          photos?: Json
+          proposal_id?: string | null
+          start_date?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roof_jobs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_jobs_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_content: {
         Row: {
           key: string
@@ -241,6 +502,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      record_invoice_payment: {
+        Args: {
+          p_amount_cents: number
+          p_invoice_id: string
+          p_method: string
+          p_received_at: string
+          p_reference: string
+        }
+        Returns: string
       }
     }
     Enums: {
