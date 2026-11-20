@@ -9,3 +9,4 @@
 - [x] Add required property address to the call-back form (show in dashboard)
 - [x] Verify forms end-to-end, commit
 - [ ] Swap sample reviews and AI photos for real ones — waiting on owner
+- [ ] Delete the 9 sample CRM leads (and their chat messages) once the owner is happy with the preview
