@@ -39,3 +39,8 @@ use the editor.
 - PDF rendering is dynamically imported in the browser; pdf-lib performs additive annotations, form filling and page operations, never claims to replace existing PDF text or securely redact it.
 - Customer proposal access uses server-issued expiring, revocable capability tokens checked before signing a short-lived file URL; public responses never expose lead records or the library.
 - Proposal sharing opens an email draft or WhatsApp message, not an automatic send; no delivery or pipeline transition is claimed without a verified sending service.
+- CRM operations use admin-only task, estimate and job records; job photos stay in private owner-only storage so customer data never becomes public media.
+- Invoices are validated server-side, snapshot customer details and store integer cents; customer capability links expose issued invoices only, and issued invoice amounts are immutable.
+- Invoice checkout uses embedded payments through the shared gateway client, with server-derived deposit/balance amounts and inclusive tax; test and live records must never mix.
+- Invoice payment settlement is row-locked and idempotent per checkout session, confirmed with the provider rather than a redirect; manual payments cannot overlap a pending online checkout.
+- Sales reporting counts each signed proposal once and uses only the latest active proposal per lead for open proposal value, avoiding duplicated revisions.

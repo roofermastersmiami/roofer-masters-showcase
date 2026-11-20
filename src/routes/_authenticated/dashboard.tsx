@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { ExternalLink, FileText, Inbox, KanbanSquare, LogOut, MessageSquare, PenSquare, Users } from "lucide-react";
+import { ExternalLink, FileText, Inbox, KanbanSquare, LogOut, MessageSquare, PenSquare, Users, Receipt, Clock, Calculator, HardHat, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +14,12 @@ import { ChatInbox } from "@/components/dashboard/ChatInbox";
 import { ContentEditor } from "@/components/dashboard/ContentEditor";
 import { LeadSheet } from "@/components/dashboard/LeadSheet";
 import { Proposals } from "@/components/dashboard/Proposals";
+import { Invoices } from "@/components/dashboard/Invoices";
+import { FollowUps } from "@/components/dashboard/FollowUps";
+import { Estimates } from "@/components/dashboard/Estimates";
+import { Jobs } from "@/components/dashboard/Jobs";
+import { SalesReport } from "@/components/dashboard/SalesReport";
+import { FollowUpAlert } from "@/components/dashboard/FollowUpAlert";
 import { LEAD_STATUSES, LEAD_STATUS_LABELS } from "@/lib/lead-schema";
 import { BUSINESS } from "@/lib/site";
 
@@ -21,9 +27,9 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
       { title: "Owner Dashboard | Roofer Masters" },
-      { name: "description", content: "Manage leads, contacts, chats and website content." },
+      { name: "description", content: "Manage roofing invoices, payments, estimates, jobs, follow-ups, proposals and sales." },
       { property: "og:title", content: "Owner Dashboard | Roofer Masters" },
-      { property: "og:description", content: "Manage leads, contacts, chats and website content." },
+      { property: "og:description", content: "Manage roofing invoices, payments, estimates, jobs, follow-ups, proposals and sales." },
       { name: "robots", content: "noindex" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -84,7 +90,7 @@ function Dashboard() {
 function OwnerArea() {
   const { data: leads = [], isLoading, error } = useQuery(leadsQuery);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [tab, setTab] = useState("pipeline");
+  const [tab, setTab] = useState("invoices");
   const [chatId, setChatId] = useState<string | null>(null);
   const [proposalLeadId, setProposalLeadId] = useState<string | null>(null);
   const openLead = leads.find((l) => l.id === openId) ?? null;
@@ -102,8 +108,7 @@ function OwnerArea() {
     <>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-3xl font-black text-foreground sm:text-4xl">Leads</h1>
-          <p className="text-muted-foreground">Every call-back, quote, contact form and chat lands here automatically.</p>
+          <h1 className="text-3xl font-black text-foreground sm:text-4xl">Roofer Masters CRM</h1>
         </div>
       </div>
 
@@ -113,9 +118,15 @@ function OwnerArea() {
       </div>
 
       {error && <p className="mt-6 rounded-xl bg-destructive/10 p-4 text-sm text-destructive">Couldn't load leads. Refresh to try again.</p>}
+      <FollowUpAlert onOpen={() => setTab("followups")} />
 
       <Tabs value={tab} onValueChange={setTab} className="mt-8">
-        <TabsList className="no-scrollbar h-auto w-full justify-start overflow-x-auto rounded-xl bg-card p-1 shadow-card sm:w-auto">
+        <TabsList className="no-scrollbar h-auto w-full max-w-full justify-start overflow-x-auto rounded-lg bg-card p-1 shadow-card">
+          <TabsTrigger value="invoices" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Receipt className="size-4" /> Invoices & payments</TabsTrigger>
+          <TabsTrigger value="followups" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Clock className="size-4" /> Follow-ups</TabsTrigger>
+          <TabsTrigger value="estimates" className="h-10 shrink-0 gap-2 rounded-lg px-4"><Calculator className="size-4" /> Estimates</TabsTrigger>
+          <TabsTrigger value="jobs" className="h-10 shrink-0 gap-2 rounded-lg px-4"><HardHat className="size-4" /> Jobs</TabsTrigger>
+          <TabsTrigger value="sales" className="h-10 shrink-0 gap-2 rounded-lg px-4"><TrendingUp className="size-4" /> Sales</TabsTrigger>
           <TabsTrigger value="pipeline" className="h-10 gap-2 rounded-lg px-4"><KanbanSquare className="size-4" /> Pipeline</TabsTrigger>
           <TabsTrigger value="inbox" className="h-10 gap-2 rounded-lg px-4"><Inbox className="size-4" /> Submissions</TabsTrigger>
           <TabsTrigger value="chat" className="h-10 gap-2 rounded-lg px-4"><MessageSquare className="size-4" /> Chat</TabsTrigger>
@@ -127,6 +138,11 @@ function OwnerArea() {
         <div className="mt-6">
           {isLoading ? <p className="py-10 text-center text-muted-foreground">Loading leads…</p> : (
             <>
+              <TabsContent value="invoices"><Invoices leads={leads} /></TabsContent>
+              <TabsContent value="followups"><FollowUps leads={leads} onOpenLead={open} onOpenProposals={() => setTab("proposals")} /></TabsContent>
+              <TabsContent value="estimates"><Estimates leads={leads} onOpenProposals={() => setTab("proposals")} /></TabsContent>
+              <TabsContent value="jobs"><Jobs leads={leads} /></TabsContent>
+              <TabsContent value="sales"><SalesReport leads={leads} /></TabsContent>
               <TabsContent value="pipeline"><Pipeline leads={leads} onOpen={open} /></TabsContent>
               <TabsContent value="inbox"><LeadsTable leads={leads} onOpen={open} /></TabsContent>
               <TabsContent value="chat"><ChatInbox leads={leads} selectedId={chatId} onSelect={setChatId} onOpenLead={open} /></TabsContent>

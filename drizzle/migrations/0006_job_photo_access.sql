@@ -1,0 +1,1 @@
+CREATE POLICY "Owner job photos" ON storage.objects FOR ALL TO authenticated USING(bucket_id = 'roof-job-photos' AND public.has_role(auth.uid(),'admin')) WITH CHECK(bucket_id = 'roof-job-photos' AND public.has_role(auth.uid(),'admin'));

@@ -560,6 +560,14 @@ export type Database = {
         }
         Returns: string
       }
+      reserve_invoice_checkout: {
+        Args: { p_environment: string; p_kind: string; p_token: string }
+        Returns: Json
+      }
+      set_invoice_status: {
+        Args: { p_invoice_id: string; p_status: string }
+        Returns: boolean
+      }
       settle_invoice_checkout: {
         Args: {
           p_amount_cents: number

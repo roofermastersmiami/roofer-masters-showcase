@@ -1,10 +1,11 @@
 # Roadmap
-- [ ] Add invoices, deposits, payment records and customer invoice links
-- [ ] Connect Stripe online checkout — owner approved Stripe; test first, live after account claim
-- [ ] Add follow-up tasks and unsigned-proposal alerts
-- [ ] Add saved roofing estimates and proposal conversion
-- [ ] Add jobs, crew assignments, inspections, permits, photos and checklists
-- [ ] Add sales reporting for sources, acceptance, revenue and services
+- [x] Add invoices, deposits, payment records and customer invoice links
+- [x] Connect Stripe embedded checkout, signed payment events and idempotent reconciliation
+- [ ] Verify completed online payment — blocked: owner must claim payment account and add business address for tax calculation; live also requires account activation
+- [x] Add follow-up tasks, overdue alerts and unsigned-proposal list
+- [x] Add saved roofing estimates and proposal conversion
+- [x] Add jobs, crew assignments, inspections, permits, private photos and checklists
+- [x] Add sales reporting for sources, acceptance, revenue and services
 - [ ] Add direct proposal/invoice email sending — waiting on sender domain
 - [x] Rebuild 3D logo from the uploaded company logo
 - [x] Design system, 3D logo, intro loader, header/footer

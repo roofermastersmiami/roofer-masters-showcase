@@ -18,6 +18,8 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Secure login for the Roofer Masters owner dashboard." },
       { property: "og:title", content: "Owner Login | Roofer Masters" },
       { property: "og:description", content: "Secure login for the Roofer Masters owner dashboard." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
     ],
   }),

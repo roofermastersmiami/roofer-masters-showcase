@@ -1,0 +1,12 @@
+import { queryOptions } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import { getStripeEnvironment } from "@/lib/stripe";
+export type Invoice = Database["public"]["Tables"]["crm_invoices"]["Row"];
+export type Job = Database["public"]["Tables"]["roof_jobs"]["Row"];
+export const tasksQuery = queryOptions({ queryKey: ["crm-tasks"], queryFn: async () => { const { data, error } = await supabase.from("crm_tasks").select("*").order("due_at"); if (error) throw error; return data ?? []; } });
+export const estimatesQuery = queryOptions({ queryKey: ["roof-estimates"], queryFn: async () => { const { data, error } = await supabase.from("roof_estimates").select("*").order("created_at", { ascending: false }); if (error) throw error; return data ?? []; } });
+export const jobsQuery = queryOptions({ queryKey: ["roof-jobs"], queryFn: async () => { const { data, error } = await supabase.from("roof_jobs").select("*").order("created_at", { ascending: false }); if (error) throw error; return data ?? []; } });
+export const invoicesQuery = queryOptions({ queryKey: ["crm-invoices"], queryFn: async () => { const { data, error } = await supabase.from("crm_invoices").select("*").eq("environment", getStripeEnvironment()).order("created_at", { ascending: false }); if (error) throw error; return data ?? []; }, refetchInterval: 15000 });
+export const paymentsQuery = queryOptions({ queryKey: ["invoice-payments"], queryFn: async () => { const { data, error } = await supabase.from("invoice_payments").select("*").eq("environment", getStripeEnvironment()).order("received_at", { ascending: false }); if (error) throw error; return data ?? []; } });
+export const allSharesQuery = queryOptions({ queryKey: ["all-proposal-shares"], queryFn: async () => { const { data, error } = await supabase.from("proposal_shares").select("proposal_id, signed_at, signed_name, expires_at, revoked_at, created_at"); if (error) throw error; return data ?? []; } });
