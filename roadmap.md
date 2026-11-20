@@ -1,4 +1,7 @@
 # Roadmap
+- [ ] Add public bilingual Instant Estimator with owner-approved pricing and lead qualification
+- [ ] Add job change orders with amount, scope, schedule and approval tracking
+- [ ] Connect bilingual missed-call AI receptionist — waiting on calling service connection and call forwarding
 - [x] Add invoices, deposits, payment records and customer invoice links
 - [x] Connect Stripe embedded checkout, signed payment events and idempotent reconciliation
 - [ ] Verify completed online payment — blocked: owner must claim payment account and add business address for tax calculation; live also requires account activation
