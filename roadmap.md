@@ -25,3 +25,5 @@
 - [x] Add private proposal PDFs, category templates, lead-linked proposals and revocable sharing
 - [x] Add PDF text annotations, highlights, signatures, form filling and page tools (not original-text replacement or secure redaction)
 - [x] Verify proposal creation, uploads, template reuse, PDF editing, storage, customer viewing and revocation
+
+- [x] Automatic material orders per job from roof size + measurement report (supplier name pending)

@@ -518,6 +518,7 @@ export type Database = {
           id: string
           inspection_at: string | null
           lead_id: string | null
+          material_order: Json | null
           notes: string
           permit_status: string
           photos: Json
@@ -533,6 +534,7 @@ export type Database = {
           id?: string
           inspection_at?: string | null
           lead_id?: string | null
+          material_order?: Json | null
           notes?: string
           permit_status?: string
           photos?: Json
@@ -548,6 +550,7 @@ export type Database = {
           id?: string
           inspection_at?: string | null
           lead_id?: string | null
+          material_order?: Json | null
           notes?: string
           permit_status?: string
           photos?: Json

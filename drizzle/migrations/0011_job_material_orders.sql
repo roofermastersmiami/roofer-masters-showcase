@@ -1,0 +1,1 @@
+ALTER TABLE public.roof_jobs ADD COLUMN material_order jsonb;

@@ -1,0 +1,65 @@
+import { z } from "zod";
+import { ROOF_TYPES } from "./instant-estimate-schema";
+export const reportSchema = z.object({
+  roof_type: z.enum(ROOF_TYPES),
+  area_sqft: z.number().positive().max(1000000),
+  waste_pct: z.number().min(0).max(50),
+  ridge_lf: z.number().min(0).max(100000),
+  hips_lf: z.number().min(0).max(100000),
+  valleys_lf: z.number().min(0).max(100000),
+  eaves_lf: z.number().min(0).max(100000),
+  rakes_lf: z.number().min(0).max(100000),
+});
+export type RoofReport = z.infer<typeof reportSchema>;
+export type MaterialLine = { item: string; qty: number; unit: string };
+const up = (n: number) => Math.max(0, Math.ceil(n - 1e-9));
+/** Material takeoff from a roof measurement report. 1 square = 100 sq ft. */
+export function materialOrder(r: RoofReport): MaterialLine[] {
+  const area = r.area_sqft * (1 + r.waste_pct / 100);
+  const sq = area / 100;
+  const edges = r.eaves_lf + r.rakes_lf;
+  const caps = r.ridge_lf + r.hips_lf;
+  const drip = { item: "Drip edge / edge metal (10 ft)", qty: up(edges / 10), unit: "pcs" };
+  switch (r.roof_type) {
+    case "Shingle Roof": return [
+      { item: "Architectural shingles", qty: up(sq * 3), unit: "bundles" },
+      { item: "Starter strip", qty: up(edges / 100), unit: "bundles" },
+      { item: "Hip & ridge cap", qty: up(caps / 33), unit: "bundles" },
+      { item: "Synthetic underlayment (10 sq roll)", qty: up(sq / 10), unit: "rolls" },
+      { item: "Ice & water shield for valleys (66 ft)", qty: up(r.valleys_lf / 66), unit: "rolls" },
+      drip,
+      { item: "Coil roofing nails", qty: up(sq / 16), unit: "boxes" },
+    ];
+    case "Metal Roof": return [
+      { item: "Metal roof panels", qty: up(area), unit: "sq ft" },
+      { item: "Ridge / hip cap (10 ft)", qty: up(caps / 10), unit: "pcs" },
+      { item: "Valley flashing (10 ft)", qty: up(r.valleys_lf / 10), unit: "pcs" },
+      { item: "High-temp underlayment (2 sq roll)", qty: up(sq / 2), unit: "rolls" },
+      drip,
+      { item: "Panel clips & screws", qty: up(sq / 2), unit: "boxes" },
+    ];
+    case "Tile Roof": return [
+      { item: "Roof tiles", qty: up(sq * 90), unit: "tiles" },
+      { item: "Hip & ridge tiles", qty: up(caps), unit: "tiles" },
+      { item: "Peel & stick underlayment (2 sq roll)", qty: up(sq / 2), unit: "rolls" },
+      { item: "Tile foam adhesive", qty: up(sq / 2), unit: "cans" },
+      { item: "Mortar for hips/ridges", qty: up(caps / 20), unit: "bags" },
+      { item: "Valley metal (10 ft)", qty: up(r.valleys_lf / 10), unit: "pcs" },
+      drip,
+    ];
+    case "TPO": return [
+      { item: "TPO membrane (10x100 ft roll)", qty: up(area / 1000), unit: "rolls" },
+      { item: "Insulation board (4x8 ft)", qty: up(area / 32), unit: "boards" },
+      { item: "Plates & fasteners", qty: up(sq / 10), unit: "buckets" },
+      { item: "Bonding adhesive", qty: up(sq / 5), unit: "pails" },
+      drip,
+    ];
+    case "Flat Roof": return [
+      { item: "Base sheet (3 sq roll)", qty: up(sq / 3), unit: "rolls" },
+      { item: "Modified cap sheet (1 sq roll)", qty: up(sq), unit: "rolls" },
+      { item: "Hot mop asphalt (100 lb keg)", qty: up(sq * 2), unit: "kegs" },
+      { item: "Tin caps & nails", qty: up(sq / 10), unit: "boxes" },
+      drip,
+    ];
+  }
+}
