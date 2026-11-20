@@ -27,3 +27,4 @@
 - [x] Verify proposal creation, uploads, template reuse, PDF editing, storage, customer viewing and revocation
 
 - [x] Automatic material orders per job from roof size + measurement report (supplier name pending)
+- [x] AI roof report upload fills material calculator

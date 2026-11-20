@@ -46,3 +46,4 @@ use the editor.
 - Sales reporting counts each signed proposal once and uses only the latest active proposal per lead for open proposal value, avoiding duplicated revisions.
 - Instant estimates use only owner-enabled installed rates; lead, qualification, preliminary estimate and unscheduled on-hold job capture are atomic through a service-only RPC called by validated lead server functions.
 - Change orders record independent scope, price and schedule deltas with explicit manually recorded approval; they never mutate issued invoices or imply a customer signature.
+- Roof report AI extraction runs in an owner-only server function (`src/lib/roof-report.functions.ts`) via the AI Gateway SDK; results only prefill the editable material calculator and are never saved without owner review.
