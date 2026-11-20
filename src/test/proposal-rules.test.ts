@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { ROOF_CATEGORIES, proposalSchema, validPdfHeader, shareIsActive } from "@/lib/proposal-schema";
+import { ROOF_CATEGORIES, proposalSchema, validPdfHeader, shareIsActive, signatureSchema } from "@/lib/proposal-schema";
 import { generateProposalPdf, applyPdfEdits, changePdfPages, getPdfFields } from "@/lib/proposal-pdf";
 
 const details = { title: "Roofing proposal", category: "Metal Roof" as const, is_template: false, lead_id: null, scope: "Standing seam metal roof", terms: "", amount: 12345.67 };
@@ -36,5 +36,13 @@ describe("Roofing proposal rules", () => {
     expect(shareIsActive({ revoked_at: "2026-11-20T00:00:00Z", expires_at: "2026-12-20T00:00:00Z" }, Date.parse("2026-11-21T00:00:00Z"))).toBe(false);
     expect(shareIsActive({ revoked_at: null, expires_at: "2026-11-20T00:00:00Z" }, Date.parse("2026-11-21T00:00:00Z"))).toBe(false);
     expect(shareIsActive({ revoked_at: null, expires_at: "2026-12-20T00:00:00Z" }, Date.parse("2026-11-21T00:00:00Z"))).toBe(true);
+  });
+  it("requires a name and a drawn PNG signature for customer sign-off", () => {
+    const token = crypto.randomUUID();
+    const png = `data:image/png;base64,${btoa("fake-png-bytes")}`;
+    expect(signatureSchema.parse({ token, name: "Elena Vargas", signature: png }).name).toBe("Elena Vargas");
+    expect(() => signatureSchema.parse({ token, name: "  ", signature: png })).toThrow();
+    expect(() => signatureSchema.parse({ token, name: "Elena Vargas", signature: "data:image/jpeg;base64,AAAA" })).toThrow();
+    expect(() => signatureSchema.parse({ token, name: "Elena Vargas", signature: "not-a-data-url" })).toThrow();
   });
 });

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Copy, Link2, Mail, ExternalLink, Ban, Loader2 } from "lucide-react";
+import { Copy, Link2, Mail, ExternalLink, Ban, Loader2, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ export function ProposalShareDialog({ proposal, customer, onClose }: { proposal:
       const body = `Hello${customer ? ` ${customer.name}` : ""},\n\nHere is your roofing proposal from Roofer Masters:\n${url}\n\nPlease call 305-942-3093 with any questions.`;
       return <div key={share.id} className="rounded-lg border border-border p-4">
         <p className="text-xs font-semibold text-muted-foreground">{share.revoked_at ? "Revoked" : active ? `Expires ${new Date(share.expires_at).toLocaleDateString()}` : "Expired"}</p>
+        {share.signed_at && <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-primary"><BadgeCheck className="size-4" /> Signed by {share.signed_name} on {new Date(share.signed_at).toLocaleString()}</p>}
+        {share.signature_data && <img src={share.signature_data} alt={`Signature of ${share.signed_name ?? "customer"}`} className="mt-2 h-14 rounded border border-border bg-card" />}
         {active && <><p className="mt-2 break-all text-sm text-foreground">{url}</p><div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(url); toast.success("Link copied"); } catch { toast.error("Could not copy link; select it to copy"); } }}><Copy /> Copy link</Button>
           <Button size="sm" variant="outline" asChild><a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink /> View</a></Button>

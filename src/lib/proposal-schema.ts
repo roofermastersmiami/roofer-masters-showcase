@@ -23,3 +23,11 @@ export function validPdfHeader(bytes: Uint8Array) {
 export function shareIsActive(share: { revoked_at: string | null; expires_at: string }, now = Date.now()) {
   return !share.revoked_at && new Date(share.expires_at).getTime() > now;
 }
+
+// Customer sign-off on a shared proposal: printed name plus a drawn PNG signature (data URL, capped in size).
+export const signatureSchema = z.object({
+  token: z.string().uuid(),
+  name: z.string().trim().min(1, "Enter your full name").max(120),
+  signature: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "Draw your signature").max(400_000, "Signature image too large"),
+});
+export type ProposalSignature = z.infer<typeof signatureSchema>;

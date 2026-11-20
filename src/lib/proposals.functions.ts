@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { shareIsActive } from "./proposal-schema";
+import { shareIsActive, signatureSchema } from "./proposal-schema";
 
 export const createProposalShare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -35,11 +35,26 @@ export const getSharedProposal = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ token: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: share } = await supabaseAdmin.from("proposal_shares").select("proposal_id, expires_at, revoked_at").eq("token", data.token).maybeSingle();
+    const { data: share } = await supabaseAdmin.from("proposal_shares").select("proposal_id, expires_at, revoked_at, signed_name, signed_at").eq("token", data.token).maybeSingle();
     if (!share || !shareIsActive(share)) return null;
     const { data: proposal } = await supabaseAdmin.from("proposals").select("title, file_path, is_template").eq("id", share.proposal_id).maybeSingle();
     if (!proposal?.file_path || proposal.is_template) return null;
     const { data: signed } = await supabaseAdmin.storage.from("roofing-proposals").createSignedUrl(proposal.file_path, 60);
     if (!signed) return null;
-    return { title: proposal.title, url: signed.signedUrl };
+    return { title: proposal.title, url: signed.signedUrl, signedName: share.signed_name, signedAt: share.signed_at };
+  });
+
+// Public capability endpoint: the same unexpired, nonrevoked token authorizes one customer sign-off.
+// Records only the signer's name, drawn signature and timestamp on that share; a signed link cannot be re-signed.
+export const signSharedProposal = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => signatureSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: share } = await supabaseAdmin.from("proposal_shares").select("id, expires_at, revoked_at, signed_at").eq("token", data.token).maybeSingle();
+    if (!share || !shareIsActive(share)) throw new Error("This proposal link is no longer available");
+    if (share.signed_at) throw new Error("This proposal was already signed");
+    const signedAt = new Date().toISOString();
+    const { error } = await supabaseAdmin.from("proposal_shares").update({ signed_name: data.name, signed_at: signedAt, signature_data: data.signature }).eq("id", share.id).is("signed_at", null);
+    if (error) throw new Error("Could not record your signature");
+    return { signedAt };
   });

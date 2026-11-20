@@ -107,6 +107,9 @@ export type Database = {
           id: string
           proposal_id: string
           revoked_at: string | null
+          signature_data: string | null
+          signed_at: string | null
+          signed_name: string | null
           token: string
         }
         Insert: {
@@ -115,6 +118,9 @@ export type Database = {
           id?: string
           proposal_id: string
           revoked_at?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          signed_name?: string | null
           token?: string
         }
         Update: {
@@ -123,6 +129,9 @@ export type Database = {
           id?: string
           proposal_id?: string
           revoked_at?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          signed_name?: string | null
           token?: string
         }
         Relationships: [
