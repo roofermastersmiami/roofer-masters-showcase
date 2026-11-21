@@ -1,0 +1,10 @@
+CREATE TABLE public.roof_cost_catalog(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),system text NOT NULL,item text NOT NULL,category text NOT NULL,unit text NOT NULL DEFAULT 'each',unit_cents bigint NOT NULL DEFAULT 0,created_at timestamptz NOT NULL DEFAULT now());
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.roof_cost_catalog TO authenticated;GRANT ALL ON public.roof_cost_catalog TO service_role;
+ALTER TABLE public.roof_cost_catalog ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Owner cost catalog" ON public.roof_cost_catalog FOR ALL TO authenticated USING(public.has_role(auth.uid(),'admin')) WITH CHECK(public.has_role(auth.uid(),'admin'));
+CREATE TABLE public.crm_expenses(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),job_id uuid REFERENCES public.roof_jobs(id),description text NOT NULL,category text NOT NULL,amount_cents bigint NOT NULL,incurred_at date NOT NULL,environment text NOT NULL DEFAULT 'sandbox',payee text NOT NULL DEFAULT '',receipt_path text,created_at timestamptz NOT NULL DEFAULT now(),CONSTRAINT positive_expense CHECK(amount_cents>0),CONSTRAINT expense_environment CHECK(environment IN ('sandbox','live')));
+GRANT SELECT,INSERT,UPDATE,DELETE ON public.crm_expenses TO authenticated;GRANT ALL ON public.crm_expenses TO service_role;
+ALTER TABLE public.crm_expenses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Owner expenses" ON public.crm_expenses FOR ALL TO authenticated USING(public.has_role(auth.uid(),'admin')) WITH CHECK(public.has_role(auth.uid(),'admin'));
+ALTER TABLE public.roof_estimates ADD COLUMN options jsonb NOT NULL DEFAULT '[]',ADD COLUMN approved_option text;
+ALTER TABLE public.roof_jobs ADD COLUMN estimate_id uuid REFERENCES public.roof_estimates(id),ADD COLUMN budget_cents bigint NOT NULL DEFAULT 0;

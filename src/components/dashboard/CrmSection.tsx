@@ -1,3 +1,4 @@
+import {RoofMeasurements} from './RoofMeasurements';
 import {Pipeline} from './Pipeline';
 import {LeadsTable} from './LeadsTable';
 import {Customers} from './Customers';
@@ -13,10 +14,11 @@ import {ContentEditor} from './ContentEditor';
 import {InstantEstimateSettings} from './InstantEstimateSettings';
 import {useCrm} from './CrmContext';
 import {useState} from 'react';
-export const CRM_SECTIONS=['pipeline','submissions','customers','properties','chat','proposals','estimates','jobs','invoices','followups','sales','content','instant'] as const;
+export const CRM_SECTIONS=['measurements','pipeline','submissions','customers','properties','chat','proposals','estimates','jobs','invoices','followups','sales','content','instant'] as const;
 export function CrmSection({section}:{section:string}){
  const {leads,onOpen,openProposals,proposalLeadId,clearProposalLead}=useCrm();const [chatId,setChatId]=useState<string|null>(null);
  switch(section){
+ case 'measurements':return <RoofMeasurements/>;
  case 'pipeline':return <Pipeline leads={leads} onOpen={onOpen}/>;
  case 'submissions':return <LeadsTable leads={leads} onOpen={onOpen}/>;
  case 'customers':return <Customers leads={leads} onOpen={onOpen}/>;

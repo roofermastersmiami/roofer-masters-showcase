@@ -125,6 +125,53 @@ export type Database = {
           },
         ]
       }
+      crm_expenses: {
+        Row: {
+          amount_cents: number
+          category: string
+          created_at: string
+          description: string
+          environment: string
+          id: string
+          incurred_at: string
+          job_id: string | null
+          payee: string
+          receipt_path: string | null
+        }
+        Insert: {
+          amount_cents: number
+          category: string
+          created_at?: string
+          description: string
+          environment?: string
+          id?: string
+          incurred_at: string
+          job_id?: string | null
+          payee?: string
+          receipt_path?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          category?: string
+          created_at?: string
+          description?: string
+          environment?: string
+          id?: string
+          incurred_at?: string
+          job_id?: string | null
+          payee?: string
+          receipt_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_expenses_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "roof_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_invoices: {
         Row: {
           created_at: string
@@ -597,6 +644,7 @@ export type Database = {
           amount: number | null
           category: string
           created_at: string
+          drawing_id: string | null
           file_path: string | null
           id: string
           is_template: boolean
@@ -611,6 +659,7 @@ export type Database = {
           amount?: number | null
           category: string
           created_at?: string
+          drawing_id?: string | null
           file_path?: string | null
           id?: string
           is_template?: boolean
@@ -625,6 +674,7 @@ export type Database = {
           amount?: number | null
           category?: string
           created_at?: string
+          drawing_id?: string | null
           file_path?: string | null
           id?: string
           is_template?: boolean
@@ -636,6 +686,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "proposals_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "roof_drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "proposals_lead_id_fkey"
             columns: ["lead_id"]
@@ -652,38 +709,135 @@ export type Database = {
           },
         ]
       }
-      roof_estimates: {
+      roof_cost_catalog: {
         Row: {
           category: string
           created_at: string
           id: string
-          inputs: Json
-          lead_id: string | null
-          property_id: string | null
-          title: string
-          total_cents: number
+          item: string
+          system: string
+          unit: string
+          unit_cents: number
         }
         Insert: {
           category: string
           created_at?: string
           id?: string
-          inputs: Json
-          lead_id?: string | null
-          property_id?: string | null
-          title: string
-          total_cents: number
+          item: string
+          system: string
+          unit?: string
+          unit_cents?: number
         }
         Update: {
           category?: string
           created_at?: string
           id?: string
+          item?: string
+          system?: string
+          unit?: string
+          unit_cents?: number
+        }
+        Relationships: []
+      }
+      roof_drawings: {
+        Row: {
+          created_at: string
+          geometry: Json
+          id: string
+          measurements: Json
+          media: Json
+          parent_id: string | null
+          property_id: string
+          revision: number
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          geometry: Json
+          id?: string
+          measurements: Json
+          media?: Json
+          parent_id?: string | null
+          property_id: string
+          revision?: number
+          title: string
+        }
+        Update: {
+          created_at?: string
+          geometry?: Json
+          id?: string
+          measurements?: Json
+          media?: Json
+          parent_id?: string | null
+          property_id?: string
+          revision?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roof_drawings_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "roof_drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_drawings_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "crm_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roof_estimates: {
+        Row: {
+          approved_option: string | null
+          category: string
+          created_at: string
+          drawing_id: string | null
+          id: string
+          inputs: Json
+          lead_id: string | null
+          options: Json
+          property_id: string | null
+          title: string
+          total_cents: number
+        }
+        Insert: {
+          approved_option?: string | null
+          category: string
+          created_at?: string
+          drawing_id?: string | null
+          id?: string
+          inputs: Json
+          lead_id?: string | null
+          options?: Json
+          property_id?: string | null
+          title: string
+          total_cents: number
+        }
+        Update: {
+          approved_option?: string | null
+          category?: string
+          created_at?: string
+          drawing_id?: string | null
+          id?: string
           inputs?: Json
           lead_id?: string | null
+          options?: Json
           property_id?: string | null
           title?: string
           total_cents?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "roof_estimates_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "roof_drawings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "roof_estimates_lead_id_fkey"
             columns: ["lead_id"]
@@ -702,9 +856,12 @@ export type Database = {
       }
       roof_jobs: {
         Row: {
+          budget_cents: number
           checklist: Json
           created_at: string
           crew: string
+          drawing_id: string | null
+          estimate_id: string | null
           id: string
           inspection_at: string | null
           lead_id: string | null
@@ -719,9 +876,12 @@ export type Database = {
           title: string
         }
         Insert: {
+          budget_cents?: number
           checklist?: Json
           created_at?: string
           crew?: string
+          drawing_id?: string | null
+          estimate_id?: string | null
           id?: string
           inspection_at?: string | null
           lead_id?: string | null
@@ -736,9 +896,12 @@ export type Database = {
           title: string
         }
         Update: {
+          budget_cents?: number
           checklist?: Json
           created_at?: string
           crew?: string
+          drawing_id?: string | null
+          estimate_id?: string | null
           id?: string
           inspection_at?: string | null
           lead_id?: string | null
@@ -753,6 +916,20 @@ export type Database = {
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "roof_jobs_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "roof_drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_jobs_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "roof_estimates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "roof_jobs_lead_id_fkey"
             columns: ["lead_id"]
