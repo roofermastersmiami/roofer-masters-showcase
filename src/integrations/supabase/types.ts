@@ -445,6 +445,39 @@ export type Database = {
           },
         ]
       }
+      invoice_project_links: {
+        Row: {
+          created_at: string
+          invoice_id: string
+          job_id: string
+        }
+        Insert: {
+          created_at?: string
+          invoice_id: string
+          job_id: string
+        }
+        Update: {
+          created_at?: string
+          invoice_id?: string
+          job_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_project_links_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: true
+            referencedRelation: "crm_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_project_links_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "roof_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_change_orders: {
         Row: {
           amount_cents: number

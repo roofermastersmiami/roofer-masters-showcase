@@ -3,5 +3,15 @@ export const COST_CATEGORIES=['materials','labor','accessories','underlayment','
 export const estimateLineSchema=z.object({id:z.string(),description:z.string().trim().min(1).max(250),category:z.enum(COST_CATEGORIES),unit:z.string().max(30),quantity:z.number().positive().max(1000000),unit_cents:z.number().int().nonnegative().max(100000000)});
 export const advancedOptionSchema=z.object({id:z.string(),name:z.string().trim().min(1).max(100),system:z.string().min(1).max(100),lines:z.array(estimateLineSchema).min(1).max(150),overhead_pct:z.number().min(0).max(100),margin_pct:z.number().min(0).max(95),discount_cents:z.number().int().min(0),tax_pct:z.number().min(0).max(100),deposit_pct:z.number().min(0).max(100)});
 export type EstimateOption=z.infer<typeof advancedOptionSchema>;
+export function materialSystem(system:string):'Metal Roof'|'Tile Roof'|'Shingle Roof'|'TPO'|'Flat Roof'|null {
+ if(system==='Standing seam'||system==='Metal Roof')return 'Metal Roof';
+ if(system==='Tile Roof'||system==='Shingle Roof'||system==='TPO'||system==='Flat Roof')return system;
+ return null;
+}
+export function projectInvoices<T extends {id:string}>(invoices:T[],links:{invoice_id:string;job_id:string}[],project:string):T[]{
+ if(project==='all')return invoices;
+ const ids=new Set(links.filter(l=>l.job_id===project).map(l=>l.invoice_id));
+ return invoices.filter(i=>ids.has(i.id));
+}
 export function priceOption(raw:EstimateOption){const o=advancedOptionSchema.parse(raw);const direct=o.lines.reduce((sum,l)=>sum+Math.round(l.quantity*l.unit_cents),0);const overhead=Math.round(direct*o.overhead_pct/100),cost=direct+overhead;const selling=Math.round(cost/(1-o.margin_pct/100));if(o.discount_cents>selling)throw new Error('Discount exceeds selling price');const subtotal=selling-o.discount_cents,tax=Math.round(subtotal*o.tax_pct/100),total=subtotal+tax,deposit=Math.round(total*o.deposit_pct/100);return {direct,overhead,cost,subtotal,tax,total,deposit,balance:total-deposit,profit:subtotal-cost,margin:subtotal?100*(subtotal-cost)/subtotal:0};}
 export function actualProfit(collected:number,expenses:{category:string;amount_cents:number}[]){const overheadCategories=new Set(['insurance','advertising','office','overhead']);const direct=expenses.filter(e=>!overheadCategories.has(e.category)).reduce((s,e)=>s+e.amount_cents,0);const overhead=expenses.filter(e=>overheadCategories.has(e.category)).reduce((s,e)=>s+e.amount_cents,0);return {direct,overhead,expenses:direct+overhead,gross:collected-direct,net:collected-direct-overhead,margin:collected>0?(collected-direct-overhead)/collected*100:null};}

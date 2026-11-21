@@ -48,3 +48,8 @@ use the editor.
 - Change orders record independent scope, price and schedule deltas with explicit manually recorded approval; they never mutate issued invoices or imply a customer signature.
 - Roof report AI extraction runs in an owner-only server function (`src/lib/roof-report.functions.ts`) via the AI Gateway SDK; results only prefill the editable material calculator and are never saved without owner review.
 - Client portals use owner-issued expiring, revocable per-lead capability links; server projections exclude private notes, addresses, material costs and other customers, and expose only active signed proposal shares and issued matching-environment invoices to preserve customer isolation.
+- CRM customer/property records retain source-lead relationships and additive pipeline stages so existing lead, document and payment workflows remain compatible.
+- Roof drawings are immutable property-linked revisions; reviewed geometry feeds measured takeoffs while Three.js remains dynamically imported to keep browser rendering outside SSR.
+- Detailed estimates snapshot integer-cent cost lines and comparison options; customer proposal projections omit unit costs, overhead and internal profit.
+- Project financial revenue uses unique explicit invoice-to-job allocations validated against customer/property relationships, never inferred from a shared lead, to prevent double counting.
+- Recorded expense analytics stay payment-environment isolated and distinguish cash collections from invoice sales; Excel/PDF exports are browser-only imports to keep server bundles compatible.

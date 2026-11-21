@@ -1,4 +1,8 @@
 import {RoofMeasurements} from './RoofMeasurements';
+import {AdvancedEstimator} from './AdvancedEstimator';
+import {CostCatalog} from './CostCatalog';
+import {Expenses} from './Expenses';
+import {FinancialAnalytics} from './FinancialAnalytics';
 import {Pipeline} from './Pipeline';
 import {LeadsTable} from './LeadsTable';
 import {Customers} from './Customers';
@@ -14,10 +18,14 @@ import {ContentEditor} from './ContentEditor';
 import {InstantEstimateSettings} from './InstantEstimateSettings';
 import {useCrm} from './CrmContext';
 import {useState} from 'react';
-export const CRM_SECTIONS=['measurements','pipeline','submissions','customers','properties','chat','proposals','estimates','jobs','invoices','followups','sales','content','instant'] as const;
+export const CRM_SECTIONS=['detailed-estimator','prices','expenses','financials','measurements','pipeline','submissions','customers','properties','chat','proposals','estimates','jobs','invoices','followups','sales','content','instant'] as const;
 export function CrmSection({section}:{section:string}){
  const {leads,onOpen,openProposals,proposalLeadId,clearProposalLead}=useCrm();const [chatId,setChatId]=useState<string|null>(null);
  switch(section){
+ case 'detailed-estimator':return <AdvancedEstimator/>;
+ case 'prices':return <CostCatalog/>;
+ case 'expenses':return <Expenses/>;
+ case 'financials':return <FinancialAnalytics/>;
  case 'measurements':return <RoofMeasurements/>;
  case 'pipeline':return <Pipeline leads={leads} onOpen={onOpen}/>;
  case 'submissions':return <LeadsTable leads={leads} onOpen={onOpen}/>;

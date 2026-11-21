@@ -1,15 +1,24 @@
 # Roadmap
+- [x] Re-read both uploaded priority briefs and fold them into the active phased upgrade
+- [x] Validate saved detailed estimate options, customer-only proposal PDF, private expense receipts, date/project financial selection and PDF/Excel exports; 45 related tests passed, desktop/mobile and signed-out isolation checked
+- [x] Clean temporary QA customer/property/drawing/estimate/proposal/expense/catalog records and private uploads
+- [x] CRM foundation: sidebar, dashboard, search, notification center, scoped theme, customers/properties and expanded pipeline/activity
+- [x] Roof workspace: editable planes/edges, starter shapes, reviewable dimensions, revision saves, private image storage, report PDF and measurement transfer; viewer remounts verified without DOM errors
+- [x] Detailed estimator and financial foundation: price catalog, cost comparison options, tax/discount/deposit/balance, customer proposal generation, expense receipts, recorded financial totals and explicit invoice/project allocation
+- [ ] Roof report remaining scope: house walls, richer custom geometry editing, photo-embedded reports and broader geometric validation
+- [ ] Estimator remaining scope: customer-side multi-option acceptance and milestone payment schedules
+- [ ] Financial remaining scope: employee/system breakdowns, labor time attribution and accrual-grade accounting
 - [x] Expand phased plan with the all-in-one brief: CRM redesign, dashboard, advanced pipeline, roles, scheduling, inventory, suppliers, file library, automations and website integrations
-- [ ] Phase 0: Premium sidebar/dashboard/search/notifications/light-dark redesign preserving working CRM screens — awaiting expanded plan approval
-- [ ] Extend shared customer/property records, configurable sales pipeline and communication activity
+- [x] Phase 0: Premium sidebar/dashboard/search/notifications/light-dark redesign preserving working CRM screens
+- [x] Extend shared customer/property records, expanded sales pipeline and call-note communication activity
 - [ ] Add team permissions, inventory/suppliers, unified private file library and configurable verified code/HVHZ settings
 - [ ] Add calendar/tasks, customer portal approvals/receipts/contact, progress billing/payment requests and configurable automations
 - [ ] Verify external website/domain access before cross-site lead integrations; email/SMS/social connectors require owner authorization
-- [ ] Phase 1: Property-linked 3D roof drawings, verified measurements, private images and shareable PDF reports — awaiting phased plan approval
-- [ ] Phase 2: Measurement-linked detailed estimates, configurable cost catalog, comparison options and payment schedules — follows Phase 1
+- [ ] Phase 1: Property-linked 3D roof drawings, verified measurements, private images and shareable PDF reports — core workspace verified; remaining scope listed above
+- [ ] Phase 2: Measurement-linked detailed estimates, configurable cost catalog, comparison options and payment schedules — core pricing and comparison workspace verified; remaining scope listed above
 - [ ] Phase 3: Reusable document types, original-preserving PDF workflow and customer/project/pricing autofill — follows Phase 2
 - [ ] Phase 4: Fourteen-stage project workflow, employee/calendar/progress/delivery/budget tracking and verified signature/deposit automation — follows Phase 3
-- [ ] Phase 5: Recorded-transaction financial analytics, expense/labor attribution, filters and PDF/Excel exports — follows Phase 4
+- [ ] Phase 5: Recorded-transaction financial analytics, expense/labor attribution, filters and PDF/Excel exports — core recorded expenses/cash reports and PDF/Excel exports verified; advanced attribution remains
 - [x] Add private client portal and owner-controlled sharing for estimates, signed proposals, job status and invoice payments; verified desktop/mobile, signed-out customer access, PDF, payment handoff and revocation (completed payment remains blocked on account setup)
 - [x] Add public bilingual Instant Estimator with owner-approved pricing and lead qualification
 - [x] Apply owner prices: Metal $1,400/square, Shingle $700/square, Tile $1,200/square, TPO $1,700/square including insulation, Flat Roof $8/sq ft

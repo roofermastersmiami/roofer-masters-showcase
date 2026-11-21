@@ -127,6 +127,13 @@
       "when": 1795226749329,
       "tag": "0017_roofing_cost_catalog_expenses",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795227419930,
+      "tag": "0018_explicit_invoice_project_attribution",
+      "breakpoints": true
     }
   ]
 }
