@@ -1,4 +1,5 @@
 # Roadmap
+- [x] Verify failed drawing downloads stay local with editable measurements; reload restores 3D on mobile/desktop, bounded preload recovery prevents loops, and 88 tests pass
 - [x] Owner correction: company-owned address-linked reports, calibrated aerial tracing, reviewed drawing save/reopen, photo/material PDFs and estimator handoff; no paid report integration
 - [x] Audit both uploaded briefs against source and verified report flow; available/partial/missing/external dependencies documented in .lovable/reviews/crm-requirements-audit.md
 - [x] Verify signed-in address/report/PDF/estimate/tracing, property shortcut, signed-out denial and mobile layout; remove temporary report/property/drawing/estimate/image without changing original customer records
