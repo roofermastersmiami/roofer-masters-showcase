@@ -92,6 +92,27 @@
       "when": 1795206989269,
       "tag": "0012_client_portal_links",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795225199545,
+      "tag": "0013_crm_customer_property_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795225266989,
+      "tag": "0014_owner_customer_save",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795225328300,
+      "tag": "0015_customer_save_return_id",
+      "breakpoints": true
     }
   ]
 }

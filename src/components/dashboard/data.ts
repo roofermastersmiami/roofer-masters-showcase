@@ -7,7 +7,7 @@ export type Lead = Omit<Database["public"]["Tables"]["leads"]["Row"], "chat_toke
 export type LeadMessage = Database["public"]["Tables"]["lead_messages"]["Row"];
 
 const LEAD_COLS =
-  "id, created_at, updated_at, name, phone, email, address, service, message, source, status, notes, page, last_message_at, qualification";
+  "id, created_at, updated_at, name, phone, email, address, service, message, source, status, notes, page, last_message_at, qualification, customer_id, pipeline_stage";
 
 export const leadsQuery = queryOptions({
   queryKey: ["leads"],

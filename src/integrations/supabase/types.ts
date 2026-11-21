@@ -49,6 +49,82 @@ export type Database = {
           },
         ]
       }
+      crm_activity: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          lead_id: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          kind: string
+          lead_id?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          lead_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_activity_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_customers: {
+        Row: {
+          billing_address: string
+          created_at: string
+          customer_type: string
+          email: string
+          id: string
+          name: string
+          notes: string
+          phone: string
+          source_lead_id: string | null
+        }
+        Insert: {
+          billing_address?: string
+          created_at?: string
+          customer_type?: string
+          email?: string
+          id?: string
+          name: string
+          notes?: string
+          phone?: string
+          source_lead_id?: string | null
+        }
+        Update: {
+          billing_address?: string
+          created_at?: string
+          customer_type?: string
+          email?: string
+          id?: string
+          name?: string
+          notes?: string
+          phone?: string
+          source_lead_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_customers_source_lead_id_fkey"
+            columns: ["source_lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_invoices: {
         Row: {
           created_at: string
@@ -65,6 +141,7 @@ export type Database = {
           notes: string
           number: number
           paid_cents: number
+          property_id: string | null
           proposal_id: string | null
           status: string
           subtotal_cents: number
@@ -88,6 +165,7 @@ export type Database = {
           notes?: string
           number?: never
           paid_cents?: number
+          property_id?: string | null
           proposal_id?: string | null
           status?: string
           subtotal_cents: number
@@ -111,6 +189,7 @@ export type Database = {
           notes?: string
           number?: never
           paid_cents?: number
+          property_id?: string | null
           proposal_id?: string | null
           status?: string
           subtotal_cents?: number
@@ -128,10 +207,52 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "crm_invoices_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "crm_properties"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "crm_invoices_proposal_id_fkey"
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_properties: {
+        Row: {
+          address: string
+          created_at: string
+          customer_id: string
+          id: string
+          label: string
+          notes: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          customer_id: string
+          id?: string
+          label?: string
+          notes?: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          customer_id?: string
+          id?: string
+          label?: string
+          notes?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_properties_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers"
             referencedColumns: ["id"]
           },
         ]
@@ -361,6 +482,7 @@ export type Database = {
           address: string | null
           chat_token: string
           created_at: string
+          customer_id: string | null
           email: string | null
           id: string
           last_message_at: string
@@ -369,6 +491,7 @@ export type Database = {
           notes: string | null
           page: string | null
           phone: string | null
+          pipeline_stage: string
           qualification: Json | null
           service: string | null
           source: Database["public"]["Enums"]["lead_source"]
@@ -379,6 +502,7 @@ export type Database = {
           address?: string | null
           chat_token?: string
           created_at?: string
+          customer_id?: string | null
           email?: string | null
           id?: string
           last_message_at?: string
@@ -387,6 +511,7 @@ export type Database = {
           notes?: string | null
           page?: string | null
           phone?: string | null
+          pipeline_stage?: string
           qualification?: Json | null
           service?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
@@ -397,6 +522,7 @@ export type Database = {
           address?: string | null
           chat_token?: string
           created_at?: string
+          customer_id?: string | null
           email?: string | null
           id?: string
           last_message_at?: string
@@ -405,13 +531,22 @@ export type Database = {
           notes?: string | null
           page?: string | null
           phone?: string | null
+          pipeline_stage?: string
           qualification?: Json | null
           service?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "leads_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       proposal_shares: {
         Row: {
@@ -466,6 +601,7 @@ export type Database = {
           id: string
           is_template: boolean
           lead_id: string | null
+          property_id: string | null
           scope: string
           terms: string
           title: string
@@ -479,6 +615,7 @@ export type Database = {
           id?: string
           is_template?: boolean
           lead_id?: string | null
+          property_id?: string | null
           scope?: string
           terms?: string
           title: string
@@ -492,6 +629,7 @@ export type Database = {
           id?: string
           is_template?: boolean
           lead_id?: string | null
+          property_id?: string | null
           scope?: string
           terms?: string
           title?: string
@@ -505,6 +643,13 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "proposals_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "crm_properties"
+            referencedColumns: ["id"]
+          },
         ]
       }
       roof_estimates: {
@@ -514,6 +659,7 @@ export type Database = {
           id: string
           inputs: Json
           lead_id: string | null
+          property_id: string | null
           title: string
           total_cents: number
         }
@@ -523,6 +669,7 @@ export type Database = {
           id?: string
           inputs: Json
           lead_id?: string | null
+          property_id?: string | null
           title: string
           total_cents: number
         }
@@ -532,6 +679,7 @@ export type Database = {
           id?: string
           inputs?: Json
           lead_id?: string | null
+          property_id?: string | null
           title?: string
           total_cents?: number
         }
@@ -541,6 +689,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_estimates_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "crm_properties"
             referencedColumns: ["id"]
           },
         ]
@@ -557,6 +712,7 @@ export type Database = {
           notes: string
           permit_status: string
           photos: Json
+          property_id: string | null
           proposal_id: string | null
           start_date: string | null
           status: string
@@ -573,6 +729,7 @@ export type Database = {
           notes?: string
           permit_status?: string
           photos?: Json
+          property_id?: string | null
           proposal_id?: string | null
           start_date?: string | null
           status?: string
@@ -589,6 +746,7 @@ export type Database = {
           notes?: string
           permit_status?: string
           photos?: Json
+          property_id?: string | null
           proposal_id?: string | null
           start_date?: string | null
           status?: string
@@ -600,6 +758,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_jobs_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "crm_properties"
             referencedColumns: ["id"]
           },
           {
@@ -682,6 +847,7 @@ export type Database = {
         Args: { p_environment: string; p_kind: string; p_token: string }
         Returns: Json
       }
+      save_crm_customer: { Args: { p_customer: Json }; Returns: string }
       set_invoice_status: {
         Args: { p_invoice_id: string; p_status: string }
         Returns: boolean

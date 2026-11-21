@@ -5,7 +5,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LEAD_STATUSES, LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/lead-schema";
+import { PIPELINE_STAGES, PIPELINE_LABELS, stageOf } from "@/lib/crm-foundation";
+import {useMoveStage} from './foundation-data';
+import {CustomerActivity} from './CustomerActivity';
 import { WhatsAppIcon } from "@/components/site/SocialIcons";
 import { formatWhen, useDeleteLead, useUpdateLead, type Lead } from "./data";
 import { SourceBadge, StatusBadge } from "./StatusBadge";
@@ -20,6 +22,7 @@ function waLink(phone: string) {
 
 export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead: Lead | null; onClose: () => void; onOpenChat?: (id: string) => void; onOpenProposals?: (id: string) => void }) {
   const update = useUpdateLead();
+  const move = useMoveStage();
   const del = useDeleteLead();
   const [notes, setNotes] = useState("");
   const qualification=instantInputSchema.safeParse(lead?.qualification);
@@ -82,13 +85,13 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
             <div className="mt-6 grid gap-2">
               <label className="text-sm font-bold text-foreground">Pipeline stage</label>
               <Select
-                value={lead.status}
-                onValueChange={(v) => update.mutate({ id: lead.id, status: v as LeadStatus }, { onSuccess: () => toast.success(`Moved to ${LEAD_STATUS_LABELS[v as LeadStatus]}`) })}
+                value={stageOf(lead)}
+                onValueChange={(v) => {const stage=PIPELINE_STAGES.find(s=>s===v);if(stage)move.mutate({id:lead.id,stage},{onSuccess:()=>toast.success(`Sales stage: ${PIPELINE_LABELS[stage]}`)});}}
               >
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {LEAD_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>{LEAD_STATUS_LABELS[s]}</SelectItem>
+                  {PIPELINE_STAGES.map((s) => (
+                    <SelectItem key={s} value={s}>{PIPELINE_LABELS[s]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -101,6 +104,8 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
                 Save notes
               </Button>
             </div>
+
+            <CustomerActivity leadId={lead.id}/>
 
             <Button
               variant="ghost"

@@ -146,13 +146,39 @@
   }
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     font-variation-settings: "wdth" 112;
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
+}
+
+/* CRM theme is scoped so the public website stays unchanged. */
+.crm-dark {
+  --background: oklch(0.18 0.013 250);
+  --foreground: oklch(0.94 0.006 250);
+  --card: oklch(0.22 0.014 250);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.7 0.1 245);
+  --primary-foreground: oklch(0.16 0.02 250);
+  --muted: oklch(0.27 0.016 250);
+  --muted-foreground: oklch(0.72 0.012 250);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --accent: oklch(0.3 0.045 250);
+  --accent-foreground: var(--foreground);
+  --border: oklch(0.34 0.012 250);
+  --input: var(--border);
+  --ring: var(--primary);
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --chart-1: var(--primary);
+  --chart-2: var(--steel);
+  --chart-3: var(--muted-foreground);
 }
 
 /* ---------- Utilities ---------- */
