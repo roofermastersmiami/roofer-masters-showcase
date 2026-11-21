@@ -1,14 +1,16 @@
 # Roadmap
-- [ ] Owner correction: build Roofer Masters' own address-linked measurement/report workflow, not a paid EagleView/Roofr order; manual or owner-supplied imagery measurements must not be presented as address-derived survey data
-- [ ] Priority correction: address-based roof report request/order tracking, private PDF attachment and estimate/material handoff; actual provider purchase waits on provider/account authorization
-- [ ] Audit every requirement in both uploaded briefs against source and tested flows; distinguish available, partial, missing and externally blocked features without claiming all complete
+- [x] Owner correction: company-owned address-linked reports, calibrated aerial tracing, reviewed drawing save/reopen, photo/material PDFs and estimator handoff; no paid report integration
+- [x] Audit both uploaded briefs against source and verified report flow; available/partial/missing/external dependencies documented in .lovable/reviews/crm-requirements-audit.md
+- [x] Verify signed-in address/report/PDF/estimate/tracing, property shortcut, signed-out denial and mobile layout; remove temporary report/property/drawing/estimate/image without changing original customer records
+- [ ] Finish remaining all-in-one scope listed in the audit; calendar/team/inventory/templates/automations and richer production/portal/billing are not complete
 - [x] Re-read both uploaded priority briefs and fold them into the active phased upgrade
 - [x] Validate saved detailed estimate options, customer-only proposal PDF, private expense receipts, date/project financial selection and PDF/Excel exports; 45 related tests passed, desktop/mobile and signed-out isolation checked
 - [x] Clean temporary QA customer/property/drawing/estimate/proposal/expense/catalog records and private uploads
 - [x] CRM foundation: sidebar, dashboard, search, notification center, scoped theme, customers/properties and expanded pipeline/activity
 - [x] Roof workspace: editable planes/edges, starter shapes, reviewable dimensions, revision saves, private image storage, report PDF and measurement transfer; viewer remounts verified without DOM errors
 - [x] Detailed estimator and financial foundation: price catalog, cost comparison options, tax/discount/deposit/balance, customer proposal generation, expense receipts, recorded financial totals and explicit invoice/project allocation
-- [ ] Roof report remaining scope: house walls, richer custom geometry editing, photo-embedded reports and broader geometric validation
+- [x] Add roof house walls, calibrated image tracing, photo/material report pages, perimeter and additional geometry validation
+- [ ] Roof report remaining scope: direct 3D vertex manipulation, attached complex topology, imagery retrieval and survey-grade accuracy validation
 - [ ] Estimator remaining scope: customer-side multi-option acceptance and milestone payment schedules
 - [ ] Financial remaining scope: employee/system breakdowns, labor time attribution and accrual-grade accounting
 - [x] Expand phased plan with the all-in-one brief: CRM redesign, dashboard, advanced pipeline, roles, scheduling, inventory, suppliers, file library, automations and website integrations

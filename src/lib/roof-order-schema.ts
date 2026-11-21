@@ -18,6 +18,7 @@ export const roofOrderSchema = z.object({
   provider: z.enum(['manual', 'eagleview', 'gaf', 'roofr', 'hover', 'other']),
   notes: z.string().max(4000),
 });
+export const ownRoofReportSchema=roofOrderSchema.extend({provider:z.literal('manual')});
 export const updateRoofOrderSchema = z.object({
   id: z.string().uuid(), updated_at: z.string(), status: z.enum(REPORT_STATUSES),
   provider_reference: z.string().trim().max(150), notes: z.string().max(4000),

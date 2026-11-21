@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { roofOrderSchema, assertReportStatus, reviewedReport } from '@/lib/roof-order-schema';
+import { roofOrderSchema, ownRoofReportSchema, assertReportStatus, reviewedReport } from '@/lib/roof-order-schema';
 const customer = 'bc1ce3a1-e666-4169-9c65-4e17b3d156bb';
 const report = { roof_type: 'Metal Roof', area_sqft: 2000, waste_pct: 10, ridge_lf: 40, hips_lf: 0, valleys_lf: 20, eaves_lf: 80, rakes_lf: 60, panel_width_in: 16, pipes: 2 };
 describe('address-based roof report requests', () => {
+  it('starts only company-owned reports, not paid provider orders',()=>{
+    const input={customer_id:customer,address:'123 Customer Road, Homestead FL',title:'Report',provider:'manual',notes:''};
+    expect(ownRoofReportSchema.safeParse(input).success).toBe(true);
+    expect(ownRoofReportSchema.safeParse({...input,provider:'eagleview'}).success).toBe(false);
+  });
   it('requires a customer property address instead of deriving measurements from an address', () => {
     expect(roofOrderSchema.safeParse({ customer_id: customer, address: '', title: 'Report', provider: 'manual', notes: '' }).success).toBe(false);
     const parsed = roofOrderSchema.parse({ customer_id: customer, address: '  123 Customer Road, Homestead FL 33030  ', title: 'Report', provider: 'manual', notes: '' });

@@ -14,6 +14,7 @@ const sub=(a:Point,b:Point)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
 const cross=(a:Point,b:Point)=>({x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x});
 const dot=(a:Point,b:Point)=>a.x*b.x+a.y*b.y+a.z*b.z;
 export function planeInfo(p:RoofPlane){
+ for(let i=0;i<p.points.length;i++)for(let j=i+1;j<p.points.length;j++){if(j===i+1||(i===0&&j===p.points.length-1))continue;const a=p.points[i],b=p.points[(i+1)%p.points.length],c=p.points[j],d=p.points[(j+1)%p.points.length];if(!a||!b||!c||!d)continue;const side=(u:Point,v:Point,w:Point)=>(v.x-u.x)*(w.z-u.z)-(v.z-u.z)*(w.x-u.x);if(side(a,b,c)*side(a,b,d)<0&&side(c,d,a)*side(c,d,b)<0)throw new Error(`${p.name}: roof edges cross`);}
  const a=p.points[0],b=p.points[1],c=p.points[2];if(!a||!b||!c)throw new Error('A plane needs three vertices');
  const n=cross(sub(b,a),sub(c,a));const mag=Math.hypot(n.x,n.y,n.z);if(mag<0.0001||Math.abs(n.y)<0.0001)throw new Error(`${p.name}: zero area or vertical plane`);
  for(const v of p.points)if(Math.abs(dot(n,sub(v,a)))/mag>0.02)throw new Error(`${p.name}: vertices must lie on one roof plane`);
@@ -30,7 +31,9 @@ export function measureDrawing(raw:RoofDrawing){
  for(let i=0;i<d.planes.length;i++)for(let j=i+1;j<d.planes.length;j++){const a=d.planes[i],b=d.planes[j];if(!a||!b)continue;const intersection=polygonClipping.intersection([ring(a)],[ring(b)]);if(intersection.reduce((sum,poly)=>sum+ringArea(poly[0]??[]),0)>0.1)throw new Error(`${a.name} overlaps ${b.name} in plan`);}
  const edges:Record<EdgeType,number>={eave:0,rake:0,ridge:0,hip:0,valley:0,other:0};const seen=new Map<string,EdgeType>();
  for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length],type=p.edges[i];if(!a||!b||!type)continue;const key=edgeKey(a,b),existing=seen.get(key);if(existing&&existing!==type)throw new Error('Shared edges must have matching classifications');if(!existing){edges[type]+=distance(a,b);seen.set(key,type);}}
- const area=planes.reduce((sum,p)=>sum+p.area,0);return {area,squares:area/100,withWaste:area*(1+d.waste/100),edges,planes,penetrations:d.penetrations.length};
+ const exterior=new Map<string,{length:number;count:number}>();for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length];if(!a||!b)continue;const key=edgeKey(a,b),existing=exterior.get(key);if(existing)existing.count++;else exterior.set(key,{length:distance(a,b),count:1});}
+ const perimeter=[...exterior.values()].filter(e=>e.count===1).reduce((sum,e)=>sum+e.length,0);
+ const area=planes.reduce((sum,p)=>sum+p.area,0);return {area,squares:area/100,withWaste:area*(1+d.waste/100),edges,planes,perimeter,penetrations:d.penetrations.length};
 }
 export type RoofShape='gable'|'hip'|'flat'|'shed'|'mansard'|'complex';
 export function roofPreset(shape:RoofShape,width=40,length=30,pitch=6):RoofDrawing {
@@ -43,12 +46,14 @@ export function roofPreset(shape:RoofShape,width=40,length=30,pitch=6):RoofDrawi
  else if(shape==='shed')planes=[plane('Shed roof',[sw,se,point(w,l,length*pitch/12),point(-w,l,length*pitch/12)],['eave','rake','eave','rake'])];
  else if(shape==='hip'){
  const a=point(0,-Math.max(0,l-w),Math.min(w,l)*pitch/12),b=point(0,Math.max(0,l-w),Math.min(w,l)*pitch/12);
- if(length<=width){const a2=point(-Math.max(0,w-l),0,l*pitch/12),b2=point(Math.max(0,w-l),0,l*pitch/12);planes=[plane('South',[sw,se,b2,a2],['eave','hip','ridge','hip']),plane('North',[nw,a2,b2,ne],['hip','ridge','hip','eave']),plane('West',[sw,a2,nw],['hip','hip','eave']),plane('East',[se,ne,b2],['eave','hip','hip'])];}
+ if(length===width){const apex=point(0,0,l*pitch/12);planes=[plane('South',[sw,se,apex],['eave','hip','hip']),plane('North',[ne,nw,apex],['eave','hip','hip']),plane('West',[nw,sw,apex],['eave','hip','hip']),plane('East',[se,ne,apex],['eave','hip','hip'])];}
+ else if(length<width){const a2=point(-Math.max(0,w-l),0,l*pitch/12),b2=point(Math.max(0,w-l),0,l*pitch/12);planes=[plane('South',[sw,se,b2,a2],['eave','hip','ridge','hip']),plane('North',[nw,a2,b2,ne],['hip','ridge','hip','eave']),plane('West',[sw,a2,nw],['hip','hip','eave']),plane('East',[se,ne,b2],['eave','hip','hip'])];}
  else planes=[plane('West',[sw,a,b,nw],['hip','ridge','hip','eave']),plane('East',[se,ne,b,a],['eave','hip','ridge','hip']),plane('South',[sw,se,a],['eave','hip','hip']),plane('North',[nw,b,ne],['hip','hip','eave'])];
  }else if(shape==='mansard'){
  const inset=Math.min(w,l)*0.3,rise=inset*pitch/12;const a=point(-w+inset,-l+inset,rise),b=point(w-inset,-l+inset,rise),c=point(w-inset,l-inset,rise),d=point(-w+inset,l-inset,rise);
  planes=[plane('South',[sw,se,b,a],['eave','hip','ridge','hip']),plane('East',[se,ne,c,b],['eave','hip','ridge','hip']),plane('North',[ne,nw,d,c],['eave','hip','ridge','hip']),plane('West',[nw,sw,a,d],['eave','hip','ridge','hip']),plane('Upper flat',[a,b,c,d],['ridge','ridge','ridge','ridge'])];
  }else{const a=point(0,-l,h),b=point(0,l,h);planes=[plane('West plane',[sw,a,b,nw],['rake','ridge','rake','eave']),plane('East plane',[a,se,ne,b],['rake','eave','rake','ridge'])];}
+ if(shape==='complex'){const wing=roofPreset('hip',width/2,length/2,pitch);planes.push(...wing.planes.map(p=>({...p,id:`wing-${p.id}`,name:`Wing ${p.name}`,points:p.points.map(v=>({...v,x:v.x+width,y:v.y,z:v.z}))})));}
  return {planes,penetrations:[],waste:10,roof_type:'Metal Roof',notes:'',condition:'',verified:false};
 }
 export function toMaterialReport(d:RoofDrawing){const m=measureDrawing(d);return {roof_type:d.roof_type,area_sqft:m.area,waste_pct:d.waste,ridge_lf:m.edges.ridge,hips_lf:m.edges.hip,valleys_lf:m.edges.valley,eaves_lf:m.edges.eave,rakes_lf:m.edges.rake,panel_width_in:16,pipes:d.penetrations.filter(p=>p.kind==='pipe'||p.kind==='vent').length};}

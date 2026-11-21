@@ -7,7 +7,7 @@ export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], f
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (pixels < 1) throw new Error('Calibration points must be distinct');
   if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24) throw new Error('Draw at least three corners and enter a valid pitch');
-  const scale = feet / pixels, origin = points[0];
+  const scale = feet / pixels, origin = reference[0];
   if (!origin) throw new Error('Missing roof corners');
   const minY = Math.min(...points.map(p => p.y));
   const plane: RoofPlane = { id, name: 'Traced roof plane', points: points.map(p => ({ x: (p.x - origin.x) * scale, z: (p.y - origin.y) * scale, y: 10 + (p.y - minY) * scale * pitch / 12 })), edges: points.map(() => 'other') };

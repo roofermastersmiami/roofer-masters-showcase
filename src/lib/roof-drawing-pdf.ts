@@ -1,6 +1,8 @@
 import {PDFDocument,StandardFonts,rgb} from 'pdf-lib';
 import {measureDrawing,type RoofDrawing} from './roof-geometry';
-export async function roofDrawingPdf(title:string,d:RoofDrawing,customer:string,address:string){
+import {materialOrder} from './material-order';
+import {toMaterialReport} from './roof-geometry';
+export async function roofDrawingPdf(title:string,d:RoofDrawing,customer:string,address:string,photos:{bytes:Uint8Array;mime:string;category:string;name:string}[]=[]){
  const m=measureDrawing(d),pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);let page=pdf.addPage([612,792]);let y=745;
  const text=(value:string,size=11,strong=false)=>{if(y<50){page=pdf.addPage([612,792]);y=745;}page.drawText(value.replace(/[^\x20-\x7e]/g,' ').slice(0,100),{x:40,y,size,font:strong?bold:font,color:rgb(.1,.16,.2)});y-=size+9;};
  text('ROOFER MASTERS',22,true);text('YOUR ROOF, OUR MASTERPIECE',10);text('305-942-3093 | roofermasters@gmail.com',10);y-=8;text(title,16,true);text(customer);text(address);text(`Status: ${d.verified?'Owner-reviewed measurements':'Unverified drawing / estimate'}`);text(`${d.roof_type} | Area ${m.area.toFixed(2)} sq ft | ${m.squares.toFixed(2)} squares`);text(`Waste ${d.waste}% | Allowance ${m.withWaste.toFixed(2)} sq ft`);
@@ -8,5 +10,9 @@ export async function roofDrawingPdf(title:string,d:RoofDrawing,customer:string,
  for(const plane of d.planes){for(let i=0;i<plane.points.length;i++){const a=plane.points[i],b=plane.points[(i+1)%plane.points.length];if(!a||!b)continue;const x1=50+(a.x-minX)*scale,y1=top-(a.z-minZ)*scale,x2=50+(b.x-minX)*scale,y2=top-(b.z-minZ)*scale;page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:1,color:rgb(0,.25,.42)});} }y=top-Math.max(1,maxZ-minZ)*scale-25;
  text('Plane measurements',13,true);for(const p of m.planes)text(`${p.name}: ${p.area.toFixed(2)} sq ft | ${p.pitch.toFixed(2)}:12 pitch`);
  text('Edge measurements (shared edges counted once)',13,true);for(const [k,v] of Object.entries(m.edges))text(`${k}: ${v.toFixed(2)} ft`);text(`Penetrations: ${d.penetrations.length}`);for(const p of d.penetrations)text(`${p.kind}: ${p.width} x ${p.length} ft at (${p.x}, ${p.z})`);if(d.condition)text(`Condition: ${d.condition}`);if(d.notes){text('Inspection notes',13,true);for(const line of d.notes.split('\n'))text(line);}text('Measurements and material assumptions require owner/supplier verification.',9);
+ text(`Perimeter: ${m.perimeter.toFixed(2)} ft`,12,true);
+ text('Material quantities (supplier verification required)',13,true);
+ for(const line of materialOrder(toMaterialReport(d)))text(`${line.item}: ${line.qty} ${line.unit}`);
+ for(const photo of photos){page=pdf.addPage([612,792]);y=745;text(`${photo.category.toUpperCase()} PHOTO`,15,true);text(photo.name,10);const image=photo.mime==='image/png'?await pdf.embedPng(photo.bytes):await pdf.embedJpg(photo.bytes);const fit=image.scaleToFit(532,600);page.drawImage(image,{x:(612-fit.width)/2,y:80+(600-fit.height)/2,...fit});}
  return pdf.save();
 }

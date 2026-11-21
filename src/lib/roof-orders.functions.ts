@@ -1,11 +1,11 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
-import { roofOrderSchema, updateRoofOrderSchema, assertReportStatus, reviewedReport } from './roof-order-schema';
+import { ownRoofReportSchema, updateRoofOrderSchema, assertReportStatus, reviewedReport } from './roof-order-schema';
 import { materialOrder } from './material-order';
 
 export const createRoofOrder = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => roofOrderSchema.parse(input)).handler(async ({ data, context }) => {
+  .inputValidator((input: unknown) => ownRoofReportSchema.parse(input)).handler(async ({ data, context }) => {
     const { data: id, error } = await context.supabase.rpc('create_roof_report_request', { p_customer_id: data.customer_id, p_address: data.address, p_title: data.title, p_provider: data.provider, p_notes: data.notes });
     if (error || !id) throw new Error('Could not save the customer report request');
     return { id };
