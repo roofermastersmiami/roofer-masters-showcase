@@ -28,8 +28,8 @@ export const extractRoofReport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data, context }): Promise<{ ok: true; report: ExtractedReport } | { ok: false; error: string }> => {
-    const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (!isAdmin) throw new Error("Owner access required");
+    const { data: isAdmin } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (!isAdmin) throw new Error("You do not have access to this action");
     const { generateResponse, GatewayError } = await import("@lovable.dev/ai-gateway");
     const dataUrl = `data:${data.mime};base64,${data.base64}`;
     const file = data.mime === "application/pdf"

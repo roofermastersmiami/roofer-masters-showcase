@@ -38,21 +38,6 @@ export const messagesQuery = (leadId: string) =>
     refetchInterval: 10_000,
   });
 
-export const isOwnerQuery = (userId: string) =>
-  queryOptions({
-    queryKey: ["is-owner", userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (error) throw error;
-      return !!data;
-    },
-  });
-
 export function useUpdateLead() {
   const qc = useQueryClient();
   return useMutation({

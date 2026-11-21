@@ -13,8 +13,8 @@ export const createRoofOrder = createServerFn({ method: 'POST' }).middleware([re
 
 export const updateRoofOrder = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => updateRoofOrderSchema.parse(input)).handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_role', { _user_id: context.userId, _role: 'admin' });
-    if (!owner) throw new Error('Owner access required');
+    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (!owner) throw new Error('You do not have access to this action');
     const { data: current } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).single();
     if (!current) throw new Error('Report request not found');
     assertReportStatus({ ...current, ...data });
@@ -26,8 +26,8 @@ export const updateRoofOrder = createServerFn({ method: 'POST' }).middleware([re
 
 export const attachRoofOrderPdf = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), path: z.string().max(300), updated_at: z.string() }).parse(input)).handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_role', { _user_id: context.userId, _role: 'admin' });
-    if (!owner) throw new Error('Owner access required');
+    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (!owner) throw new Error('You do not have access to this action');
     if (!data.path.startsWith(`roof-report/${data.id}/`) || !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(data.path)) throw new Error('Invalid report file');
     const name = data.path.split('/').at(-1);
     const { data: files, error: fileError } = await context.supabase.storage.from('roofing-proposals').list(`roof-report/${data.id}`, { search: name ?? '' });
@@ -40,8 +40,8 @@ export const attachRoofOrderPdf = createServerFn({ method: 'POST' }).middleware(
 
 export const transferRoofOrder = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), target: z.enum(['estimate', 'materials']), job_id: z.string().uuid().optional() }).parse(input)).handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_role', { _user_id: context.userId, _role: 'admin' });
-    if (!owner) throw new Error('Owner access required');
+    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (!owner) throw new Error('You do not have access to this action');
     const { data: order } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).single();
     if (!order) throw new Error('Report request not found');
     const report = reviewedReport(order);

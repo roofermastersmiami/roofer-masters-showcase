@@ -4,8 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { invoiceSchema, invoiceTotals } from "./crm-schema";
 
 export const createInvoice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: unknown) => invoiceSchema.parse(input)).handler(async ({ data, context }) => {
-  const { data: owner } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-  if (!owner) throw new Error("Owner access required");
+  const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['accounting']});
+  if (!owner) throw new Error("You do not have access to this action");
   const { data: lead } = await context.supabase.from("leads").select("name,email,address").eq("id", data.lead_id).single();
   if (!lead) throw new Error("Choose an existing customer");
   if (data.proposal_id) {
@@ -19,8 +19,8 @@ export const createInvoice = createServerFn({ method: "POST" }).middleware([requ
   return invoice;
 });
 export const changeInvoiceStatus = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: unknown) => z.object({ id: z.string().uuid(), status: z.enum(["issued", "void"]) }).parse(input)).handler(async ({ data, context }) => {
-  const { data: owner } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-  if (!owner) throw new Error("Owner access required");
+  const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['accounting']});
+  if (!owner) throw new Error("You do not have access to this action");
   const { data: changed, error } = await context.supabase.rpc("set_invoice_status", { p_invoice_id: data.id, p_status: data.status });
   if (error || !changed) throw new Error(error?.message ?? "Invoice cannot be changed");
   return { ok: true };

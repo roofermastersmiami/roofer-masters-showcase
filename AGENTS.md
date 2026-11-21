@@ -32,7 +32,7 @@ use the editor.
 ## Project rules
 - Public forms and chat write leads only through server functions in `src/lib/leads.functions.ts` (service-role client, zod-validated); browsers have no insert access to `leads`/`lead_messages`, so validation and abuse checks can't be bypassed.
 - Lead form rules (required fields, pipeline stages) live in `src/lib/lead-schema.ts` and are shared by client and server; tests in `src/test/lead-rules.test.ts` cover them.
-- Owner access = `admin` row in `user_roles`, granted by a trigger when the business email confirms; dashboard data is read via the browser client under admin-only RLS.
+- Owner access = `admin` row in `user_roles` (trigger on business-email confirmation). Team roles (office, sales, production_manager, crew, accounting) are enforced by `has_any_role` in RLS, storage policies, RPCs and server functions; `src/lib/team-roles.ts` mirrors them for navigation only. Money tables are owner/accounting only; crew read assigned jobs solely through a server projection.
 - Editable site text lives in `site_content` and is read via `getSiteContent` (publishable client) in the root loader, with code defaults as fallback.
 - Visitor chat uses a per-lead `chat_token` kept in localStorage; replies are polled, not realtime, to keep the chat simple.
 - Proposals and reusable templates share an admin-only library with private PDF storage; new revisions use unique object paths so saved edits cannot expose another document.

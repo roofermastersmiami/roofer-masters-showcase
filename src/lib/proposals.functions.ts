@@ -7,8 +7,8 @@ export const createProposalShare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ proposalId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (roleError || !owner) throw new Error("Owner access required");
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
+    if (roleError || !owner) throw new Error("You do not have access to this action");
     const { data: proposal } = await context.supabase.from("proposals").select("id, file_path, is_template").eq("id", data.proposalId).single();
     if (!proposal?.file_path || proposal.is_template) throw new Error("Save a proposal PDF before sharing");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -21,8 +21,8 @@ export const revokeProposalShare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (error || !owner) throw new Error("Owner access required");
+    const { data: owner, error } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
+    if (error || !owner) throw new Error("You do not have access to this action");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: updateError } = await supabaseAdmin.from("proposal_shares").update({ revoked_at: new Date().toISOString() }).eq("id", data.id);
     if (updateError) throw new Error("Could not revoke link");

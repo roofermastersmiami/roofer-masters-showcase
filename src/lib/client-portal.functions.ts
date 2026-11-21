@@ -8,8 +8,8 @@ export const createClientPortal = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ leadId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc('has_role', { _user_id: context.userId, _role: 'admin' });
-    if (roleError || !owner) throw new Error('Owner access required');
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
+    if (roleError || !owner) throw new Error('You do not have access to this action');
     const { data: lead } = await context.supabase.from('leads').select('id').eq('id', data.leadId).single();
     if (!lead) throw new Error('Customer not found');
     const { data: link, error } = await context.supabase.from('client_portal_links').insert({ lead_id: lead.id }).select('id,token,expires_at,revoked_at').single();
@@ -21,8 +21,8 @@ export const revokeClientPortal = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc('has_role', { _user_id: context.userId, _role: 'admin' });
-    if (roleError || !owner) throw new Error('Owner access required');
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
+    if (roleError || !owner) throw new Error('You do not have access to this action');
     const { error } = await context.supabase.from('client_portal_links').update({ revoked_at: new Date().toISOString() }).eq('id', data.id);
     if (error) throw new Error('Could not revoke customer portal');
     return { ok: true };

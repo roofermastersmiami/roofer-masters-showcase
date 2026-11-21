@@ -8,8 +8,8 @@ export const loadPublicAerial = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => z.object({ address: z.string().trim().min(8).max(250), spanMeters: z.number().min(30).max(200).default(70) }).parse(raw))
   .handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_role', { _user_id: context.userId, _role: 'admin' });
-    if (!owner) throw new Error('Owner access required');
+    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (!owner) throw new Error('You do not have access to this action');
     const geo = await fetch(`https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(data.address)}&benchmark=Public_AR_Current&format=json`, { signal: AbortSignal.timeout(15000) }).catch(() => null);
     if (!geo?.ok) return { error: 'Free address lookup is unavailable right now. Upload your own drone or roof photo instead.' } as const;
     const match = (await geo.json() as { result?: { addressMatches?: { coordinates: { x: number; y: number }; matchedAddress: string }[] } }).result?.addressMatches?.[0];

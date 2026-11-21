@@ -1,3 +1,7 @@
+import {useRoles} from './RolesContext';
+import {canOpen} from '@/lib/team-roles';
+import {TeamAccess} from './TeamAccess';
+import {CrewJobs} from './CrewJobs';
 import {RoofReports} from './RoofReports';
 import {AdvancedEstimator} from './AdvancedEstimator';
 import {CostCatalog} from './CostCatalog';
@@ -18,11 +22,14 @@ import {ContentEditor} from './ContentEditor';
 import {InstantEstimateSettings} from './InstantEstimateSettings';
 import {useCrm} from './CrmContext';
 import {useState} from 'react';
-export const CRM_SECTIONS=['detailed-estimator','prices','expenses','financials','measurements','pipeline','submissions','customers','properties','chat','proposals','estimates','jobs','invoices','followups','sales','content','instant'] as const;
+export const CRM_SECTIONS=['detailed-estimator','prices','expenses','financials','measurements','pipeline','submissions','customers','properties','chat','proposals','estimates','jobs','invoices','followups','sales','content','instant','team','my-jobs'] as const;
 export function CrmSection({section}:{section:string}){
  const {leads,onOpen,openProposals,proposalLeadId,clearProposalLead}=useCrm();const [chatId,setChatId]=useState<string|null>(null);
+ const roles=useRoles();if(!canOpen(roles,section))return <p role="alert" className="py-10 text-muted-foreground">Your team role does not include this section.</p>;
  switch(section){
  case 'detailed-estimator':return <AdvancedEstimator/>;
+ case 'team':return <TeamAccess/>;
+ case 'my-jobs':return <CrewJobs/>;
  case 'prices':return <CostCatalog/>;
  case 'expenses':return <Expenses/>;
  case 'financials':return <FinancialAnalytics/>;

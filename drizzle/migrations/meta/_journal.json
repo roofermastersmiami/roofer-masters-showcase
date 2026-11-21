@@ -162,6 +162,34 @@
       "when": 1795231048233,
       "tag": "0022_lockdown_helper_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795231473426,
+      "tag": "0023_team_roles_enum",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795231536043,
+      "tag": "0024_team_role_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795231554412,
+      "tag": "0025_customer_save_team_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795231733517,
+      "tag": "0026_tighten_job_money_access",
+      "breakpoints": true
     }
   ]
 }

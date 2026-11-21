@@ -909,6 +909,7 @@ export type Database = {
       }
       roof_jobs: {
         Row: {
+          assigned_user_ids: string[]
           budget_cents: number
           checklist: Json
           created_at: string
@@ -929,6 +930,7 @@ export type Database = {
           title: string
         }
         Insert: {
+          assigned_user_ids?: string[]
           budget_cents?: number
           checklist?: Json
           created_at?: string
@@ -949,6 +951,7 @@ export type Database = {
           title: string
         }
         Update: {
+          assigned_user_ids?: string[]
           budget_cents?: number
           checklist?: Json
           created_at?: string
@@ -1142,6 +1145,13 @@ export type Database = {
         }
         Returns: string
       }
+      has_any_role: {
+        Args: {
+          _roles: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1182,7 +1192,14 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role:
+        | "admin"
+        | "user"
+        | "office"
+        | "sales"
+        | "production_manager"
+        | "crew"
+        | "accounting"
       lead_source: "callback" | "contact" | "quote" | "chat"
       lead_status: "new" | "contacted" | "estimate_sent" | "won" | "lost"
     }
@@ -1312,7 +1329,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: [
+        "admin",
+        "user",
+        "office",
+        "sales",
+        "production_manager",
+        "crew",
+        "accounting",
+      ],
       lead_source: ["callback", "contact", "quote", "chat"],
       lead_status: ["new", "contacted", "estimate_sent", "won", "lost"],
     },
