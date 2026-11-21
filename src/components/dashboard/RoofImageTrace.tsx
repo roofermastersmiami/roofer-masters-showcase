@@ -1,15 +1,103 @@
-import { useState } from 'react';
+import { useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Ruler, Plus, Undo2 } from 'lucide-react';
+import { Ruler, Plus, Undo2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { calibratedPlane, type ImagePoint } from '@/lib/roof-trace';
-import type { RoofPlane } from '@/lib/roof-geometry';
-import { Field } from './CrmControls';
-export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; onAdd: (plane: RoofPlane,replace:boolean) => void; feetPerPixel?: number }) {
-  const photo = useQuery({queryKey:['trace-photo',path],queryFn:async()=>{const {data,error}=await supabase.storage.from('roof-job-photos').createSignedUrl(path,300);if(error||!data)throw error;return data.signedUrl;}});
-  const [mode,setMode]=useState<'calibrate'|'trace'>(feetPerPixel?'trace':'calibrate'),[reference,setReference]=useState<ImagePoint[]>(feetPerPixel?[{x:0,y:0},{x:1000,y:0}]:[]),[points,setPoints]=useState<ImagePoint[]>([]),[feet,setFeet]=useState(feetPerPixel?feetPerPixel*1000:0),[pitch,setPitch]=useState(0),[dimensions,setDimensions]=useState({width:1000,height:700}),[replace,setReplace]=useState(true);
-  return <section className="border-t border-border py-6"><h3 className="mb-3 text-lg font-bold">Calibrated aerial tracing</h3><p className="mb-4 text-sm text-muted-foreground">Use a top-down, undistorted image and a known ground distance. Traced measurements remain unverified until checked on site.</p>{feetPerPixel&&<p className="mb-4 border-l-2 border-primary pl-3 text-sm">Public aerial: scale pre-set from map data ({feetPerPixel.toFixed(2)} ft per pixel). This photo is coarse — treat results as estimates and recalibrate on a measured edge when possible.</p>}<div className="mb-4 flex flex-wrap items-end gap-3"><Button variant={mode==='calibrate'?'secondary':'outline'} onClick={()=>{setMode('calibrate');setReference([]);}}><Ruler/> Set two scale points</Button><Field label="Known distance (ft)"><Input className="w-32" type="number" min={0.1} value={feet} onChange={e=>setFeet(Number(e.target.value))}/></Field><Field label="Plane pitch (rise / 12)"><Input className="w-32" type="number" min={0} max={24} value={pitch} onChange={e=>setPitch(Number(e.target.value))}/></Field><Button variant={mode==='trace'?'secondary':'outline'} disabled={reference.length!==2||feet<=0} onClick={()=>setMode('trace')}>Trace roof corners</Button><Button variant="ghost" size="icon" aria-label="Undo traced corner" title="Undo traced corner" disabled={!points.length} onClick={()=>setPoints(points.slice(0,-1))}><Undo2/></Button></div>{photo.data?<div className="relative w-full overflow-hidden rounded-md border border-border"><img src={photo.data} alt="Aerial roof measurement source" className="block max-h-[600px] w-full object-contain" onLoad={e=>setDimensions({width:e.currentTarget.naturalWidth,height:e.currentTarget.naturalHeight})}/><svg className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Aerial tracing surface" onClick={e=>{const box=e.currentTarget.getBoundingClientRect();const scale=Math.min(box.width/dimensions.width,box.height/dimensions.height);const x=(e.clientX-box.left-(box.width-dimensions.width*scale)/2)/scale,y=(e.clientY-box.top-(box.height-dimensions.height*scale)/2)/scale;if(x<0||y<0||x>dimensions.width||y>dimensions.height)return;const point={x,y};if(mode==='calibrate')setReference(reference.length===2?[point]:[...reference,point]);else setPoints([...points,point]);}}>{reference.length===2&&<line x1={reference[0]?.x} y1={reference[0]?.y} x2={reference[1]?.x} y2={reference[1]?.y} stroke="currentColor" strokeWidth={dimensions.width/250}/>}<polygon points={points.map(p=>`${p.x},${p.y}`).join(' ')} fill="currentColor" fillOpacity={0.2} stroke="currentColor" strokeWidth={dimensions.width/300}/>{[...reference,...points].map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={dimensions.width/120} fill="currentColor"/>)}</svg></div>:<p>{photo.error?'Aerial image unavailable':'Loading aerial image…'}</p>}<div className="mt-4 flex flex-wrap items-center gap-4"><p className="text-sm text-muted-foreground">{reference.length}/2 scale points · {points.length} roof corners</p><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={replace} onChange={e=>setReplace(e.target.checked)}/> Replace existing roof planes</label><Button disabled={points.length<3||feet<=0||reference.length!==2} onClick={()=>{try{onAdd(calibratedPlane(points,reference,feet,pitch,crypto.randomUUID()),replace);setReplace(false);setPoints([]);toast.success('Unverified traced plane added; classify its edges');}catch(e){toast.error(e instanceof Error?e.message:'Could not measure traced plane');}}}><Plus/> Add traced plane</Button></div></section>;
+import { calibratedPlane, checkCalibration, nextEdgeType, UPHILL_LABELS, type ImagePoint, type Uphill } from '@/lib/roof-trace';
+import { planeInfo, type EdgeType, type RoofPlane } from '@/lib/roof-geometry';
+import { Field, Choice } from './CrmControls';
+
+const EDGE_SHORT: Record<EdgeType, string> = { eave: 'Eave', rake: 'Rake', ridge: 'Ridge', hip: 'Hip', valley: 'Valley', other: 'Other' };
+type Traced = { id: string; name: string; points: ImagePoint[] };
+
+export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; onAdd: (plane: RoofPlane, replace: boolean) => void; feetPerPixel?: number }) {
+  const photo = useQuery({ queryKey: ['trace-photo', path], queryFn: async () => { const { data, error } = await supabase.storage.from('roof-job-photos').createSignedUrl(path, 300); if (error || !data) throw error; return data.signedUrl; } });
+  const [mode, setMode] = useState<'calibrate' | 'trace'>(feetPerPixel ? 'trace' : 'calibrate');
+  const [reference, setReference] = useState<ImagePoint[]>(feetPerPixel ? [{ x: 0, y: 0 }, { x: 1000, y: 0 }] : []);
+  const [points, setPoints] = useState<ImagePoint[]>([]);
+  const [edges, setEdges] = useState<EdgeType[]>([]);
+  const [feet, setFeet] = useState(feetPerPixel ? feetPerPixel * 1000 : 0);
+  const [pitch, setPitch] = useState(6);
+  const [uphill, setUphill] = useState<Uphill>('up');
+  const [name, setName] = useState('');
+  const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
+  const [replace, setReplace] = useState(true);
+  const [traced, setTraced] = useState<Traced[]>([]);
+  const drag = useRef<{ kind: 'ref' | 'pt'; i: number } | null>(null);
+  const moved = useRef(false);
+  const svg = useRef<SVGSVGElement>(null);
+  const w = dimensions.width;
+  const calibration = checkCalibration(reference, feet, w);
+
+  const toImage = (clientX: number, clientY: number) => {
+    const box = svg.current!.getBoundingClientRect();
+    const s = Math.min(box.width / dimensions.width, box.height / dimensions.height);
+    const x = (clientX - box.left - (box.width - dimensions.width * s) / 2) / s, y = (clientY - box.top - (box.height - dimensions.height * s) / 2) / s;
+    return x < 0 || y < 0 || x > dimensions.width || y > dimensions.height ? null : { x, y };
+  };
+  const addPoint = (p: ImagePoint) => {
+    if (mode === 'calibrate') setReference(reference.length === 2 ? [p] : [...reference, p]);
+    else { setPoints([...points, p]); setEdges([...edges, 'other']); }
+  };
+  const onMove = (e: RPointerEvent<SVGSVGElement>) => {
+    if (!drag.current) return; const p = toImage(e.clientX, e.clientY); if (!p) return; moved.current = true;
+    const { kind, i } = drag.current;
+    if (kind === 'ref') setReference(r => r.map((q, j) => j === i ? p : q)); else setPoints(r => r.map((q, j) => j === i ? p : q));
+  };
+  const startDrag = (kind: 'ref' | 'pt', i: number) => (e: RPointerEvent) => { e.stopPropagation(); drag.current = { kind, i }; moved.current = false; svg.current?.setPointerCapture(e.pointerId); };
+
+  let preview: { area: number; perimeter: number } | null = null;
+  if (points.length >= 3 && calibration.ok) { try { const info = planeInfo(calibratedPlane(points, reference, feet, pitch, 'p', { uphill, edges })); const pl = calibratedPlane(points, reference, feet, pitch, "p", { uphill, edges }); preview = { area: info.area, perimeter: pl.points.reduce((s, a, i) => { const b = pl.points[(i + 1) % pl.points.length]!; return s + Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z); }, 0) }; } catch { preview = null; } }
+
+  const add = () => {
+    try {
+      const id = crypto.randomUUID(); const label = name.trim() || `Traced plane ${traced.length + 1}`;
+      onAdd(calibratedPlane(points, reference, feet, pitch, id, { uphill, edges, name: label }), replace);
+      setTraced(t => replace ? [{ id, name: label, points }] : [...t, { id, name: label, points }]);
+      setReplace(false); setPoints([]); setEdges([]); setName('');
+      toast.success(`${label} added as unverified. Trace the next plane on the same photo, or review and verify.`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not measure traced plane'); }
+  };
+
+  return <section className="border-t border-border py-6">
+    <h3 className="mb-2 text-lg font-bold">Calibrated photo tracing</h3>
+    <div className="mb-4 space-y-1 text-sm text-muted-foreground">
+      <p>1. Set scale: click both ends of something you measured (a wall, eave or driveway) and enter its real length. 2. Trace one roof plane at a time — click corners, drag dots to adjust, click edge labels to set Eave / Rake / Ridge / Hip / Valley. 3. Enter that plane's pitch and which way it rises. 4. Add plane, repeat for every plane on the same photo.</p>
+      <p>Photos only give flat (plan) size; slope comes from the pitch you enter. Results stay estimates until you check them on site and mark the report verified. Not survey-grade.</p>
+    </div>
+    {feetPerPixel && <p className="mb-4 border-l-2 border-primary pl-3 text-sm">Free public aerial: scale pre-set from map data ({feetPerPixel.toFixed(2)} ft per pixel). This image is coarse (about 1 m per pixel) — use it for rough layout only and recalibrate on a measured edge when possible.</p>}
+    <div className="mb-3 flex flex-wrap items-end gap-3">
+      <Button variant={mode === 'calibrate' ? 'secondary' : 'outline'} onClick={() => { setMode('calibrate'); setReference([]); }}><Ruler /> Set two scale points</Button>
+      <Field label="Known distance (ft)"><Input className="w-28" type="number" min={0.1} value={feet || ''} onChange={e => setFeet(Number(e.target.value))} /></Field>
+      <Button variant={mode === 'trace' ? 'secondary' : 'outline'} disabled={!calibration.ok} onClick={() => setMode('trace')}>Trace roof plane</Button>
+    </div>
+    <p className={`mb-3 text-sm ${calibration.ok ? 'text-muted-foreground' : 'text-destructive'}`}>{calibration.ok ? `Scale: ${calibration.ftPerPx.toFixed(3)} ft per pixel.` : calibration.message}{calibration.ok && calibration.warnings.map(m => <span key={m} className="block text-destructive">{m}</span>)}</p>
+    {photo.data ? <div className="relative w-full overflow-hidden rounded-md border border-border">
+      <img src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
+      <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
+        onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
+        onClick={e => { if (moved.current) { moved.current = false; return; } const p = toImage(e.clientX, e.clientY); if (p) addPoint(p); }}>
+        {traced.map(t => <g key={t.id} className="text-muted-foreground"><polygon points={t.points.map(p => `${p.x},${p.y}`).join(' ')} fill="currentColor" fillOpacity={0.15} stroke="currentColor" strokeDasharray={`${w / 120}`} strokeWidth={w / 400} /><text x={t.points.reduce((s, p) => s + p.x, 0) / t.points.length} y={t.points.reduce((s, p) => s + p.y, 0) / t.points.length} fontSize={w / 50} textAnchor="middle" fill="currentColor">{t.name}</text></g>)}
+        {reference.length === 2 && <line x1={reference[0]?.x} y1={reference[0]?.y} x2={reference[1]?.x} y2={reference[1]?.y} stroke="currentColor" strokeWidth={w / 250} strokeDasharray={`${w / 80}`} />}
+        <polygon points={points.map(p => `${p.x},${p.y}`).join(' ')} fill="currentColor" fillOpacity={0.25} stroke="currentColor" strokeWidth={w / 300} />
+        {points.length >= 3 && points.map((p, i) => { const q = points[(i + 1) % points.length]!; return <g key={`e${i}`} role="button" aria-label={`Edge ${i + 1}: ${edges[i]}. Click to change`} onClick={ev => { ev.stopPropagation(); setEdges(es => es.map((t, j) => j === i ? nextEdgeType(t) : t)); }} className="cursor-pointer"><rect x={(p.x + q.x) / 2 - w / 28} y={(p.y + q.y) / 2 - w / 70} width={w / 14} height={w / 35} rx={w / 200} className="fill-background" stroke="currentColor" strokeWidth={w / 600} /><text x={(p.x + q.x) / 2} y={(p.y + q.y) / 2 + w / 200} fontSize={w / 60} textAnchor="middle" className="fill-foreground">{EDGE_SHORT[edges[i] ?? 'other']}</text></g>; })}
+        {reference.map((p, i) => <circle key={`r${i}`} cx={p.x} cy={p.y} r={w / 100} className="cursor-move fill-destructive" onPointerDown={startDrag('ref', i)} onClick={e => e.stopPropagation()} />)}
+        {points.map((p, i) => <circle key={`p${i}`} cx={p.x} cy={p.y} r={w / 90} fill="currentColor" strokeWidth={w / 600} className="cursor-move stroke-background" onPointerDown={startDrag('pt', i)} onClick={e => e.stopPropagation()} />)}
+      </svg>
+    </div> : <p>{photo.error ? 'Photo unavailable' : 'Loading photo…'}</p>}
+    <div className="mt-4 flex flex-wrap items-end gap-3">
+      <Field label="Plane name"><Input className="w-40" value={name} maxLength={100} placeholder={`Traced plane ${traced.length + 1}`} onChange={e => setName(e.target.value)} /></Field>
+      <Field label="Pitch (rise / 12)"><Input className="w-24" type="number" min={0} max={24} value={pitch} onChange={e => setPitch(Number(e.target.value))} /></Field>
+      <div className="w-52"><Choice label="Roof rises (eave → ridge)" value={uphill} onChange={v => setUphill(v as Uphill)} options={(Object.keys(UPHILL_LABELS) as Uphill[]).map(k => ({ value: k, label: UPHILL_LABELS[k] }))} /></div>
+      <Button variant="ghost" size="icon" aria-label="Undo last corner" title="Undo last corner" disabled={!points.length} onClick={() => { setPoints(points.slice(0, -1)); setEdges(edges.slice(0, -1)); }}><Undo2 /></Button>
+      <Button variant="ghost" size="icon" aria-label="Clear current plane" title="Clear current plane" disabled={!points.length} onClick={() => { setPoints([]); setEdges([]); }}><Trash2 /></Button>
+    </div>
+    <div className="mt-3 flex flex-wrap items-center gap-4">
+      <p className="text-sm text-muted-foreground">{points.length} corners{preview ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter` : ''} · {traced.length} plane{traced.length === 1 ? '' : 's'} added from this photo</p>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} /> Replace existing roof planes</label>
+      <Button disabled={points.length < 3 || !calibration.ok} onClick={add}><Plus /> Add traced plane</Button>
+    </div>
+  </section>;
 }
