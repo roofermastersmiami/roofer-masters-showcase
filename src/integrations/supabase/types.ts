@@ -781,6 +781,7 @@ export type Database = {
           media: Json
           parent_id: string | null
           property_id: string
+          report_order_id: string | null
           revision: number
           title: string
         }
@@ -792,6 +793,7 @@ export type Database = {
           media?: Json
           parent_id?: string | null
           property_id: string
+          report_order_id?: string | null
           revision?: number
           title: string
         }
@@ -803,6 +805,7 @@ export type Database = {
           media?: Json
           parent_id?: string | null
           property_id?: string
+          report_order_id?: string | null
           revision?: number
           title?: string
         }
@@ -821,6 +824,13 @@ export type Database = {
             referencedRelation: "crm_properties"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "roof_drawings_report_order_id_fkey"
+            columns: ["report_order_id"]
+            isOneToOne: false
+            referencedRelation: "roof_report_orders"
+            referencedColumns: ["id"]
+          },
         ]
       }
       roof_estimates: {
@@ -834,6 +844,7 @@ export type Database = {
           lead_id: string | null
           options: Json
           property_id: string | null
+          report_order_id: string | null
           title: string
           total_cents: number
         }
@@ -847,6 +858,7 @@ export type Database = {
           lead_id?: string | null
           options?: Json
           property_id?: string | null
+          report_order_id?: string | null
           title: string
           total_cents: number
         }
@@ -860,6 +872,7 @@ export type Database = {
           lead_id?: string | null
           options?: Json
           property_id?: string | null
+          report_order_id?: string | null
           title?: string
           total_cents?: number
         }
@@ -883,6 +896,13 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "crm_properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_estimates_report_order_id_fkey"
+            columns: ["report_order_id"]
+            isOneToOne: false
+            referencedRelation: "roof_report_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -986,6 +1006,82 @@ export type Database = {
           },
         ]
       }
+      roof_report_orders: {
+        Row: {
+          address: string
+          created_at: string
+          customer_id: string
+          drawing_id: string | null
+          file_path: string | null
+          id: string
+          measurements: Json | null
+          notes: string
+          property_id: string
+          provider: string
+          provider_reference: string
+          reviewed_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          customer_id: string
+          drawing_id?: string | null
+          file_path?: string | null
+          id?: string
+          measurements?: Json | null
+          notes?: string
+          property_id: string
+          provider?: string
+          provider_reference?: string
+          reviewed_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          customer_id?: string
+          drawing_id?: string | null
+          file_path?: string | null
+          id?: string
+          measurements?: Json | null
+          notes?: string
+          property_id?: string
+          provider?: string
+          provider_reference?: string
+          reviewed_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roof_report_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_report_orders_drawing_id_fkey"
+            columns: ["drawing_id"]
+            isOneToOne: false
+            referencedRelation: "roof_drawings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roof_report_orders_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "crm_properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_content: {
         Row: {
           key: string
@@ -1033,6 +1129,16 @@ export type Database = {
           p_lead: Json
           p_qualification: Json
           p_total: number
+        }
+        Returns: string
+      }
+      create_roof_report_request: {
+        Args: {
+          p_address: string
+          p_customer_id: string
+          p_notes: string
+          p_provider: string
+          p_title: string
         }
         Returns: string
       }

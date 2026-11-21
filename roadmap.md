@@ -1,4 +1,7 @@
 # Roadmap
+- [ ] Owner correction: build Roofer Masters' own address-linked measurement/report workflow, not a paid EagleView/Roofr order; manual or owner-supplied imagery measurements must not be presented as address-derived survey data
+- [ ] Priority correction: address-based roof report request/order tracking, private PDF attachment and estimate/material handoff; actual provider purchase waits on provider/account authorization
+- [ ] Audit every requirement in both uploaded briefs against source and tested flows; distinguish available, partial, missing and externally blocked features without claiming all complete
 - [x] Re-read both uploaded priority briefs and fold them into the active phased upgrade
 - [x] Validate saved detailed estimate options, customer-only proposal PDF, private expense receipts, date/project financial selection and PDF/Excel exports; 45 related tests passed, desktop/mobile and signed-out isolation checked
 - [x] Clean temporary QA customer/property/drawing/estimate/proposal/expense/catalog records and private uploads

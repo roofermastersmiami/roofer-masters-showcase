@@ -134,6 +134,20 @@
       "when": 1795227419930,
       "tag": "0018_explicit_invoice_project_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795228743038,
+      "tag": "0019_address_roof_report_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795228845111,
+      "tag": "0020_company_owned_roof_reports",
+      "breakpoints": true
     }
   ]
 }

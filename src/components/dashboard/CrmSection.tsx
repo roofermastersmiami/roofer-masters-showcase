@@ -1,4 +1,4 @@
-import {RoofMeasurements} from './RoofMeasurements';
+import {RoofReports} from './RoofReports';
 import {AdvancedEstimator} from './AdvancedEstimator';
 import {CostCatalog} from './CostCatalog';
 import {Expenses} from './Expenses';
@@ -26,7 +26,7 @@ export function CrmSection({section}:{section:string}){
  case 'prices':return <CostCatalog/>;
  case 'expenses':return <Expenses/>;
  case 'financials':return <FinancialAnalytics/>;
- case 'measurements':return <RoofMeasurements/>;
+ case 'measurements':return <RoofReports/>;
  case 'pipeline':return <Pipeline leads={leads} onOpen={onOpen}/>;
  case 'submissions':return <LeadsTable leads={leads} onOpen={onOpen}/>;
  case 'customers':return <Customers leads={leads} onOpen={onOpen}/>;
