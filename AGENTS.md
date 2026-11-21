@@ -56,3 +56,5 @@ use the editor.
 - Project financial revenue uses unique explicit invoice-to-job allocations validated against customer/property relationships, never inferred from a shared lead, to prevent double counting.
 - Recorded expense analytics stay payment-environment isolated and distinguish cash collections from invoice sales; Excel/PDF exports are browser-only imports to keep server bundles compatible.
 - Free aerial import uses only keyless public-domain sources (Census geocoder, USGS National Map) via an owner-only server function; imagery-derived measurements carry an accuracy basis and image credit and are never labeled survey-grade.
+
+- Aerial import validates Census coordinates and USGS PNG size/dimensions server-side; decode image bytes locally and report request vs storage failures without logging customer data.

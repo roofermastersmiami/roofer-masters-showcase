@@ -1,4 +1,5 @@
 # Roadmap
+- [x] Public aerial import: historical error not reproducible/no retained logs; validated Census/USGS responses, added stage-specific errors and local PNG decoding; 118 tests/typecheck/automatic build passed; owner success and simulated storage denial/retry verified, temporary images deleted (no customer changes)
 - [x] Verify failed drawing downloads stay local with editable measurements; reload restores 3D on mobile/desktop, bounded preload recovery prevents loops, and 88 tests pass
 - [x] Owner correction: company-owned address-linked reports, calibrated aerial tracing, reviewed drawing save/reopen, photo/material PDFs and estimator handoff; no paid report integration
 - [x] Audit both uploaded briefs against source and verified report flow; available/partial/missing/external dependencies documented in .lovable/reviews/crm-requirements-audit.md
