@@ -6,7 +6,7 @@ export type EdgeType=typeof EDGE_TYPES[number];
 export type Point={x:number;y:number;z:number};
 export const pointSchema=z.object({x:z.number().min(-10000).max(10000),y:z.number().min(0).max(10000),z:z.number().min(-10000).max(10000)});
 export const planeSchema=z.object({id:z.string(),name:z.string().min(1).max(100),points:z.array(pointSchema).min(3).max(100),edges:z.array(z.enum(EDGE_TYPES)).min(3).max(100)}).refine(p=>p.edges.length===p.points.length,'Each edge needs a classification');
-export const drawingSchema=z.object({planes:z.array(planeSchema).min(1).max(100),penetrations:z.array(z.object({id:z.string(),kind:z.enum(['chimney','skylight','vent','pipe','other']),x:z.number(),z:z.number(),width:z.number().positive(),length:z.number().positive()})).max(500),waste:z.number().min(0).max(50),roof_type:z.enum(['Metal Roof','Shingle Roof','Tile Roof','TPO','Flat Roof']),notes:z.string().max(4000),condition:z.string().max(1000),verified:z.boolean()});
+export const drawingSchema=z.object({planes:z.array(planeSchema).min(1).max(100),penetrations:z.array(z.object({id:z.string(),kind:z.enum(['chimney','skylight','vent','pipe','other']),x:z.number(),z:z.number(),width:z.number().positive(),length:z.number().positive()})).max(500),waste:z.number().min(0).max(50),roof_type:z.enum(['Metal Roof','Shingle Roof','Tile Roof','TPO','Flat Roof']),notes:z.string().max(4000),condition:z.string().max(1000),verified:z.boolean(),accuracy:z.enum(['photo_estimate','scaled','site_verified']).optional(),image_credit:z.string().max(300).optional()});
 export type RoofDrawing=z.infer<typeof drawingSchema>;
 export type RoofPlane=z.infer<typeof planeSchema>;
 export const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
