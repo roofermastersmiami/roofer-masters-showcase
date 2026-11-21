@@ -9,6 +9,7 @@ import {Textarea} from '@/components/ui/textarea';
 import {Checkbox} from '@/components/ui/checkbox';
 import {supabase} from '@/integrations/supabase/client';
 import {drawingSchema,roofPreset,measureDrawing,toMaterialReport,EDGE_TYPES,type RoofDrawing,type RoofShape} from '@/lib/roof-geometry';
+import {calculateRoofSummary} from '@/lib/roof-calculations';
 import {saveRoofDrawing} from '@/lib/roof-drawing.functions';
 import {propertiesQuery,customersQuery} from './foundation-data';
 import {drawingsQuery} from './roof-data';
