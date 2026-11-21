@@ -1164,6 +1164,10 @@ export type Database = {
         Returns: Json
       }
       save_crm_customer: { Args: { p_customer: Json }; Returns: string }
+      save_report_drawing: {
+        Args: { p_drawing: Json; p_report: Json; p_report_id: string }
+        Returns: string
+      }
       set_invoice_status: {
         Args: { p_invoice_id: string; p_status: string }
         Returns: boolean
