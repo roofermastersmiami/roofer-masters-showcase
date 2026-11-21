@@ -21,6 +21,7 @@ import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as ServiceAreasRouteImport } from './routes/service-areas'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ClientPortalTokenRouteImport } from './routes/client-portal.$token'
 import { Route as InvoiceTokenRouteImport } from './routes/invoice.$token'
 import { Route as ProposalTokenRouteImport } from './routes/proposal.$token'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
@@ -84,6 +85,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ClientPortalTokenRoute = ClientPortalTokenRouteImport.update({
+  id: '/client-portal/$token',
+  path: '/client-portal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InvoiceTokenRoute = InvoiceTokenRouteImport.update({
   id: '/invoice/$token',
   path: '/invoice/$token',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/service-areas': typeof ServiceAreasRoute
   '/services': typeof ServicesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/service-areas': typeof ServiceAreasRoute
   '/services': typeof ServicesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/service-areas': typeof ServiceAreasRoute
   '/services': typeof ServicesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/service-areas'
     | '/services'
     | '/dashboard'
+    | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
     | '/api/public/payments/webhook'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/service-areas'
     | '/services'
     | '/dashboard'
+    | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
     | '/api/public/payments/webhook'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/service-areas'
     | '/services'
     | '/_authenticated/dashboard'
+    | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
     | '/api/public/payments/webhook'
@@ -215,6 +227,7 @@ export interface RootRouteChildren {
   ReviewsRoute: typeof ReviewsRoute
   ServiceAreasRoute: typeof ServiceAreasRoute
   ServicesRoute: typeof ServicesRoute
+  ClientPortalTokenRoute: typeof ClientPortalTokenRoute
   InvoiceTokenRoute: typeof InvoiceTokenRoute
   ProposalTokenRoute: typeof ProposalTokenRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
@@ -306,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/client-portal/$token': {
+      id: '/client-portal/$token'
+      path: '/client-portal/$token'
+      fullPath: '/client-portal/$token'
+      preLoaderRoute: typeof ClientPortalTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invoice/$token': {
       id: '/invoice/$token'
       path: '/invoice/$token'
@@ -353,6 +373,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewsRoute: ReviewsRoute,
   ServiceAreasRoute: ServiceAreasRoute,
   ServicesRoute: ServicesRoute,
+  ClientPortalTokenRoute: ClientPortalTokenRoute,
   InvoiceTokenRoute: InvoiceTokenRoute,
   ProposalTokenRoute: ProposalTokenRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,

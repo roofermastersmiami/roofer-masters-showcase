@@ -47,3 +47,4 @@ use the editor.
 - Instant estimates use only owner-enabled installed rates; lead, qualification, preliminary estimate and unscheduled on-hold job capture are atomic through a service-only RPC called by validated lead server functions.
 - Change orders record independent scope, price and schedule deltas with explicit manually recorded approval; they never mutate issued invoices or imply a customer signature.
 - Roof report AI extraction runs in an owner-only server function (`src/lib/roof-report.functions.ts`) via the AI Gateway SDK; results only prefill the editable material calculator and are never saved without owner review.
+- Client portals use owner-issued expiring, revocable per-lead capability links; server projections exclude private notes, addresses, material costs and other customers, and expose only active signed proposal shares and issued matching-environment invoices to preserve customer isolation.

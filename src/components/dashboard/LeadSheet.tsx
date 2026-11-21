@@ -10,6 +10,7 @@ import { WhatsAppIcon } from "@/components/site/SocialIcons";
 import { formatWhen, useDeleteLead, useUpdateLead, type Lead } from "./data";
 import { SourceBadge, StatusBadge } from "./StatusBadge";
 import { instantInputSchema, qualifyRoofLead } from '@/lib/instant-estimate-schema';
+import { ClientPortalShare } from './ClientPortalShare';
 
 function waLink(phone: string) {
   let digits = phone.replace(/\D/g, "");
@@ -75,6 +76,8 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
               </Button>
             )}
             {onOpenProposals && <Button variant="navy" className="mt-4 w-full" onClick={() => onOpenProposals(lead.id)}><FileText /> Roofing proposals</Button>}
+
+            <ClientPortalShare leadId={lead.id} email={lead.email} />
 
             <div className="mt-6 grid gap-2">
               <label className="text-sm font-bold text-foreground">Pipeline stage</label>
