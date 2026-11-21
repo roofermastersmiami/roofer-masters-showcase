@@ -155,6 +155,13 @@
       "when": 1795230826948,
       "tag": "0021_atomic_report_drawing_save",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795231048233,
+      "tag": "0022_lockdown_helper_functions",
+      "breakpoints": true
     }
   ]
 }

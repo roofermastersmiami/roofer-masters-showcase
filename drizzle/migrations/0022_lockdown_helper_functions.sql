@@ -1,0 +1,18 @@
+REVOKE EXECUTE ON FUNCTION public.grant_owner_role() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_crm_lead_activity() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.sync_lead_customer() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.touch_lead_on_message() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.create_roof_report_request(uuid,text,text,text,text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.record_invoice_payment(uuid,bigint,text,text,timestamptz) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.save_crm_customer(jsonb) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.set_invoice_status(uuid,text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.reserve_invoice_checkout(uuid,text,text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.settle_invoice_checkout(text,text,bigint) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.capture_instant_roof_lead(jsonb,jsonb,text,bigint) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reserve_invoice_checkout(uuid,text,text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.settle_invoice_checkout(text,text,bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.capture_instant_roof_lead(jsonb,jsonb,text,bigint) TO service_role;
+GRANT EXECUTE ON FUNCTION public.create_roof_report_request(uuid,text,text,text,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.record_invoice_payment(uuid,bigint,text,text,timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.save_crm_customer(jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.set_invoice_status(uuid,text) TO authenticated;
