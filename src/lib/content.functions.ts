@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { queryOptions } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
+import { optionalContent } from "@/lib/optional-content";
 
 export const CONTENT_DEFAULTS = {
   hero_headline: "Storm-Ready Roofs Built for Miami-Dade & Broward",
@@ -47,6 +48,8 @@ export const getSiteContent = createServerFn({ method: "GET" }).handler(
 
 export const siteContentQuery = queryOptions({
   queryKey: ["site-content"],
-  queryFn: () => getSiteContent(),
+  // The RPC transport can fail before the server's fallback handler runs.
+  // Optional public copy must never prevent sign-in or the CRM from rendering.
+  queryFn: () => optionalContent(() => getSiteContent(), { ...CONTENT_DEFAULTS }),
   staleTime: 60_000,
 });

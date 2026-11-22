@@ -37,13 +37,19 @@ function AuthPage() {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    let active = true;
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/dashboard", replace: true });
+      if (active && data.user) void navigate({ to: "/dashboard", replace: true });
+    }).catch(() => {
+      if (active) setNotice("We couldn’t check your connection. You can still try signing in; if it fails, reconnect and try again.");
     });
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) navigate({ to: "/dashboard", replace: true });
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
   }, [navigate]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -77,8 +83,12 @@ function AuthPage() {
   }
 
   async function social(provider: "google" | "lovable") {
-    const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/auth" });
-    if (result.error) toast.error(result.error.message ?? "Sign-in failed");
+    try {
+      const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/auth" });
+      if (result.error) toast.error(result.error.message ?? "Sign-in failed");
+    } catch {
+      toast.error("Could not connect to sign-in. Check your connection and try again.");
+    }
   }
 
   return (

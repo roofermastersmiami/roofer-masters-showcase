@@ -1,4 +1,3 @@
-src/lib/roof-calculations.ts
 /**
  * Roofer Masters - Roof Calculation Helpers
  *
