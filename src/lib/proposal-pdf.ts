@@ -6,7 +6,28 @@ import type { ProposalDetails } from "./proposal-schema";
 const ink = rgb(0.1, 0.12, 0.15);
 const brand = rgb(0, 0.247, 0.416);
 const clean = (text: string) => text.replace(/[^\x20-\x7E\n\r\u00A0-\u00FF]/g, (c) => c === "•" ? "-" : c === "—" || c === "–" ? "-" : "");
+async function loadLogoPng(): Promise<Uint8Array> {
+  const response = await fetch(logoMark);
+  const bitmap = await createImageBitmap(await response.blob());
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
 
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare company logo.");
+
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  const png = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("Logo conversion failed.")),
+      "image/png"
+    );
+  });
+
+  return new Uint8Array(await png.arrayBuffer());
+}
 export async function generateProposalPdf(details: ProposalDetails, customer?: { name: string; address: string | null; email: string | null }) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
