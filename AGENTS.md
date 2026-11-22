@@ -58,3 +58,4 @@ use the editor.
 - Free aerial import uses only keyless public-domain sources (Census geocoder, USGS National Map) via an owner-only server function; imagery-derived measurements carry an accuracy basis and image credit and are never labeled survey-grade.
 
 - Aerial import validates Census coordinates and USGS PNG size/dimensions server-side; decode image bytes locally and report request vs storage failures without logging customer data.
+- Agent access uses OAuth-verified caller clients and explicit field projections in `src/lib/mcp`; read-only tools retain RLS and role checks. Browser tools stay in the CRM shell with fail-open static telemetry; consent returns use canonical local paths to avoid redirects outside the app.

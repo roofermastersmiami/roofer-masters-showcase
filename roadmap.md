@@ -1,4 +1,5 @@
 # Roadmap
+- [ ] Add OAuth-protected read-only CRM MCP tools, consent/sign-in return handling, and safe browser navigation tools; verify permissions and extract catalog
 - [x] Verify early download recovery and Safari route-import recovery without preload events; 9 focused tests and automatic build pass, mobile blocked-script test restores sign-in after one reload, persistent failure shows retry without looping
 - [x] Fix /auth blank screen from optional site-content transport failure; mobile browser with blocked RPC kept sign-in visible with no uncaught errors, 7 focused tests and automatic build passed; removed stray calculation-file path causing type errors, no records changed
 - [x] Public aerial import: historical error not reproducible/no retained logs; validated Census/USGS responses, added stage-specific errors and local PNG decoding; 118 tests/typecheck/automatic build passed; owner success and simulated storage denial/retry verified, temporary images deleted (no customer changes)
