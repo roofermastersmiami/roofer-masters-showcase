@@ -79,12 +79,15 @@ export async function fetchPublicAerial(address: string, spanMeters: number, fet
     25000,
     fetcher,
   );
-  if (!img?.ok)
-    return failure(
-      "imagery",
-      "The free USGS aerial service is unavailable or timed out. Try again later.",
-      img?.status,
-    );
+if (!img?.ok) {
+  return failure(
+    'imagery',
+    img
+      ? `Miami-Dade imagery service returned HTTP ${img.status}.`
+      : 'Could not connect to the Miami-Dade imagery service or the request timed out.',
+    img?.status
+  );
+}
   if (img.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "image/png")
     return failure("imagery_response", "USGS returned a service error instead of a PNG aerial image.", img.status);
   if (Number(img.headers.get("content-length")) > MAX_BYTES)
