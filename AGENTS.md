@@ -51,7 +51,7 @@ use the editor.
 - CRM customer/property records retain source-lead relationships and additive pipeline stages so existing lead, document and payment workflows remain compatible.
 - Roof drawings are immutable property-linked revisions; reviewed geometry feeds measured takeoffs while Three.js remains dynamically imported to keep browser rendering outside SSR.
 - Report-linked drawing saves go through one owner-checked database function so drawing and report never diverge. Address reports link customers/properties to drawing revisions; address entry never invents roof dimensions, calibrated aerial traces remain unverified until explicit owner review, and measurement edits clear review state.
-- Isolate optional roof-renderer failures with a local boundary; preload recovery is reload-limited so failed script downloads cannot blank the CRM or loop.
+- Isolate optional roof-renderer failures with a local boundary; install preload recovery before route loading and recover explicit route-import failures at the root boundary, with a shared reload limit to prevent loops.
 - Detailed estimates snapshot integer-cent cost lines and comparison options; customer proposal projections omit unit costs, overhead and internal profit.
 - Project financial revenue uses unique explicit invoice-to-job allocations validated against customer/property relationships, never inferred from a shared lead, to prevent double counting.
 - Recorded expense analytics stay payment-environment isolated and distinguish cash collections from invoice sales; Excel/PDF exports are browser-only imports to keep server bundles compatible.

@@ -22,7 +22,7 @@ import { siteContentQuery } from "@/lib/content.functions";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { installModuleLoadRecovery, isModuleLoadError } from "@/lib/module-load-recovery";
+import { recoverModuleLoadError, isModuleLoadError } from "@/lib/module-load-recovery";
 import { Button } from "@/components/ui/button";
 
 function NotFoundComponent() {
@@ -51,6 +51,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
+    if (recoverModuleLoadError(window, error)) return;
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
@@ -157,8 +158,6 @@ function RootComponent() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const appOnly = APP_ONLY.some((p) => pathname.startsWith(p));
-
-  useEffect(() => installModuleLoadRecovery(window), []);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {

@@ -1,7 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { claimModuleReload, installModuleLoadRecovery, isModuleLoadError } from '@/lib/module-load-recovery';
+import { claimModuleReload, installModuleLoadRecovery, isModuleLoadError, recoverModuleLoadError } from '@/lib/module-load-recovery';
 
 describe('module download recovery', () => {
+  it('recovers a Safari route import error even without a preload event, only once', () => {
+    const values = new Map<string, string>();
+    const reload = vi.fn();
+    const target = { sessionStorage: { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => { values.set(k, v); } }, location: { reload } } as unknown as Window;
+    expect(recoverModuleLoadError(target, new TypeError('Importing a module script failed.'))).toBe(true);
+    expect(recoverModuleLoadError(target, new TypeError('Importing a module script failed.'))).toBe(false);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+  it('never refreshes the page for an ordinary failed API call', () => {
+    const reload = vi.fn();
+    const target = { location: { reload } } as unknown as Window;
+    expect(recoverModuleLoadError(target, new TypeError('Load failed'))).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  });
   it('recognizes Safari and Chromium module failures, but not ordinary request failures', () => {
     expect(isModuleLoadError(new TypeError('Importing a module script failed.'))).toBe(true);
     expect(isModuleLoadError(new TypeError('Failed to fetch dynamically imported module: /assets/roof.js'))).toBe(true);

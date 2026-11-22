@@ -18,6 +18,18 @@ export function claimModuleReload(storage: Pick<Storage, 'getItem' | 'setItem'>,
   }
 }
 
+/** Route imports can fail without Vite's preload event (notably in Safari/dev). */
+export function recoverModuleLoadError(target: Window, error: unknown): boolean {
+  if (!isModuleLoadError(error)) return false;
+  try {
+    if (!claimModuleReload(target.sessionStorage, Date.now())) return false;
+    target.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function installModuleLoadRecovery(target: Window): () => void {
   const recover = (event: Event) => {
     // Vite emits this event for stale or interrupted module/CSS downloads.
