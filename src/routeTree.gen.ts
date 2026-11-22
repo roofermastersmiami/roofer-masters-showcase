@@ -16,14 +16,17 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as InstantEstimatorRouteImport } from './routes/instant-estimator'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as ServiceAreasRouteImport } from './routes/service-areas'
 import { Route as ServicesRouteImport } from './routes/services'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as ClientPortalTokenRouteImport } from './routes/client-portal.$token'
 import { Route as InvoiceTokenRouteImport } from './routes/invoice.$token'
 import { Route as ProposalTokenRouteImport } from './routes/proposal.$token'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard.$section'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
@@ -62,6 +65,11 @@ const InstantEstimatorRoute = InstantEstimatorRouteImport.update({
   path: '/instant-estimator',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -82,6 +90,12 @@ const ServicesRoute = ServicesRouteImport.update({
   path: '/services',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -100,6 +114,11 @@ const InvoiceTokenRoute = InvoiceTokenRouteImport.update({
 const ProposalTokenRoute = ProposalTokenRouteImport.update({
   id: '/proposal/$token',
   path: '/proposal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedDashboardIndexRoute =
@@ -128,14 +147,17 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
   '/instant-estimator': typeof InstantEstimatorRoute
+  '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
   '/service-areas': typeof ServiceAreasRoute
   '/services': typeof ServicesRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
@@ -147,13 +169,16 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
   '/instant-estimator': typeof InstantEstimatorRoute
+  '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
   '/service-areas': typeof ServiceAreasRoute
   '/services': typeof ServicesRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
@@ -167,14 +192,17 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/gallery': typeof GalleryRoute
   '/instant-estimator': typeof InstantEstimatorRoute
+  '/mcp': typeof McpRoute
   '/reset-password': typeof ResetPasswordRoute
   '/reviews': typeof ReviewsRoute
   '/service-areas': typeof ServiceAreasRoute
   '/services': typeof ServicesRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
@@ -188,14 +216,17 @@ export interface FileRouteTypes {
     | '/contact'
     | '/gallery'
     | '/instant-estimator'
+    | '/mcp'
     | '/reset-password'
     | '/reviews'
     | '/service-areas'
     | '/services'
+    | '/.well-known/oauth-protected-resource'
     | '/dashboard'
     | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
+    | '/.lovable/oauth/consent'
     | '/dashboard/$section'
     | '/dashboard/'
     | '/api/public/payments/webhook'
@@ -207,13 +238,16 @@ export interface FileRouteTypes {
     | '/contact'
     | '/gallery'
     | '/instant-estimator'
+    | '/mcp'
     | '/reset-password'
     | '/reviews'
     | '/service-areas'
     | '/services'
+    | '/.well-known/oauth-protected-resource'
     | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
+    | '/.lovable/oauth/consent'
     | '/dashboard/$section'
     | '/dashboard'
     | '/api/public/payments/webhook'
@@ -226,14 +260,17 @@ export interface FileRouteTypes {
     | '/contact'
     | '/gallery'
     | '/instant-estimator'
+    | '/mcp'
     | '/reset-password'
     | '/reviews'
     | '/service-areas'
     | '/services'
+    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/dashboard'
     | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
+    | '/.lovable/oauth/consent'
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/dashboard/'
     | '/api/public/payments/webhook'
@@ -247,13 +284,16 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   GalleryRoute: typeof GalleryRoute
   InstantEstimatorRoute: typeof InstantEstimatorRoute
+  McpRoute: typeof McpRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ReviewsRoute: typeof ReviewsRoute
   ServiceAreasRoute: typeof ServiceAreasRoute
   ServicesRoute: typeof ServicesRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ClientPortalTokenRoute: typeof ClientPortalTokenRoute
   InvoiceTokenRoute: typeof InvoiceTokenRoute
   ProposalTokenRoute: typeof ProposalTokenRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
 }
 
@@ -308,6 +348,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InstantEstimatorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -336,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -362,6 +416,13 @@ declare module '@tanstack/react-router' {
       path: '/proposal/$token'
       fullPath: '/proposal/$token'
       preLoaderRoute: typeof ProposalTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/dashboard/': {
@@ -423,13 +484,17 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   GalleryRoute: GalleryRoute,
   InstantEstimatorRoute: InstantEstimatorRoute,
+  McpRoute: McpRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ReviewsRoute: ReviewsRoute,
   ServiceAreasRoute: ServiceAreasRoute,
   ServicesRoute: ServicesRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ClientPortalTokenRoute: ClientPortalTokenRoute,
   InvoiceTokenRoute: InvoiceTokenRoute,
   ProposalTokenRoute: ProposalTokenRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
 }
 export const routeTree = rootRouteImport

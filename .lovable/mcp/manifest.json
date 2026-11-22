@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "sdk_version": "3.6.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://vufsjizrldukatnhrdem.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "roofer-masters-showcase",
+      "version": "0.1.0",
+      "title": "Roofer Masters Showcase"
+    },
+    "tools": [
+      {
+        "name": "list_leads",
+        "title": "List roofing leads",
+        "description": "Read recent roofing leads permitted by your CRM team role, without chat tokens or private notes.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Maximum recent leads to return, from 1 to 50."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_customers",
+        "title": "List customers",
+        "description": "Read recent customer contact information accessible to your CRM team role, excluding internal notes.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Maximum recent customers to return, from 1 to 50."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_roof_reports",
+        "title": "List company roof reports",
+        "description": "Read company-owned roof report status and review dates; no report is created or ordered and no measurements are inferred.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Maximum recent roof reports to return, from 1 to 50."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_invoices",
+        "title": "List invoices",
+        "description": "Read invoice totals and recorded paid amounts for Owner or Accounting only, filtered to test or live payments; excludes customer-link tokens.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "environment": {
+              "type": "string",
+              "enum": [
+                "test",
+                "live"
+              ],
+              "description": "Payment environment to read; test and live are never combined."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "Maximum recent invoices to return, from 1 to 50."
+            }
+          },
+          "required": [
+            "environment"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

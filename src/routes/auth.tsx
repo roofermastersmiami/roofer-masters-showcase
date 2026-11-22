@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, type SearchSchemaInput } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,8 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/site/Logo";
 import { BUSINESS } from "@/lib/site";
+import { oauthReturnPath } from '@/lib/oauth-return-path';
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({ next: oauthReturnPath(search.next ?? '/dashboard') }),
   head: () => ({
     meta: [
       { title: "Owner Login | Roofer Masters" },
@@ -30,6 +32,7 @@ type Mode = "signin" | "signup" | "forgot";
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,18 +42,18 @@ function AuthPage() {
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(({ data }) => {
-      if (active && data.user) void navigate({ to: "/dashboard", replace: true });
+      if (active && data.user) void navigate({ href: next, replace: true });
     }).catch(() => {
       if (active) setNotice("We couldn’t check your connection. You can still try signing in; if it fails, reconnect and try again.");
     });
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) navigate({ to: "/dashboard", replace: true });
+      if (event === "SIGNED_IN" && session) void navigate({ href: next, replace: true });
     });
     return () => {
       active = false;
       data.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, next]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +67,7 @@ function AuthPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin + "/dashboard" },
+          options: { emailRedirectTo: new URL(next, window.location.origin).href },
         });
         if (error) throw error;
         setNotice("Check your inbox to confirm your email, then sign in.");
@@ -84,7 +87,9 @@ function AuthPage() {
 
   async function social(provider: "google" | "lovable") {
     try {
-      const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin + "/auth" });
+      const returnUrl = new URL('/auth', window.location.origin);
+      returnUrl.searchParams.set('next', next);
+      const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: returnUrl.href });
       if (result.error) toast.error(result.error.message ?? "Sign-in failed");
     } catch {
       toast.error("Could not connect to sign-in. Check your connection and try again.");
