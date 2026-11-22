@@ -1,5 +1,5 @@
 
-import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFPage } from 'pdf-lib';
 import { measureDrawing, type RoofDrawing, toMaterialReport } from './roof-geometry';
 import { materialOrder } from './material-order';
 
