@@ -1,3 +1,4 @@
+import logoMark from "@/assets/logo-mark.webp";
 import { PDFDocument, StandardFonts, rgb, PDFTextField, PDFCheckBox, PDFDropdown, PDFOptionList } from "pdf-lib";
 import type { ProposalDetails } from "./proposal-schema";
 
