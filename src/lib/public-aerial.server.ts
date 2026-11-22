@@ -75,7 +75,7 @@ export async function fetchPublicAerial(address: string, spanMeters: number, fet
     f: "image",
   });
   const img = await request(
-    `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/export?${params}`,
+    `https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/export?${params}`,
     25000,
     fetcher,
   );
