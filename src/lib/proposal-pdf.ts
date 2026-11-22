@@ -31,9 +31,19 @@ async function loadLogoPng(): Promise<Uint8Array> {
 export async function generateProposalPdf(details: ProposalDetails, customer?: { name: string; address: string | null; email: string | null }) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const logo = await pdf.embedPng(await loadLogoPng());
+
   let page = pdf.addPage([612, 792]);
-  let y = 730;
+  const logoSize = logo.scaleToFit(180, 62);
+  page.drawImage(logo, {
+    x: 50,
+    y: 710,
+    width: logoSize.width,
+    height: logoSize.height,
+  });
+
+  let y = 690;
   const line = (text: string, size = 11, heading = false) => {
     const font = heading ? bold : regular;
     for (const paragraph of clean(text).split("\n")) {
