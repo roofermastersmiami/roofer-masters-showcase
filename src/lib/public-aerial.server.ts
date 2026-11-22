@@ -99,7 +99,7 @@ export async function fetchPublicAerial(address: string, spanMeters: number, fet
   if (bytes.length < 24 || ![137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v))
     return failure("imagery_response", "USGS returned an empty or invalid aerial image.");
   const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (header.getUint32(16) !== 1000 || header.getUint32(20) !== 1000)
+  if (header.getUint32(16) !== 2000 || header.getUint32(20) !== 2000)
     return failure("imagery_dimensions", "USGS returned unexpected image dimensions; the map scale cannot be trusted.");
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
