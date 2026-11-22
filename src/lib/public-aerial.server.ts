@@ -70,7 +70,7 @@ export async function fetchPublicAerial(address: string, spanMeters: number, fet
     bbox: box.bbox.join(","),
     bboxSR: "3857",
     imageSR: "3857",
-    size: "1000,1000",
+    size: "2000,2000",
     format: "png",
     f: "image",
   });
