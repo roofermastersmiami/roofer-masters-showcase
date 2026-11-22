@@ -69,9 +69,7 @@ export async function generateProposalPdf(details: ProposalDetails, customer?: {
       }
     }
   };
-  line("ROOFER MASTERS", 24, true);
-  line("YOUR ROOF, OUR MASTERPIECE", 9);
-  line("305-942-3093  |  roofermasters@gmail.com", 10);
+    line("305-942-3093  |  roofermasters@gmail.com", 10);
   y -= 24;
   line(details.title, 19, true);
   line(details.category, 11);
