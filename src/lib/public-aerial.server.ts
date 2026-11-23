@@ -2,6 +2,35 @@ import { aerialBox, AERIAL_CREDIT } from "./public-aerial";
 const FALLBACK =
   " Use Add image to upload your own aerial/drone photo, then calibrate and trace it.";
 const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_GEOCODER_BYTES = 1024 * 1024;
+
+async function readTextLimited(response: Response, maxBytes: number): Promise<string | null> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return null;
+  if (!response.body) {
+    const text = await response.text();
+    return new TextEncoder().encode(text).byteLength <= maxBytes ? text : null;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
 function failure(stage: string, message: string, status?: number) {
   // Do not log addresses, coordinates, images or sessions.
   console.warn("Public aerial import failed", { stage, status: status ?? null });
@@ -33,7 +62,13 @@ export async function fetchPublicAerial(
     );
   let body: string;
   try {
-    body = await geo.text();
+    const boundedBody = await readTextLimited(geo, MAX_GEOCODER_BYTES);
+    if (boundedBody === null)
+      return failure(
+        "geocoding_size",
+        "The Census address response exceeded the 1 MB safety limit.",
+      );
+    body = boundedBody;
   } catch {
     return failure("geocoding_response", "The free Census response could not be read.", geo.status);
   }
