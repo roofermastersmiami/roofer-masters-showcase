@@ -327,6 +327,11 @@ export function AdvancedEstimator() {
             >
               Import measured materials
             </Button>
+            <p className="self-end text-xs text-muted-foreground md:col-span-3">
+              Takeoff quantities are estimating allowances. Verify field dimensions, roof details,
+              product coverage, packaging, fastening schedules, and applicable code requirements
+              before ordering.
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
