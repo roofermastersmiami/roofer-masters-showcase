@@ -22,6 +22,56 @@ export function snapToExistingCorner(
   }
   return nearest ? { x: nearest.x, y: nearest.y } : point;
 }
+/** Return drawing-quality problems in image space before converting pixels to feet. */
+export function validateRoofOutline(points: ImagePoint[]): string[] {
+  const issues: string[] = [];
+  if (points.length < 3) return ["Draw at least three corners."];
+  if (points.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.y < 0)) {
+    return ["Photo points must have valid, non-negative coordinates."];
+  }
+  const count = points.length;
+  for (let i = 0; i < count; i++) {
+    const next = points[(i + 1) % count]!;
+    if (Math.hypot(points[i]!.x - next.x, points[i]!.y - next.y) < 0.5) {
+      issues.push("Two neighboring corners overlap; move or remove the duplicate corner.");
+      break;
+    }
+  }
+  const twiceArea = points.reduce((sum, p, i) => {
+    const q = points[(i + 1) % count]!;
+    return sum + p.x * q.y - q.x * p.y;
+  }, 0);
+  if (Math.abs(twiceArea) / 2 < 1) issues.push("Roof outline is too small or flat to measure.");
+  const cross = (a: ImagePoint, b: ImagePoint, c: ImagePoint) =>
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const onSegment = (a: ImagePoint, b: ImagePoint, p: ImagePoint) =>
+    Math.abs(cross(a, b, p)) < 1e-7 &&
+    p.x >= Math.min(a.x, b.x) - 1e-7 && p.x <= Math.max(a.x, b.x) + 1e-7 &&
+    p.y >= Math.min(a.y, b.y) - 1e-7 && p.y <= Math.max(a.y, b.y) + 1e-7;
+  const intersects = (a: ImagePoint, b: ImagePoint, c: ImagePoint, d: ImagePoint) => {
+    const abC = cross(a, b, c), abD = cross(a, b, d);
+    const cdA = cross(c, d, a), cdB = cross(c, d, b);
+    if (((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
+        ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))) return true;
+    return (Math.abs(abC) < 1e-7 && onSegment(a, b, c)) ||
+      (Math.abs(abD) < 1e-7 && onSegment(a, b, d)) ||
+      (Math.abs(cdA) < 1e-7 && onSegment(c, d, a)) ||
+      (Math.abs(cdB) < 1e-7 && onSegment(c, d, b));
+  };
+  for (let i = 0; i < count; i++) {
+    const a = points[i]!, b = points[(i + 1) % count]!;
+    for (let j = i + 1; j < count; j++) {
+      if (j === i || j === (i + 1) % count || (j + 1) % count === i) continue;
+      const c = points[j]!, d = points[(j + 1) % count]!;
+      if (intersects(a, b, c, d)) {
+        issues.push("Roof outline crosses itself; adjust the corners so the perimeter does not cross.");
+        return issues;
+      }
+    }
+  }
+  return issues;
+}
+
 export const UPHILL_LABELS: Record<Uphill, string> = {
   up: "Toward top of photo",
   down: "Toward bottom of photo",
@@ -104,8 +154,10 @@ export function calibratedPlane(
     throw new Error("Photo points must have valid, non-negative coordinates");
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (pixels < 1) throw new Error("Calibration points must be distinct");
-  if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24)
-    throw new Error("Draw at least three corners and enter a valid pitch");
+  if (!Number.isFinite(pitch) || pitch < 0 || pitch > 24)
+    throw new Error("Enter a valid pitch from 0:12 to 24:12");
+  const outlineIssues = validateRoofOutline(points);
+  if (outlineIssues.length) throw new Error(outlineIssues[0]);
   const scale = feet / pixels,
     origin = a,
     uphill = opts.uphill ?? "down";
