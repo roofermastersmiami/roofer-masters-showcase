@@ -105,7 +105,11 @@ export function RoofImageTrace({
     if (kind === "ref") setReference((r) => r.map((q, j) => (j === i ? p : q)));
     else {
       const next = snapCorners
-        ? snapToExistingCorner(p, traced.flatMap((plane) => plane.points), Math.max(6, w * 0.012))
+        ? snapToExistingCorner(
+            p,
+            traced.flatMap((plane) => plane.points),
+            Math.max(6, w * 0.012),
+          )
         : p;
       setPoints((r) => r.map((q, j) => (j === i ? next : q)));
     }
