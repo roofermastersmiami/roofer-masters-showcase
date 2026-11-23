@@ -4,7 +4,6 @@ const inputSchema = z.object({
   shingleBundleCoverageSqft: z.number().positive().default(33.3),
   underlaymentRollCoverageSqft: z.number().positive().default(400),
   metalPanelCoverageInches: z.number().positive().default(16),
-  metalPanelMaxLengthFeet: z.number().positive().default(40),
   fastenersPerSquare: z.number().positive().default(80),
   wastePercent: z.number().min(0).max(50).default(10),
 });
@@ -28,7 +27,7 @@ export function calculateRoofMaterialTakeoff(drawing: RoofDrawing, rawOptions: T
     add('Fasteners allowance', squares * options.fastenersPerSquare, 'fasteners', 'Allowance only; confirm deck and fastening schedule');
   } else if (drawing.roof_type === 'Metal Roof') {
     const coverFt = options.metalPanelCoverageInches / 12;
-    add('Metal panels (area allowance)', area / (options.metalPanelMaxLengthFeet * coverFt), 'panels', 'Not a cut list; final count requires each panel run and layout');
+    add('Metal panel coverage allowance', area, 'sq ft', 'Area allowance only; panel count and cut lengths require each measured panel run and layout');
     add('Underlayment rolls', area / options.underlaymentRollCoverageSqft, 'rolls', 'Area divided by assumed roll coverage');
     add('Ridge and hip trim', measured.edges.ridge + measured.edges.hip, 'linear ft', 'Measured ridge and hip edges');
     add('Valley trim', measured.edges.valley, 'linear ft', 'Measured valley edges');
@@ -51,7 +50,7 @@ export function calculateRoofMaterialTakeoff(drawing: RoofDrawing, rawOptions: T
     warnings: [
       'Preliminary takeoff only. Verify dimensions, roof assembly, product coverage, code and manufacturer specifications before purchasing.',
       ...(drawing.verified ? [] : ['Drawing is not site-verified; quantities are not final.']),
-      ...(drawing.roof_type === 'Metal Roof' ? ['Metal panel count is an area-based allowance, not a cut list. Measure each panel run and account for sidelaps, endlaps and trim before ordering.'] : []),
+      ...(drawing.roof_type === 'Metal Roof' ? ['Metal quantity is shown as square-foot coverage only, not a panel count or cut list. Measure each panel run and account for sidelaps, endlaps and trim before ordering.'] : []),
       ...(drawing.roof_type === 'Tile Roof' ? ['Tile piece counts require the exact tile model, headlap, exposure and accessory system.'] : []),
       ...((drawing.roof_type === 'TPO' || drawing.roof_type === 'Flat Roof') ? ['Flat-roof membrane layout depends on roll width, seam direction, parapets, penetrations and attachment method.'] : []),
     ],
