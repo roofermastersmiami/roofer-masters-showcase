@@ -3,7 +3,6 @@ import { measureDrawing, type RoofDrawing } from './roof-geometry';
 const inputSchema = z.object({
   shingleBundleCoverageSqft: z.number().positive().default(33.3),
   underlaymentRollCoverageSqft: z.number().positive().default(400),
-  metalPanelCoverageInches: z.number().positive().default(16),
   fastenersPerSquare: z.number().positive().default(80),
   wastePercent: z.number().min(0).max(50).default(10),
 });
