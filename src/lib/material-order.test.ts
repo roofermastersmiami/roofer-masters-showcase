@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { materialOrder, type RoofReport } from "./material-order";
+import { materialOrder, parseRoofReportText, type RoofReport } from "./material-order";
 
 const metalReport = (overrides: Partial<RoofReport> = {}): RoofReport => ({
   roof_type: "Metal Roof" as const,
