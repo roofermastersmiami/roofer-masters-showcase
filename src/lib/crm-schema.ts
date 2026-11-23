@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 export const money = (cents: number) => {
-  if (!Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported currency range");
+  if (!Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported range");
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 };
 export const dollarsToCents = (dollars: number) => {
   const cents = Math.round(dollars * 100);
-  if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported currency range");
+  if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported range");
   return cents;
 };
 export const itemSchema = z.object({ description: z.string().trim().min(1).max(250), quantity: z.number().positive().max(100000), unit_cents: z.number().int().nonnegative().max(100000000) });
