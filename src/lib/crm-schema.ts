@@ -57,10 +57,10 @@ export function paymentAmount(invoice: { total_cents: number; paid_cents: number
 export const estimateInputSchema = z.object({ sqft: z.number().positive().max(1000000), waste: z.number().min(0).max(100), material: z.number().nonnegative().max(100000), labor: z.number().nonnegative().max(100000), permits: z.number().nonnegative().max(1000000), other: z.number().nonnegative().max(1000000), margin: z.number().min(0).max(95) });
 export type EstimateInputs = z.infer<typeof estimateInputSchema>;
 export function calculateEstimate(raw: EstimateInputs) {
-  const input = estimateInputSchema.parse(raw);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("Estimate inputs must be a valid object");
   }
+  const input = estimateInputSchema.parse(raw);
   const squares = input.sqft / 100;
   const materialSquares = squares * (1 + input.waste / 100);
   const materialCents = dollarsToCents(materialSquares * input.material);
