@@ -36,6 +36,30 @@ describe('snapToImageEdge', () => {
     expect(snapToImageEdge(data, width, height, { x: 10, y: 10 }, 2, 100)).toBeNull();
   });
 
+  it('prefers a continuous boundary over an isolated high-contrast texture edge', () => {
+    const width = 48, height = 40, data = pixels(width, height, 25);
+    // Long, consistent vertical boundary.
+    for (let y = 0; y < height; y++) for (let x = 18; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 150;
+    }
+    // Small, higher-contrast isolated square near the click.
+    for (let y = 13; y < 16; y++) for (let x = 11; x < 14; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+    }
+    const result = snapToImageEdge(data, width, height, { x: 13, y: 14 }, 10, 100);
+    expect(result).not.toBeNull();
+    expect(result!.point.x).toBeGreaterThanOrEqual(17);
+    expect(result!.point.x).toBeLessThanOrEqual(18);
+  });
+
+  it('rejects invalid radius and strength settings', () => {
+    const data = pixels(20, 20);
+    expect(snapToImageEdge(data, 20, 20, { x: 10, y: 10 }, Number.NaN, 20)).toBeNull();
+    expect(snapToImageEdge(data, 20, 20, { x: 10, y: 10 }, 5, -1)).toBeNull();
+  });
+
   it('clamps the search to image boundaries', () => {
     const data = pixels(12, 12);
     for (let y = 0; y < 12; y++) for (let x = 6; x < 12; x++) {
