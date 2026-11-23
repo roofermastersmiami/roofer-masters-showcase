@@ -27,6 +27,15 @@ describe('snapToImageEdge', () => {
     expect(snapToImageEdge(new Uint8ClampedArray(4), 20, 20, { x: 10, y: 10 })).toBeNull();
   });
 
+  it('keeps candidates inside the circular search radius', () => {
+    const width = 30, height = 30, data = pixels(width, height);
+    for (let y = 12; y < height; y++) for (let x = 12; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 240;
+    }
+    expect(snapToImageEdge(data, width, height, { x: 10, y: 10 }, 2, 100)).toBeNull();
+  });
+
   it('clamps the search to image boundaries', () => {
     const data = pixels(12, 12);
     for (let y = 0; y < 12; y++) for (let x = 6; x < 12; x++) {
