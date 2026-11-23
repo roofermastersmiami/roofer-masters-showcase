@@ -39,7 +39,7 @@ export async function extractRoofReportPdfText(file: File): Promise<string> {
       extractedLength += Math.min(pageText.length, remaining);
       page.cleanup();
     }
-    return pages.join("\\n");
+    return pages.join("\n");
   } finally {
     await document.destroy();
   }
