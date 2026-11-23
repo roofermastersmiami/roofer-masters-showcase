@@ -58,7 +58,9 @@ export function AdvancedEstimator() {
   let totals: ReturnType<typeof priceOption> | null = null;
   try {
     if (o) totals = priceOption(o);
-  } catch {}
+  } catch {
+    // Keep the estimator usable while invalid draft pricing is being edited.
+  }
   const unpricedItems = o?.lines.filter((line) => line.quantity > 0 && line.unit_cents <= 0) ?? [];
   function update(next: EstimateOption) {
     setOptions(options.map((v, i) => (i === selected ? next : v)));

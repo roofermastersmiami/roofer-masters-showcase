@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import {
   calibratedPlane,
   checkCalibration,
+  findSharedEdges,
+  snapToExistingCorner,
+  validateRoofOutline,
   nextEdgeType,
   UPHILL_LABELS,
   type ImagePoint,
@@ -62,12 +65,23 @@ export function RoofImageTrace({
   const [name, setName] = useState("");
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
   const [replace, setReplace] = useState(true);
+  const [snapCorners, setSnapCorners] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
   const drag = useRef<{ kind: "ref" | "pt"; i: number } | null>(null);
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
   const calibration = checkCalibration(reference, feet, w, dimensions.height);
+  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];
+  const sharedEdgeMatches =
+    points.length >= 3
+      ? traced.flatMap((plane) =>
+          findSharedEdges(points, plane.points, Math.max(3, w * 0.006)).map((match) => ({
+            ...match,
+            planeName: plane.name,
+          })),
+        )
+      : [];
 
   const toImage = (clientX: number, clientY: number) => {
     const box = svg.current!.getBoundingClientRect();
@@ -79,7 +93,14 @@ export function RoofImageTrace({
   const addPoint = (p: ImagePoint) => {
     if (mode === "calibrate") setReference(reference.length === 2 ? [p] : [...reference, p]);
     else {
-      setPoints([...points, p]);
+      const next = snapCorners
+        ? snapToExistingCorner(
+            p,
+            traced.flatMap((plane) => plane.points),
+            Math.max(6, w * 0.012),
+          )
+        : p;
+      setPoints([...points, next]);
       setEdges([...edges, "other"]);
     }
   };
@@ -90,7 +111,16 @@ export function RoofImageTrace({
     moved.current = true;
     const { kind, i } = drag.current;
     if (kind === "ref") setReference((r) => r.map((q, j) => (j === i ? p : q)));
-    else setPoints((r) => r.map((q, j) => (j === i ? p : q)));
+    else {
+      const next = snapCorners
+        ? snapToExistingCorner(
+            p,
+            traced.flatMap((plane) => plane.points),
+            Math.max(6, w * 0.012),
+          )
+        : p;
+      setPoints((r) => r.map((q, j) => (j === i ? next : q)));
+    }
   };
   const startDrag = (kind: "ref" | "pt", i: number) => (e: RPointerEvent) => {
     e.stopPropagation();
@@ -405,18 +435,49 @@ export function RoofImageTrace({
         </Button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-4">
-        <p className="text-sm text-muted-foreground">
-          {points.length} corners
-          {preview
-            ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter`
-            : ""}{" "}
-          · {traced.length} plane{traced.length === 1 ? "" : "s"} added from this photo
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted-foreground">
+            {points.length} corners
+            {preview
+              ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter`
+              : ""}{" "}
+            · {traced.length} plane{traced.length === 1 ? "" : "s"} added from this photo
+          </p>
+          {outlineIssues.map((issue) => (
+            <p key={issue} className="mt-1 text-sm text-destructive">
+              {issue}
+            </p>
+          ))}
+          {sharedEdgeMatches.length > 0 && (
+            <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">
+              Shared boundary detected: {sharedEdgeMatches.map((match) =>
+                `edge ${match.edgeA + 1} with ${match.planeName} (within ${match.maxEndpointDistance.toFixed(1)} px)`,
+              ).join("; ")}. Review this connection before verifying the report.
+            </p>
+          )}
+          {traced.length > 0 && points.length >= 3 && sharedEdgeMatches.length === 0 && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              No matching edge found on the previously traced planes. If these planes should connect,
+              review the corner alignment before verifying the report.
+            </p>
+          )}
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />{" "}
           Replace existing roof planes
         </label>
-        <Button disabled={points.length < 3 || !calibration.ok} onClick={add}>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={snapCorners}
+            onChange={(e) => setSnapCorners(e.target.checked)}
+          />{" "}
+          Snap corners to previous planes
+        </label>
+        <Button
+          disabled={points.length < 3 || !calibration.ok || outlineIssues.length > 0}
+          onClick={add}
+        >
           <Plus /> Add traced plane
         </Button>
       </div>

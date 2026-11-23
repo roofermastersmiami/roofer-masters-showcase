@@ -55,6 +55,10 @@ type Media = {
   name: string;
   category: "aerial" | "before" | "after" | "diagram";
   feet_per_pixel?: number;
+  source?: string;
+  matched_address?: string;
+  latitude?: number;
+  longitude?: number;
 };
 export function RoofMeasurements({
   report,
@@ -71,7 +75,9 @@ export function RoofMeasurements({
   let startPitch = 6;
   try {
     startPitch = measureDrawing(starting).planes[0]?.pitch ?? 6;
-  } catch {}
+  } catch {
+    // Keep the default pitch when saved geometry cannot be measured.
+  }
   const properties = useQuery(propertiesQuery),
     customers = useQuery(customersQuery),
     drawings = useQuery(drawingsQuery),
@@ -115,6 +121,20 @@ export function RoofMeasurements({
                 Number.isFinite(m["feet_per_pixel"]) &&
                 m["feet_per_pixel"] > 0
                   ? { feet_per_pixel: m["feet_per_pixel"] }
+                  : {}),
+                ...(typeof m["source"] === "string"
+                  ? { source: m["source"].slice(0, 80) }
+                  : {}),
+                ...(typeof m["matched_address"] === "string"
+                  ? { matched_address: m["matched_address"].slice(0, 250) }
+                  : {}),
+                ...(typeof m["latitude"] === "number" &&
+                Number.isFinite(m["latitude"])
+                  ? { latitude: m["latitude"] }
+                  : {}),
+                ...(typeof m["longitude"] === "number" &&
+                Number.isFinite(m["longitude"])
+                  ? { longitude: m["longitude"] }
                   : {}),
               },
             ]
@@ -228,7 +248,17 @@ export function RoofMeasurements({
           bytes = new Uint8Array(await converted.arrayBuffer());
           mime = "image/png";
         }
-        photos.push({ bytes, mime, category: item.category, name: item.name });
+        photos.push({
+          bytes,
+          mime,
+          category: item.category,
+          name: item.name,
+          ...(item.source ? { source: item.source } : {}),
+          ...(item.matched_address ? { matchedAddress: item.matched_address } : {}),
+          ...(typeof item.latitude === "number" ? { latitude: item.latitude } : {}),
+          ...(typeof item.longitude === "number" ? { longitude: item.longitude } : {}),
+          ...(item.feet_per_pixel ? { feetPerPixel: item.feet_per_pixel } : {}),
+        });
       }
       const bytes = await roofDrawingPdf(
         title,
@@ -347,7 +377,7 @@ export function RoofMeasurements({
   const [aerialError, setAerialError] = useState("");
   const [aerialStatus, setAerialStatus] = useState("");
   async function loadAerial() {
-    const address = report?.address ?? propertyRow?.address;
+    const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
     setBusy(true);
     setAerialError("");
@@ -376,6 +406,10 @@ export function RoofMeasurements({
           name: `Public aerial · ${r.matchedAddress}`.slice(0, 200),
           category: "aerial" as const,
           feet_per_pixel: r.feetPerPixel,
+          source: "USGS National Map NAIP imagery",
+          matched_address: r.matchedAddress,
+          latitude: r.lat,
+          longitude: r.lon,
         },
       ];
       setMedia(next);
@@ -400,8 +434,7 @@ export function RoofMeasurements({
   useEffect(() => {
     if (
       shouldAutoLoadAddressAerial({
-        isNewReport: Boolean(report && !initialDrawing),
-        address: report?.address ?? propertyRow?.address,
+        address: report?.address?.trim() || propertyRow?.address,
         hasAerial: media.some((item) => item.category === "aerial"),
         alreadyAttempted: autoAerialAttempted.current,
       })
@@ -1007,6 +1040,15 @@ export function RoofMeasurements({
           {media.map((m, i) => (
             <div key={m.path}>
               <DrawingImage path={m.path} name={m.name} />
+              {m.source && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {m.source}
+                  {m.matched_address ? ` · Matched: ${m.matched_address}` : ""}
+                  {typeof m.latitude === "number" && typeof m.longitude === "number"
+                    ? ` · ${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`
+                    : ""}
+                </p>
+              )}
               <Choice
                 label="Photo type"
                 value={m.category}
@@ -1052,7 +1094,7 @@ export function RoofMeasurements({
         <div className="flex flex-wrap items-end gap-3">
           <Button
             variant="outline"
-            disabled={busy || !property || !(report?.address ?? propertyRow?.address)}
+            disabled={busy || !property || !(report?.address?.trim() || propertyRow?.address)}
             onClick={() => void loadAerial()}
           >
             <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}

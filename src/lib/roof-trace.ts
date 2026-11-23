@@ -2,6 +2,155 @@ import type { EdgeType, RoofPlane } from "./roof-geometry";
 import { planeInfo, EDGE_TYPES } from "./roof-geometry";
 export type ImagePoint = { x: number; y: number };
 export type Uphill = "up" | "down" | "left" | "right";
+
+/** Snap a photo point to the nearest corner already traced on this same image. */
+export function snapToExistingCorner(
+  point: ImagePoint,
+  existing: ImagePoint[],
+  tolerancePx: number,
+): ImagePoint {
+  if (!Number.isFinite(tolerancePx) || tolerancePx <= 0) return point;
+  let nearest: ImagePoint | undefined;
+  let nearestDistance = tolerancePx;
+  for (const candidate of existing) {
+    if (!Number.isFinite(candidate.x) || !Number.isFinite(candidate.y)) continue;
+    const distance = Math.hypot(point.x - candidate.x, point.y - candidate.y);
+    if (distance <= nearestDistance) {
+      nearest = candidate;
+      nearestDistance = distance;
+    }
+  }
+  return nearest ? { x: nearest.x, y: nearest.y } : point;
+}
+export type SharedEdgeMatch = {
+  edgeA: number;
+  edgeB: number;
+  reversed: boolean;
+  maxEndpointDistance: number;
+};
+
+/** Find near-identical boundary segments between two outlines in the same photo. */
+export function findSharedEdges(
+  a: ImagePoint[],
+  b: ImagePoint[],
+  tolerancePx: number,
+): SharedEdgeMatch[] {
+  if (!Number.isFinite(tolerancePx) || tolerancePx <= 0 || a.length < 3 || b.length < 3) {
+    return [];
+  }
+  const matches: SharedEdgeMatch[] = [];
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i]!, a2 = a[(i + 1) % a.length]!;
+    for (let j = 0; j < b.length; j++) {
+      const b1 = b[j]!, b2 = b[(j + 1) % b.length]!;
+      const direct = Math.max(Math.hypot(a1.x - b1.x, a1.y - b1.y), Math.hypot(a2.x - b2.x, a2.y - b2.y));
+      const reverse = Math.max(Math.hypot(a1.x - b2.x, a1.y - b2.y), Math.hypot(a2.x - b1.x, a2.y - b1.y));
+      const reversed = reverse < direct;
+      const distance = Math.min(direct, reverse);
+      if (distance <= tolerancePx) {
+        matches.push({ edgeA: i, edgeB: j, reversed, maxEndpointDistance: distance });
+      }
+    }
+  }
+  return matches;
+}
+
+/** Return drawing-quality problems in image space before converting pixels to feet. */
+export function validateRoofOutline(points: ImagePoint[]): string[] {
+  const issues: string[] = [];
+  if (points.length < 3) return ["Draw at least three corners."];
+
+  if (
+    points.some(
+      (point) =>
+        !Number.isFinite(point.x) ||
+        !Number.isFinite(point.y) ||
+        point.x < 0 ||
+        point.y < 0,
+    )
+  ) {
+    return ["Photo points must have valid, non-negative coordinates."];
+  }
+
+  const count = points.length;
+  for (let index = 0; index < count; index += 1) {
+    const current = points[index]!;
+    const next = points[(index + 1) % count]!;
+    if (Math.hypot(current.x - next.x, current.y - next.y) < 0.5) {
+      issues.push("Two neighboring corners overlap; move or remove the duplicate corner.");
+      break;
+    }
+  }
+
+  const cross = (a: ImagePoint, b: ImagePoint, c: ImagePoint) =>
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+  const onSegment = (a: ImagePoint, b: ImagePoint, point: ImagePoint) =>
+    Math.abs(cross(a, b, point)) < 1e-7 &&
+    point.x >= Math.min(a.x, b.x) - 1e-7 &&
+    point.x <= Math.max(a.x, b.x) + 1e-7 &&
+    point.y >= Math.min(a.y, b.y) - 1e-7 &&
+    point.y <= Math.max(a.y, b.y) + 1e-7;
+
+  const intersects = (
+    a: ImagePoint,
+    b: ImagePoint,
+    c: ImagePoint,
+    d: ImagePoint,
+  ) => {
+    const abC = cross(a, b, c);
+    const abD = cross(a, b, d);
+    const cdA = cross(c, d, a);
+    const cdB = cross(c, d, b);
+
+    const crossesProperly =
+      ((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
+      ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0));
+
+    if (crossesProperly) return true;
+
+    return (
+      (Math.abs(abC) < 1e-7 && onSegment(a, b, c)) ||
+      (Math.abs(abD) < 1e-7 && onSegment(a, b, d)) ||
+      (Math.abs(cdA) < 1e-7 && onSegment(c, d, a)) ||
+      (Math.abs(cdB) < 1e-7 && onSegment(c, d, b))
+    );
+  };
+
+  // Check non-adjacent edges first: a bow-tie can have zero signed area.
+  for (let firstEdge = 0; firstEdge < count; firstEdge += 1) {
+    const a = points[firstEdge]!;
+    const b = points[(firstEdge + 1) % count]!;
+
+    for (let secondEdge = firstEdge + 1; secondEdge < count; secondEdge += 1) {
+      const edgesAreAdjacent =
+        secondEdge === (firstEdge + 1) % count ||
+        (secondEdge + 1) % count === firstEdge;
+      if (edgesAreAdjacent) continue;
+
+      const c = points[secondEdge]!;
+      const d = points[(secondEdge + 1) % count]!;
+      if (intersects(a, b, c, d)) {
+        return [
+          ...issues,
+          "Roof outline crosses itself; adjust the corners so the perimeter does not cross.",
+        ];
+      }
+    }
+  }
+
+  const twiceArea = points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % count]!;
+    return sum + point.x * next.y - next.x * point.y;
+  }, 0);
+
+  if (Math.abs(twiceArea) / 2 < 1) {
+    issues.push("Roof outline is too small or flat to measure.");
+  }
+
+  return issues;
+}
+
 export const UPHILL_LABELS: Record<Uphill, string> = {
   up: "Toward top of photo",
   down: "Toward bottom of photo",
@@ -84,8 +233,10 @@ export function calibratedPlane(
     throw new Error("Photo points must have valid, non-negative coordinates");
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (pixels < 1) throw new Error("Calibration points must be distinct");
-  if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24)
-    throw new Error("Draw at least three corners and enter a valid pitch");
+  if (!Number.isFinite(pitch) || pitch < 0 || pitch > 24)
+    throw new Error("Enter a valid pitch from 0:12 to 24:12");
+  const outlineIssues = validateRoofOutline(points);
+  if (outlineIssues.length) throw new Error(outlineIssues[0]);
   const scale = feet / pixels,
     origin = a,
     uphill = opts.uphill ?? "down";

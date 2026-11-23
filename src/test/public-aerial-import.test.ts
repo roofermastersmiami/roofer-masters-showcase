@@ -192,24 +192,21 @@ describe("private aerial upload", () => {
 });
 
 describe("automatic address aerial loading", () => {
-  it("loads free imagery once for a new address report without an aerial", () => {
+  it("loads free imagery once for any address-linked report without an aerial", () => {
     expect(
       shouldAutoLoadAddressAerial({
-        isNewReport: true,
         address: "123 Main St, Miami, FL",
         hasAerial: false,
         alreadyAttempted: false,
       }),
     ).toBe(true);
   });
-  it("does not auto-load for existing drawings, missing addresses, saved aerials or retries", () => {
+  it("does not auto-load when the address is missing, an aerial is saved or a request was already attempted", () => {
     const base = {
-      isNewReport: true,
       address: "123 Main St, Miami, FL",
       hasAerial: false,
       alreadyAttempted: false,
     };
-    expect(shouldAutoLoadAddressAerial({ ...base, isNewReport: false })).toBe(false);
     expect(shouldAutoLoadAddressAerial({ ...base, address: " " })).toBe(false);
     expect(shouldAutoLoadAddressAerial({ ...base, hasAerial: true })).toBe(false);
     expect(shouldAutoLoadAddressAerial({ ...base, alreadyAttempted: true })).toBe(false);
