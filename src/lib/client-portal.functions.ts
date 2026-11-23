@@ -10,7 +10,8 @@ export const createClientPortal = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
     if (roleError || !owner) throw new Error('You do not have access to this action');
-    const { data: lead } = await context.supabase.from('leads').select('id').eq('id', data.leadId).single();
+    const { data: lead, error: leadError } = await context.supabase.from('leads').select('id').eq('id', data.leadId).maybeSingle();
+    if (leadError) throw new Error('Could not verify customer record');
     if (!lead) throw new Error('Customer not found');
     const { data: link, error } = await context.supabase.from('client_portal_links').insert({ lead_id: lead.id }).select('id,token,expires_at,revoked_at').single();
     if (error || !link) throw new Error('Could not create customer portal');
@@ -23,8 +24,8 @@ export const revokeClientPortal = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
     if (roleError || !owner) throw new Error('You do not have access to this action');
-    const { error } = await context.supabase.from('client_portal_links').update({ revoked_at: new Date().toISOString() }).eq('id', data.id);
-    if (error) throw new Error('Could not revoke customer portal');
+    const { data: revoked, error } = await context.supabase.from('client_portal_links').update({ revoked_at: new Date().toISOString() }).eq('id', data.id).select('id').maybeSingle();
+    if (error || !revoked) throw new Error('Could not revoke customer portal');
     return { ok: true };
   });
 
