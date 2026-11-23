@@ -41,7 +41,11 @@ import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
-import { uploadAerialImage, aerialInvocationError, shouldAutoLoadAddressAerial } from "@/lib/public-aerial-import";
+import {
+  uploadAerialImage,
+  aerialInvocationError,
+  shouldAutoLoadAddressAerial,
+} from "@/lib/public-aerial-import";
 import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));

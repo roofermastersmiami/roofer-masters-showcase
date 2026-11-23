@@ -63,9 +63,6 @@ export function shouldAutoLoadAddressAerial(input: {
   alreadyAttempted: boolean;
 }) {
   return Boolean(
-    input.isNewReport &&
-      input.address?.trim() &&
-      !input.hasAerial &&
-      !input.alreadyAttempted,
+    input.isNewReport && input.address?.trim() && !input.hasAerial && !input.alreadyAttempted,
   );
 }
