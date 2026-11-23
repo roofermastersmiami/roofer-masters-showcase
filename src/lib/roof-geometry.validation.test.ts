@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingSchema, planeInfo, roofPreset } from './roof-geometry';
+import { drawingSchema, measureDrawing, planeInfo, roofPreset } from './roof-geometry';
 
 const drawing = {
   planes: [{
@@ -129,5 +129,21 @@ describe('roof drawing identifier validation', () => {
       ...drawing,
       penetrations: [{ id: '  ', kind: 'pipe', x: 5, z: 6, width: 2, length: 3 }],
     }).success).toBe(false);
+  });
+});
+
+describe('roof penetration footprint validation', () => {
+  it('accepts a penetration fully inside the roof footprint', () => {
+    expect(() => measureDrawing({
+      ...drawing,
+      penetrations: [{ id: 'pipe-inside', kind: 'pipe', x: 10, z: 10, width: 2, length: 2 }],
+    } as any)).not.toThrow();
+  });
+
+  it('rejects a penetration that extends beyond the roof edge', () => {
+    expect(() => measureDrawing({
+      ...drawing,
+      penetrations: [{ id: 'pipe-edge', kind: 'pipe', x: 20, z: 10, width: 2, length: 2 }],
+    } as any)).toThrow(/must fit within the roof footprint/);
   });
 });
