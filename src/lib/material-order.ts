@@ -98,7 +98,6 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
   }
 }
 
-
 export type ParsedRoofReportText = {
   values: Partial<RoofReport>;
   found: string[];
@@ -140,14 +139,22 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
     "area_sqft",
     (n, u) => (/square|squares|^sq$/.test(u) ? n * 100 : n),
   );
-  read("Waste", [new RegExp("waste(?:\\s+factor)?\\s*[:=]?\\s*" + number + "\\s*%?", "i")], "waste_pct");
+  read(
+    "Waste",
+    [new RegExp("waste(?:\\s+factor)?\\s*[:=]?\\s*" + number + "\\s*%?", "i")],
+    "waste_pct",
+  );
   const linear = (label: string, aliases: string[], key: keyof RoofReport) => {
     const names = aliases.join("|");
     read(
       label,
       [
         new RegExp(
-          "(?:" + names + ")(?:\\s+(?:length|total))?\\s*[:=]?\\s*" + number + "\\s*(lf|linear feet|feet|ft)?",
+          "(?:" +
+            names +
+            ")(?:\\s+(?:length|total))?\\s*[:=]?\\s*" +
+            number +
+            "\\s*(lf|linear feet|feet|ft)?",
           "i",
         ),
       ],
@@ -169,7 +176,9 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
     ],
     "pipes",
   );
-  const roof = source.match(/\\b(shingle|tile|metal|tpo|flat)\\s*(?:roof)?\\b/i)?.[1]?.toLowerCase();
+  const roof = source
+    .match(/\\b(shingle|tile|metal|tpo|flat)\\s*(?:roof)?\\b/i)?.[1]
+    ?.toLowerCase();
   if (roof) {
     values.roof_type =
       roof === "shingle"

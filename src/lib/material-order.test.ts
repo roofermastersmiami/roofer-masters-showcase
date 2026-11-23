@@ -51,20 +51,21 @@ describe("metal material order", () => {
   });
 });
 
-
 describe("local roof report text import", () => {
   it("reads explicitly labelled measurements without guessing", () => {
-    const parsed = parseRoofReportText([
-      "Roof Type: Metal Roof",
-      "Total Roof Area: 2,400 sq ft",
-      "Waste: 10%",
-      "Ridge: 40 LF",
-      "Hips: 20 LF",
-      "Valleys: 15 LF",
-      "Eaves: 80 LF",
-      "Rakes: 40 LF",
-      "Pipe boots: 3",
-    ].join("\\n"));
+    const parsed = parseRoofReportText(
+      [
+        "Roof Type: Metal Roof",
+        "Total Roof Area: 2,400 sq ft",
+        "Waste: 10%",
+        "Ridge: 40 LF",
+        "Hips: 20 LF",
+        "Valleys: 15 LF",
+        "Eaves: 80 LF",
+        "Rakes: 40 LF",
+        "Pipe boots: 3",
+      ].join("\\n"),
+    );
     expect(parsed.values).toMatchObject({
       roof_type: "Metal Roof",
       area_sqft: 2400,
