@@ -312,26 +312,24 @@ export function RoofMeasurements({
     }
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from("roof_estimates")
-        .insert({
-          lead_id: customer.source_lead_id,
-          property_id: property,
-          drawing_id: parent,
-          ...(report ? { report_order_id: report.id } : {}),
-          title: `${title} — estimate`,
-          category: d.roof_type,
-          inputs: {
-            sqft: measurement.area,
-            waste: d.waste,
-            material: 0,
-            labor: 0,
-            permits: 0,
-            other: 0,
-            margin: 0,
-          },
-          total_cents: 0,
-        });
+      const { error } = await supabase.from("roof_estimates").insert({
+        lead_id: customer.source_lead_id,
+        property_id: property,
+        drawing_id: parent,
+        ...(report ? { report_order_id: report.id } : {}),
+        title: `${title} — estimate`,
+        category: d.roof_type,
+        inputs: {
+          sqft: measurement.area,
+          waste: d.waste,
+          material: 0,
+          labor: 0,
+          permits: 0,
+          other: 0,
+          margin: 0,
+        },
+        total_cents: 0,
+      });
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["roof-estimates"] });
       toast.success("Measurements transferred; load the estimate to add pricing");

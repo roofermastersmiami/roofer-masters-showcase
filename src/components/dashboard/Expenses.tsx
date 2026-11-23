@@ -55,18 +55,16 @@ export function Expenses() {
         const { error } = await supabase.storage.from("roofing-proposals").upload(path, receipt);
         if (error) throw error;
       }
-      const { error } = await supabase
-        .from("crm_expenses")
-        .insert({
-          description: form.description.trim(),
-          category: form.category,
-          amount_cents: Math.round(form.amount * 100),
-          job_id: form.job_id || null,
-          incurred_at: form.incurred_at,
-          environment: getStripeEnvironment(),
-          payee: form.payee,
-          receipt_path: path,
-        });
+      const { error } = await supabase.from("crm_expenses").insert({
+        description: form.description.trim(),
+        category: form.category,
+        amount_cents: Math.round(form.amount * 100),
+        job_id: form.job_id || null,
+        incurred_at: form.incurred_at,
+        environment: getStripeEnvironment(),
+        payee: form.payee,
+        receipt_path: path,
+      });
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["crm-expenses"] });
       setForm({ ...form, description: "", amount: 0 });
