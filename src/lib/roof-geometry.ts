@@ -146,17 +146,15 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
     const second = shared[1];
     if (!first || !second || first.plane.id === second.plane.id) continue;
 
-    const firstCenter = first.plane.points.reduce((sum, point) => sum + point.y, 0) /
-      first.plane.points.length;
-    const secondCenter = second.plane.points.reduce((sum, point) => sum + point.y, 0) /
-      second.plane.points.length;
+    const firstCenter =
+      first.plane.points.reduce((sum, point) => sum + point.y, 0) / first.plane.points.length;
+    const secondCenter =
+      second.plane.points.reduce((sum, point) => sum + point.y, 0) / second.plane.points.length;
     const edgeLow = Math.min(first.a.y, first.b.y);
     const edgeHigh = Math.max(first.a.y, first.b.y);
     const toleranceFt = 0.05;
-    const isRidge =
-      edgeLow > firstCenter + toleranceFt && edgeLow > secondCenter + toleranceFt;
-    const isValley =
-      edgeHigh < firstCenter - toleranceFt && edgeHigh < secondCenter - toleranceFt;
+    const isRidge = edgeLow > firstCenter + toleranceFt && edgeLow > secondCenter + toleranceFt;
+    const isValley = edgeHigh < firstCenter - toleranceFt && edgeHigh < secondCenter - toleranceFt;
     if (!isRidge && !isValley) continue;
 
     const type = isRidge ? "ridge" : "valley";

@@ -830,7 +830,9 @@ export function RoofMeasurements({
                         })),
                       };
                       edit(next);
-                      toast.success("Shared ridge/valley suggestions applied; review before saving");
+                      toast.success(
+                        "Shared ridge/valley suggestions applied; review before saving",
+                      );
                     }}
                   >
                     Apply shared-edge suggestions

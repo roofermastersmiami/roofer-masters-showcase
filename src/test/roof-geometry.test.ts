@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { roofPreset, measureDrawing, toMaterialReport, suggestSharedEdgeClassifications, type RoofPlane } from "@/lib/roof-geometry";
+import {
+  roofPreset,
+  measureDrawing,
+  toMaterialReport,
+  suggestSharedEdgeClassifications,
+  type RoofPlane,
+} from "@/lib/roof-geometry";
 describe("roof geometry", () => {
   it("measures a 40 by 30 flat roof as 1200 square feet and 12 squares", () => {
     const m = measureDrawing(roofPreset("flat", 40, 30));
@@ -75,7 +81,6 @@ describe("roof geometry", () => {
     expect(() => measureDrawing(d)).toThrow("cross");
   });
 });
-
 
 describe("reviewable shared roof-edge suggestions", () => {
   it("suggests both sides of a clear gable ridge without changing the drawing", () => {
