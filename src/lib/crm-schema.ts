@@ -58,13 +58,20 @@ export const estimateInputSchema = z.object({ sqft: z.number().positive().max(10
 export type EstimateInputs = z.infer<typeof estimateInputSchema>;
 export function calculateEstimate(raw: EstimateInputs) {
   const input = estimateInputSchema.parse(raw);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Estimate inputs must be a valid object");
+  }
   const squares = input.sqft / 100;
   const materialSquares = squares * (1 + input.waste / 100);
   const materialCents = dollarsToCents(materialSquares * input.material);
   const laborCents = dollarsToCents(squares * input.labor);
-  const cost = materialCents + laborCents + dollarsToCents(input.permits + input.other);
+  const additionalCents = dollarsToCents(input.permits + input.other);
+  const cost = materialCents + laborCents + additionalCents;
+  if (![materialCents, laborCents, additionalCents, cost].every(Number.isSafeInteger)) throw new Error("Estimate exceeds the supported amount");
   const total = Math.round(cost / (1 - input.margin / 100));
-  if (![materialCents, laborCents, cost, total].every(Number.isSafeInteger)) throw new Error("Estimate exceeds the supported amount");
-  return { squares, materialSquares, materialCents, laborCents, cost, total, profit: total - cost };
+  if (!Number.isSafeInteger(total)) throw new Error("Estimate exceeds the supported amount");
+  const profit = total - cost;
+  if (!Number.isSafeInteger(profit)) throw new Error("Estimate exceeds the supported amount");
+  return { squares, materialSquares, materialCents, laborCents, cost, total, profit };
 }
 export const CHECKLIST = ["Pre-job inspection", "Permit verified", "Materials delivered", "Tear-off complete", "Dry-in inspection", "Roof installation", "Final inspection", "Site cleanup"];
