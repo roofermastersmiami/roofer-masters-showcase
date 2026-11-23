@@ -60,6 +60,14 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const prepareSnapPixels = () => {
     const image = snapImage.current;
     if (!image?.naturalWidth || !image.naturalHeight) return;
+    // Edge guidance allocates source pixels, grayscale pixels and an RGBA overlay.
+    // Keep that optional enhancement bounded so large phone/drone photos do not exhaust memory.
+    if (image.naturalWidth * image.naturalHeight > 16_000_000) {
+      setSnapPixels(null);
+      setShowEdgeGuide(false);
+      toast.info('This image is too large for edge guidance. Manual tracing is still available.');
+      return;
+    }
     try {
       const canvas = document.createElement('canvas');
       canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
@@ -90,7 +98,16 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const startDrag = (kind: 'ref' | 'pt', i: number) => (e: RPointerEvent) => { e.stopPropagation(); drag.current = { kind, i }; moved.current = false; svg.current?.setPointerCapture(e.pointerId); };
 
   let preview: { area: number; perimeter: number } | null = null;
-  if (points.length >= 3 && calibration.ok) { try { const info = planeInfo(calibratedPlane(points, reference, feet, pitch, 'p', { uphill, edges })); const pl = calibratedPlane(points, reference, feet, pitch, "p", { uphill, edges }); preview = { area: info.area, perimeter: pl.points.reduce((s, a, i) => { const b = pl.points[(i + 1) % pl.points.length]!; return s + Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z); }, 0) }; } catch { preview = null; } }
+  if (points.length >= 3 && calibration.ok) {
+    try {
+      const plane = calibratedPlane(points, reference, feet, pitch, 'preview', { uphill, edges });
+      const info = planeInfo(plane);
+      preview = { area: info.area, perimeter: plane.points.reduce((sum, point, index) => {
+        const next = plane.points[(index + 1) % plane.points.length]!;
+        return sum + Math.hypot(next.x - point.x, next.y - point.y, next.z - point.z);
+      }, 0) };
+    } catch { preview = null; }
+  }
 
   const add = () => {
     try {
