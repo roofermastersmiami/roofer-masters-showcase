@@ -9,7 +9,7 @@ export const reportSchema = z.object({
   valleys_lf: z.number().min(0).max(100000),
   eaves_lf: z.number().min(0).max(100000),
   rakes_lf: z.number().min(0).max(100000),
-  panel_width_in: z.number().min(6).max(48).default(16),
+  panel_width_in: z.number().positive().max(60).default(16),
   pipes: z.number().int().min(0).max(500).default(0),
 });
 export type RoofReport = z.input<typeof reportSchema>;
@@ -37,9 +37,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
       boots,
     ];
     case "Metal Roof": return [
-      { item: `Metal panels (${r.panel_width_in}" coverage)`, qty: up((r.eaves_lf * 12) / r.panel_width_in * (1 + r.waste_pct / 100)), unit: "panels" },
-      { item: "Average panel length", qty: Math.round(r.eaves_lf ? area / r.eaves_lf : 0), unit: "ft" },
-      { item: "Total panel linear footage", qty: up(area / (r.panel_width_in / 12)), unit: "ft" },
+      { item: `Equivalent panel run length (${r.panel_width_in}" net coverage; aggregate only)`, qty: Math.round((area / (r.panel_width_in / 12)) * 10) / 10, unit: "linear ft" },
       { item: "Eave trim (10 ft)", qty: up(r.eaves_lf / 10), unit: "pcs" },
       { item: "Gable / rake trim (10 ft)", qty: up(r.rakes_lf / 10), unit: "pcs" },
       { item: "Foam closures (3 ft)", qty: up((r.eaves_lf + caps * 2 + r.valleys_lf * 2) / 3), unit: "pcs" },
