@@ -6,3 +6,14 @@ describe('public aerial scale', () => {
     const b = aerialBox(25.47, -80.48, 70, 1000).bbox; const left=b[0],right=b[2]; if(left===undefined||right===undefined)throw new Error('Missing bounds'); expect((right - left) * Math.cos(25.47 * Math.PI / 180)).toBeCloseTo(70, 3);
   });
 });
+import { shouldAutoLoadAddressAerial } from "@/lib/public-aerial-import";
+describe("automatic address aerial eligibility", () => {
+  it("loads once for a non-empty address when no aerial exists", () => {
+    expect(shouldAutoLoadAddressAerial({ address: "123 Main St, Miami, FL", hasAerial: false, alreadyAttempted: false })).toBe(true);
+  });
+  it("does not load without an address, when an aerial exists, or after an attempt", () => {
+    expect(shouldAutoLoadAddressAerial({ address: "  ", hasAerial: false, alreadyAttempted: false })).toBe(false);
+    expect(shouldAutoLoadAddressAerial({ address: "123 Main St", hasAerial: true, alreadyAttempted: false })).toBe(false);
+    expect(shouldAutoLoadAddressAerial({ address: "123 Main St", hasAerial: false, alreadyAttempted: true })).toBe(false);
+  });
+});
