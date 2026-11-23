@@ -329,9 +329,15 @@ export function RoofMeasurements({
         const { downloadPdf } = await import("./proposal-data");
         downloadPdf(bytes, title);
       }
-    } catch {
-      if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);
-      toast.error("Could not generate report");
+    } catch (error) {
+      if (proposalId) {
+        try {
+          await supabase.from("proposals").delete().eq("id", proposalId);
+        } catch {
+          // Preserve the original report-generation error.
+        }
+      }
+      toast.error(error instanceof Error ? error.message : "Could not generate report");
     } finally {
       setBusy(false);
     }
