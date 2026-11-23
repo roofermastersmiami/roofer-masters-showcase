@@ -57,6 +57,7 @@ export function AdvancedEstimator() {
   try {
     if (o) totals = priceOption(o);
   } catch {}
+  const unpricedItems = o?.lines.filter((line) => line.quantity > 0 && line.unit_cents <= 0) ?? [];
   function update(next: EstimateOption) {
     setOptions(options.map((v, i) => (i === selected ? next : v)));
     setDirty(true);
@@ -529,6 +530,21 @@ export function AdvancedEstimator() {
               </Field>
             ))}
           </div>
+          {unpricedItems.length > 0 && (
+            <div
+              role="status"
+              className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+            >
+              <p className="font-medium text-amber-700 dark:text-amber-300">
+                {unpricedItems.length} item{unpricedItems.length === 1 ? "" : "s"} need approved unit pricing
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {unpricedItems.map((line) => line.description.trim() || "Unnamed cost item").join(", ")}.
+                You can save this as a draft, but a customer proposal stays blocked until every
+                positive-quantity item has an approved price.
+              </p>
+            </div>
+          )}
           {totals ? (
             <div className="grid gap-5 border-y border-border py-6 sm:grid-cols-3">
               {[
