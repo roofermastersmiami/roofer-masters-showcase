@@ -70,8 +70,10 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     }
   };
   const onMove = (e: RPointerEvent<SVGSVGElement>) => {
-    if (!drag.current) return; const p = toImage(e.clientX, e.clientY); if (!p) return; moved.current = true;
+    if (!drag.current) return;
+    moved.current = true;
     if (drag.current.kind === 'pan') { setPan({ x: drag.current.panX + e.clientX - drag.current.x, y: drag.current.panY + e.clientY - drag.current.y }); return; }
+    const p = toImage(e.clientX, e.clientY); if (!p) return;
     const { kind, i } = drag.current;
     if (kind === 'ref') setReference(r => r.map((q, j) => j === i ? p : q)); else setPoints(r => r.map((q, j) => j === i ? p : q));
   };
