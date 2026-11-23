@@ -59,7 +59,7 @@ describe('calculateRoofMaterialTakeoff', () => {
   });
 
   it('preserves fractional linear footage instead of rounding every edge up', () => {
-    const d = roofPreset('gable', 40.25, 30.5, 6); d.roof_type = 'Shingle Roof';
+    const d = roofPreset('gable', 40.37, 30.53, 6); d.roof_type = 'Shingle Roof';
     const r = calculateRoofMaterialTakeoff(d, { wastePercent: 0 });
     const drip = r.lines.find(x => x.item === 'Drip edge allowance');
     expect(drip?.quantity).toBe(Math.round(measureDrawing(d).perimeter * 10) / 10);
