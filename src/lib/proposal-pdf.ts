@@ -31,17 +31,24 @@ async function loadLogoPng(): Promise<Uint8Array> {
 export async function generateProposalPdf(details: ProposalDetails, customer?: { name: string; address: string | null; email: string | null }) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
-    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const logo = await pdf.embedPng(await loadLogoPng());
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   let page = pdf.addPage([612, 792]);
-  const logoSize = logo.scaleToFit(180, 62);
-  page.drawImage(logo, {
-    x: 50,
-    y: 710,
-    width: logoSize.width,
-    height: logoSize.height,
-  });
+  // A logo conversion failure must never prevent a customer proposal from being generated.
+  try {
+    const logo = await pdf.embedPng(await loadLogoPng());
+    const logoSize = logo.scaleToFit(180, 62);
+    page.drawImage(logo, {
+      x: 50,
+      y: 710,
+      width: logoSize.width,
+      height: logoSize.height,
+    });
+  } catch (error) {
+    console.warn("Proposal logo could not be embedded; using text header.", error);
+    page.drawText("ROOFER MASTERS", { x: 50, y: 738, font: bold, size: 20, color: brand });
+    page.drawText("YOUR ROOF, OUR MASTERPIECE", { x: 50, y: 718, font: regular, size: 8, color: ink });
+  }
 
   let y = 690;
   const line = (text: string, size = 11, heading = false) => {
