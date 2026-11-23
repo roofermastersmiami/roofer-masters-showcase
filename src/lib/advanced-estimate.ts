@@ -33,6 +33,15 @@ export const advancedOptionSchema = z.object({
   deposit_pct: z.number().min(0).max(100),
 });
 export type EstimateOption = z.infer<typeof advancedOptionSchema>;
+export function catalogForSystem<T extends { system: string }>(catalog: T[], system: string): T[] {
+  const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  const target = materialSystem(system) ?? normalize(system);
+  if (!target) return [];
+  return catalog.filter((entry) => {
+    const candidate = materialSystem(entry.system) ?? normalize(entry.system);
+    return candidate === target;
+  });
+}
 export function findCatalogPrice<T extends { system: string; item: string; unit_cents: number }>(
   catalog: T[],
   system: string,
