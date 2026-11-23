@@ -69,7 +69,8 @@ export async function fetchPublicAerial(
     ?.addressMatches;
   const match = Array.isArray(matches)
     ? (matches[0] as
-        { coordinates?: { x?: unknown; y?: unknown }; matchedAddress?: unknown } | undefined)
+        | { coordinates?: { x?: unknown; y?: unknown }; matchedAddress?: unknown }
+        | undefined)
     : undefined;
   if (!match)
     return failure(

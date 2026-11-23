@@ -67,7 +67,9 @@ declare module "@lovable.dev/ai-gateway" {
       | "google/gemini-3.1-flash-tts-preview"
       | "openai/gpt-4o-mini-tts";
     transcription:
-      "google/gemini-3.5-transcribe" | "openai/gpt-4o-mini-transcribe" | "openai/gpt-4o-transcribe";
+      | "google/gemini-3.5-transcribe"
+      | "openai/gpt-4o-mini-transcribe"
+      | "openai/gpt-4o-transcribe";
     music: never;
     videos:
       | "google/gemini-omni-1.1-flash"
