@@ -56,7 +56,9 @@ function Plane({
       });
       g.setAttribute("position", new Float32BufferAttribute(positions, 3));
       g.computeVertexNormals();
-    } catch {}
+    } catch {
+      // Invalid geometry renders as an empty mesh until the drawing is corrected.
+    }
     return g;
   }, [plane]);
   useEffect(() => () => geometry.dispose(), [geometry]);
