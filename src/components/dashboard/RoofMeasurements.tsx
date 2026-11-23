@@ -52,6 +52,12 @@ import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
+const initialVertices = initial.planes.flatMap((p) => p.points);
+const resetWidth =
+  Math.max(...initialVertices.map((v) => v.x)) - Math.min(...initialVertices.map((v) => v.x));
+const resetLength =
+  Math.max(...initialVertices.map((v) => v.z)) - Math.min(...initialVertices.map((v) => v.z));
+const resetPitch = measureDrawing(initial).planes[0]?.pitch ?? 6;
 type Media = {
   path: string;
   name: string;
@@ -524,9 +530,9 @@ export function RoofMeasurements({
             setFuture([]);
             setSelected(initial.planes[0]?.id ?? "");
             setShape("gable");
-            setWidth(startWidth);
-            setLength(startLength);
-            setPitch(startPitch);
+            setWidth(resetWidth);
+            setLength(resetLength);
+            setPitch(resetPitch);
             setJobId("");
             setTitle("Roof measurement report");
             setDirty(true);
