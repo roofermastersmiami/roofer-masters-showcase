@@ -12,8 +12,10 @@ export const dollarsToCents = (dollars: number) => {
 export const itemSchema = z.object({ description: z.string().trim().min(1).max(250), quantity: z.number().positive().max(100000), unit_cents: z.number().int().nonnegative().max(100000000) });
 export type InvoiceItem = z.infer<typeof itemSchema>;
 export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
+  if (!Array.isArray(items) || items.length === 0 || items.length > 50) throw new Error("Invoice must contain between 1 and 50 valid items");
   if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) throw new Error("Tax percentage must be between 0 and 100");
-  const subtotal = items.reduce((sum, item) => {
+  const validatedItems = items.map((item) => itemSchema.parse(item));
+  const subtotal = validatedItems.reduce((sum, item) => {
     const lineTotal = Math.round(item.quantity * item.unit_cents);
     if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || !Number.isSafeInteger(sum + lineTotal)) throw new Error("Invoice subtotal exceeds the supported amount");
     return sum + lineTotal;
