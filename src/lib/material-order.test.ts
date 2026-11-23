@@ -94,7 +94,7 @@ describe("local roof report text import", () => {
     expect(parsed.found).toEqual(["Pitch (review manually)"]);
   });
 
-  it("ignores negative values", () => {
+  it("recognizes simple pipe counts as well as boots and vent labels", () => {\n    const parsed = parseRoofReportText("Pipes: 2\\nVent count: 3\\nPenetrations: 1");\n    expect(parsed.values.pipes).toBe(2);\n    expect(parsed.found).toContain("Pipes / vents");\n  });\n\n  it("ignores negative values", () => {
     const parsed = parseRoofReportText("Roof area: -2400 sq ft\nRidge: -20 LF");
     expect(parsed.values.area_sqft).toBeUndefined();
     expect(parsed.values.ridge_lf).toBeUndefined();
