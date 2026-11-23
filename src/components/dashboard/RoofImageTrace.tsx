@@ -86,7 +86,11 @@ export function RoofImageTrace({
     if (mode === "calibrate") setReference(reference.length === 2 ? [p] : [...reference, p]);
     else {
       const next = snapCorners
-        ? snapToExistingCorner(p, traced.flatMap((plane) => plane.points), Math.max(6, w * 0.012))
+        ? snapToExistingCorner(
+            p,
+            traced.flatMap((plane) => plane.points),
+            Math.max(6, w * 0.012),
+          )
         : p;
       setPoints([...points, next]);
       setEdges([...edges, "other"]);
@@ -428,7 +432,9 @@ export function RoofImageTrace({
             · {traced.length} plane{traced.length === 1 ? "" : "s"} added from this photo
           </p>
           {outlineIssues.map((issue) => (
-            <p key={issue} className="mt-1 text-sm text-destructive">{issue}</p>
+            <p key={issue} className="mt-1 text-sm text-destructive">
+              {issue}
+            </p>
           ))}
           {sharedEdgeMatches.length > 0 && (
             <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">
@@ -456,7 +462,10 @@ export function RoofImageTrace({
           />{" "}
           Snap corners to previous planes
         </label>
-        <Button disabled={points.length < 3 || !calibration.ok || outlineIssues.length > 0} onClick={add}>
+        <Button
+          disabled={points.length < 3 || !calibration.ok || outlineIssues.length > 0}
+          onClick={add}
+        >
           <Plus /> Add traced plane
         </Button>
       </div>
