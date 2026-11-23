@@ -81,7 +81,7 @@ describe("estimate and recorded profitability", () => {
     expect(actualProfit(0, [{ category: "labor", amount_cents: 5000 }]).margin).toBeNull());
   it("matches catalog items despite harmless case and whitespace differences", () => {
     const catalog = [
-      { system: "Metal Roof", item: "Ridge / hip cap (10 ft)", unit_cents: 2500 },
+      { system: "Metal Roof", item: "Ridge /  hip cap (10 ft)", unit_cents: 2500 },
       { system: "Tile Roof", item: "Ridge / hip cap (10 ft)", unit_cents: 3000 },
     ];
     expect(
