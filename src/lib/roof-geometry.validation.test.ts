@@ -233,3 +233,10 @@ describe('roof plane coordinate validation', () => {
     }).success).toBe(false);
   });
 });
+
+describe('roof preset measurement compatibility', () => {
+  it.each(['gable', 'hip', 'flat', 'shed', 'mansard'] as const)('measures the %s preset', (shape) => {
+    const preset = roofPreset(shape, 40, 30, 6);
+    expect(() => measureDrawing(preset)).not.toThrow();
+  });
+});
