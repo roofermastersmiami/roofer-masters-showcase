@@ -167,6 +167,14 @@ describe("Roof calculation helpers", () => {
       })
     ).toThrow();
   });
+  it("rounds material orders upward to exact one-third-square increments", () => {
+    const result = calculateRoofSummary({
+      facets: [{ id: "plane-1", surfaceAreaSqFt: 101 }],
+      wastePercent: 0,
+    });
+    expect(result.orderSquares).toBe(4 / 3);
+  });
+
   it("rejects roofing square order calculations that overflow", () => {
     expect(() => calculateRoofSummary({
       facets: [{ id: "large", surfaceAreaSqFt: Number.MAX_VALUE }],
