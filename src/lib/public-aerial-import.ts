@@ -55,14 +55,13 @@ export function aerialInvocationError(error: unknown) {
   );
 }
 
-/** Automatically fetch free imagery only for a newly created address report with no aerial attached. */
+/** Automatically fetch free imagery for any address-linked report or drawing without an aerial, once per mounted workspace. */
 export function shouldAutoLoadAddressAerial(input: {
-  isNewReport: boolean;
   address: string | null | undefined;
   hasAerial: boolean;
   alreadyAttempted: boolean;
 }) {
   return Boolean(
-    input.isNewReport && input.address?.trim() && !input.hasAerial && !input.alreadyAttempted,
+    input.address?.trim() && !input.hasAerial && !input.alreadyAttempted,
   );
 }
