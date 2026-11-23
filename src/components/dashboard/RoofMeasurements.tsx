@@ -120,14 +120,18 @@ export function RoofMeasurements({
                 m["feet_per_pixel"] > 0
                   ? { feet_per_pixel: m["feet_per_pixel"] }
                   : {}),
-                ...(typeof m["source"] === "string" ? { source: m["source"].slice(0, 80) } : {}),
+                ...(typeof m["source"] === "string"
+                  ? { source: m["source"].slice(0, 80) }
+                  : {}),
                 ...(typeof m["matched_address"] === "string"
                   ? { matched_address: m["matched_address"].slice(0, 250) }
                   : {}),
-                ...(typeof m["latitude"] === "number" && Number.isFinite(m["latitude"])
+                ...(typeof m["latitude"] === "number" &&
+                Number.isFinite(m["latitude"])
                   ? { latitude: m["latitude"] }
                   : {}),
-                ...(typeof m["longitude"] === "number" && Number.isFinite(m["longitude"])
+                ...(typeof m["longitude"] === "number" &&
+                Number.isFinite(m["longitude"])
                   ? { longitude: m["longitude"] }
                   : {}),
               },
