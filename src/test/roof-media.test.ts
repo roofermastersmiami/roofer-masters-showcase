@@ -7,6 +7,14 @@ describe("roof media storage paths", () => {
     expect(isSafeRoofMediaPath("aerials/2026/roof.png")).toBe(true);
   });
 
+  it("rejects both single and repeated backslashes", () => {
+    const backslash = String.fromCharCode(92);
+
+    expect(isSafeRoofMediaPath(`job${backslash}roof.jpg`)).toBe(false);
+    expect(isSafeRoofMediaPath(`job${backslash}${backslash}roof.jpg`)).toBe(false);
+    expect(isSafeRoofMediaPath(`job${backslash}${backslash}${backslash}roof.jpg`)).toBe(false);
+  });
+
   it.each([
     "",
     "/absolute/roof.jpg",
