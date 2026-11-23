@@ -518,7 +518,17 @@ export function RoofMeasurements({
             setProperty(v === "none" ? "" : v);
             setParent(null);
             setMedia([]);
-            setD({ ...d, verified: false });
+            setTraceIndex(0);
+            setD({ ...initial, notes: "" });
+            setHistory([]);
+            setFuture([]);
+            setSelected(initial.planes[0]?.id ?? "");
+            setShape("gable");
+            setWidth(startWidth);
+            setLength(startLength);
+            setPitch(startPitch);
+            setJobId("");
+            setTitle("Roof measurement report");
             setDirty(true);
           }}
           options={[
