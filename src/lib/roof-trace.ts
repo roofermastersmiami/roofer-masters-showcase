@@ -30,6 +30,7 @@ export function nextEdgeType(t: EdgeType): EdgeType { return EDGE_TYPES[(EDGE_TY
 export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], feet: number, pitch: number, id: string, opts: { uphill?: Uphill; edges?: EdgeType[]; name?: string } = {}): RoofPlane {
   const a = reference[0], b = reference[1];
   if (!a || !b || !Number.isFinite(feet) || feet <= 0) throw new Error('Set two calibration points and a known distance');
+  if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) throw new Error('Calibration coordinates must be finite numbers');
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (pixels < 1) throw new Error('Calibration points must be distinct');
   if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24) throw new Error('Draw at least three corners and enter a valid pitch');
