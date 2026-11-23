@@ -53,8 +53,11 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" }).inputVal
         await stripe.checkout.sessions.expire(session.id);
         throw new Error("Stripe checkout did not return a client secret");
       }
-      const { error } = await supabaseAdmin.from("invoice_checkouts").update({ session_id: session.id }).eq("id", reserved.id);
-      if (error) { await stripe.checkout.sessions.expire(session.id); throw new Error("Could not register checkout; please try again"); }
+      const { data: registered, error } = await supabaseAdmin.from("invoice_checkouts").update({ session_id: session.id }).eq("id", reserved.id).eq("status", "pending").select("id").maybeSingle();
+      if (error || !registered) {
+        await stripe.checkout.sessions.expire(session.id);
+        throw new Error(error ? "Could not register checkout; please try again" : "Checkout reservation changed before registration; please try again");
+      }
       return { clientSecret: session.client_secret };
     } catch (error) {
       const { error: failureError } = await supabaseAdmin.from("invoice_checkouts").update({ status: "failed" }).eq("id", reserved.id).eq("status", "pending");
