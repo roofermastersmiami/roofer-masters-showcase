@@ -28,7 +28,8 @@ export const updateRoofOrder = createServerFn({ method: 'POST' }).middleware([re
 
 export const attachRoofOrderPdf = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), path: z.string().max(300), updated_at: z.string() }).parse(input)).handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (roleError) throw new Error('Could not verify report permissions');
     if (!owner) throw new Error('You do not have access to this action');
     if (!data.path.startsWith(`roof-report/${data.id}/`) || !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(data.path)) throw new Error('Invalid report file');
     const name = data.path.split('/').at(-1);
@@ -42,7 +43,8 @@ export const attachRoofOrderPdf = createServerFn({ method: 'POST' }).middleware(
 
 export const transferRoofOrder = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), target: z.enum(['estimate', 'materials']), job_id: z.string().uuid().optional() }).parse(input)).handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (roleError) throw new Error('Could not verify report permissions');
     if (!owner) throw new Error('You do not have access to this action');
     const { data: order, error: orderError } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).maybeSingle();
     if (orderError) throw new Error('Could not load report request');
