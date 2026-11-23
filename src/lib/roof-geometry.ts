@@ -27,6 +27,14 @@ export function planeInfo(p:RoofPlane){
 const ring=(p:RoofPlane):[number,number][]=>{const points=p.points.map(v=>[v.x,v.z] as [number,number]);const first=points[0];return first?[...points,first]:points;};
 function ringArea(r:number[][]){let area=0;for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length];if(a&&b)area+=(a[0]??0)*(b[1]??0)-(b[0]??0)*(a[1]??0);}return Math.abs(area)/2;}
 function edgeKey(a:Point,b:Point){const key=(p:Point)=>[p.x,p.y,p.z].map(n=>Math.round(n*1000)).join(',');return [key(a),key(b)].sort().join('|');}
+function splitEdgeAtVertices(a:Point,b:Point,vertices:Point[]){
+ const delta=sub(b,a),lengthSquared=dot(delta,delta);
+ if(lengthSquared<1e-12)return [{a,b}];
+ const points=vertices.map(point=>({point,t:dot(sub(point,a),delta)/lengthSquared}))
+  .filter(({point,t})=>t>1e-6&&t<1-1e-6&&distance(point,{x:a.x+delta.x*t,y:a.y+delta.y*t,z:a.z+delta.z*t})<=0.001)
+  .sort((u,v)=>u.t-v.t).map(item=>item.point);
+ const chain=[a,...points,b];return chain.slice(0,-1).map((start,index)=>({a:start,b:chain[index+1]!}));
+}
 
 export function measureDrawing(raw:RoofDrawing){
  const d=drawingSchema.parse(raw);const planes=d.planes.map(p=>({...planeInfo(p),id:p.id,name:p.name}));
@@ -34,9 +42,10 @@ export function measureDrawing(raw:RoofDrawing){
  const footprint=polygonClipping.union(...d.planes.map(p=>[ring(p)]));
  for(const penetration of d.penetrations){const halfW=penetration.width/2,halfL=penetration.length/2;const penetrationRing:[[number,number],[number,number],[number,number],[number,number],[number,number]]=[[penetration.x-halfW,penetration.z-halfL],[penetration.x+halfW,penetration.z-halfL],[penetration.x+halfW,penetration.z+halfL],[penetration.x-halfW,penetration.z+halfL],[penetration.x-halfW,penetration.z-halfL]];const outside=polygonClipping.difference([[penetrationRing]],footprint);const outsideArea=outside.reduce((sum,poly)=>sum+ringArea(poly[0]??[])-poly.slice(1).reduce((holes,hole)=>holes+ringArea(hole),0),0);if(outsideArea>0.0001)throw new Error(`Penetration ${penetration.id} must fit within the roof footprint`);}
  for(let i=0;i<d.penetrations.length;i++)for(let j=i+1;j<d.penetrations.length;j++){const a=d.penetrations[i],b=d.penetrations[j];if(!a||!b)continue;const overlapX=Math.min(a.x+a.width/2,b.x+b.width/2)-Math.max(a.x-a.width/2,b.x-b.width/2);const overlapZ=Math.min(a.z+a.length/2,b.z+b.length/2)-Math.max(a.z-a.length/2,b.z-b.length/2);if(overlapX>0.001&&overlapZ>0.001)throw new Error(`Penetrations ${a.id} and ${b.id} overlap`);}
+ const vertices=d.planes.flatMap(plane=>plane.points);
  const edges:Record<EdgeType,number>={eave:0,rake:0,ridge:0,hip:0,valley:0,other:0};const seen=new Map<string,EdgeType>();
- for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length],type=p.edges[i];if(!a||!b||!type)continue;const key=edgeKey(a,b),existing=seen.get(key);if(existing&&existing!==type)throw new Error('Shared edges must have matching classifications');if(!existing){edges[type]+=distance(a,b);seen.set(key,type);}}
- const exterior=new Map<string,{length:number;count:number}>();for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length];if(!a||!b)continue;const key=edgeKey(a,b),existing=exterior.get(key);if(existing)existing.count++;else exterior.set(key,{length:distance(a,b),count:1});}
+ for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length],type=p.edges[i];if(!a||!b||!type)continue;for(const segment of splitEdgeAtVertices(a,b,vertices)){const key=edgeKey(segment.a,segment.b),existing=seen.get(key);if(existing&&existing!==type)throw new Error('Shared edges must have matching classifications');if(!existing){edges[type]+=distance(segment.a,segment.b);seen.set(key,type);}}}
+ const exterior=new Map<string,{length:number;count:number}>();for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length];if(!a||!b)continue;for(const segment of splitEdgeAtVertices(a,b,vertices)){const key=edgeKey(segment.a,segment.b),existing=exterior.get(key);if(existing)existing.count++;else exterior.set(key,{length:distance(segment.a,segment.b),count:1});}}
  const perimeter=[...exterior.values()].filter(e=>e.count===1).reduce((sum,e)=>sum+e.length,0);
  const area=planes.reduce((sum,p)=>sum+p.area,0);return {area,squares:area/100,withWaste:area*(1+d.waste/100),edges,planes,perimeter,penetrations:d.penetrations.length};
 }
