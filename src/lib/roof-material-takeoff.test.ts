@@ -22,6 +22,12 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(drip?.quantity).toBe(Math.round(measureDrawing(d).perimeter * 10) / 10);
     expect(drip?.unit).toBe('linear ft');
   });
+  it('uses flat-system allowances for TPO and flat roofs', () => {
+    const d = roofPreset('flat', 30, 40, 0); d.roof_type = 'TPO';
+    const r = calculateRoofMaterialTakeoff(d);
+    expect(r.lines.some(x => x.item === 'Roof membrane allowance' && x.unit === 'sq ft')).toBe(true);
+    expect(r.warnings.some(x => x.includes('roll width'))).toBe(true);
+  });
   it('rejects invalid product coverage assumptions', () => {
     const d = roofPreset('flat', 30, 40, 0);
     expect(() => calculateRoofMaterialTakeoff(d, { underlaymentRollCoverageSqft: 0 })).toThrow();
