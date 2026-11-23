@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -41,7 +41,7 @@ import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
-import { uploadAerialImage, aerialInvocationError } from "@/lib/public-aerial-import";
+import { uploadAerialImage, aerialInvocationError, shouldAutoLoadAddressAerial } from "@/lib/public-aerial-import";
 import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));
@@ -382,6 +382,21 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }
+  const autoAerialAttempted = useRef(false);
+  useEffect(() => {
+    if (
+      shouldAutoLoadAddressAerial({
+        isNewReport: Boolean(report && !initialDrawing),
+        address: report?.address ?? propertyRow?.address,
+        hasAerial: media.some((item) => item.category === "aerial"),
+        alreadyAttempted: autoAerialAttempted.current,
+      })
+    ) {
+      autoAerialAttempted.current = true;
+      void loadAerial();
+    }
+  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address, media]);
+
   async function upload(file: File) {
     if (
       !property ||
