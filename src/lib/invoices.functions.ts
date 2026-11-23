@@ -7,13 +7,15 @@ export const createInvoice = createServerFn({ method: "POST" }).middleware([requ
   const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['admin','accounting']});
   if (roleError) throw new Error("Could not verify accounting permissions");
   if (!owner) throw new Error("You do not have access to this action");
-  const { data: lead, error: leadError } = await context.supabase.from("leads").select("name,email,address").eq("id", data.lead_id).single();
-  if (leadError || !lead) throw new Error("Choose an existing customer");
+  const { data: lead, error: leadError } = await context.supabase.from("leads").select("name,email,address").eq("id", data.lead_id).maybeSingle();
+  if (leadError) throw new Error("Could not verify customer details");
+  if (!lead) throw new Error("Choose an existing customer");
 
   let propertyId: string | null = null;
   if (data.proposal_id) {
-    const { data: proposal, error: proposalError } = await context.supabase.from("proposals").select("lead_id,is_template,property_id").eq("id", data.proposal_id).single();
-    if (proposalError || !proposal || proposal.is_template || proposal.lead_id !== data.lead_id) throw new Error("Proposal must belong to this customer");
+    const { data: proposal, error: proposalError } = await context.supabase.from("proposals").select("lead_id,is_template,property_id").eq("id", data.proposal_id).maybeSingle();
+    if (proposalError) throw new Error("Could not verify proposal details");
+    if (!proposal || proposal.is_template || proposal.lead_id !== data.lead_id) throw new Error("Proposal must belong to this customer");
     propertyId = proposal.property_id;
   }
 
