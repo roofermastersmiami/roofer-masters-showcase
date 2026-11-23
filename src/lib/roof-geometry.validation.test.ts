@@ -288,4 +288,35 @@ describe('partial shared edge segmentation', () => {
     expect(result.perimeter).toBeCloseTo(50, 3);
     expect(result.edges.eave).toBeCloseTo(50, 3);
   });
+  it('rejects mismatched classifications on a partially shared edge', () => {
+    const adjacent = {
+      ...drawing,
+      planes: [
+        {
+          id: 'main',
+          name: 'Main plane',
+          points: [
+            { x: 0, y: 10, z: 0 },
+            { x: 10, y: 10, z: 0 },
+            { x: 10, y: 10, z: 10 },
+            { x: 0, y: 10, z: 10 },
+          ],
+          edges: ['eave', 'eave', 'eave', 'eave'],
+        },
+        {
+          id: 'wing',
+          name: 'Wing plane',
+          points: [
+            { x: 10, y: 10, z: 3 },
+            { x: 15, y: 10, z: 3 },
+            { x: 15, y: 10, z: 7 },
+            { x: 10, y: 10, z: 7 },
+          ],
+          edges: ['eave', 'eave', 'eave', 'ridge'],
+        },
+      ],
+    } as RoofDrawing;
+    expect(() => measureDrawing(adjacent)).toThrow(/matching classifications/);
+  });
+
 });
