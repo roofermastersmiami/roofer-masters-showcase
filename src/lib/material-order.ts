@@ -177,7 +177,7 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
     "pipes",
   );
   const roof = source
-    .match(/\\b(shingle|tile|metal|tpo|flat)\\s*(?:roof)?\\b/i)?.[1]
+    .match(/\b(shingle|tile|metal|tpo|flat)\s*(?:roof)?\b/i)?.[1]
     ?.toLowerCase();
   if (roof) {
     values.roof_type =
@@ -192,7 +192,7 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
               : "Flat Roof";
     found.push("Roof type");
   }
-  const pitch = source.match(/(?:roof\\s+)?pitch\\s*[:=]?\\s*(\\d{1,2}\\s*[:/]\\s*12)/i)?.[1];
+  const pitch = source.match(/(?:roof\s+)?pitch\s*[:=]?\s*(\d{1,2}\s*[:/]\s*12)/i)?.[1];
   if (pitch) found.push("Pitch (review manually)");
   return { values, found: [...new Set(found)] };
 }
