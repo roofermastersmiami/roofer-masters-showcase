@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Environment files contain local configuration and must never be committed.
+.env
+.env.*
+!.env.example
