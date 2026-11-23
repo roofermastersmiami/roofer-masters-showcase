@@ -76,3 +76,21 @@ describe('roof preset input validation', () => {
     expect(() => roofPreset('gable', width, length, pitch)).toThrow();
   });
 });
+
+describe('roof polygon boundary validation', () => {
+  it('rejects non-adjacent edges that touch at a point', () => {
+    const plane = {
+      id: 'touching-edges',
+      name: 'Touching edges',
+      points: [
+        { x: 0, y: 10, z: 0 },
+        { x: 4, y: 10, z: 0 },
+        { x: 4, y: 10, z: 4 },
+        { x: 2, y: 10, z: 0 },
+        { x: 0, y: 10, z: 4 },
+      ],
+      edges: ['eave', 'eave', 'eave', 'eave', 'eave'] as const,
+    };
+    expect(() => planeInfo(plane)).toThrow(/edges cross or touch/);
+  });
+});
