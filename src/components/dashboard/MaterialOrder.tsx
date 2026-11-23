@@ -6,9 +6,11 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ROOF_TYPES } from "@/lib/instant-estimate-schema";
 import {
   materialOrder,
+  parseRoofReportText,
   reportSchema,
   type RoofReport,
   type MaterialLine,
@@ -55,6 +57,8 @@ export function MaterialOrder({
         },
   );
   const [busy, setBusy] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [parsedLabels, setParsedLabels] = useState<string[]>([]);
   const valid = reportSchema.safeParse(r);
   const lines: MaterialLine[] = useMemo(
     () => (valid.success ? materialOrder(valid.data) : []),
@@ -111,6 +115,43 @@ export function MaterialOrder({
             metered AI charges.
           </p>
         </div>
+      </div>
+      <div className="mb-4 rounded-md border border-border p-4">
+        <p className="mb-2 text-sm font-semibold">Paste text copied from your roof report</p>
+        <Textarea
+          value={reportText}
+          onChange={(e) => setReportText(e.target.value)}
+          placeholder={"Example:\nTotal Roof Area: 2,400 sq ft\nWaste: 10%\nRidge: 40 LF\nHips: 20 LF\nValleys: 15 LF\nEaves: 80 LF\nRakes: 40 LF\nPipe boots: 3"}
+          rows={5}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!reportText.trim()}
+            onClick={() => {
+              const parsed = parseRoofReportText(reportText);
+              if (!parsed.found.length) {
+                toast.error("No clearly labelled measurements found. Enter them in the fields below.");
+                return;
+              }
+              setR((current) => ({ ...current, ...parsed.values }));
+              setParsedLabels(parsed.found);
+              toast.success(`Found ${parsed.found.length} labelled report fields. Please review them.`);
+            }}
+          >
+            <FileText /> Read pasted text locally
+          </Button>
+          {parsedLabels.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Found: {parsedLabels.join(", ")}. Check every value before saving.
+            </p>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          This reads only labelled values in your browser. It does not upload the report or use AI.
+          Scanned image-only PDFs need OCR or manual entry.
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-4">
         <Choice
