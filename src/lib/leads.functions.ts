@@ -20,7 +20,7 @@ export const submitInstantEstimate = createServerFn({ method: 'POST' })
     if(data.lead.address.length<5)throw new Error('Property address is required.');
     if(await tooManyRecent(data.lead.phone,data.lead.email))throw new Error('We already received your request. Please call 305-942-3093.');
     const db=await admin();
-    const {data:rate,error:rateError}=await db.from('instant_roof_rates').select('low_cents,high_cents,enabled').eq('category',data.input.category).maybeSingle();
+    const {data:rate,error:rateError}=await db.from('instant_roof_rates').select('category,low_cents,high_cents,enabled').eq('category',data.input.category).maybeSingle();
     if(rateError)throw new Error('Please call 305-942-3093 to request your estimate.');
     const range=instantRange(data.input,rate);
     const qualification={...data.input,qualification:qualifyRoofLead(data.input),range,preliminary:true};
