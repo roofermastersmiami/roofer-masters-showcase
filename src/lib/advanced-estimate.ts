@@ -13,5 +13,27 @@ export function projectInvoices<T extends {id:string}>(invoices:T[],links:{invoi
  const ids=new Set(links.filter(l=>l.job_id===project).map(l=>l.invoice_id));
  return invoices.filter(i=>ids.has(i.id));
 }
-export function priceOption(raw:EstimateOption){const o=advancedOptionSchema.parse(raw);const direct=o.lines.reduce((sum,l)=>sum+Math.round(l.quantity*l.unit_cents),0);const overhead=Math.round(direct*o.overhead_pct/100),cost=direct+overhead;const selling=Math.round(cost/(1-o.margin_pct/100));if(o.discount_cents>selling)throw new Error('Discount exceeds selling price');const subtotal=selling-o.discount_cents,tax=Math.round(subtotal*o.tax_pct/100),total=subtotal+tax,deposit=Math.round(total*o.deposit_pct/100);return {direct,overhead,cost,subtotal,tax,total,deposit,balance:total-deposit,profit:subtotal-cost,margin:subtotal?100*(subtotal-cost)/subtotal:0};}
+function safeCents(value:number,label:string):number {
+ if(!Number.isSafeInteger(value)||value<0)throw new Error(`${label} exceeds the supported currency range`);
+ return value;
+}
+export function priceOption(raw:EstimateOption){
+ const o=advancedOptionSchema.parse(raw);
+ const direct=o.lines.reduce((sum,l)=>{
+  const line=safeCents(Math.round(l.quantity*l.unit_cents),'Estimate line');
+  return safeCents(sum+line,'Direct cost');
+ },0);
+ const overhead=safeCents(Math.round(direct*o.overhead_pct/100),'Overhead');
+ const cost=safeCents(direct+overhead,'Estimate cost');
+ const selling=safeCents(Math.round(cost/(1-o.margin_pct/100)),'Selling price');
+ const discount=safeCents(o.discount_cents,'Discount');
+ if(discount>selling)throw new Error('Discount exceeds selling price');
+ const subtotal=safeCents(selling-discount,'Subtotal');
+ const tax=safeCents(Math.round(subtotal*o.tax_pct/100),'Tax');
+ const total=safeCents(subtotal+tax,'Total');
+ const deposit=safeCents(Math.round(total*o.deposit_pct/100),'Deposit');
+ const profit=subtotal-cost;
+ if(!Number.isSafeInteger(profit))throw new Error('Estimate profit exceeds the supported currency range');
+ return {direct,overhead,cost,subtotal,tax,total,deposit,balance:total-deposit,profit,margin:subtotal?100*profit/subtotal:0};
+}
 export function actualProfit(collected:number,expenses:{category:string;amount_cents:number}[]){const overheadCategories=new Set(['insurance','advertising','office','overhead']);const direct=expenses.filter(e=>!overheadCategories.has(e.category)).reduce((s,e)=>s+e.amount_cents,0);const overhead=expenses.filter(e=>overheadCategories.has(e.category)).reduce((s,e)=>s+e.amount_cents,0);return {direct,overhead,expenses:direct+overhead,gross:collected-direct,net:collected-direct-overhead,margin:collected>0?(collected-direct-overhead)/collected*100:null};}
