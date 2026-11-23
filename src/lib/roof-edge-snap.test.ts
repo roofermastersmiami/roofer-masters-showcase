@@ -34,6 +34,9 @@ describe('snapToImageEdge', () => {
       data[i] = data[i + 1] = data[i + 2] = 240;
     }
     const result = snapToImageEdge(data, 12, 12, { x: 0, y: 0 }, 80, 100);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.point.x).toBeGreaterThanOrEqual(5);
+    expect(result!.point.x).toBeLessThanOrEqual(6);
+    expect(result!.point.y).toBeGreaterThanOrEqual(1);
   });
 });
