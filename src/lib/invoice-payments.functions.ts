@@ -49,11 +49,16 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" }).inputVal
         payment_intent_data: { description }, metadata: { invoiceId: invoice.id, checkoutId: reserved.id, environment: data.environment },
         expires_at: Math.floor(Date.now() / 1000) + 1800,
       }, { idempotencyKey: `invoice-checkout-${reserved.id}` });
+      if (!session.client_secret) {
+        await stripe.checkout.sessions.expire(session.id);
+        throw new Error("Stripe checkout did not return a client secret");
+      }
       const { error } = await supabaseAdmin.from("invoice_checkouts").update({ session_id: session.id }).eq("id", reserved.id);
       if (error) { await stripe.checkout.sessions.expire(session.id); throw new Error("Could not register checkout; please try again"); }
-      return { clientSecret: session.client_secret ?? "" };
+      return { clientSecret: session.client_secret };
     } catch (error) {
-      await supabaseAdmin.from("invoice_checkouts").update({ status: "failed" }).eq("id", reserved.id);
+      const { error: failureError } = await supabaseAdmin.from("invoice_checkouts").update({ status: "failed" }).eq("id", reserved.id).eq("status", "pending");
+      if (failureError) throw new Error("Checkout setup failed and its reservation could not be released; owner review required");
       throw error;
     }
   } catch (error) { return { error: getStripeErrorMessage(error) }; }
