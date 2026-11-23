@@ -515,7 +515,11 @@ export function RoofMeasurements({
           label="Property"
           value={property || "none"}
           onChange={(v) => {
-            if (parent && v !== property && !confirm("Start a new drawing for this property?"))
+            if (
+              v !== property &&
+              (parent || dirty) &&
+              !confirm("Discard the current drawing and start a new one for this property?")
+            )
               return;
             if (report && v !== report.property_id) {
               toast.error("Open or create a report for the other property first");
@@ -558,6 +562,25 @@ export function RoofMeasurements({
           label="Saved drawing"
           value={parent ?? "new"}
           onChange={(v) => {
+            if (v === "new") {
+              if (dirty && !confirm("Discard unsaved changes and start a fresh drawing?")) return;
+              setD({ ...initial, notes: report?.notes ?? "" });
+              setProperty(report?.property_id ?? "");
+              setTitle(report?.title ?? "Roof measurement report");
+              setParent(null);
+              setDirty(true);
+              setHistory([]);
+              setFuture([]);
+              setSelected(initial.planes[0]?.id ?? "");
+              setMedia([]);
+              setTraceIndex(0);
+              setShape("gable");
+              setWidth(resetWidth);
+              setLength(resetLength);
+              setPitch(resetPitch);
+              setJobId("");
+              return;
+            }
             if (dirty && !confirm("Discard unsaved changes and load this drawing?")) return;
             const row = drawings.data?.find((r) => r.id === v);
             if (!row) return;
@@ -574,6 +597,25 @@ export function RoofMeasurements({
             setHistory([]);
             setFuture([]);
             setSelected(parsed.data.planes[0]?.id ?? "");
+            const loadedPoints = parsed.data.planes.flatMap((p) => p.points);
+            if (loadedPoints.length) {
+              const xs = loadedPoints.map((point) => point.x);
+              const zs = loadedPoints.map((point) => point.z);
+              setWidth(Math.max(...xs) - Math.min(...xs));
+              setLength(Math.max(...zs) - Math.min(...zs));
+              try {
+                setPitch(measureDrawing(parsed.data).planes[0]?.pitch ?? 6);
+              } catch {
+                setPitch(6);
+              }
+            } else {
+              setWidth(resetWidth);
+              setLength(resetLength);
+              setPitch(resetPitch);
+            }
+            setShape("complex");
+            setJobId("");
+            setTraceIndex(0);
             setMedia(
               Array.isArray(row.media)
                 ? row.media.flatMap((m) =>
