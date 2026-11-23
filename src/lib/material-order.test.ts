@@ -31,6 +31,14 @@ describe('metal material order', () => {
     expect(aggregate?.qty).toBeCloseTo((2400 * 1.1) / 5, 1);
   });
 
+  it('uses the 16-inch company default when legacy reports omit panel width', () => {
+    const { panel_width_in: _ignored, ...legacy } = metalReport();
+    const lines = materialOrder(legacy);
+    const aggregate = lines.find(line => line.item.includes('aggregate only'));
+    expect(aggregate?.item).toContain('16" net coverage');
+    expect(aggregate?.qty).toBeCloseTo((2400 * 1.1) / (16 / 12), 1);
+  });
+
   it('rejects invalid panel coverage widths', () => {
     expect(() => materialOrder(metalReport({ panel_width_in: 5.99 }))).toThrow();
     expect(materialOrder(metalReport({ panel_width_in: 6 })).some(line => line.item.includes('6\"'))).toBe(true);
