@@ -4,7 +4,7 @@ const inputSchema = z.object({
   shingleBundleCoverageSqft: z.number().positive().default(33.3),
   underlaymentRollCoverageSqft: z.number().positive().default(400),
   fastenersPerSquare: z.number().positive().default(80),
-  metalPanelCoverageWidthInches: z.number().positive().max(60).default(16),
+  metalPanelCoverageWidthInches: z.number().min(6).max(60).default(16),
   wastePercent: z.number().min(0).max(50).default(10),
 });
 export type TakeoffOptions = z.input<typeof inputSchema>;
