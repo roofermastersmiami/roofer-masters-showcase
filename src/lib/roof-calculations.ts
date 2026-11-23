@@ -219,6 +219,9 @@ export function calculateRoofSummary(
 
   const facetIds = new Set<string>();
   for (const facet of input.facets) {
+    if (!facet || typeof facet !== "object") {
+      throw new Error("Every roof facet must be an object.");
+    }
     if (typeof facet.id !== "string" || !facet.id.trim()) {
       throw new Error("Every roof facet must have a non-empty id.");
     }
@@ -273,6 +276,12 @@ export function calculateRoofSummary(
   const unique = new Map<string, RoofEdgeInput>();
 
   for (const edge of input.edges ?? []) {
+    if (!edge || typeof edge !== "object") {
+      throw new Error("Every roof edge must be an object.");
+    }
+    if (!Object.hasOwn(linearFeet, edge.type)) {
+      throw new Error(`Edge ${String(edge.id ?? "unknown")} has an unsupported type.`);
+    }
     if (typeof edge.id !== "string" || !edge.id.trim()) {
       throw new Error("Every roof edge must have a non-empty id.");
     }
@@ -296,7 +305,6 @@ export function calculateRoofSummary(
       continue;
     }
 
-    if (!Object.hasOwn(linearFeet, edge.type)) throw new Error(`Edge ${edge.id} has an unsupported type.`);
     unique.set(edge.id, edge);
     const nextLength = linearFeet[edge.type] + edge.lengthFt;
     if (!Number.isFinite(nextLength)) throw new Error("Total edge length exceeds the supported range.");
