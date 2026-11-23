@@ -29,7 +29,7 @@ describe('snapToImageEdge', () => {
 
   it('keeps candidates inside the circular search radius', () => {
     const width = 30, height = 30, data = pixels(width, height);
-    for (let y = 12; y < height; y++) for (let x = 12; x < width; x++) {
+    for (let y = 14; y < height; y++) for (let x = 14; x < width; x++) {
       const i = (y * width + x) * 4;
       data[i] = data[i + 1] = data[i + 2] = 240;
     }
