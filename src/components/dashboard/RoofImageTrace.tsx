@@ -133,7 +133,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       </div>
     </div> : <p>{photo.error ? 'Photo unavailable' : 'Loading photo…'}</p>}
     <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
-      Best measurement results come from straight-down aerial images. Angled drone photos have perspective distortion: image scale changes across the roof, so one calibration distance may not produce accurate dimensions everywhere. Use these images for visual tracing only unless you have orthorectified imagery or independent measurements at the roof plane.
+      Angled drone photo warning: this view has perspective distortion, so the near and far roof edges are at different apparent scales. A single two-point calibration cannot correct that distortion. Use this image to identify roof planes and trace visual geometry only; do not rely on its calculated area, perimeter, or material quantities for a proposal or order. Use straight-down orthorectified imagery or field measurements for dimensions, then verify on site.
     </div>
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <Field label="Plane name"><Input className="w-40" value={name} maxLength={100} placeholder={`Traced plane ${traced.length + 1}`} onChange={e => setName(e.target.value)} /></Field>
