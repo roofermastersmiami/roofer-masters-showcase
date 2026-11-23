@@ -3,6 +3,7 @@ import {
   priceOption,
   actualProfit,
   materialSystem,
+  findCatalogPrice,
   projectInvoices,
   type EstimateOption,
 } from "@/lib/advanced-estimate";
@@ -78,6 +79,16 @@ describe("estimate and recorded profitability", () => {
     ).toMatchObject({ gross: 120000, net: 100000, margin: 50 }));
   it("does not claim a percentage margin without collected revenue", () =>
     expect(actualProfit(0, [{ category: "labor", amount_cents: 5000 }]).margin).toBeNull());
+  it("matches catalog items despite harmless case and whitespace differences", () => {
+    const catalog = [
+      { system: "Metal Roof", item: "Ridge / hip cap (10 ft)", unit_cents: 2500 },
+      { system: "Tile Roof", item: "Ridge / hip cap (10 ft)", unit_cents: 3000 },
+    ];
+    expect(findCatalogPrice(catalog, "Standing seam", " ridge / HIP cap (10 ft) ")?.unit_cents).toBe(
+      2500,
+    );
+    expect(findCatalogPrice(catalog, "Standing seam", "unlisted item")).toBeUndefined();
+  });
   it("does not import metal quantities for an unsupported coating system", () => {
     expect(materialSystem("Coatings")).toBeNull();
     expect(materialSystem("Standing seam")).toBe("Metal Roof");
