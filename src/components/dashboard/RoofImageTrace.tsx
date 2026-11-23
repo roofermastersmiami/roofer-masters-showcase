@@ -29,7 +29,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
-  const calibration = checkCalibration(reference, feet, w);
+  const calibration = checkCalibration(reference, feet, w, dimensions.height);
 
   const toImage = (clientX: number, clientY: number) => {
     const box = svg.current!.getBoundingClientRect();
