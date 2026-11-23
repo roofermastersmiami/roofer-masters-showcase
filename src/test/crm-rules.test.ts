@@ -34,7 +34,8 @@ describe("CRM invoices and roofing operations", () => {
     expect(() =>
       invoiceTotals([{ description: "Roof", quantity: 1, unit_cents: 100 }], 101),
     ).toThrow();
-    expect(() => dollarsToCents(Number.MAX_VALUE)).toThrow();
+    expect(() => dollarsToCents(Number.MAX_VALUE)).toThrow("Amount exceeds the supported range");
+    expect(() => money(Number.MAX_VALUE)).toThrow("Amount exceeds the supported range");
   });
   it("requests only the remaining deposit after partial payments", () => {
     expect(
