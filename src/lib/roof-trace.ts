@@ -22,6 +22,39 @@ export function snapToExistingCorner(
   }
   return nearest ? { x: nearest.x, y: nearest.y } : point;
 }
+export type SharedEdgeMatch = {
+  edgeA: number;
+  edgeB: number;
+  reversed: boolean;
+  maxEndpointDistance: number;
+};
+
+/** Find near-identical boundary segments between two outlines in the same photo. */
+export function findSharedEdges(
+  a: ImagePoint[],
+  b: ImagePoint[],
+  tolerancePx: number,
+): SharedEdgeMatch[] {
+  if (!Number.isFinite(tolerancePx) || tolerancePx <= 0 || a.length < 3 || b.length < 3) {
+    return [];
+  }
+  const matches: SharedEdgeMatch[] = [];
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i]!, a2 = a[(i + 1) % a.length]!;
+    for (let j = 0; j < b.length; j++) {
+      const b1 = b[j]!, b2 = b[(j + 1) % b.length]!;
+      const direct = Math.max(Math.hypot(a1.x - b1.x, a1.y - b1.y), Math.hypot(a2.x - b2.x, a2.y - b2.y));
+      const reverse = Math.max(Math.hypot(a1.x - b2.x, a1.y - b2.y), Math.hypot(a2.x - b1.x, a2.y - b1.y));
+      const reversed = reverse < direct;
+      const distance = Math.min(direct, reverse);
+      if (distance <= tolerancePx) {
+        matches.push({ edgeA: i, edgeB: j, reversed, maxEndpointDistance: distance });
+      }
+    }
+  }
+  return matches;
+}
+
 /** Return drawing-quality problems in image space before converting pixels to feet. */
 export function validateRoofOutline(points: ImagePoint[]): string[] {
   const issues: string[] = [];
