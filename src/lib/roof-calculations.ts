@@ -96,7 +96,9 @@ export function squareMetersToSquareFeet(
 ): number {
   nonNegative(m2, "Square meters");
 
-  return m2 * 10.763910416709722;
+  const result = m2 * 10.763910416709722;
+  if (!Number.isFinite(result)) throw new Error("Square feet exceed the supported range.");
+  return result;
 }
 
 /** Convert square feet to roofing squares. */
@@ -119,10 +121,9 @@ export function projectedAreaToSurfaceArea(
   nonNegative(projectedAreaSqFt, "Projected area");
   nonNegative(pitchRisePer12, "Pitch rise");
 
-  return (
-    projectedAreaSqFt *
-    Math.sqrt(1 + (pitchRisePer12 / 12) ** 2)
-  );
+  const result = projectedAreaSqFt * Math.sqrt(1 + (pitchRisePer12 / 12) ** 2);
+  if (!Number.isFinite(result)) throw new Error("Roof surface area exceeds the supported range.");
+  return result;
 }
 
 /**
@@ -153,10 +154,16 @@ export function polygonAreaSqFt(
       );
     }
 
-    twice += a.x * b.y - b.x * a.y;
+    const term = a.x * b.y - b.x * a.y;
+    if (!Number.isFinite(term) || !Number.isFinite(twice + term)) {
+      throw new Error("Polygon area exceeds the supported range.");
+    }
+    twice += term;
   }
 
-  return Math.abs(twice) / 2;
+  const area = Math.abs(twice) / 2;
+  if (!Number.isFinite(area)) throw new Error("Polygon area exceeds the supported range.");
+  return area;
 }
 
 /** Calculate the actual surface area of one roof plane. */
@@ -286,8 +293,11 @@ export function calculateRoofSummary(
       continue;
     }
 
+    if (!(edge.type in linearFeet)) throw new Error(`Edge ${edge.id} has an unsupported type.`);
     unique.set(edge.id, edge);
-    linearFeet[edge.type] += edge.lengthFt;
+    const nextLength = linearFeet[edge.type] + edge.lengthFt;
+    if (!Number.isFinite(nextLength)) throw new Error("Total edge length exceeds the supported range.");
+    linearFeet[edge.type] = nextLength;
   }
 
   // Find the most common roof pitch.
@@ -310,6 +320,9 @@ export function calculateRoofSummary(
       (counts.get(pitch) ?? 0) + 1
     );
   }
+
+  const totalUniqueEdgeFeet = [...unique.values()].reduce((sum, edge) => sum + edge.lengthFt, 0);
+  if (!Number.isFinite(totalUniqueEdgeFeet)) throw new Error("Total edge length exceeds the supported range.");
 
   const predominantPitchRisePer12 =
     pitches.length
@@ -338,12 +351,7 @@ export function calculateRoofSummary(
 
     linearFeet,
 
-    totalUniqueEdgeFeet: [
-      ...unique.values(),
-    ].reduce(
-      (sum, edge) => sum + edge.lengthFt,
-      0
-    ),
+    totalUniqueEdgeFeet,
 
     predominantPitchRisePer12,
   };
