@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-export const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+export const money = (cents: number) => {
+  if (!Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported currency range");
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+};
 export const dollarsToCents = (dollars: number) => {
   const cents = Math.round(dollars * 100);
   if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported currency range");
@@ -26,6 +29,8 @@ export const invoiceSchema = z.object({
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => { const date = new Date(`${v}T00:00:00.000Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v; }, "Choose a valid due date"), notes: z.string().max(4000), environment: z.enum(["sandbox", "live"]),
 }).refine((data) => invoiceTotals(data.items, data.tax_percent).total > 0, "Invoice total must be greater than zero");
 export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
+  if (![invoice.total_cents, invoice.paid_cents].every(Number.isSafeInteger) || invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents) throw new Error("Invoice balances are outside the supported range");
+  if (!Number.isFinite(now)) throw new Error("Invoice status requires a valid current date");
   if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
   if (invoice.paid_cents >= invoice.total_cents) return "paid";
   const todayInMiami = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -33,7 +38,13 @@ export function invoiceState(invoice: { status: string; total_cents: number; pai
   return invoice.paid_cents > 0 ? "partial" : "unpaid";
 }
 export function paymentAmount(invoice: { total_cents: number; paid_cents: number; deposit_cents: number }, kind: "deposit" | "balance") {
-  return kind === "deposit" ? Math.max(0, Math.min(invoice.deposit_cents - invoice.paid_cents, invoice.total_cents - invoice.paid_cents)) : Math.max(0, invoice.total_cents - invoice.paid_cents);
+  if (![invoice.total_cents, invoice.paid_cents, invoice.deposit_cents].every(Number.isSafeInteger) ||
+      invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents ||
+      invoice.deposit_cents < 0 || invoice.deposit_cents > invoice.total_cents) {
+    throw new Error("Invoice payment amounts are outside the supported range");
+  }
+  if (kind !== "deposit" && kind !== "balance") throw new Error("Unsupported invoice payment type");
+  return kind === "deposit" ? Math.max(0, Math.min(invoice.deposit_cents - invoice.paid_cents, invoice.total_cents - invoice.paid_cents)) : invoice.total_cents - invoice.paid_cents;
 }
 export const estimateInputSchema = z.object({ sqft: z.number().positive().max(1000000), waste: z.number().min(0).max(100), material: z.number().nonnegative().max(100000), labor: z.number().nonnegative().max(100000), permits: z.number().nonnegative().max(1000000), other: z.number().nonnegative().max(1000000), margin: z.number().min(0).max(95) });
 export type EstimateInputs = z.infer<typeof estimateInputSchema>;
