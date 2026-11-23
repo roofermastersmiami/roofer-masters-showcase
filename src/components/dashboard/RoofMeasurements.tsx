@@ -31,7 +31,7 @@ import {
 } from "@/lib/roof-geometry";
 import { calculateRoofSummary } from "@/lib/roof-calculations";
 import { calculateRoofMaterialTakeoff } from "@/lib/roof-material-takeoff";
-import { suggestSharedEdgeTypes } from "@/lib/roof-edge-suggestions";
+import { applySharedEdgeSuggestions, suggestSharedEdgeTypes } from "@/lib/roof-edge-suggestions";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
@@ -819,15 +819,7 @@ export function RoofMeasurements({
                     toast.info("No unambiguous shared ridge or valley edges were detected. Review plane geometry and edge labels manually.");
                     return;
                   }
-                  const next = { ...d, planes: d.planes.map((currentPlane) => ({
-                    ...currentPlane,
-                    edges: currentPlane.edges.map((edge, edgeIndex) => {
-                      const suggestion = suggestions.find((item) =>
-                        (item.firstPlaneId === currentPlane.id && item.firstEdgeIndex === edgeIndex) ||
-                        (item.secondPlaneId === currentPlane.id && item.secondEdgeIndex === edgeIndex));
-                      return suggestion?.type ?? edge;
-                    }),
-                  })) };
+                  const next = applySharedEdgeSuggestions(d, suggestions);
                   edit(next);
                   toast.success(`${suggestions.length} shared edge suggestion(s) applied. Review every label before saving.`);
                 }}>Suggest shared ridges &amp; valleys</Button>
