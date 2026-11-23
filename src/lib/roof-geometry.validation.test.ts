@@ -246,3 +246,11 @@ describe('roof preset shape validation', () => {
     expect(() => roofPreset('dome' as never)).toThrow(/Unsupported roof preset shape/);
   });
 });
+
+describe('partial shared roof edges', () => {
+  it('subtracts a T-junction attachment from the exterior perimeter', () => {
+    const result = measureDrawing(roofPreset('complex', 40, 30, 6));
+    // 40x30 main footprint plus a 20x15 wing attached along 15 feet.
+    expect(result.perimeter).toBeCloseTo(180, 2);
+  });
+});
