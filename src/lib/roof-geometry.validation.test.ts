@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingSchema } from './roof-geometry';
+import { drawingSchema, planeInfo } from './roof-geometry';
 
 const drawing = {
   planes: [{
@@ -39,5 +39,22 @@ describe('roof drawing penetration validation', () => {
       ...drawing,
       penetrations: [{ id: 'bad-penetration', kind: 'pipe', ...dimensions }],
     }).success).toBe(false);
+  });
+});
+
+describe('roof plane vertex validation', () => {
+  it('rejects consecutive duplicate roof corners before area calculation', () => {
+    const plane = {
+      id: 'duplicate-corner',
+      name: 'Duplicate corner',
+      points: [
+        { x: 0, y: 10, z: 0 },
+        { x: 20, y: 10, z: 0 },
+        { x: 20, y: 10, z: 0 },
+        { x: 0, y: 10, z: 20 },
+      ],
+      edges: ['eave', 'eave', 'eave', 'eave'] as const,
+    };
+    expect(() => planeInfo(plane)).toThrow(/corners must be distinct/);
   });
 });
