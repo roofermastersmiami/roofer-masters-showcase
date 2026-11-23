@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import {
   calibratedPlane,
   checkCalibration,
+  snapToExistingCorner,
   nextEdgeType,
   UPHILL_LABELS,
   type ImagePoint,
@@ -62,6 +63,7 @@ export function RoofImageTrace({
   const [name, setName] = useState("");
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
   const [replace, setReplace] = useState(true);
+  const [snapCorners, setSnapCorners] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
   const drag = useRef<{ kind: "ref" | "pt"; i: number } | null>(null);
   const moved = useRef(false);
@@ -79,7 +81,10 @@ export function RoofImageTrace({
   const addPoint = (p: ImagePoint) => {
     if (mode === "calibrate") setReference(reference.length === 2 ? [p] : [...reference, p]);
     else {
-      setPoints([...points, p]);
+      const next = snapCorners
+        ? snapToExistingCorner(p, traced.flatMap((plane) => plane.points), Math.max(6, w * 0.012))
+        : p;
+      setPoints([...points, next]);
       setEdges([...edges, "other"]);
     }
   };
@@ -90,7 +95,12 @@ export function RoofImageTrace({
     moved.current = true;
     const { kind, i } = drag.current;
     if (kind === "ref") setReference((r) => r.map((q, j) => (j === i ? p : q)));
-    else setPoints((r) => r.map((q, j) => (j === i ? p : q)));
+    else {
+      const next = snapCorners
+        ? snapToExistingCorner(p, traced.flatMap((plane) => plane.points), Math.max(6, w * 0.012))
+        : p;
+      setPoints((r) => r.map((q, j) => (j === i ? next : q)));
+    }
   };
   const startDrag = (kind: "ref" | "pt", i: number) => (e: RPointerEvent) => {
     e.stopPropagation();
@@ -415,6 +425,14 @@ export function RoofImageTrace({
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />{" "}
           Replace existing roof planes
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={snapCorners}
+            onChange={(e) => setSnapCorners(e.target.checked)}
+          />{" "}
+          Snap corners to previous planes
         </label>
         <Button disabled={points.length < 3 || !calibration.ok} onClick={add}>
           <Plus /> Add traced plane
