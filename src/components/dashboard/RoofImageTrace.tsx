@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { calibratedPlane, checkCalibration, nextEdgeType, UPHILL_LABELS, type ImagePoint, type Uphill } from '@/lib/roof-trace';
 import { planeInfo, type EdgeType, type RoofPlane } from '@/lib/roof-geometry';
 import { snapToImageEdge } from '@/lib/roof-edge-snap';
+import { createRoofEdgeMap } from '@/lib/roof-edge-map';
 import { Field, Choice } from './CrmControls';
 
 const EDGE_SHORT: Record<EdgeType, string> = { eave: 'Eave', rake: 'Rake', ridge: 'Ridge', hip: 'Hip', valley: 'Valley', other: 'Other' };
@@ -33,6 +34,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [lastSnapPoint, setLastSnapPoint] = useState<ImagePoint | null>(null);
   const [snapPixels, setSnapPixels] = useState<{ data: Uint8ClampedArray; width: number; height: number } | null>(null);
   const snapImage = useRef<HTMLImageElement>(null);
+  const edgeGuideCanvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ kind: 'ref' | 'pt'; i: number } | { kind: 'pan'; x: number; y: number; panX: number; panY: number } | null>(null);
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
@@ -65,6 +67,13 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       context.drawImage(image, 0, 0);
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
       setSnapPixels({ data: pixels.data, width: canvas.width, height: canvas.height });
+      const guide = createRoofEdgeMap(pixels.data, canvas.width, canvas.height, 90);
+      const overlay = edgeGuideCanvas.current;
+      const overlayContext = overlay?.getContext('2d');
+      if (overlay && overlayContext && guide) {
+        overlay.width = guide.width; overlay.height = guide.height;
+        overlayContext.putImageData(new ImageData(guide.rgba, guide.width, guide.height), 0, 0);
+      }
     } catch {
       setSnapPixels(null);
     }
@@ -121,6 +130,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       <div className="relative w-full overflow-hidden" onWheel={e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); setZoom(z => { const next = Math.max(1, Math.min(4, Number((z + (e.deltaY < 0 ? 0.25 : -0.25)).toFixed(2)))); if (next === 1) setPan({ x: 0, y: 0 }); return next; }); }}>
       <div className="relative w-full" style={{ transform: 'translate(' + pan.x + 'px, ' + pan.y + 'px) scale(' + zoom + ')', transformOrigin: 'center center' }}>
       <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
+      <canvas ref={edgeGuideCanvas} aria-hidden="true" className={"pointer-events-none absolute inset-0 h-full w-full object-contain " + (showEdgeGuide ? "opacity-100" : "opacity-0")} />
       <svg ref={svg} className={"absolute inset-0 h-full w-full touch-none text-primary " + (zoom > 1 ? "cursor-grab" : "")} viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
         onPointerDown={e => { if (zoom > 1 && e.target === e.currentTarget) { drag.current = { kind: "pan", x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }; moved.current = false; e.currentTarget.setPointerCapture(e.pointerId); } }}
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
