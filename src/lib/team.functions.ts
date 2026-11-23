@@ -14,8 +14,9 @@ export const listTeam = createServerFn({ method: 'POST' }).middleware([requireSu
   const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
   const { data: roles, error } = await supabaseAdmin.from('user_roles').select('user_id,role');
   if (error) throw new Error('Could not load team');
-  const { data: users } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
-  return (users?.users ?? []).map(u => ({ id: u.id, email: u.email ?? '', confirmed: !!u.email_confirmed_at, roles: (roles ?? []).filter(r => r.user_id === u.id).map(r => r.role as string) }));
+  const { data: users, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
+  if (usersError || !users) throw new Error('Could not load team accounts');
+  return users.users.map(u => ({ id: u.id, email: u.email ?? '', confirmed: !!u.email_confirmed_at, roles: (roles ?? []).filter(r => r.user_id === u.id).map(r => r.role as string) }));
 });
 
 export const setTeamRole = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
@@ -23,8 +24,9 @@ export const setTeamRole = createServerFn({ method: 'POST' }).middleware([requir
   .handler(async ({ data, context }) => {
     await gate(context, []);
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const { data: users } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
-    const user = users?.users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
+    const { data: users, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
+    if (usersError || !users) throw new Error('Could not verify team account. Please try again.');
+    const user = users.users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
     if (!user || !user.email_confirmed_at) return { error: 'No confirmed account with that email. Ask them to create an account at /auth and confirm their email first.' } as const;
     if (user.id === context.userId) return { error: 'You cannot change your own owner access here.' } as const;
     const q = data.grant
@@ -55,6 +57,7 @@ export const myCrewJobs = createServerFn({ method: 'POST' }).middleware([require
   const { data, error } = await supabaseAdmin.from('roof_jobs').select('id,title,status,start_date,inspection_at,permit_status,checklist,photos,property_id').contains('assigned_user_ids', [context.userId]).order('start_date', { ascending: true });
   if (error) throw new Error('Could not load jobs');
   const ids = [...new Set((data ?? []).map(j => j.property_id).filter((x): x is string => !!x))];
-  const { data: props } = ids.length ? await supabaseAdmin.from('crm_properties').select('id,address').in('id', ids) : { data: [] };
+  const { data: props, error: propsError } = ids.length ? await supabaseAdmin.from('crm_properties').select('id,address').in('id', ids) : { data: [], error: null };
+  if (propsError) throw new Error('Could not load assigned job addresses');
   return (data ?? []).map(j => ({ ...j, address: props?.find(p => p.id === j.property_id)?.address ?? '' }));
 });
