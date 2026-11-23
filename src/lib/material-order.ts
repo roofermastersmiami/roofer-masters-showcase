@@ -170,7 +170,8 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
     "Pipes / vents",
     [
       new RegExp(
-        "(?:pipes?|pipe\\s+(?:boots?|flashings?)|vents?|penetrations)\\s*(?:count)?\\s*[:=]?\\s*" + number,
+        "(?:pipes?|pipe\\s+(?:boots?|flashings?)|vents?|penetrations)\\s*(?:count)?\\s*[:=]?\\s*" +
+          number,
         "i",
       ),
     ],
