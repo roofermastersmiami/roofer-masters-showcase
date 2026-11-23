@@ -70,11 +70,6 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
       break;
     }
   }
-  const twiceArea = points.reduce((sum, p, i) => {
-    const q = points[(i + 1) % count]!;
-    return sum + p.x * q.y - q.x * p.y;
-  }, 0);
-  if (Math.abs(twiceArea) / 2 < 1) issues.push("Roof outline is too small or flat to measure.");
   const cross = (a: ImagePoint, b: ImagePoint, c: ImagePoint) =>
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
   const onSegment = (a: ImagePoint, b: ImagePoint, p: ImagePoint) =>
@@ -98,7 +93,14 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
       const c = points[j]!, d = points[(j + 1) % count]!;
       if (intersects(a, b, c, d)) {
         issues.push("Roof outline crosses itself; adjust the corners so the perimeter does not cross.");
-        return issues;
+        const twiceArea = points.reduce((sum, p, i) => {
+    const q = points[(i + 1) % count]!;
+    return sum + p.x * q.y - q.x * p.y;
+  }, 0);
+  if (Math.abs(twiceArea) / 2 < 1) {
+    issues.push("Roof outline is too small or flat to measure.");
+  }
+  return issues;
       }
     }
   }
