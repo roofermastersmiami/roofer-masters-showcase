@@ -4,7 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { invoiceSchema, invoiceTotals } from "./crm-schema";
 
 export const createInvoice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: unknown) => invoiceSchema.parse(input)).handler(async ({ data, context }) => {
-  const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['admin','accounting']});
+  const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['admin','accounting']});
+  if (roleError) throw new Error("Could not verify accounting permissions");
   if (!owner) throw new Error("You do not have access to this action");
   const { data: lead, error: leadError } = await context.supabase.from("leads").select("name,email,address").eq("id", data.lead_id).single();
   if (leadError || !lead) throw new Error("Choose an existing customer");
@@ -47,6 +48,7 @@ export const changeInvoiceStatus = createServerFn({ method: "POST" }).middleware
 });
 export const getSharedInvoice = createServerFn({ method: "GET" }).inputValidator((input: unknown) => z.object({ token: z.string().uuid() }).parse(input)).handler(async ({ data }) => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: invoice } = await supabaseAdmin.from("crm_invoices").select("number,title,customer_name,items,subtotal_cents,tax_cents,total_cents,deposit_cents,paid_cents,due_date,notes,environment").eq("token", data.token).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
+  const { data: invoice, error } = await supabaseAdmin.from("crm_invoices").select("number,title,customer_name,items,subtotal_cents,tax_cents,total_cents,deposit_cents,paid_cents,due_date,notes,environment").eq("token", data.token).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
+  if (error) throw new Error("Could not load shared invoice");
   return invoice;
 });
