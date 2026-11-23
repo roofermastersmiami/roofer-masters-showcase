@@ -132,7 +132,9 @@ export function MaterialOrder({
             try {
               const extracted = await extractRoofReportPdfText(file);
               if (!extracted.trim()) {
-                toast.error("No selectable text found. This may be a scanned PDF; enter its measurements manually.");
+                toast.error(
+                  "No selectable text found. This may be a scanned PDF; enter its measurements manually.",
+                );
                 return;
               }
               setReportText(extracted);
@@ -140,9 +142,13 @@ export function MaterialOrder({
               if (parsed.found.length) {
                 setR((current) => ({ ...current, ...parsed.values }));
                 setParsedLabels(parsed.found);
-                toast.success(`Read PDF locally and found ${parsed.found.length} labelled fields. Review every value.`);
+                toast.success(
+                  `Read PDF locally and found ${parsed.found.length} labelled fields. Review every value.`,
+                );
               } else {
-                toast.info("PDF text extracted locally. Review it below and use Read pasted text locally.");
+                toast.info(
+                  "PDF text extracted locally. Review it below and use Read pasted text locally.",
+                );
               }
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Could not read this PDF.");
@@ -152,7 +158,9 @@ export function MaterialOrder({
           }}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          {pdfBusy ? "Reading PDF on this device…" : "PDF text is extracted in your browser only (25 MB limit). Scanned/image-only PDFs still need manual entry."}
+          {pdfBusy
+            ? "Reading PDF on this device…"
+            : "PDF text is extracted in your browser only (25 MB limit). Scanned/image-only PDFs still need manual entry."}
         </p>
       </div>
       <div className="mb-4 rounded-md border border-border p-4">
