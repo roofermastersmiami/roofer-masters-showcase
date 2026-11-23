@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { calibratedPlane, checkCalibration, nextEdgeType, UPHILL_LABELS, type ImagePoint, type Uphill } from '@/lib/roof-trace';
+import { calibratedPlane, checkCalibration, findSharedEdges, snapToExistingCorner, validateRoofOutline, nextEdgeType, UPHILL_LABELS, type ImagePoint, type Uphill } from '@/lib/roof-trace';
 import { planeInfo, type EdgeType, type RoofPlane } from '@/lib/roof-geometry';
 import { snapToImageEdge } from '@/lib/roof-edge-snap';
 import { createRoofEdgeMap } from '@/lib/roof-edge-map';
@@ -26,6 +26,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [name, setName] = useState('');
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
   const [replace, setReplace] = useState(true);
+  const [snapCorners, setSnapCorners] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
   const [edgeSnap, setEdgeSnap] = useState(false);
   const [showEdgeGuide, setShowEdgeGuide] = useState(false);
@@ -40,7 +41,11 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
-  const calibration = checkCalibration(reference, feet, w);
+  const calibration = checkCalibration(reference, feet, w, dimensions.height);
+  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];
+  const sharedEdgeMatches = points.length >= 3
+    ? traced.flatMap(plane => findSharedEdges(points, plane.points, Math.max(3, w * 0.006)).map(match => ({ ...match, planeName: plane.name })))
+    : [];
 
   const toImage = (clientX: number, clientY: number) => {
     const box = svg.current!.getBoundingClientRect();
@@ -52,10 +57,13 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     const snapped = mode === 'trace' && edgeSnap && snapPixels
       ? snapToImageEdge(snapPixels.data, snapPixels.width, snapPixels.height, p, 18, 55)?.point
       : null;
-    const point = snapped ?? p;
-    if (mode === 'trace' && edgeSnap) { setLastSnap(snapped ? 'snapped' : 'unchanged'); setLastSnapPoint(snapped ? point : null); }
-    if (mode === 'calibrate') setReference(reference.length === 2 ? [point] : [...reference, point]);
-    else { setPoints([...points, point]); setEdges([...edges, 'other']); }
+    const edgeAdjusted = snapped ?? p;
+    if (mode === 'trace' && edgeSnap) { setLastSnap(snapped ? 'snapped' : 'unchanged'); setLastSnapPoint(snapped ? edgeAdjusted : null); }
+    if (mode === 'calibrate') setReference(reference.length === 2 ? [edgeAdjusted] : [...reference, edgeAdjusted]);
+    else {
+      const point = snapCorners ? snapToExistingCorner(edgeAdjusted, traced.flatMap(plane => plane.points), Math.max(6, w * 0.012)) : edgeAdjusted;
+      setPoints([...points, point]); setEdges([...edges, 'other']);
+    }
   };
   const prepareSnapPixels = () => {
     const image = snapImage.current;
@@ -93,7 +101,11 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     if (drag.current.kind === 'pan') { setPan({ x: drag.current.panX + e.clientX - drag.current.x, y: drag.current.panY + e.clientY - drag.current.y }); return; }
     const p = toImage(e.clientX, e.clientY); if (!p) return;
     const { kind, i } = drag.current;
-    if (kind === 'ref') setReference(r => r.map((q, j) => j === i ? p : q)); else setPoints(r => r.map((q, j) => j === i ? p : q));
+    if (kind === 'ref') setReference(r => r.map((q, j) => j === i ? p : q));
+    else {
+      const next = snapCorners ? snapToExistingCorner(p, traced.flatMap(plane => plane.points), Math.max(6, w * 0.012)) : p;
+      setPoints(r => r.map((q, j) => j === i ? next : q));
+    }
   };
   const startDrag = (kind: 'ref' | 'pt', i: number) => (e: RPointerEvent) => { e.stopPropagation(); drag.current = { kind, i }; moved.current = false; svg.current?.setPointerCapture(e.pointerId); };
 
@@ -147,7 +159,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       </div>
       <div className="relative w-full overflow-hidden" onWheel={e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); setZoom(z => { const next = Math.max(1, Math.min(4, Number((z + (e.deltaY < 0 ? 0.25 : -0.25)).toFixed(2)))); if (next === 1) setPan({ x: 0, y: 0 }); return next; }); }}>
       <div className="relative w-full" style={{ transform: 'translate(' + pan.x + 'px, ' + pan.y + 'px) scale(' + zoom + ')', transformOrigin: 'center center' }}>
-      <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
+      <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { const width = e.currentTarget.naturalWidth, height = e.currentTarget.naturalHeight; setDimensions({ width, height }); if (feetPerPixel && Number.isFinite(feetPerPixel) && feetPerPixel > 0) { setReference([{ x: 0, y: 0 }, { x: width, y: 0 }]); setFeet(feetPerPixel * width); } prepareSnapPixels(); }} />
       <canvas ref={edgeGuideCanvas} aria-hidden="true" className={"pointer-events-none absolute inset-0 h-full w-full object-contain " + (showEdgeGuide ? "opacity-100" : "opacity-0")} />
       <svg ref={svg} className={"absolute inset-0 h-full w-full touch-none text-primary " + (zoom > 1 ? "cursor-grab" : "")} viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
         onPointerDown={e => { if (zoom > 1 && e.target === e.currentTarget) { drag.current = { kind: "pan", x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }; moved.current = false; e.currentTarget.setPointerCapture(e.pointerId); } }}
@@ -177,9 +189,15 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       <Button variant="ghost" size="icon" aria-label="Clear current plane" title="Clear current plane" disabled={!points.length} onClick={() => { setPoints([]); setEdges([]); }}><Trash2 /></Button>
     </div>
     <div className="mt-3 flex flex-wrap items-center gap-4">
-      <p className="text-sm text-muted-foreground">{points.length} corners{preview ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter` : ''} · {traced.length} plane{traced.length === 1 ? '' : 's'} added from this photo</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-muted-foreground">{points.length} corners{preview ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter` : ''} · {traced.length} plane{traced.length === 1 ? '' : 's'} added from this photo</p>
+        {outlineIssues.map(issue => <p key={issue} className="mt-1 text-sm text-destructive">{issue}</p>)}
+        {sharedEdgeMatches.length > 0 && <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">Shared boundary detected: {sharedEdgeMatches.map(match => `edge ${match.edgeA + 1} with ${match.planeName} (within ${match.maxEndpointDistance.toFixed(1)} px)`).join('; ')}. Review this connection before verifying the report.</p>}
+        {traced.length > 0 && points.length >= 3 && sharedEdgeMatches.length === 0 && <p className="mt-1 text-sm text-muted-foreground">No matching edge found on the previously traced planes. If these planes should connect, review the corner alignment before verifying the report.</p>}
+      </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)} /> Replace existing roof planes</label>
-      <Button disabled={points.length < 3 || !calibration.ok} onClick={add}><Plus /> Add traced plane</Button>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={snapCorners} onChange={e => setSnapCorners(e.target.checked)} /> Snap corners to previous planes</label>
+      <Button disabled={points.length < 3 || !calibration.ok || outlineIssues.length > 0} onClick={add}><Plus /> Add traced plane</Button>
     </div>
   </section>;
 }
