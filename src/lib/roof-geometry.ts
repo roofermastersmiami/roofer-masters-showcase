@@ -26,6 +26,7 @@ export function planeInfo(p:RoofPlane){
 }
 const ring=(p:RoofPlane):[number,number][]=>{const points=p.points.map(v=>[v.x,v.z] as [number,number]);const first=points[0];return first?[...points,first]:points;};
 function ringArea(r:number[][]){let area=0;for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length];if(a&&b)area+=(a[0]??0)*(b[1]??0)-(b[0]??0)*(a[1]??0);}return Math.abs(area)/2;}
+function edgeKey(a:Point,b:Point){const key=(p:Point)=>[p.x,p.y,p.z].map(n=>Math.round(n*1000)).join(',');return [key(a),key(b)].sort().join('|');}
 
 export function measureDrawing(raw:RoofDrawing){
  const d=drawingSchema.parse(raw);const planes=d.planes.map(p=>({...planeInfo(p),id:p.id,name:p.name}));
