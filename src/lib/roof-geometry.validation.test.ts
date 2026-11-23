@@ -219,3 +219,17 @@ describe('exact penetration containment', () => {
     expect(() => measureDrawing(notchedRoof as RoofDrawing)).toThrow(/must fit within the roof footprint/);
   });
 });
+
+describe('roof plane coordinate validation', () => {
+  it.each([
+    ['infinite x', { x: Number.POSITIVE_INFINITY, y: 10, z: 0 }],
+    ['infinite y', { x: 0, y: Number.POSITIVE_INFINITY, z: 0 }],
+    ['infinite z', { x: 0, y: 10, z: Number.NEGATIVE_INFINITY }],
+    ['NaN coordinate', { x: Number.NaN, y: 10, z: 0 }],
+  ])('rejects %s', (_label, point) => {
+    expect(drawingSchema.safeParse({
+      ...drawing,
+      planes: [{ ...drawing.planes[0], points: [point, ...drawing.planes[0].points.slice(1)] }],
+    }).success).toBe(false);
+  });
+});
