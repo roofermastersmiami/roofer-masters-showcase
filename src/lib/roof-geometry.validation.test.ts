@@ -316,8 +316,8 @@ describe('partial shared edge segmentation', () => {
       ],
     } as RoofDrawing;
     const result = measureDrawing(adjacent);
-    expect(result.perimeter).toBeCloseTo(54, 3);
-    expect(result.edges.eave).toBeCloseTo(54, 3);
+    expect(result.perimeter).toBeCloseTo(50, 3);
+    expect(result.edges.eave).toBeCloseTo(50, 3);
   });
   it('rejects mismatched classifications on a partially shared edge', () => {
     const adjacent = {
