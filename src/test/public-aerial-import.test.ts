@@ -25,10 +25,10 @@ function source(second: Response) {
 }
 const encoded = () => `data:image/png;base64,${btoa(String.fromCharCode(...png()))}`;
 describe("free aerial retrieval", () => {
-  it("exports a fixed USGS 3857 PNG and returns ground scale for 120 m / 1000 px", async () => {
+  it("exports a fixed USGS 3857 PNG and returns ground scale for 120 m / 2000 px", async () => {
     const fetcher = source(image());
     const r = await fetchPublicAerial("Test address", 120, fetcher);
-    expect("error" in r).toBe(false);
+    expect("error" in r, "error" in r ? r.error : "").toBe(false);
     if ("error" in r) throw new Error(r.error);
     expect(r.feetPerPixel).toBeCloseTo(0.1968504, 7);
     expect(r.image).toBe(encoded());
