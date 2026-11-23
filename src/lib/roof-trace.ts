@@ -8,6 +8,7 @@ export const UPHILL_LABELS: Record<Uphill, string> = { up: 'Toward top of photo'
 export function checkCalibration(reference: ImagePoint[], feet: number, imageWidth: number) {
   const a = reference[0], b = reference[1];
   if (!a || !b) return { ok: false, message: 'Click two points on something you know the length of.' } as const;
+  if (![a.x, a.y, b.x, b.y, imageWidth].every(Number.isFinite) || imageWidth <= 0 || a.x < 0 || b.x < 0 || a.x > imageWidth || b.x > imageWidth || a.y < 0 || b.y < 0) return { ok: false, message: 'Calibration points must be inside a valid image.' } as const;
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (pixels < 1) return { ok: false, message: 'Calibration points must be distinct.' } as const;
   if (!Number.isFinite(feet) || feet <= 0) return { ok: false, message: 'Enter the real distance between the two points in feet.' } as const;
@@ -28,7 +29,8 @@ export function nextEdgeType(t: EdgeType): EdgeType { return EDGE_TYPES[(EDGE_TY
  */
 export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], feet: number, pitch: number, id: string, opts: { uphill?: Uphill; edges?: EdgeType[]; name?: string } = {}): RoofPlane {
   const a = reference[0], b = reference[1];
-  if (!a || !b || !Number.isFinite(feet) || feet <= 0) throw new Error('Set two calibration points and a known distance');
+  if (!a || !b || !Number.isFinite(feet) || feet <= 0 || feet > 500) throw new Error('Set two calibration points and a known distance between 0 and 500 feet');
+  if (![a.x, a.y, b.x, b.y, ...points.flatMap(p => [p.x, p.y])].every(Number.isFinite) || points.some(p => p.x < 0 || p.y < 0)) throw new Error('Photo points must have valid, non-negative coordinates');
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (pixels < 1) throw new Error('Calibration points must be distinct');
   if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24) throw new Error('Draw at least three corners and enter a valid pitch');
