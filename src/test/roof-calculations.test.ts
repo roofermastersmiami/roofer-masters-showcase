@@ -106,6 +106,43 @@ describe("Roof calculation helpers", () => {
     ).toBe(100);
   });
 
+  it("rejects duplicate roof facet ids", () => {
+    expect(() =>
+      calculateRoofSummary({
+        facets: [
+          { id: "plane-1", surfaceAreaSqFt: 500 },
+          { id: "plane-1", surfaceAreaSqFt: 500 },
+        ],
+      })
+    ).toThrow("Duplicate roof facet id");
+  });
+
+  it("rejects empty roof facet and edge ids", () => {
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: " ", surfaceAreaSqFt: 500 }],
+      })
+    ).toThrow("non-empty id");
+
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 500 }],
+        edges: [{ id: "", type: "ridge", lengthFt: 10 }],
+      })
+    ).toThrow("non-empty id");
+  });
+
+  it("rejects area totals that overflow finite numeric range", () => {
+    expect(() =>
+      calculateRoofSummary({
+        facets: [
+          { id: "plane-1", surfaceAreaSqFt: Number.MAX_VALUE },
+          { id: "plane-2", surfaceAreaSqFt: Number.MAX_VALUE },
+        ],
+      })
+    ).toThrow("supported range");
+  });
+
   it("rejects ambiguous area inputs", () => {
     expect(() =>
       calculateRoofSummary({
