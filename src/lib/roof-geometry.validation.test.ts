@@ -169,7 +169,7 @@ describe("roof penetration footprint validation", () => {
       measureDrawing({
         ...drawing,
         penetrations: [{ id: "pipe-edge", kind: "pipe", x: 20, z: 10, width: 2, length: 2 }],
-      } as any),
+      } as RoofDrawing),
     ).toThrow(/must fit within the roof footprint/);
   });
 });
