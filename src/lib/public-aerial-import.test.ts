@@ -6,8 +6,17 @@ import {
   uploadAerialImage,
 } from "./public-aerial-import";
 
-const pngDataUrl = (bytes: number[]) =>
-  `data:image/png;base64,${btoa(String.fromCharCode(...bytes))}`;
+const pngDataUrl = (bytes: ArrayLike<number>) => {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    const chunk = Array.from(
+      { length: Math.min(0x8000, bytes.length - offset) },
+      (_, index) => bytes[offset + index]!,
+    );
+    binary += String.fromCharCode(...chunk);
+  }
+  return `data:image/png;base64,${btoa(binary)}`;
+};
 const minimalPng = [
   137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
 ];
