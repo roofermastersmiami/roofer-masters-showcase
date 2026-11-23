@@ -91,7 +91,7 @@ describe("local roof report text import", () => {
     expect(parsed.values.area_sqft).toBeUndefined();
     expect(parsed.values.ridge_lf).toBeUndefined();
     expect(parsed.values.pipes).toBeUndefined();
-    expect(parsed.found).toEqual([]);
+    expect(parsed.found).toEqual(["Pitch (review manually)"]);
   });
 
   it("ignores negative values", () => {
