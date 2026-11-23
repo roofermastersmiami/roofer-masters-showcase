@@ -1,0 +1,42 @@
+name: Format repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to format
+        required: true
+        default: feature/roof-imagery-measurement-foundation
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-package-lock --no-audit --no-fund
+      - name: Apply repository formatting
+        run: npm run format
+      - name: Commit formatting changes
+        run: |
+          if git diff --quiet; then
+            echo "Prettier found no changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Format repository with Prettier"
+          git push origin HEAD:${{ inputs.branch }}
