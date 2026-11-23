@@ -437,6 +437,12 @@ export function RoofImageTrace({
               ).join("; ")}. Review this connection before verifying the report.
             </p>
           )}
+          {traced.length > 0 && points.length >= 3 && sharedEdgeMatches.length === 0 && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              No matching edge found on the previously traced planes. If these planes should connect,
+              review the corner alignment before verifying the report.
+            </p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />{" "}
