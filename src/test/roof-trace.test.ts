@@ -45,3 +45,8 @@ it('rejects invalid traced coordinates and unrealistic reference lengths', () =>
   expect(() => calibratedPlane([{x:0,y:0},{x:100,y:0},{x:0,y:100}],ref,501,0,'bad')).toThrow('500 feet');
   expect(() => calibratedPlane([{x:0,y:0},{x:Number.NaN,y:0},{x:0,y:100}],ref,10,0,'bad')).toThrow('coordinates');
 });
+
+it('rejects calibration points below the bottom image boundary', () => {
+  expect(checkCalibration([{x:0,y:0},{x:100,y:701}],20,1000,700).ok).toBe(false);
+  expect(checkCalibration([{x:0,y:0},{x:100,y:700}],20,1000,700).ok).toBe(true);
+});
