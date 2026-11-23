@@ -15,6 +15,13 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(r.lines.some(x => x.item === 'Metal panel coverage allowance' && x.unit === 'sq ft')).toBe(true);
     expect(r.warnings.some(x => x.includes('not a panel count or cut list'))).toBe(true);
   });
+  it('preserves fractional linear footage instead of rounding every edge up', () => {
+    const d = roofPreset('gable', 40.25, 30.5, 6); d.roof_type = 'Shingle Roof';
+    const r = calculateRoofMaterialTakeoff(d, { wastePercent: 0 });
+    const drip = r.lines.find(x => x.item === 'Drip edge allowance');
+    expect(drip?.quantity).toBeCloseTo(2 * (40.25 + 30.5), 1);
+    expect(drip?.unit).toBe('linear ft');
+  });
   it('rejects invalid product coverage assumptions', () => {
     const d = roofPreset('flat', 30, 40, 0);
     expect(() => calculateRoofMaterialTakeoff(d, { underlaymentRollCoverageSqft: 0 })).toThrow();
