@@ -31,6 +31,12 @@ export const invoiceSchema = z.object({
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => { const date = new Date(`${v}T00:00:00.000Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v; }, "Choose a valid due date"), notes: z.string().max(4000), environment: z.enum(["sandbox", "live"]),
 }).refine((data) => invoiceTotals(data.items, data.tax_percent).total > 0, "Invoice total must be greater than zero");
 export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
+  if (!invoice || typeof invoice !== "object" || Array.isArray(invoice)) {
+    throw new Error("Invoice status requires a valid invoice object");
+  }
+  if (typeof invoice.status !== "string" || typeof invoice.due_date !== "string") {
+    throw new Error("Invoice status and due date must be valid strings");
+  }
   if (![invoice.total_cents, invoice.paid_cents].every(Number.isSafeInteger) || invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents) throw new Error("Invoice balances are outside the supported range");
   if (!Number.isFinite(now)) throw new Error("Invoice status requires a valid current date");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(invoice.due_date) ||
@@ -46,6 +52,9 @@ export function invoiceState(invoice: { status: string; total_cents: number; pai
   return invoice.paid_cents > 0 ? "partial" : "unpaid";
 }
 export function paymentAmount(invoice: { total_cents: number; paid_cents: number; deposit_cents: number }, kind: "deposit" | "balance") {
+  if (!invoice || typeof invoice !== "object" || Array.isArray(invoice)) {
+    throw new Error("Invoice payment requires a valid invoice object");
+  }
   if (![invoice.total_cents, invoice.paid_cents, invoice.deposit_cents].every(Number.isSafeInteger) ||
       invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents ||
       invoice.deposit_cents < 0 || invoice.deposit_cents > invoice.total_cents) {
