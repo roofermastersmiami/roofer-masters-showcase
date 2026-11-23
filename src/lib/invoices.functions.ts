@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { invoiceSchema, invoiceTotals } from "./crm-schema";
@@ -54,6 +55,8 @@ export const changeInvoiceStatus = createServerFn({ method: "POST" }).middleware
   return { ok: true };
 });
 export const getSharedInvoice = createServerFn({ method: "GET" }).inputValidator((input: unknown) => z.object({ token: z.string().uuid() }).parse(input)).handler(async ({ data }) => {
+  setResponseHeader("Cache-Control", "private, no-store");
+  setResponseHeader("Referrer-Policy", "no-referrer");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: invoice, error } = await supabaseAdmin.from("crm_invoices").select("number,title,customer_name,items,subtotal_cents,tax_cents,total_cents,deposit_cents,paid_cents,due_date,notes,environment").eq("token", data.token).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
   if (error) throw new Error("Could not load shared invoice");
