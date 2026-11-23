@@ -38,7 +38,9 @@ export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], f
   if (!Number.isFinite(pixels) || pixels < 1) throw new Error('Calibration points must be distinct and at least one pixel apart');
   if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24) throw new Error('Draw at least three corners and enter a valid pitch');
   if (points.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y))) throw new Error('Roof corner coordinates must be finite numbers');
-  const scale = feet / pixels, origin = a, uphill = opts.uphill ?? 'down';
+  const scale = feet / pixels;
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Calibration scale is outside the supported numeric range');
+  const origin = a, uphill = opts.uphill ?? 'down';
   const run = (p: ImagePoint) => uphill === 'down' ? p.y : uphill === 'up' ? -p.y : uphill === 'right' ? p.x : -p.x;
   const low = Math.min(...points.map(run));
   const edges = opts.edges && opts.edges.length === points.length ? opts.edges : points.map(() => 'other' as EdgeType);
