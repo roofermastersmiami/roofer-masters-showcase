@@ -83,8 +83,8 @@ if (!img?.ok) {
   return failure(
     'imagery',
     img
-      ? `Miami-Dade imagery service returned HTTP ${img.status}.`
-      : 'Could not connect to the Miami-Dade imagery service or the request timed out.',
+      ? `USGS National Map imagery service returned HTTP ${img.status}.`
+      : 'Could not connect to the USGS National Map imagery service or the request timed out.',
     img?.status
   );
 }
