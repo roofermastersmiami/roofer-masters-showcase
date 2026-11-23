@@ -3,6 +3,12 @@ import { calculateEstimate, dollarsToCents, invoiceTotals, invoiceSchema, invoic
 import { proposalMetrics } from "@/lib/crm-reporting";
 describe("CRM invoices and roofing operations",()=>{
   it("calculates line items and tax in integer cents",()=>{expect(invoiceTotals([{description:"Roof",quantity:1.5,unit_cents:10001}],7)).toEqual({subtotal:15002,tax:1050,total:16052});});
+  it("rejects malformed invoice line item collections before totaling",()=>{
+    expect(()=>invoiceTotals(null as never,0)).toThrow("between 1 and 50");
+    expect(()=>invoiceTotals([] as never,0)).toThrow("between 1 and 50");
+    expect(()=>invoiceTotals([{description:"",quantity:1,unit_cents:100}] as never,0)).toThrow();
+    expect(()=>invoiceTotals([{description:"Roof",quantity:Number.NaN,unit_cents:100}] as never,0)).toThrow();
+  });
   it("rejects unsafe invoice currency calculations",()=>{expect(()=>invoiceTotals([{description:"Roof",quantity:Number.MAX_VALUE,unit_cents:100}],0)).toThrow();expect(()=>invoiceTotals([{description:"Roof",quantity:1,unit_cents:100}],101)).toThrow();expect(()=>dollarsToCents(Number.MAX_VALUE)).toThrow();});
   it("requests only the remaining deposit after partial payments",()=>{expect(paymentAmount({total_cents:1000000,deposit_cents:300000,paid_cents:100000},"deposit")).toBe(200000);});
   it("requests only the unpaid invoice balance",()=>{expect(paymentAmount({total_cents:1000000,deposit_cents:300000,paid_cents:300000},"balance")).toBe(700000);});
