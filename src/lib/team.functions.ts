@@ -42,8 +42,9 @@ export const setJobCrew = createServerFn({ method: 'POST' }).middleware([require
     await gate(context, ['production_manager']);
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
     if (data.user_ids.length) {
-      const { data: crew } = await supabaseAdmin.from('user_roles').select('user_id').eq('role', 'crew').in('user_id', data.user_ids);
-      if ((crew ?? []).length !== new Set(data.user_ids).size) throw new Error('Only crew members can be assigned');
+      const { data: crew, error: crewError } = await supabaseAdmin.from('user_roles').select('user_id').eq('role', 'crew').in('user_id', data.user_ids);
+      if (crewError || !crew) throw new Error('Could not verify crew assignments');
+      if (crew.length !== new Set(data.user_ids).size) throw new Error('Only crew members can be assigned');
     }
     const { error } = await context.supabase.from('roof_jobs').update({ assigned_user_ids: data.user_ids }).eq('id', data.job_id);
     if (error) throw new Error('Could not assign crew');
