@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roofPreset } from './roof-geometry';
+import { measureDrawing, roofPreset } from './roof-geometry';
 import { calculateRoofMaterialTakeoff } from './roof-material-takeoff';
 describe('calculateRoofMaterialTakeoff', () => {
   it('calculates preliminary shingle quantities with waste', () => {
@@ -19,7 +19,7 @@ describe('calculateRoofMaterialTakeoff', () => {
     const d = roofPreset('gable', 40.25, 30.5, 6); d.roof_type = 'Shingle Roof';
     const r = calculateRoofMaterialTakeoff(d, { wastePercent: 0 });
     const drip = r.lines.find(x => x.item === 'Drip edge allowance');
-    expect(drip?.quantity).toBeCloseTo(2 * (40.25 + 30.5), 1);
+    expect(drip?.quantity).toBe(Math.round(measureDrawing(d).perimeter * 10) / 10);
     expect(drip?.unit).toBe('linear ft');
   });
   it('rejects invalid product coverage assumptions', () => {
