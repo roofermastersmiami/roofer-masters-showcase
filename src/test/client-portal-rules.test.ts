@@ -24,6 +24,15 @@ describe('client portal access', () => {
     expect(portalSignatureVisible({ ...signed, signed_at: null }, now)).toBe(false);
     expect(portalSignatureVisible({ ...signed, revoked_at: '2026-11-20T20:00:00Z' }, now)).toBe(false);
   });
+  it('fails closed for malformed invoice and signature records', () => {
+    expect(portalInvoiceVisible(null as never, 'sandbox', now)).toBe(false);
+    expect(portalInvoiceVisible({status:'issued',environment:'sandbox',expires_at:'not-a-date'}, 'sandbox', now)).toBe(false);
+    expect(portalInvoiceVisible({status:'issued',environment:'sandbox',expires_at:active.expires_at}, 'production', now)).toBe(false);
+    expect(portalInvoiceVisible({status:'issued',environment:'sandbox',expires_at:active.expires_at}, 'sandbox', Number.NaN)).toBe(false);
+    expect(portalSignatureVisible(null as never, now)).toBe(false);
+    expect(portalSignatureVisible({signed_at:'2026-11-20T19:00:00Z',revoked_at:null,expires_at:'not-a-date'}, now)).toBe(false);
+    expect(portalSignatureVisible({signed_at:'2026-11-20T19:00:00Z',revoked_at:null,expires_at:active.expires_at}, Number.NaN)).toBe(false);
+  });
   it('requires a private UUID token rather than an email or customer name', () => {
     expect(portalInput.safeParse({ token: 'customer@example.com', environment: 'sandbox' }).success).toBe(false);
   });
