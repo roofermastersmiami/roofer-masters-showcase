@@ -27,7 +27,9 @@ export function FinancialAnalytics() {
   let env = "";
   try {
     env = getStripeEnvironment();
-  } catch {}
+  } catch {
+    // Show an empty environment label when Stripe configuration is unavailable.
+  }
   const ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
   const costs = (expenses.data ?? []).filter(
     (e) =>
