@@ -14,6 +14,7 @@ const sub=(a:Point,b:Point)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
 const cross=(a:Point,b:Point)=>({x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x});
 const dot=(a:Point,b:Point)=>a.x*b.x+a.y*b.y+a.z*b.z;
 export function planeInfo(p:RoofPlane){
+ for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length];if(a&&b&&distance(a,b)<0.001)throw new Error(`${p.name}: consecutive roof corners must be distinct`);}
  for(let i=0;i<p.points.length;i++)for(let j=i+1;j<p.points.length;j++){if(j===i+1||(i===0&&j===p.points.length-1))continue;const a=p.points[i],b=p.points[(i+1)%p.points.length],c=p.points[j],d=p.points[(j+1)%p.points.length];if(!a||!b||!c||!d)continue;const side=(u:Point,v:Point,w:Point)=>(v.x-u.x)*(w.z-u.z)-(v.z-u.z)*(w.x-u.x);if(side(a,b,c)*side(a,b,d)<0&&side(c,d,a)*side(c,d,b)<0)throw new Error(`${p.name}: roof edges cross`);}
  const a=p.points[0],b=p.points[1],c=p.points[2];if(!a||!b||!c)throw new Error('A plane needs three vertices');
  const n=cross(sub(b,a),sub(c,a));const mag=Math.hypot(n.x,n.y,n.z);if(mag<0.0001||Math.abs(n.y)<0.0001)throw new Error(`${p.name}: zero area or vertical plane`);
