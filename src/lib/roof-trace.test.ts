@@ -18,6 +18,15 @@ describe('roof photo calibration', () => {
     )).toThrow(/finite numbers/);
   });
 
+  it('rejects a calibration scale that underflows to zero', () => {
+    const reference = [{ x: 0, y: 0 }, { x: 1e200, y: 0 }];
+    expect(checkCalibration(reference, Number.MIN_VALUE, 1000).ok).toBe(false);
+    expect(() => calibratedPlane(
+      [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }],
+      reference, Number.MIN_VALUE, 6, 'underflow',
+    )).toThrow(/numeric range/);
+  });
+
   it('calculates feet per pixel from a known distance', () => {
     const result = checkCalibration([{ x: 100, y: 100 }, { x: 500, y: 100 }], 40, 2000);
     expect(result.ok).toBe(true);
