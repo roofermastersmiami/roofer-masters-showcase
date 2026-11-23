@@ -28,6 +28,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [replace, setReplace] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
   const [edgeSnap, setEdgeSnap] = useState(false);
+  const [showEdgeGuide, setShowEdgeGuide] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [lastSnap, setLastSnap] = useState<'snapped' | 'unchanged' | null>(null);
