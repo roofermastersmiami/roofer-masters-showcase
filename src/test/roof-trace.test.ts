@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { calibratedPlane } from "@/lib/roof-trace";
+import { calibratedPlane, snapToExistingCorner } from "@/lib/roof-trace";
 import { planeInfo } from "@/lib/roof-geometry";
 it("calibrates a 200 by 100 pixel plane from a 20 foot reference", () => {
   const plane = calibratedPlane(
@@ -234,4 +234,23 @@ it("rejects calibration points below the bottom image boundary", () => {
       700,
     ).ok,
   ).toBe(true);
+});
+
+
+describe("shared roof corner snapping", () => {
+  it("snaps a new plane corner to a nearby previously traced corner", () => {
+    const existing = [{ x: 100, y: 200 }, { x: 300, y: 200 }];
+    expect(snapToExistingCorner({ x: 106, y: 204 }, existing, 10)).toEqual({ x: 100, y: 200 });
+  });
+
+  it("leaves points alone when no existing corner is within tolerance", () => {
+    const point = { x: 106, y: 204 };
+    expect(snapToExistingCorner(point, [{ x: 300, y: 200 }], 10)).toEqual(point);
+  });
+
+  it("ignores invalid existing corners and invalid tolerances", () => {
+    const point = { x: 106, y: 204 };
+    expect(snapToExistingCorner(point, [{ x: Number.NaN, y: 0 }], 10)).toEqual(point);
+    expect(snapToExistingCorner(point, [{ x: 100, y: 200 }], 0)).toEqual(point);
+  });
 });
