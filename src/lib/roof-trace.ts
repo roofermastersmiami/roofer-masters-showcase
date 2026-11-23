@@ -40,6 +40,9 @@ export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], f
   const low = Math.min(...points.map(run));
   const edges = opts.edges && opts.edges.length === points.length ? opts.edges : points.map(() => 'other' as EdgeType);
   const plane: RoofPlane = { id, name: opts.name ?? 'Traced roof plane', points: points.map(p => ({ x: (p.x - origin.x) * scale, z: (p.y - origin.y) * scale, y: 10 + (run(p) - low) * scale * pitch / 12 })), edges };
+  if (plane.points.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z))) {
+    throw new Error('Calibration produces invalid roof coordinates; check the scale points and traced corners');
+  }
   planeInfo(plane);
   return plane;
 }
