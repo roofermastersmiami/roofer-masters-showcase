@@ -93,6 +93,15 @@ describe('roof photo calibration', () => {
 });
 
 describe('public aerial map scale', () => {
+  it('rejects invalid map coordinates and dimensions', () => {
+    expect(() => aerialBox(Number.NaN, -80, 120, 2000)).toThrow(/latitude/);
+    expect(() => aerialBox(90, -80, 120, 2000)).toThrow(/latitude/);
+    expect(() => aerialBox(25, 181, 120, 2000)).toThrow(/longitude/);
+    expect(() => aerialBox(25, -80, 0, 2000)).toThrow(/ground span/);
+    expect(() => aerialBox(25, -80, 120, 0)).toThrow(/dimensions/);
+    expect(() => aerialBox(25, -80, 120, 2000.5)).toThrow(/dimensions/);
+  });
+
   it('keeps true ground feet-per-pixel stable across latitude', () => {
     const equator = aerialBox(0, -80, 120, 2000);
     const miami = aerialBox(25.76, -80.19, 120, 2000);
