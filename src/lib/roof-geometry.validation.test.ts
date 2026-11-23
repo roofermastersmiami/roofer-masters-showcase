@@ -254,3 +254,38 @@ describe('partial shared roof edges', () => {
     expect(result.perimeter).toBeCloseTo(180, 2);
   });
 });
+
+describe('partial shared edge segmentation', () => {
+  it('counts a short shared edge once when the neighboring plane has a longer edge', () => {
+    const adjacent = {
+      ...drawing,
+      planes: [
+        {
+          id: 'main',
+          name: 'Main plane',
+          points: [
+            { x: 0, y: 10, z: 0 },
+            { x: 10, y: 10, z: 0 },
+            { x: 10, y: 10, z: 10 },
+            { x: 0, y: 10, z: 10 },
+          ],
+          edges: ['eave', 'eave', 'eave', 'eave'],
+        },
+        {
+          id: 'wing',
+          name: 'Wing plane',
+          points: [
+            { x: 10, y: 10, z: 3 },
+            { x: 15, y: 10, z: 3 },
+            { x: 15, y: 10, z: 7 },
+            { x: 10, y: 10, z: 7 },
+          ],
+          edges: ['eave', 'eave', 'eave', 'eave'],
+        },
+      ],
+    } as RoofDrawing;
+    const result = measureDrawing(adjacent);
+    expect(result.perimeter).toBeCloseTo(50, 3);
+    expect(result.edges.eave).toBeCloseTo(50, 3);
+  });
+});
