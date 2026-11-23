@@ -235,7 +235,7 @@ describe('roof plane coordinate validation', () => {
 });
 
 describe('roof preset measurement compatibility', () => {
-  it.each(['gable', 'hip', 'flat', 'shed', 'mansard'] as const)('measures the %s preset', (shape) => {
+  it.each(['gable', 'hip', 'flat', 'shed', 'mansard', 'complex'] as const)('measures the %s preset', (shape) => {
     const preset = roofPreset(shape, 40, 30, 6);
     expect(() => measureDrawing(preset)).not.toThrow();
   });
