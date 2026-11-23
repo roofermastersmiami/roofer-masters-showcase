@@ -35,6 +35,13 @@ describe("CRM invoices and roofing operations",()=>{
   });
   it("counts a signed proposal once even when multiple links are signed",()=>{const proposals=[{id:"p",is_template:false,amount:100,lead_id:"l",created_at:"2026-11-01"}];const share={proposal_id:"p",signed_at:"2026-11-02",revoked_at:null,expires_at:"2026-12-01"};expect(proposalMetrics(proposals,[share,share]).accepted).toBe(1);expect(proposalMetrics(proposals,[share,share]).acceptance).toBe(100);});
   it("avoids double-counting proposal revisions in expected revenue",()=>{const proposals=[{id:"old",is_template:false,amount:100,lead_id:"l",created_at:"2026-11-01"},{id:"new",is_template:false,amount:150,lead_id:"l",created_at:"2026-11-02"}];const shares=proposals.map((p)=>({proposal_id:p.id,signed_at:null,revoked_at:null,expires_at:"2026-12-01"}));expect(proposalMetrics(proposals,shares,Date.parse("2026-11-20")).expectedCents).toBe(15000);});
+  it("rejects missing and malformed invoice objects before calculations",()=>{
+    expect(()=>invoiceState(null as never)).toThrow("valid invoice object");
+    expect(()=>invoiceState([] as never)).toThrow("valid invoice object");
+    expect(()=>invoiceState({status:null as never,total_cents:100,paid_cents:0,due_date:"2026-12-01"})).toThrow("valid strings");
+    expect(()=>paymentAmount(null as never,"deposit")).toThrow("valid invoice object");
+    expect(()=>paymentAmount([] as never,"balance")).toThrow("valid invoice object");
+  });
   it("rejects invalid invoice balances before computing status or payment amounts",()=>{
     expect(()=>invoiceState({status:"issued",total_cents:100,paid_cents:101,due_date:"2026-12-01"})).toThrow("supported range");
     expect(()=>paymentAmount({total_cents:100,paid_cents:-1,deposit_cents:30},"deposit")).toThrow("supported range");
