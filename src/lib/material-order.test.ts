@@ -64,7 +64,7 @@ describe("local roof report text import", () => {
         "Eaves: 80 LF",
         "Rakes: 40 LF",
         "Pipe boots: 3",
-      ].join("\\n"),
+      ].join("\n"),
     );
     expect(parsed.values).toMatchObject({
       roof_type: "Metal Roof",
