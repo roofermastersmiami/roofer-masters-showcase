@@ -92,9 +92,9 @@ describe("Census-to-USGS aerial server integration", () => {
   });
 
   it("stops after Census reports no address match", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({ result: { addressMatches: [] } }),
-    );
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ result: { addressMatches: [] } }));
 
     await expect(fetchPublicAerial(ADDRESS, SPAN_METERS, fetcher)).resolves.toMatchObject({
       stage: "address_not_found",
@@ -103,9 +103,7 @@ describe("Census-to-USGS aerial server integration", () => {
   });
 
   it("does not request imagery when Census returns unusable coordinates", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      censusResponse(91, LON),
-    );
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(censusResponse(91, LON));
 
     await expect(fetchPublicAerial(ADDRESS, SPAN_METERS, fetcher)).resolves.toMatchObject({
       stage: "geocoding_response",
@@ -131,9 +129,9 @@ describe("Census-to-USGS aerial server integration", () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(censusResponse())
       .mockResolvedValueOnce(usgsResponse(1024, 1024));
-    await expect(
-      fetchPublicAerial(ADDRESS, SPAN_METERS, dimensionsFetcher),
-    ).resolves.toMatchObject({ stage: "imagery_dimensions" });
+    await expect(fetchPublicAerial(ADDRESS, SPAN_METERS, dimensionsFetcher)).resolves.toMatchObject(
+      { stage: "imagery_dimensions" },
+    );
     expect(dimensionsFetcher).toHaveBeenCalledTimes(2);
   });
 
