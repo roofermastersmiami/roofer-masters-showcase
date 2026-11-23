@@ -167,4 +167,29 @@ describe("Roof calculation helpers", () => {
       })
     ).toThrow();
   });
+  it("rejects geometry conversions and polygon calculations that overflow", () => {
+    expect(() => squareMetersToSquareFeet(Number.MAX_VALUE)).toThrow("supported range");
+    expect(() => projectedAreaToSurfaceArea(Number.MAX_VALUE, 12)).toThrow("supported range");
+    expect(() => polygonAreaSqFt([
+      { x: Number.MAX_VALUE, y: Number.MAX_VALUE },
+      { x: -Number.MAX_VALUE, y: Number.MAX_VALUE },
+      { x: 0, y: -Number.MAX_VALUE },
+    ])).toThrow("supported range");
+  });
+
+  it("rejects unsupported edge types and overflowing total edge length", () => {
+    expect(() => calculateRoofSummary({
+      facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+      edges: [{ id: "bad", type: "toString" as never, lengthFt: 10 }],
+    })).toThrow("unsupported type");
+
+    expect(() => calculateRoofSummary({
+      facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+      edges: [
+        { id: "edge-1", type: "ridge", lengthFt: Number.MAX_VALUE },
+        { id: "edge-2", type: "ridge", lengthFt: Number.MAX_VALUE },
+      ],
+    })).toThrow("supported range");
+  });
+
 });
