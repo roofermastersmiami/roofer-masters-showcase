@@ -54,7 +54,8 @@ export const signSharedProposal = createServerFn({ method: "POST" })
     if (!share || !shareIsActive(share)) throw new Error("This proposal link is no longer available");
     if (share.signed_at) throw new Error("This proposal was already signed");
     const signedAt = new Date().toISOString();
-    const { error } = await supabaseAdmin.from("proposal_shares").update({ signed_name: data.name, signed_at: signedAt, signature_data: data.signature }).eq("id", share.id).is("signed_at", null);
+    const { data: updated, error } = await supabaseAdmin.from("proposal_shares").update({ signed_name: data.name, signed_at: signedAt, signature_data: data.signature }).eq("id", share.id).is("signed_at", null).select("id").maybeSingle();
     if (error) throw new Error("Could not record your signature");
+    if (!updated) throw new Error("This proposal was already signed");
     return { signedAt };
   });
