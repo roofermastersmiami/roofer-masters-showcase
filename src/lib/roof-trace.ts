@@ -43,6 +43,9 @@ export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], f
   if (plane.points.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z))) {
     throw new Error('Calibration produces invalid roof coordinates; check the scale points and traced corners');
   }
+  if (plane.points.some(p => Math.abs(p.x) > 10000 || Math.abs(p.z) > 10000 || p.y < 0 || p.y > 10000)) {
+    throw new Error('Calibrated roof coordinates exceed the supported drawing bounds; check the scale and traced outline');
+  }
   planeInfo(plane);
   return plane;
 }
