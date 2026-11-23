@@ -29,10 +29,10 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(r.warnings.some(x => x.includes('roll width'))).toBe(true);
   });
 
-  it('does not publish an assumed metal panel width in report data', () => {
+  it('publishes the confirmed 16-inch metal panel width in report data', () => {
     const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
     const report = toMaterialReport(d);
-    expect(report).not.toHaveProperty('panel_width_in');
+    expect(report.panel_width_in).toBe(16);
     expect(report.roof_type).toBe('Metal Roof');
   });
   it('rounds package counts up while keeping measured footage fractional', () => {
