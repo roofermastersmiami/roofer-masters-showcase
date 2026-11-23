@@ -56,7 +56,9 @@ export function AdvancedEstimator() {
   let totals: ReturnType<typeof priceOption> | null = null;
   try {
     if (o) totals = priceOption(o);
-  } catch {}
+  } catch {
+    // Keep totals unavailable while the user enters temporarily invalid values.
+  }
   function update(next: EstimateOption) {
     setOptions(options.map((v, i) => (i === selected ? next : v)));
     setDirty(true);
