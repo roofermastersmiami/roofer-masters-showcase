@@ -6,6 +6,7 @@ import {
   updateRoofOrderSchema,
   assertReportStatus,
   reviewedReport,
+  roofOrderTransferRoles,
 } from "./roof-order-schema";
 import { materialOrder } from "./material-order";
 
@@ -116,8 +117,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     // Material handoff updates roof_jobs, whose RLS policy is production-manager-only.
     // Estimate handoff is a sales workflow and remains available to office and sales.
-    const allowedRoles =
-      data.target === "materials" ? ["production_manager"] : ["office", "sales"];
+    const allowedRoles = roofOrderTransferRoles(data.target);
     const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
       _user_id: context.userId,
       _roles: allowedRoles,
