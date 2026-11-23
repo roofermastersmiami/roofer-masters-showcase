@@ -143,9 +143,7 @@ export function AdvancedEstimator() {
       toast.error("Save the estimate before preparing a proposal");
       return;
     }
-    const unpricedItems = o.lines.filter(
-      (line) => line.quantity > 0 && line.unit_cents <= 0,
-    );
+    const unpricedItems = o.lines.filter((line) => line.quantity > 0 && line.unit_cents <= 0);
     if (unpricedItems.length) {
       toast.error(
         `Add approved unit prices for ${unpricedItems.length} cost item(s) before creating a customer proposal`,
