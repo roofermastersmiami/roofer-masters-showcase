@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+export const AMOUNT_RANGE_ERROR = "Amount exceeds the supported range";
+
 export const money = (cents: number) => {
-  if (!Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported range");
+  if (!Number.isSafeInteger(cents)) throw new Error(AMOUNT_RANGE_ERROR);
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 };
 export const dollarsToCents = (dollars: number) => {
