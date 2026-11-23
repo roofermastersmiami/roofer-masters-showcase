@@ -241,11 +241,16 @@ export function RoofMeasurements({
     try {
       const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
       const photos = [];
+      let totalPhotoBytes = 0;
+      const maxPhotoBytes = 10 * 1024 * 1024;
+      const maxTotalPhotoBytes = 30 * 1024 * 1024;
       for (const item of media) {
         const { data: blob, error: photoError } = await supabase.storage
           .from("roof-job-photos")
           .download(item.path);
         if (photoError || !blob) throw new Error("Photo could not load");
+        if (blob.size > maxPhotoBytes || totalPhotoBytes + blob.size > maxTotalPhotoBytes)
+          throw new Error("Report photos exceed the 10 MB per-photo or 30 MB total limit");
         let bytes = new Uint8Array(await blob.arrayBuffer());
         let mime = blob.type;
         if (mime === "image/webp") {
@@ -261,9 +266,14 @@ export function RoofMeasurements({
             canvas.toBlob(resolve, "image/png"),
           );
           if (!converted) throw new Error("Photo conversion failed");
+          if (converted.size > maxPhotoBytes || totalPhotoBytes + converted.size > maxTotalPhotoBytes)
+            throw new Error("Converted report photos exceed the 10 MB per-photo or 30 MB total limit");
           bytes = new Uint8Array(await converted.arrayBuffer());
           mime = "image/png";
         }
+        totalPhotoBytes += bytes.byteLength;
+        if (totalPhotoBytes > maxTotalPhotoBytes)
+          throw new Error("Report photos exceed the 30 MB total limit");
         photos.push({
           bytes,
           mime,
