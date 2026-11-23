@@ -1,15 +1,180 @@
-import {useState} from 'react';
-import {useQuery,useQueryClient} from '@tanstack/react-query';
-import {Plus,Trash2,Save} from 'lucide-react';
-import {toast} from 'sonner';
-import {supabase} from '@/integrations/supabase/client';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {COST_CATEGORIES} from '@/lib/advanced-estimate';
-import {money} from '@/lib/crm-schema';
-import {costCatalogQuery} from './cost-data';
-import {Field,Choice,SectionHeading} from './CrmControls';
-export function CostCatalog(){const catalog=useQuery(costCatalogQuery),qc=useQueryClient();const [form,setForm]=useState({system:'Metal Roof',item:'',category:'materials',unit:'each',price:0}),[id,setId]=useState<string|null>(null),[busy,setBusy]=useState(false);
- async function save(){if(!form.item.trim()||!form.system.trim()||form.price<0){toast.error('Enter a system, item and valid price');return;}setBusy(true);const data={system:form.system.trim(),item:form.item.trim(),category:form.category,unit:form.unit,unit_cents:Math.round(form.price*100)};const result=id?await supabase.from('roof_cost_catalog').update(data).eq('id',id):await supabase.from('roof_cost_catalog').insert(data);setBusy(false);if(result.error)toast.error('Could not save price');else{await qc.invalidateQueries({queryKey:['roof-cost-catalog']});setId(null);setForm({...form,item:'',price:0});toast.success('Catalog price saved');}}
- return <div><SectionHeading title="Material & labor prices"/><form className="mb-8 grid gap-4 sm:grid-cols-3" onSubmit={e=>{e.preventDefault();void save();}}><Field label="Roof system"><Input required value={form.system} onChange={e=>setForm({...form,system:e.target.value})}/></Field><Field label="Item"><Input required value={form.item} onChange={e=>setForm({...form,item:e.target.value})}/></Field><Choice label="Cost category" value={form.category} onChange={v=>setForm({...form,category:v})} options={COST_CATEGORIES.map(v=>({value:v,label:v.replaceAll('_',' ')}))}/><Field label="Unit"><Input required value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})}/></Field><Field label="Price per unit ($)"><Input type="number" min={0} step="0.01" value={form.price} onChange={e=>setForm({...form,price:Number(e.target.value)})}/></Field><Button className="self-end" disabled={busy} type="submit"><Save/>{id?'Update price':'Save price'}</Button></form>{catalog.error&&<p className="text-destructive">Catalog unavailable.</p>}<div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-muted-foreground"><th className="py-3">System / item</th><th>Category</th><th>Unit price</th><th/></tr></thead><tbody>{catalog.data?.map(c=><tr key={c.id} className="border-t border-border"><td className="py-4"><p className="font-semibold">{c.item}</p><p className="text-xs text-muted-foreground">{c.system}</p></td><td>{c.category.replaceAll('_',' ')}</td><td>{money(c.unit_cents)} / {c.unit}</td><td className="text-right"><Button size="sm" variant="outline" onClick={()=>{setId(c.id);setForm({system:c.system,item:c.item,category:c.category,unit:c.unit,price:c.unit_cents/100});}}>Edit</Button><Button size="icon" variant="ghost" title="Delete catalog item" aria-label="Delete catalog item" onClick={async()=>{if(!confirm('Delete this catalog price? Saved estimates keep their prices.'))return;const {error}=await supabase.from('roof_cost_catalog').delete().eq('id',c.id);if(error)toast.error('Could not delete item');else await qc.invalidateQueries({queryKey:['roof-cost-catalog']});}}><Trash2/></Button></td></tr>)}</tbody></table></div>{!catalog.data?.length&&<p className="py-8 text-sm text-muted-foreground">No prices recorded. Add your supplier and labor prices.</p>}<Button className="mt-4" variant="outline" onClick={()=>{setId(null);setForm({...form,item:'',price:0});}}><Plus/> New catalog item</Button></div>;
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2, Save } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { COST_CATEGORIES } from "@/lib/advanced-estimate";
+import { money } from "@/lib/crm-schema";
+import { costCatalogQuery } from "./cost-data";
+import { Field, Choice, SectionHeading } from "./CrmControls";
+export function CostCatalog() {
+  const catalog = useQuery(costCatalogQuery),
+    qc = useQueryClient();
+  const [form, setForm] = useState({
+      system: "Metal Roof",
+      item: "",
+      category: "materials",
+      unit: "each",
+      price: 0,
+    }),
+    [id, setId] = useState<string | null>(null),
+    [busy, setBusy] = useState(false);
+  async function save() {
+    if (!form.item.trim() || !form.system.trim() || form.price < 0) {
+      toast.error("Enter a system, item and valid price");
+      return;
+    }
+    setBusy(true);
+    const data = {
+      system: form.system.trim(),
+      item: form.item.trim(),
+      category: form.category,
+      unit: form.unit,
+      unit_cents: Math.round(form.price * 100),
+    };
+    const result = id
+      ? await supabase.from("roof_cost_catalog").update(data).eq("id", id)
+      : await supabase.from("roof_cost_catalog").insert(data);
+    setBusy(false);
+    if (result.error) toast.error("Could not save price");
+    else {
+      await qc.invalidateQueries({ queryKey: ["roof-cost-catalog"] });
+      setId(null);
+      setForm({ ...form, item: "", price: 0 });
+      toast.success("Catalog price saved");
+    }
+  }
+  return (
+    <div>
+      <SectionHeading title="Material & labor prices" />
+      <form
+        className="mb-8 grid gap-4 sm:grid-cols-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <Field label="Roof system">
+          <Input
+            required
+            value={form.system}
+            onChange={(e) => setForm({ ...form, system: e.target.value })}
+          />
+        </Field>
+        <Field label="Item">
+          <Input
+            required
+            value={form.item}
+            onChange={(e) => setForm({ ...form, item: e.target.value })}
+          />
+        </Field>
+        <Choice
+          label="Cost category"
+          value={form.category}
+          onChange={(v) => setForm({ ...form, category: v })}
+          options={COST_CATEGORIES.map((v) => ({ value: v, label: v.replaceAll("_", " ") }))}
+        />
+        <Field label="Unit">
+          <Input
+            required
+            value={form.unit}
+            onChange={(e) => setForm({ ...form, unit: e.target.value })}
+          />
+        </Field>
+        <Field label="Price per unit ($)">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.price}
+            onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
+          />
+        </Field>
+        <Button className="self-end" disabled={busy} type="submit">
+          <Save />
+          {id ? "Update price" : "Save price"}
+        </Button>
+      </form>
+      {catalog.error && <p className="text-destructive">Catalog unavailable.</p>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              <th className="py-3">System / item</th>
+              <th>Category</th>
+              <th>Unit price</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {catalog.data?.map((c) => (
+              <tr key={c.id} className="border-t border-border">
+                <td className="py-4">
+                  <p className="font-semibold">{c.item}</p>
+                  <p className="text-xs text-muted-foreground">{c.system}</p>
+                </td>
+                <td>{c.category.replaceAll("_", " ")}</td>
+                <td>
+                  {money(c.unit_cents)} / {c.unit}
+                </td>
+                <td className="text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setId(c.id);
+                      setForm({
+                        system: c.system,
+                        item: c.item,
+                        category: c.category,
+                        unit: c.unit,
+                        price: c.unit_cents / 100,
+                      });
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Delete catalog item"
+                    aria-label="Delete catalog item"
+                    onClick={async () => {
+                      if (!confirm("Delete this catalog price? Saved estimates keep their prices."))
+                        return;
+                      const { error } = await supabase
+                        .from("roof_cost_catalog")
+                        .delete()
+                        .eq("id", c.id);
+                      if (error) toast.error("Could not delete item");
+                      else await qc.invalidateQueries({ queryKey: ["roof-cost-catalog"] });
+                    }}
+                  >
+                    <Trash2 />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!catalog.data?.length && (
+        <p className="py-8 text-sm text-muted-foreground">
+          No prices recorded. Add your supplier and labor prices.
+        </p>
+      )}
+      <Button
+        className="mt-4"
+        variant="outline"
+        onClick={() => {
+          setId(null);
+          setForm({ ...form, item: "", price: 0 });
+        }}
+      >
+        <Plus /> New catalog item
+      </Button>
+    </div>
+  );
 }

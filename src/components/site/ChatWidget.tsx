@@ -89,7 +89,10 @@ export function ChatWidget() {
     if (!session || !draft.trim()) return;
     const body = draft.trim();
     setDraft("");
-    setMessages((m) => [...m, { id: `tmp-${Date.now()}`, sender: "customer", body, created_at: new Date().toISOString() }]);
+    setMessages((m) => [
+      ...m,
+      { id: `tmp-${Date.now()}`, sender: "customer", body, created_at: new Date().toISOString() },
+    ]);
     try {
       await send({ data: { leadId: session.leadId, token: session.token, body } });
     } catch {
@@ -120,7 +123,9 @@ export function ChatWidget() {
             </div>
             <div className="flex-1">
               <p className="font-display font-extrabold">Roofer Masters</p>
-              <p className="text-xs text-navy-foreground/70">We reply during business hours · Hablamos español</p>
+              <p className="text-xs text-navy-foreground/70">
+                We reply during business hours · Hablamos español
+              </p>
             </div>
           </div>
 
@@ -129,15 +134,46 @@ export function ChatWidget() {
               <p className="text-sm text-muted-foreground">
                 Hi! 👋 Send us a message and we'll get back to you here, by phone or by email.
               </p>
-              <Input aria-label="Your name" placeholder="Your name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-11" />
-              <Input aria-label="Phone" type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-11" />
-              <Input aria-label="Email" type="email" placeholder="Email (optional if phone given)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="h-11" />
-              <Textarea aria-label="Your message" placeholder="How can we help?" rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+              <Input
+                aria-label="Your name"
+                placeholder="Your name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-11"
+              />
+              <Input
+                aria-label="Phone"
+                type="tel"
+                placeholder="Phone"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="h-11"
+              />
+              <Input
+                aria-label="Email"
+                type="email"
+                placeholder="Email (optional if phone given)"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="h-11"
+              />
+              <Textarea
+                aria-label="Your message"
+                placeholder="How can we help?"
+                rows={3}
+                value={form.message}
+                onChange={(e) => setForm({ ...form, message: e.target.value })}
+              />
               {error && <p className="text-xs font-medium text-destructive">{error}</p>}
               <Button type="submit" variant="hero" size="lg" disabled={busy}>
                 {busy ? <Loader2 className="animate-spin" /> : <Send />} Start chat
               </Button>
-              <a href={BUSINESS.whatsappHref} target="_blank" rel="noopener noreferrer" className="text-center text-xs font-semibold text-primary">
+              <a
+                href={BUSINESS.whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-center text-xs font-semibold text-primary"
+              >
                 Or message us on WhatsApp
               </a>
             </form>
@@ -148,7 +184,13 @@ export function ChatWidget() {
                   <p className="text-center text-xs text-muted-foreground">Loading conversation…</p>
                 )}
                 {messages.map((m) => (
-                  <div key={m.id} className={cn("flex", m.sender === "customer" ? "justify-end" : "justify-start")}>
+                  <div
+                    key={m.id}
+                    className={cn(
+                      "flex",
+                      m.sender === "customer" ? "justify-end" : "justify-start",
+                    )}
+                  >
                     <p
                       className={cn(
                         "max-w-[80%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm",
@@ -163,14 +205,27 @@ export function ChatWidget() {
                 ))}
                 {messages.length > 0 && messages.every((m) => m.sender === "customer") && (
                   <p className="pt-2 text-center text-xs text-muted-foreground">
-                    Thanks {session.name.split(" ")[0]}! Our team has your message and will reply soon.
+                    Thanks {session.name.split(" ")[0]}! Our team has your message and will reply
+                    soon.
                   </p>
                 )}
               </div>
               {error && <p className="px-4 pt-2 text-xs text-destructive">{error}</p>}
               <form onSubmit={onSend} className="flex gap-2 border-t border-border p-3">
-                <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Type a message…" className="h-11" aria-label="Message" />
-                <Button type="submit" variant="call" size="icon" className="size-11" aria-label="Send">
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Type a message…"
+                  className="h-11"
+                  aria-label="Message"
+                />
+                <Button
+                  type="submit"
+                  variant="call"
+                  size="icon"
+                  className="size-11"
+                  aria-label="Send"
+                >
                   <Send />
                 </Button>
               </form>

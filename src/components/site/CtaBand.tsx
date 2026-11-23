@@ -12,7 +12,9 @@ export function CtaBand({ title = "Ready for a roof built to last?" }: { title?:
         <div className="grid-lines pointer-events-none absolute inset-0" />
         <div className="relative">
           <p className="eyebrow text-primary-glow">Free estimates · Hablamos español</p>
-          <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-black leading-tight sm:text-5xl">{title}</h2>
+          <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-black leading-tight sm:text-5xl">
+            {title}
+          </h2>
           <p className="mx-auto mt-4 max-w-xl text-navy-foreground/75">
             Talk to a local roofing pro today. We serve Homestead, Miami, Fort Lauderdale and every
             city in between.

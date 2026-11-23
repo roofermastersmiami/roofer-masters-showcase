@@ -1,18 +1,30 @@
 import { useEffect, useState } from "react";
 import { FileText, Mail, MessageSquare, Phone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PIPELINE_STAGES, PIPELINE_LABELS, stageOf } from "@/lib/crm-foundation";
-import {useMoveStage} from './foundation-data';
-import {CustomerActivity} from './CustomerActivity';
+import { useMoveStage } from "./foundation-data";
+import { CustomerActivity } from "./CustomerActivity";
 import { WhatsAppIcon } from "@/components/site/SocialIcons";
 import { formatWhen, useDeleteLead, useUpdateLead, type Lead } from "./data";
 import { SourceBadge, StatusBadge } from "./StatusBadge";
-import { instantInputSchema, qualifyRoofLead } from '@/lib/instant-estimate-schema';
-import { ClientPortalShare } from './ClientPortalShare';
+import { instantInputSchema, qualifyRoofLead } from "@/lib/instant-estimate-schema";
+import { ClientPortalShare } from "./ClientPortalShare";
 
 function waLink(phone: string) {
   let digits = phone.replace(/\D/g, "");
@@ -20,12 +32,22 @@ function waLink(phone: string) {
   return `https://wa.me/${digits}`;
 }
 
-export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead: Lead | null; onClose: () => void; onOpenChat?: (id: string) => void; onOpenProposals?: (id: string) => void }) {
+export function LeadSheet({
+  lead,
+  onClose,
+  onOpenChat,
+  onOpenProposals,
+}: {
+  lead: Lead | null;
+  onClose: () => void;
+  onOpenChat?: (id: string) => void;
+  onOpenProposals?: (id: string) => void;
+}) {
   const update = useUpdateLead();
   const move = useMoveStage();
   const del = useDeleteLead();
   const [notes, setNotes] = useState("");
-  const qualification=instantInputSchema.safeParse(lead?.qualification);
+  const qualification = instantInputSchema.safeParse(lead?.qualification);
 
   useEffect(() => setNotes(lead?.notes ?? ""), [lead?.id, lead?.notes]);
 
@@ -45,17 +67,23 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
             <div className="mt-6 grid grid-cols-3 gap-2">
               {lead.phone && (
                 <Button asChild variant="call" className="h-12 rounded-xl">
-                  <a href={`tel:${lead.phone}`}><Phone /> Call</a>
+                  <a href={`tel:${lead.phone}`}>
+                    <Phone /> Call
+                  </a>
                 </Button>
               )}
               {lead.phone && (
                 <Button asChild variant="whatsapp" className="h-12 rounded-xl">
-                  <a href={waLink(lead.phone)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon /> WhatsApp</a>
+                  <a href={waLink(lead.phone)} target="_blank" rel="noopener noreferrer">
+                    <WhatsAppIcon /> WhatsApp
+                  </a>
                 </Button>
               )}
               {lead.email && (
                 <Button asChild variant="outline" className="h-12 rounded-xl">
-                  <a href={`mailto:${lead.email}`}><Mail /> Email</a>
+                  <a href={`mailto:${lead.email}`}>
+                    <Mail /> Email
+                  </a>
                 </Button>
               )}
             </div>
@@ -66,9 +94,24 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
               <Row label="Address" value={lead.address} />
               <Row label="Service" value={lead.service} />
               <Row label="From page" value={lead.page} />
-              {qualification.success&&<><Row label="Qualification" value={qualifyRoofLead(qualification.data).replaceAll('_',' ')}/><Row label="Roof area" value={`${qualification.data.sqft} sq ft`}/><Row label="Timeline" value={qualification.data.timeline}/><Row label="Language" value={qualification.data.language==='es'?'Spanish':'English'}/></>}
+              {qualification.success && (
+                <>
+                  <Row
+                    label="Qualification"
+                    value={qualifyRoofLead(qualification.data).replaceAll("_", " ")}
+                  />
+                  <Row label="Roof area" value={`${qualification.data.sqft} sq ft`} />
+                  <Row label="Timeline" value={qualification.data.timeline} />
+                  <Row
+                    label="Language"
+                    value={qualification.data.language === "es" ? "Spanish" : "English"}
+                  />
+                </>
+              )}
               <div>
-                <dt className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Message</dt>
+                <dt className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Message
+                </dt>
                 <dd className="mt-1 whitespace-pre-wrap text-foreground">{lead.message || "—"}</dd>
               </div>
             </dl>
@@ -78,7 +121,15 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
                 <MessageSquare /> Open chat conversation
               </Button>
             )}
-            {onOpenProposals && <Button variant="navy" className="mt-4 w-full" onClick={() => onOpenProposals(lead.id)}><FileText /> Roofing proposals</Button>}
+            {onOpenProposals && (
+              <Button
+                variant="navy"
+                className="mt-4 w-full"
+                onClick={() => onOpenProposals(lead.id)}
+              >
+                <FileText /> Roofing proposals
+              </Button>
+            )}
 
             <ClientPortalShare leadId={lead.id} email={lead.email} />
 
@@ -86,33 +137,66 @@ export function LeadSheet({ lead, onClose, onOpenChat, onOpenProposals }: { lead
               <label className="text-sm font-bold text-foreground">Pipeline stage</label>
               <Select
                 value={stageOf(lead)}
-                onValueChange={(v) => {const stage=PIPELINE_STAGES.find(s=>s===v);if(stage)move.mutate({id:lead.id,stage},{onSuccess:()=>toast.success(`Sales stage: ${PIPELINE_LABELS[stage]}`)});}}
+                onValueChange={(v) => {
+                  const stage = PIPELINE_STAGES.find((s) => s === v);
+                  if (stage)
+                    move.mutate(
+                      { id: lead.id, stage },
+                      { onSuccess: () => toast.success(`Sales stage: ${PIPELINE_LABELS[stage]}`) },
+                    );
+                }}
               >
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {PIPELINE_STAGES.map((s) => (
-                    <SelectItem key={s} value={s}>{PIPELINE_LABELS[s]}</SelectItem>
+                    <SelectItem key={s} value={s}>
+                      {PIPELINE_LABELS[s]}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="mt-6 grid gap-2">
-              <label htmlFor="lead-notes" className="text-sm font-bold text-foreground">Private notes</label>
-              <Textarea id="lead-notes" rows={5} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Estimate amount, roof details, follow-up date…" />
-              <Button variant="navy" disabled={notes === (lead.notes ?? "") || update.isPending} onClick={() => update.mutate({ id: lead.id, notes }, { onSuccess: () => toast.success("Notes saved") })}>
+              <label htmlFor="lead-notes" className="text-sm font-bold text-foreground">
+                Private notes
+              </label>
+              <Textarea
+                id="lead-notes"
+                rows={5}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Estimate amount, roof details, follow-up date…"
+              />
+              <Button
+                variant="navy"
+                disabled={notes === (lead.notes ?? "") || update.isPending}
+                onClick={() =>
+                  update.mutate(
+                    { id: lead.id, notes },
+                    { onSuccess: () => toast.success("Notes saved") },
+                  )
+                }
+              >
                 Save notes
               </Button>
             </div>
 
-            <CustomerActivity leadId={lead.id}/>
+            <CustomerActivity leadId={lead.id} />
 
             <Button
               variant="ghost"
               className="mt-8 w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => {
                 if (!confirm(`Delete lead from ${lead.name}? This can't be undone.`)) return;
-                del.mutate(lead.id, { onSuccess: () => { toast.success("Lead deleted"); onClose(); } });
+                del.mutate(lead.id, {
+                  onSuccess: () => {
+                    toast.success("Lead deleted");
+                    onClose();
+                  },
+                });
               }}
             >
               <Trash2 /> Delete lead

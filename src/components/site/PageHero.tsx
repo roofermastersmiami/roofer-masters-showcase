@@ -52,11 +52,15 @@ export function SectionHeading({
   return (
     <div className={align === "center" ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
       <p className={`eyebrow ${light ? "text-primary-glow" : "text-primary"}`}>{eyebrow}</p>
-      <h2 className={`mt-3 text-3xl font-black leading-tight sm:text-4xl md:text-5xl ${light ? "text-navy-foreground" : "text-foreground"}`}>
+      <h2
+        className={`mt-3 text-3xl font-black leading-tight sm:text-4xl md:text-5xl ${light ? "text-navy-foreground" : "text-foreground"}`}
+      >
         {title}
       </h2>
       {children && (
-        <p className={`mt-4 text-base leading-relaxed sm:text-lg ${light ? "text-navy-foreground/75" : "text-muted-foreground"}`}>
+        <p
+          className={`mt-4 text-base leading-relaxed sm:text-lg ${light ? "text-navy-foreground/75" : "text-muted-foreground"}`}
+        >
           {children}
         </p>
       )}

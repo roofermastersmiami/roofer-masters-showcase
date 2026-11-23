@@ -42,11 +42,16 @@ function ContactPage() {
         </Reveal>
 
         <Reveal delay={100} className="space-y-4">
-          <a href={BUSINESS.phoneHref} className="flex items-center gap-4 rounded-2xl bg-gradient-primary p-6 text-primary-foreground shadow-elegant">
+          <a
+            href={BUSINESS.phoneHref}
+            className="flex items-center gap-4 rounded-2xl bg-gradient-primary p-6 text-primary-foreground shadow-elegant"
+          >
             <Phone className="size-8" />
             <span>
               <span className="block text-sm font-semibold opacity-80">Call or text</span>
-              <span className="block font-display text-3xl font-black">{BUSINESS.phoneDisplay}</span>
+              <span className="block font-display text-3xl font-black">
+                {BUSINESS.phoneDisplay}
+              </span>
             </span>
           </a>
           <Button asChild variant="whatsapp" size="tap" className="h-16 text-lg">
@@ -55,7 +60,10 @@ function ContactPage() {
             </a>
           </Button>
           <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-            <a href={`mailto:${BUSINESS.email}`} className="flex items-center gap-3 font-semibold text-foreground">
+            <a
+              href={`mailto:${BUSINESS.email}`}
+              className="flex items-center gap-3 font-semibold text-foreground"
+            >
               <Mail className="size-5 text-primary" /> {BUSINESS.email}
             </a>
             <div className="mt-5 flex gap-3">
@@ -72,7 +80,9 @@ function ContactPage() {
             <p className="mt-5 flex items-center gap-3 text-sm text-muted-foreground">
               <MapPin className="size-5 text-primary" /> Serving all of Miami-Dade &amp; Broward
             </p>
-            <p className="mt-5 font-display text-lg font-extrabold text-foreground">Hablamos español</p>
+            <p className="mt-5 font-display text-lg font-extrabold text-foreground">
+              Hablamos español
+            </p>
             <SocialLinks className="mt-4 text-primary" />
           </div>
         </Reveal>

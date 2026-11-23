@@ -36,7 +36,9 @@ function ReviewsPage() {
             <p className="font-display text-2xl font-black text-foreground">Google Reviews</p>
             <div className="mt-1 flex items-center justify-center gap-2 sm:justify-start">
               <Stars className="size-5" />
-              <span className="text-sm font-semibold text-muted-foreground">5-star rated service</span>
+              <span className="text-sm font-semibold text-muted-foreground">
+                5-star rated service
+              </span>
             </div>
           </div>
           <Button asChild variant="hero" size="lg">

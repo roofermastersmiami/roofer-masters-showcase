@@ -36,7 +36,8 @@ export const getSiteContent = createServerFn({ method: "GET" }).handler(
       for (const row of data ?? []) {
         if (!(row.key in out)) continue;
         // The announcement may be blanked to hide the bar; headlines fall back to defaults.
-        if (row.key === "announcement" || row.value.trim()) out[row.key as keyof SiteContent] = row.value;
+        if (row.key === "announcement" || row.value.trim())
+          out[row.key as keyof SiteContent] = row.value;
       }
       return out;
     } catch (e) {

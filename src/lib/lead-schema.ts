@@ -25,24 +25,16 @@ const phoneRegex = /^[0-9+()\-.\s]{7,20}$/;
 
 export const leadFormSchema = z
   .object({
-  name: z.string().trim().min(2, "Please enter your name").max(100),
-  phone: z
-    .string()
-    .trim()
-    .regex(phoneRegex, "Please enter a valid phone number"),
-  email: z
-    .string()
-    .trim()
-    .max(255)
-    .email("Please enter a valid email")
-    .or(z.literal("")),
-  address: z.string().trim().max(250).optional().default(""),
-  service: z.string().trim().max(100).optional().default(""),
-  message: z.string().trim().max(2000).optional().default(""),
-  source: z.enum(["callback", "contact", "quote"]),
-  page: z.string().trim().max(200).optional().default(""),
-  // Honeypot: real visitors never fill this in.
-  company: z.string().max(0).optional().default(""),
+    name: z.string().trim().min(2, "Please enter your name").max(100),
+    phone: z.string().trim().regex(phoneRegex, "Please enter a valid phone number"),
+    email: z.string().trim().max(255).email("Please enter a valid email").or(z.literal("")),
+    address: z.string().trim().max(250).optional().default(""),
+    service: z.string().trim().max(100).optional().default(""),
+    message: z.string().trim().max(2000).optional().default(""),
+    source: z.enum(["callback", "contact", "quote"]),
+    page: z.string().trim().max(200).optional().default(""),
+    // Honeypot: real visitors never fill this in.
+    company: z.string().max(0).optional().default(""),
   })
   // Call-back requests must say where the property is.
   .refine((v) => v.source !== "callback" || v.address.length >= 5, {

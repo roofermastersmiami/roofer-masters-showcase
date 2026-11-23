@@ -1,12 +1,139 @@
-import { useQuery,useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Save, PhoneOff } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { ROOF_TYPES,rateSchema } from '@/lib/instant-estimate-schema';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Field,SectionHeading } from './CrmControls';
-import { toast } from 'sonner';
-export function InstantEstimateSettings(){const query=useQuery({queryKey:['owner-instant-rates'],queryFn:async()=>{const {data,error}=await supabase.from('instant_roof_rates').select('*');if(error)throw error;return data??[];}});return <div><SectionHeading title="Instant estimate pricing"/><p className="mb-6 text-sm text-muted-foreground">Installed USD price per roofing square (100 sq ft), inclusive of any applicable tax. Only enabled rates appear in customer estimates. Final quotes require inspection.</p>{query.error?<p className="text-destructive">Could not load pricing.</p>:query.isLoading?<p>Loading…</p>:<div className="grid gap-4 lg:grid-cols-2">{ROOF_TYPES.map(category=>{const rate=query.data?.find(r=>r.category===category);return <Rate key={`${category}-${rate?.low_cents}-${rate?.high_cents}-${rate?.enabled}`} category={category} low={rate?.low_cents??0} high={rate?.high_cents??0} active={rate?.enabled??false}/>;})}</div>}<section className="mt-10 border-t border-border pt-6"><h3 className="flex items-center gap-2 text-xl font-bold"><PhoneOff className="size-5"/> AI receptionist — not connected</h3><p className="mt-3 text-sm text-muted-foreground">English and Spanish phone answering requires a calling-service connection and missed-call forwarding. No calls are being answered, jobs created from calls, or estimates sent by phone yet.</p></section></div>;}
-function Rate({category,low,high,active}:{category:typeof ROOF_TYPES[number];low:number;high:number;active:boolean}){const qc=useQueryClient();const [min,setMin]=useState(String(low/100||''));const [max,setMax]=useState(String(high/100||''));const [enabled,setEnabled]=useState(active);const [busy,setBusy]=useState(false);async function save(){setBusy(true);try{const data=rateSchema.parse({category,low_cents:Math.round(Number(min)*100),high_cents:Math.round(Number(max)*100),enabled});const {error}=await supabase.from('instant_roof_rates').upsert(data);if(error)throw error;await qc.invalidateQueries({queryKey:['owner-instant-rates']});await qc.invalidateQueries({queryKey:['instant-rates']});toast.success('Roof pricing saved');}catch{toast.error('Enter a positive minimum and a maximum at least as high.');}finally{setBusy(false);}}return <form className="rounded-lg border border-border bg-card p-5" onSubmit={e=>{e.preventDefault();void save();}}><h3 className="mb-4 font-bold">{category}</h3><div className="grid grid-cols-2 gap-4"><Field label="Minimum ($/square)"><Input required type="number" min="0.01" step="0.01" value={min} onChange={e=>setMin(e.target.value)}/></Field><Field label="Maximum ($/square)"><Input required type="number" min="0.01" step="0.01" value={max} onChange={e=>setMax(e.target.value)}/></Field></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><label className="flex items-center gap-2 text-sm"><Checkbox checked={enabled} onCheckedChange={v=>setEnabled(v===true)}/>Enable instant estimates</label><Button size="sm" disabled={busy}><Save/>Save</Button></div></form>;}
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Save, PhoneOff } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { ROOF_TYPES, rateSchema } from "@/lib/instant-estimate-schema";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, SectionHeading } from "./CrmControls";
+import { toast } from "sonner";
+export function InstantEstimateSettings() {
+  const query = useQuery({
+    queryKey: ["owner-instant-rates"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("instant_roof_rates").select("*");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  return (
+    <div>
+      <SectionHeading title="Instant estimate pricing" />
+      <p className="mb-6 text-sm text-muted-foreground">
+        Installed USD price per roofing square (100 sq ft), inclusive of any applicable tax. Only
+        enabled rates appear in customer estimates. Final quotes require inspection.
+      </p>
+      {query.error ? (
+        <p className="text-destructive">Could not load pricing.</p>
+      ) : query.isLoading ? (
+        <p>Loading…</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {ROOF_TYPES.map((category) => {
+            const rate = query.data?.find((r) => r.category === category);
+            return (
+              <Rate
+                key={`${category}-${rate?.low_cents}-${rate?.high_cents}-${rate?.enabled}`}
+                category={category}
+                low={rate?.low_cents ?? 0}
+                high={rate?.high_cents ?? 0}
+                active={rate?.enabled ?? false}
+              />
+            );
+          })}
+        </div>
+      )}
+      <section className="mt-10 border-t border-border pt-6">
+        <h3 className="flex items-center gap-2 text-xl font-bold">
+          <PhoneOff className="size-5" /> AI receptionist — not connected
+        </h3>
+        <p className="mt-3 text-sm text-muted-foreground">
+          English and Spanish phone answering requires a calling-service connection and missed-call
+          forwarding. No calls are being answered, jobs created from calls, or estimates sent by
+          phone yet.
+        </p>
+      </section>
+    </div>
+  );
+}
+function Rate({
+  category,
+  low,
+  high,
+  active,
+}: {
+  category: (typeof ROOF_TYPES)[number];
+  low: number;
+  high: number;
+  active: boolean;
+}) {
+  const qc = useQueryClient();
+  const [min, setMin] = useState(String(low / 100 || ""));
+  const [max, setMax] = useState(String(high / 100 || ""));
+  const [enabled, setEnabled] = useState(active);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      const data = rateSchema.parse({
+        category,
+        low_cents: Math.round(Number(min) * 100),
+        high_cents: Math.round(Number(max) * 100),
+        enabled,
+      });
+      const { error } = await supabase.from("instant_roof_rates").upsert(data);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["owner-instant-rates"] });
+      await qc.invalidateQueries({ queryKey: ["instant-rates"] });
+      toast.success("Roof pricing saved");
+    } catch {
+      toast.error("Enter a positive minimum and a maximum at least as high.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form
+      className="rounded-lg border border-border bg-card p-5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <h3 className="mb-4 font-bold">{category}</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Minimum ($/square)">
+          <Input
+            required
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={min}
+            onChange={(e) => setMin(e.target.value)}
+          />
+        </Field>
+        <Field label="Maximum ($/square)">
+          <Input
+            required
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={max}
+            onChange={(e) => setMax(e.target.value)}
+          />
+        </Field>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
+          Enable instant estimates
+        </label>
+        <Button size="sm" disabled={busy}>
+          <Save />
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}

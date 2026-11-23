@@ -1,36 +1,359 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#071b36"><title>Roofer Masters — Development Progress</title>
-<style>
-:root{color-scheme:dark;--bg:#071321;--panel:#10243b;--line:#203b58;--muted:#9bb0c7;--blue:#4da3ff;--green:#4ade80}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#173b60 0,transparent 42%),var(--bg);color:#f5f8fc;font:15px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
-main{max-width:1080px;margin:auto;padding:34px 22px 70px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}.eyebrow{color:#8fc5ff;text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:800}h1{font-size:clamp(30px,5vw,48px);line-height:1.08;margin:9px 0}p{color:var(--muted);margin:7px 0}.btn{background:#1976d2;color:white;border:0;border-radius:10px;padding:12px 17px;font-weight:750;cursor:pointer}.btn:disabled{opacity:.6;cursor:wait}.meta{margin-top:20px;display:flex;gap:12px;flex-wrap:wrap}.pill{border:1px solid var(--line);border-radius:999px;padding:6px 11px;color:#c6d8ea;font-size:12px}.quicklinks{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}.quicklinks a{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;color:#c6d8ea;text-decoration:none;font-size:13px;font-weight:700}.quicklinks a:hover{border-color:var(--blue);color:#fff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:26px 0}.card{background:linear-gradient(145deg,#122b46,#0d2035);border:1px solid var(--line);border-radius:16px;padding:19px}.card small{color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-size:10px;font-weight:800}.card strong{display:block;font-size:23px;margin:7px 0}.section{margin-top:34px}.section h2{font-size:20px;margin:0 0 12px}.item{display:flex;justify-content:space-between;gap:18px;padding:15px 0;border-bottom:1px solid var(--line)}.item a{color:#8fc5ff;text-decoration:none}.item a:hover{text-decoration:underline}.item time{color:var(--muted);white-space:nowrap;font-size:12px}.tasks{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.task{padding:15px;border:1px solid var(--line);border-radius:12px;background:#0c1e31}.tag{display:inline-block;color:#9ee6b4;background:#123927;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;margin-bottom:8px}.tag.pending{color:#f7d58a;background:#3b2e12}.foot{margin-top:36px;border-top:1px solid var(--line);padding-top:17px;font-size:12px;color:var(--muted)}.error{color:#ffb4a9}
-</style></head>
-<body><main>
-<header class="top"><div><div class="eyebrow">Roofer Masters · Build tracker</div><h1>Project progress</h1><p>A live view of committed development work.</p></div><button id="refresh" class="btn">↻ Refresh progress</button></header>
-<div class="meta"><span class="pill">Repository: roofer-masters-showcase</span><span class="pill">Branch: main</span><span class="pill" id="updated">Loading latest update…</span></div><nav class="quicklinks" aria-label="Project links"><a href="https://github.com/roofermastersmiami/roofer-masters-showcase/actions" target="_blank" rel="noopener noreferrer">View build checks ↗</a><a href="https://github.com/roofermastersmiami/roofer-masters-showcase" target="_blank" rel="noopener noreferrer">Open source repository ↗</a></nav>
-<section class="grid">
-<div class="card"><small>Recent commits</small><strong id="count">—</strong><p>Latest changes recorded on GitHub</p></div>
-<div class="card"><small>Latest commit</small><strong id="latest">—</strong><p id="latestDate">Waiting for data</p></div>
-<div class="card"><small>Project status</small><strong>Active</strong><p>Development continues on the main branch</p></div>
-</section>
-<section class="section"><h2>Work completed</h2><div class="tasks">
-<div class="task"><span class="tag">Completed</span><b>Roof measurement engine</b><p>Facet and edge validation, area overflow protection, measured edge integration, and safer estimate/job creation.</p></div>
-<div class="task"><span class="tag">Completed</span><b>Estimates and proposals</b><p>Update existing estimates, preserve property/drawing links, and clean up failed proposal creation.</p></div>
-<div class="task"><span class="tag">Completed</span><b>Job and invoice workflow</b><p>Proposal-to-job links, invoice validation, accounting role access, and payment workflow safeguards.</p></div>
-<div class="task"><span class="tag">Completed</span><b>Invoice date and payment rules</b><p>Miami daylight-saving-aware overdue status, strict calendar-date validation, and checkout permission fixes.</p></div>
-<div class="task"><span class="tag pending">Database action needed</span><b>Apply database migrations</b><p>Migrations 0027, 0028, and 0029 are committed but still need to be applied to the database.</p></div>
-</div></section>
-<section class="section"><h2>Latest code activity</h2><div id="commits"><p>Loading commits from GitHub…</p></div></section>
-<div class="foot">This page reads the generated commit feed. Refresh to retrieve the newest published progress. Commit history links open the exact changes in GitHub. This dashboard does not expose application secrets or customer records.</div>
-</main>
-<script>
-const feed='./commits.json';
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function safeCommitUrl(value){try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='github.com'&&u.pathname.startsWith('/roofermastersmiami/roofer-masters-showcase/commit/')?u.href:'#';}catch{return '#';}}
-function formatDate(value){const d=new Date(value);return Number.isNaN(d.getTime())?'Date unavailable':d.toLocaleString();}
-async function load(){const b=document.getElementById('refresh');b.disabled=true;b.textContent='Refreshing…';try{const res=await fetch(feed+'?t='+Date.now(),{cache:'no-store'});if(!res.ok)throw new Error('Commit feed is not published yet. Try again after the first deployment.');const data=await res.json();const commits=Array.isArray(data)?data:(data.commits||[]);document.getElementById('count').textContent=commits.length;document.getElementById('latest').textContent=commits[0]?.sha?.slice(0,7)||'—';document.getElementById('latestDate').textContent=commits[0]?.date?formatDate(commits[0].date):'No commits found';document.getElementById('updated').textContent='Refreshed '+new Date().toLocaleTimeString();document.getElementById('commits').innerHTML=commits.length?commits.map(c=>'<div class="item"><div><b>'+esc(c.message)+'</b><br><a href="'+esc(safeCommitUrl(c.url))+'" target="_blank" rel="noopener noreferrer">View commit ↗</a> <span style="color:#9bb0c7">· '+esc(c.author)+'</span></div><time>'+esc(formatDate(c.date))+'</time></div>').join(''):'<p>No commits yet.</p>';}catch(e){document.getElementById('commits').innerHTML='<p class="error">'+esc(e.message)+'</p>';document.getElementById('updated').textContent='Unable to refresh';}finally{b.disabled=false;b.textContent='↻ Refresh progress';}}
-document.getElementById('refresh').addEventListener('click',load);load();
-</script></body></html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#071b36" />
+    <title>Roofer Masters — Development Progress</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071321;
+        --panel: #10243b;
+        --line: #203b58;
+        --muted: #9bb0c7;
+        --blue: #4da3ff;
+        --green: #4ade80;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(ellipse at top right, #173b60 0, transparent 42%), var(--bg);
+        color: #f5f8fc;
+        font:
+          15px/1.55 Inter,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+      }
+      main {
+        max-width: 1080px;
+        margin: auto;
+        padding: 34px 22px 70px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      .eyebrow {
+        color: #8fc5ff;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 11px;
+        font-weight: 800;
+      }
+      h1 {
+        font-size: clamp(30px, 5vw, 48px);
+        line-height: 1.08;
+        margin: 9px 0;
+      }
+      p {
+        color: var(--muted);
+        margin: 7px 0;
+      }
+      .btn {
+        background: #1976d2;
+        color: white;
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 17px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .meta {
+        margin-top: 20px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 11px;
+        color: #c6d8ea;
+        font-size: 12px;
+      }
+      .quicklinks {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 15px;
+      }
+      .quicklinks a {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: #c6d8ea;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .quicklinks a:hover {
+        border-color: var(--blue);
+        color: #fff;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 14px;
+        margin: 26px 0;
+      }
+      .card {
+        background: linear-gradient(145deg, #122b46, #0d2035);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 19px;
+      }
+      .card small {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        font-size: 10px;
+        font-weight: 800;
+      }
+      .card strong {
+        display: block;
+        font-size: 23px;
+        margin: 7px 0;
+      }
+      .section {
+        margin-top: 34px;
+      }
+      .section h2 {
+        font-size: 20px;
+        margin: 0 0 12px;
+      }
+      .item {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 15px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .item a {
+        color: #8fc5ff;
+        text-decoration: none;
+      }
+      .item a:hover {
+        text-decoration: underline;
+      }
+      .item time {
+        color: var(--muted);
+        white-space: nowrap;
+        font-size: 12px;
+      }
+      .tasks {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+      }
+      .task {
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #0c1e31;
+      }
+      .tag {
+        display: inline-block;
+        color: #9ee6b4;
+        background: #123927;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 800;
+        margin-bottom: 8px;
+      }
+      .tag.pending {
+        color: #f7d58a;
+        background: #3b2e12;
+      }
+      .foot {
+        margin-top: 36px;
+        border-top: 1px solid var(--line);
+        padding-top: 17px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .error {
+        color: #ffb4a9;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <div>
+          <div class="eyebrow">Roofer Masters · Build tracker</div>
+          <h1>Project progress</h1>
+          <p>A live view of committed development work.</p>
+        </div>
+        <button id="refresh" class="btn">↻ Refresh progress</button>
+      </header>
+      <div class="meta">
+        <span class="pill">Repository: roofer-masters-showcase</span
+        ><span class="pill">Branch: main</span
+        ><span class="pill" id="updated">Loading latest update…</span>
+      </div>
+      <nav class="quicklinks" aria-label="Project links">
+        <a
+          href="https://github.com/roofermastersmiami/roofer-masters-showcase/actions"
+          target="_blank"
+          rel="noopener noreferrer"
+          >View build checks ↗</a
+        ><a
+          href="https://github.com/roofermastersmiami/roofer-masters-showcase"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Open source repository ↗</a
+        >
+      </nav>
+      <section class="grid">
+        <div class="card">
+          <small>Recent commits</small><strong id="count">—</strong>
+          <p>Latest changes recorded on GitHub</p>
+        </div>
+        <div class="card">
+          <small>Latest commit</small><strong id="latest">—</strong>
+          <p id="latestDate">Waiting for data</p>
+        </div>
+        <div class="card">
+          <small>Project status</small><strong>Active</strong>
+          <p>Development continues on the main branch</p>
+        </div>
+      </section>
+      <section class="section">
+        <h2>Work completed</h2>
+        <div class="tasks">
+          <div class="task">
+            <span class="tag">Completed</span><b>Roof measurement engine</b>
+            <p>
+              Facet and edge validation, area overflow protection, measured edge integration, and
+              safer estimate/job creation.
+            </p>
+          </div>
+          <div class="task">
+            <span class="tag">Completed</span><b>Estimates and proposals</b>
+            <p>
+              Update existing estimates, preserve property/drawing links, and clean up failed
+              proposal creation.
+            </p>
+          </div>
+          <div class="task">
+            <span class="tag">Completed</span><b>Job and invoice workflow</b>
+            <p>
+              Proposal-to-job links, invoice validation, accounting role access, and payment
+              workflow safeguards.
+            </p>
+          </div>
+          <div class="task">
+            <span class="tag">Completed</span><b>Invoice date and payment rules</b>
+            <p>
+              Miami daylight-saving-aware overdue status, strict calendar-date validation, and
+              checkout permission fixes.
+            </p>
+          </div>
+          <div class="task">
+            <span class="tag pending">Database action needed</span><b>Apply database migrations</b>
+            <p>
+              Migrations 0027, 0028, and 0029 are committed but still need to be applied to the
+              database.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <h2>Latest code activity</h2>
+        <div id="commits"><p>Loading commits from GitHub…</p></div>
+      </section>
+      <div class="foot">
+        This page reads the generated commit feed. Refresh to retrieve the newest published
+        progress. Commit history links open the exact changes in GitHub. This dashboard does not
+        expose application secrets or customer records.
+      </div>
+    </main>
+    <script>
+      const feed = "./commits.json";
+      function esc(s) {
+        return String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+      }
+      function safeCommitUrl(value) {
+        try {
+          const u = new URL(value);
+          return u.protocol === "https:" &&
+            u.hostname === "github.com" &&
+            u.pathname.startsWith("/roofermastersmiami/roofer-masters-showcase/commit/")
+            ? u.href
+            : "#";
+        } catch {
+          return "#";
+        }
+      }
+      function formatDate(value) {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? "Date unavailable" : d.toLocaleString();
+      }
+      async function load() {
+        const b = document.getElementById("refresh");
+        b.disabled = true;
+        b.textContent = "Refreshing…";
+        try {
+          const res = await fetch(feed + "?t=" + Date.now(), { cache: "no-store" });
+          if (!res.ok)
+            throw new Error(
+              "Commit feed is not published yet. Try again after the first deployment.",
+            );
+          const data = await res.json();
+          const commits = Array.isArray(data) ? data : data.commits || [];
+          document.getElementById("count").textContent = commits.length;
+          document.getElementById("latest").textContent = commits[0]?.sha?.slice(0, 7) || "—";
+          document.getElementById("latestDate").textContent = commits[0]?.date
+            ? formatDate(commits[0].date)
+            : "No commits found";
+          document.getElementById("updated").textContent =
+            "Refreshed " + new Date().toLocaleTimeString();
+          document.getElementById("commits").innerHTML = commits.length
+            ? commits
+                .map(
+                  (c) =>
+                    '<div class="item"><div><b>' +
+                    esc(c.message) +
+                    '</b><br><a href="' +
+                    esc(safeCommitUrl(c.url)) +
+                    '" target="_blank" rel="noopener noreferrer">View commit ↗</a> <span style="color:#9bb0c7">· ' +
+                    esc(c.author) +
+                    "</span></div><time>" +
+                    esc(formatDate(c.date)) +
+                    "</time></div>",
+                )
+                .join("")
+            : "<p>No commits yet.</p>";
+        } catch (e) {
+          document.getElementById("commits").innerHTML =
+            '<p class="error">' + esc(e.message) + "</p>";
+          document.getElementById("updated").textContent = "Unable to refresh";
+        } finally {
+          b.disabled = false;
+          b.textContent = "↻ Refresh progress";
+        }
+      }
+      document.getElementById("refresh").addEventListener("click", load);
+      load();
+    </script>
+  </body>
+</html>

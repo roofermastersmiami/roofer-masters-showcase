@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from "vitest";
 
 import {
@@ -29,9 +28,7 @@ describe("Roof calculation helpers", () => {
   });
 
   it("calculates sloped area from projected area", () => {
-    expect(
-      projectedAreaToSurfaceArea(100, 12)
-    ).toBeCloseTo(141.421356);
+    expect(projectedAreaToSurfaceArea(100, 12)).toBeCloseTo(141.421356);
   });
 
   it("does not apply pitch twice to surface area", () => {
@@ -84,14 +81,12 @@ describe("Roof calculation helpers", () => {
   it("rejects conflicting shared edge measurements", () => {
     expect(() =>
       calculateRoofSummary({
-        facets: [
-          { id: "a", surfaceAreaSqFt: 500 },
-        ],
+        facets: [{ id: "a", surfaceAreaSqFt: 500 }],
         edges: [
           { id: "shared-1", type: "ridge", lengthFt: 20 },
           { id: "shared-1", type: "hip", lengthFt: 25 },
         ],
-      })
+      }),
     ).toThrow();
   });
 
@@ -102,7 +97,7 @@ describe("Roof calculation helpers", () => {
         { x: 10, y: 0 },
         { x: 10, y: 10 },
         { x: 0, y: 10 },
-      ])
+      ]),
     ).toBe(100);
   });
 
@@ -113,7 +108,7 @@ describe("Roof calculation helpers", () => {
           { id: "plane-1", surfaceAreaSqFt: 500 },
           { id: "plane-1", surfaceAreaSqFt: 500 },
         ],
-      })
+      }),
     ).toThrow("Duplicate roof facet id");
   });
 
@@ -121,14 +116,14 @@ describe("Roof calculation helpers", () => {
     expect(() =>
       calculateRoofSummary({
         facets: [{ id: " ", surfaceAreaSqFt: 500 }],
-      })
+      }),
     ).toThrow("non-empty id");
 
     expect(() =>
       calculateRoofSummary({
         facets: [{ id: "plane-1", surfaceAreaSqFt: 500 }],
         edges: [{ id: "", type: "ridge", lengthFt: 10 }],
-      })
+      }),
     ).toThrow("non-empty id");
   });
 
@@ -139,7 +134,7 @@ describe("Roof calculation helpers", () => {
           { id: "plane-1", surfaceAreaSqFt: Number.MAX_VALUE },
           { id: "plane-2", surfaceAreaSqFt: Number.MAX_VALUE },
         ],
-      })
+      }),
     ).toThrow("supported range");
   });
 
@@ -153,18 +148,16 @@ describe("Roof calculation helpers", () => {
             projectedAreaSqFt: 900,
           },
         ],
-      })
+      }),
     ).toThrow();
   });
 
   it("rejects invalid waste percentages", () => {
     expect(() =>
       calculateRoofSummary({
-        facets: [
-          { id: "plane-1", surfaceAreaSqFt: 1000 },
-        ],
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 1000 }],
         wastePercent: 60,
-      })
+      }),
     ).toThrow();
   });
   it("rounds material orders upward to exact one-third-square increments", () => {
@@ -176,59 +169,87 @@ describe("Roof calculation helpers", () => {
   });
 
   it("rejects roofing square order calculations that overflow", () => {
-    expect(() => calculateRoofSummary({
-      facets: [{ id: "large", surfaceAreaSqFt: Number.MAX_VALUE }],
-      wastePercent: 0,
-    })).toThrow("order exceeds the supported range");
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "large", surfaceAreaSqFt: Number.MAX_VALUE }],
+        wastePercent: 0,
+      }),
+    ).toThrow("order exceeds the supported range");
   });
 
   it("rejects geometry conversions and polygon calculations that overflow", () => {
     expect(() => squareMetersToSquareFeet(Number.MAX_VALUE)).toThrow("supported range");
     expect(() => projectedAreaToSurfaceArea(Number.MAX_VALUE, 12)).toThrow("supported range");
-    expect(() => polygonAreaSqFt([
-      { x: Number.MAX_VALUE, y: Number.MAX_VALUE },
-      { x: -Number.MAX_VALUE, y: Number.MAX_VALUE },
-      { x: 0, y: -Number.MAX_VALUE },
-    ])).toThrow("supported range");
+    expect(() =>
+      polygonAreaSqFt([
+        { x: Number.MAX_VALUE, y: Number.MAX_VALUE },
+        { x: -Number.MAX_VALUE, y: Number.MAX_VALUE },
+        { x: 0, y: -Number.MAX_VALUE },
+      ]),
+    ).toThrow("supported range");
   });
 
   it("rejects unsupported edge types and overflowing total edge length", () => {
-    expect(() => calculateRoofSummary({
-      facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
-      edges: [{ id: "bad", type: "toString" as never, lengthFt: 10 }],
-    })).toThrow("unsupported type");
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+        edges: [{ id: "bad", type: "toString" as never, lengthFt: 10 }],
+      }),
+    ).toThrow("unsupported type");
 
-    expect(() => calculateRoofSummary({
-      facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
-      edges: [
-        { id: "edge-1", type: "ridge", lengthFt: Number.MAX_VALUE },
-        { id: "edge-2", type: "ridge", lengthFt: Number.MAX_VALUE },
-      ],
-    })).toThrow("supported range");
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+        edges: [
+          { id: "edge-1", type: "ridge", lengthFt: Number.MAX_VALUE },
+          { id: "edge-2", type: "ridge", lengthFt: Number.MAX_VALUE },
+        ],
+      }),
+    ).toThrow("supported range");
   });
 
-  it("rejects malformed roof edge collections",()=>{
-    expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:{} as never})).toThrow("edges must be provided as an array");
+  it("rejects malformed roof edge collections", () => {
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+        edges: {} as never,
+      }),
+    ).toThrow("edges must be provided as an array");
   });
 
   it("rejects malformed polygon point collections and missing coordinates", () => {
     expect(() => polygonAreaSqFt(null as never)).toThrow("points must be provided as an array");
-    expect(() => polygonAreaSqFt([null, { x: 1, y: 1 }, { x: 2, y: 2 }] as never)).toThrow("point must be an object");
+    expect(() => polygonAreaSqFt([null, { x: 1, y: 1 }, { x: 2, y: 2 }] as never)).toThrow(
+      "point must be an object",
+    );
     const sparsePoints = new Array(3) as Array<{ x: number; y: number }>;
     sparsePoints[0] = { x: 0, y: 0 };
     sparsePoints[2] = { x: 1, y: 1 };
     expect(() => polygonAreaSqFt(sparsePoints)).toThrow("point must be an object");
-    expect(() => polygonAreaSqFt([
-      { x: 0, y: 0 },
-      { x: 10, y: Number.NaN },
-      { x: 10, y: 10 },
-    ])).toThrow("coordinates must be finite");
+    expect(() =>
+      polygonAreaSqFt([
+        { x: 0, y: 0 },
+        { x: 10, y: Number.NaN },
+        { x: 10, y: 10 },
+      ]),
+    ).toThrow("coordinates must be finite");
   });
 
-  it("rejects null facet and edge records with clear validation errors",()=>{
-    expect(()=>calculateRoofSummary({facets:[null as never]})).toThrow("facet must be an object");
-    expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:[null as never]})).toThrow("edge must be an object");
-    expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:[{id:"bad",type:"toString" as never,lengthFt:1}]})).toThrow("unsupported type");
+  it("rejects null facet and edge records with clear validation errors", () => {
+    expect(() => calculateRoofSummary({ facets: [null as never] })).toThrow(
+      "facet must be an object",
+    );
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+        edges: [null as never],
+      }),
+    ).toThrow("edge must be an object");
+    expect(() =>
+      calculateRoofSummary({
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 100 }],
+        edges: [{ id: "bad", type: "toString" as never, lengthFt: 1 }],
+      }),
+    ).toThrow("unsupported type");
   });
-
 });

@@ -6,64 +6,131 @@ export const money = (cents: number) => {
 };
 export const dollarsToCents = (dollars: number) => {
   const cents = Math.round(dollars * 100);
-  if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported range");
+  if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents))
+    throw new Error("Amount exceeds the supported range");
   return cents;
 };
-export const itemSchema = z.object({ description: z.string().trim().min(1).max(250), quantity: z.number().positive().max(100000), unit_cents: z.number().int().nonnegative().max(100000000) });
+export const itemSchema = z.object({
+  description: z.string().trim().min(1).max(250),
+  quantity: z.number().positive().max(100000),
+  unit_cents: z.number().int().nonnegative().max(100000000),
+});
 export type InvoiceItem = z.infer<typeof itemSchema>;
 export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
-  if (!Array.isArray(items) || items.length === 0 || items.length > 50) throw new Error("Invoice must contain between 1 and 50 valid items");
-  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) throw new Error("Tax percentage must be between 0 and 100");
+  if (!Array.isArray(items) || items.length === 0 || items.length > 50)
+    throw new Error("Invoice must contain between 1 and 50 valid items");
+  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100)
+    throw new Error("Tax percentage must be between 0 and 100");
   const validatedItems = items.map((item) => itemSchema.parse(item));
   const subtotal = validatedItems.reduce((sum, item) => {
     const lineTotal = Math.round(item.quantity * item.unit_cents);
-    if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || !Number.isSafeInteger(sum + lineTotal)) throw new Error("Invoice subtotal exceeds the supported amount");
+    if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || !Number.isSafeInteger(sum + lineTotal))
+      throw new Error("Invoice subtotal exceeds the supported amount");
     return sum + lineTotal;
   }, 0);
   const tax = Math.round(subtotal * (taxPercent / 100));
   const total = subtotal + tax;
-  if (!Number.isSafeInteger(tax) || !Number.isSafeInteger(total)) throw new Error("Invoice total exceeds the supported amount");
+  if (!Number.isSafeInteger(tax) || !Number.isSafeInteger(total))
+    throw new Error("Invoice total exceeds the supported amount");
   return { subtotal, tax, total };
 }
-export const invoiceSchema = z.object({
-  lead_id: z.string().uuid(), proposal_id: z.string().uuid().nullable(), title: z.string().trim().min(1).max(180),
-  items: z.array(itemSchema).min(1).max(50), tax_percent: z.number().min(0).max(100), deposit_percent: z.number().min(0).max(100),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => { const date = new Date(`${v}T00:00:00.000Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v; }, "Choose a valid due date"), notes: z.string().max(4000), environment: z.enum(["sandbox", "live"]),
-}).refine((data) => invoiceTotals(data.items, data.tax_percent).total > 0, "Invoice total must be greater than zero");
-export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
+export const invoiceSchema = z
+  .object({
+    lead_id: z.string().uuid(),
+    proposal_id: z.string().uuid().nullable(),
+    title: z.string().trim().min(1).max(180),
+    items: z.array(itemSchema).min(1).max(50),
+    tax_percent: z.number().min(0).max(100),
+    deposit_percent: z.number().min(0).max(100),
+    due_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .refine((v) => {
+        const date = new Date(`${v}T00:00:00.000Z`);
+        return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v;
+      }, "Choose a valid due date"),
+    notes: z.string().max(4000),
+    environment: z.enum(["sandbox", "live"]),
+  })
+  .refine(
+    (data) => invoiceTotals(data.items, data.tax_percent).total > 0,
+    "Invoice total must be greater than zero",
+  );
+export function invoiceState(
+  invoice: { status: string; total_cents: number; paid_cents: number; due_date: string },
+  now = Date.now(),
+) {
   if (!invoice || typeof invoice !== "object" || Array.isArray(invoice)) {
     throw new Error("Invoice status requires a valid invoice object");
   }
   if (typeof invoice.status !== "string" || typeof invoice.due_date !== "string") {
     throw new Error("Invoice status and due date must be valid strings");
   }
-  if (![invoice.total_cents, invoice.paid_cents].every(Number.isSafeInteger) || invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents) throw new Error("Invoice balances are outside the supported range");
+  if (
+    ![invoice.total_cents, invoice.paid_cents].every(Number.isSafeInteger) ||
+    invoice.total_cents < 0 ||
+    invoice.paid_cents < 0 ||
+    invoice.paid_cents > invoice.total_cents
+  )
+    throw new Error("Invoice balances are outside the supported range");
   if (!Number.isFinite(now)) throw new Error("Invoice status requires a valid current date");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoice.due_date) ||
-      Number.isNaN(Date.parse(`${invoice.due_date}T00:00:00.000Z`)) ||
-      new Date(`${invoice.due_date}T00:00:00.000Z`).toISOString().slice(0, 10) !== invoice.due_date) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(invoice.due_date) ||
+    Number.isNaN(Date.parse(`${invoice.due_date}T00:00:00.000Z`)) ||
+    new Date(`${invoice.due_date}T00:00:00.000Z`).toISOString().slice(0, 10) !== invoice.due_date
+  ) {
     throw new Error("Invoice due date is invalid");
   }
-  if (!["draft", "void", "issued"].includes(invoice.status)) throw new Error("Invoice status is invalid");
+  if (!["draft", "void", "issued"].includes(invoice.status))
+    throw new Error("Invoice status is invalid");
   if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
   if (invoice.paid_cents >= invoice.total_cents) return "paid";
-  const todayInMiami = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const todayInMiami = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
   if (invoice.due_date < todayInMiami) return "overdue";
   return invoice.paid_cents > 0 ? "partial" : "unpaid";
 }
-export function paymentAmount(invoice: { total_cents: number; paid_cents: number; deposit_cents: number }, kind: "deposit" | "balance") {
+export function paymentAmount(
+  invoice: { total_cents: number; paid_cents: number; deposit_cents: number },
+  kind: "deposit" | "balance",
+) {
   if (!invoice || typeof invoice !== "object" || Array.isArray(invoice)) {
     throw new Error("Invoice payment requires a valid invoice object");
   }
-  if (![invoice.total_cents, invoice.paid_cents, invoice.deposit_cents].every(Number.isSafeInteger) ||
-      invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents ||
-      invoice.deposit_cents < 0 || invoice.deposit_cents > invoice.total_cents) {
+  if (
+    ![invoice.total_cents, invoice.paid_cents, invoice.deposit_cents].every(Number.isSafeInteger) ||
+    invoice.total_cents < 0 ||
+    invoice.paid_cents < 0 ||
+    invoice.paid_cents > invoice.total_cents ||
+    invoice.deposit_cents < 0 ||
+    invoice.deposit_cents > invoice.total_cents
+  ) {
     throw new Error("Invoice payment amounts are outside the supported range");
   }
   if (kind !== "deposit" && kind !== "balance") throw new Error("Unsupported invoice payment type");
-  return kind === "deposit" ? Math.max(0, Math.min(invoice.deposit_cents - invoice.paid_cents, invoice.total_cents - invoice.paid_cents)) : invoice.total_cents - invoice.paid_cents;
+  return kind === "deposit"
+    ? Math.max(
+        0,
+        Math.min(
+          invoice.deposit_cents - invoice.paid_cents,
+          invoice.total_cents - invoice.paid_cents,
+        ),
+      )
+    : invoice.total_cents - invoice.paid_cents;
 }
-export const estimateInputSchema = z.object({ sqft: z.number().positive().max(1000000), waste: z.number().min(0).max(100), material: z.number().nonnegative().max(100000), labor: z.number().nonnegative().max(100000), permits: z.number().nonnegative().max(1000000), other: z.number().nonnegative().max(1000000), margin: z.number().min(0).max(95) });
+export const estimateInputSchema = z.object({
+  sqft: z.number().positive().max(1000000),
+  waste: z.number().min(0).max(100),
+  material: z.number().nonnegative().max(100000),
+  labor: z.number().nonnegative().max(100000),
+  permits: z.number().nonnegative().max(1000000),
+  other: z.number().nonnegative().max(1000000),
+  margin: z.number().min(0).max(95),
+});
 export type EstimateInputs = z.infer<typeof estimateInputSchema>;
 export function calculateEstimate(raw: EstimateInputs) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -76,11 +143,21 @@ export function calculateEstimate(raw: EstimateInputs) {
   const laborCents = dollarsToCents(squares * input.labor);
   const additionalCents = dollarsToCents(input.permits + input.other);
   const cost = materialCents + laborCents + additionalCents;
-  if (![materialCents, laborCents, additionalCents, cost].every(Number.isSafeInteger)) throw new Error("Estimate exceeds the supported amount");
+  if (![materialCents, laborCents, additionalCents, cost].every(Number.isSafeInteger))
+    throw new Error("Estimate exceeds the supported amount");
   const total = Math.round(cost / (1 - input.margin / 100));
   if (!Number.isSafeInteger(total)) throw new Error("Estimate exceeds the supported amount");
   const profit = total - cost;
   if (!Number.isSafeInteger(profit)) throw new Error("Estimate exceeds the supported amount");
   return { squares, materialSquares, materialCents, laborCents, cost, total, profit };
 }
-export const CHECKLIST = ["Pre-job inspection", "Permit verified", "Materials delivered", "Tear-off complete", "Dry-in inspection", "Roof installation", "Final inspection", "Site cleanup"];
+export const CHECKLIST = [
+  "Pre-job inspection",
+  "Permit verified",
+  "Materials delivered",
+  "Tear-off complete",
+  "Dry-in inspection",
+  "Roof installation",
+  "Final inspection",
+  "Site cleanup",
+];

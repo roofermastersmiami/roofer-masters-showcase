@@ -29,7 +29,9 @@ function AreasPage() {
         <div className="space-y-10">
           {AREAS.map((area, i) => (
             <Reveal key={area.county} delay={i * 100}>
-              <h2 className="text-3xl font-black text-foreground sm:text-4xl">{area.county} County</h2>
+              <h2 className="text-3xl font-black text-foreground sm:text-4xl">
+                {area.county} County
+              </h2>
               <p className="mt-2 text-muted-foreground">
                 {area.county === "Miami-Dade"
                   ? "Our home turf. Roof replacement in Miami-Dade, metal roof installation in Homestead and repairs countywide."
@@ -37,7 +39,10 @@ function AreasPage() {
               </p>
               <ul className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {area.cities.map((c) => (
-                  <li key={c} className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground shadow-card">
+                  <li
+                    key={c}
+                    className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold text-foreground shadow-card"
+                  >
                     <MapPin className="size-4 shrink-0 text-primary" /> {c}
                   </li>
                 ))}
