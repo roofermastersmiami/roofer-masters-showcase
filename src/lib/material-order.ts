@@ -137,7 +137,7 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
       new RegExp("total\\s+(\\d[\\d,]*(?:\\.\\d+)?)\\s*(squares?)", "i"),
     ],
     "area_sqft",
-    (n, u) => (/square|squares|^sq$/.test(u) ? n * 100 : n),
+    (n, u) => (/^(?:sq|square|squares)$/.test(u.trim()) ? n * 100 : n),
   );
   read(
     "Waste",
