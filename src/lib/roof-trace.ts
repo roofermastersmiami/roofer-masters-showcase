@@ -2,6 +2,26 @@ import type { EdgeType, RoofPlane } from "./roof-geometry";
 import { planeInfo, EDGE_TYPES } from "./roof-geometry";
 export type ImagePoint = { x: number; y: number };
 export type Uphill = "up" | "down" | "left" | "right";
+
+/** Snap a photo point to the nearest corner already traced on this same image. */
+export function snapToExistingCorner(
+  point: ImagePoint,
+  existing: ImagePoint[],
+  tolerancePx: number,
+): ImagePoint {
+  if (!Number.isFinite(tolerancePx) || tolerancePx <= 0) return point;
+  let nearest: ImagePoint | undefined;
+  let nearestDistance = tolerancePx;
+  for (const candidate of existing) {
+    if (!Number.isFinite(candidate.x) || !Number.isFinite(candidate.y)) continue;
+    const distance = Math.hypot(point.x - candidate.x, point.y - candidate.y);
+    if (distance <= nearestDistance) {
+      nearest = candidate;
+      nearestDistance = distance;
+    }
+  }
+  return nearest ? { x: nearest.x, y: nearest.y } : point;
+}
 export const UPHILL_LABELS: Record<Uphill, string> = {
   up: "Toward top of photo",
   down: "Toward bottom of photo",
