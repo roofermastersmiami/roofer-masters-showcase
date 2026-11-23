@@ -7,7 +7,7 @@ describe('roof media storage paths', () => {
     expect(isSafeRoofMediaPath('aerials/2026/roof.png')).toBe(true);
   });
 
-  it.each(['', '/absolute/roof.jpg', '../private.jpg', 'job/../../private.jpg', 'job//roof.jpg', 'job/./roof.jpg', 'job\\\\roof.jpg', 'x'.repeat(301)])(
+  it.each(['', '/absolute/roof.jpg', '../private.jpg', 'job/../../private.jpg', 'job//roof.jpg', 'job/./roof.jpg', 'job\\\\roof.jpg', 'job/%2e%2e/private.jpg', 'job/roof photo.jpg', 'job/roof?.jpg', 'x'.repeat(301)])(
     'rejects unsafe path %s',
     (path) => expect(isSafeRoofMediaPath(path)).toBe(false),
   );
