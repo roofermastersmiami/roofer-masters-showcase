@@ -11,6 +11,7 @@ import {
   priceOption,
   materialSystem,
   findCatalogPrice,
+  catalogForSystem,
   COST_CATEGORIES,
   type EstimateOption,
 } from "@/lib/advanced-estimate";
@@ -495,12 +496,17 @@ export function AdvancedEstimator() {
                     });
                 }}
                 options={[
-                  { value: "none", label: "Choose catalog price" },
-                  ...(catalog.data ?? []).map((c) => ({
+                  {
+                    value: "none",
+                    label: catalogForSystem(catalog.data ?? [], o.system).length
+                      ? "Choose catalog price"
+                      : "No catalog items for this system",
+                  },
+                  ...catalogForSystem(catalog.data ?? [], o.system).map((c) => ({
                     value: c.id,
-                    label: `${c.item} · ${money(c.unit_cents)}`,
+                    label: `${c.item} · `${money(c.unit_cents)}`,
                   })),
-                ]}
+                ]}}
               />
             </div>
           </div>
