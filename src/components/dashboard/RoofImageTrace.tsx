@@ -28,6 +28,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [traced, setTraced] = useState<Traced[]>([]);
   const [edgeSnap, setEdgeSnap] = useState(false);
   const [lastSnap, setLastSnap] = useState<'snapped' | 'unchanged' | null>(null);
+  const [lastSnapPoint, setLastSnapPoint] = useState<ImagePoint | null>(null);
   const [snapPixels, setSnapPixels] = useState<{ data: Uint8ClampedArray; width: number; height: number } | null>(null);
   const snapImage = useRef<HTMLImageElement>(null);
   const drag = useRef<{ kind: 'ref' | 'pt'; i: number } | null>(null);
@@ -47,7 +48,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       ? snapToImageEdge(snapPixels.data, snapPixels.width, snapPixels.height, p, 18, 55)?.point
       : null;
     const point = snapped ?? p;
-    if (mode === 'trace' && edgeSnap) setLastSnap(snapped ? 'snapped' : 'unchanged');
+    if (mode === 'trace' && edgeSnap) { setLastSnap(snapped ? 'snapped' : 'unchanged'); setLastSnapPoint(snapped ? point : null); }
     if (mode === 'calibrate') setReference(reference.length === 2 ? [point] : [...reference, point]);
     else { setPoints([...points, point]); setEdges([...edges, 'other']); }
   };
@@ -110,11 +111,12 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
         {points.length >= 3 && points.map((p, i) => { const q = points[(i + 1) % points.length]!; return <g key={`e${i}`} role="button" aria-label={`Edge ${i + 1}: ${edges[i]}. Click to change`} onClick={ev => { ev.stopPropagation(); setEdges(es => es.map((t, j) => j === i ? nextEdgeType(t) : t)); }} className="cursor-pointer"><rect x={(p.x + q.x) / 2 - w / 28} y={(p.y + q.y) / 2 - w / 70} width={w / 14} height={w / 35} rx={w / 200} className="fill-background" stroke="currentColor" strokeWidth={w / 600} /><text x={(p.x + q.x) / 2} y={(p.y + q.y) / 2 + w / 200} fontSize={w / 60} textAnchor="middle" className="fill-foreground">{EDGE_SHORT[edges[i] ?? 'other']}</text></g>; })}
         {reference.map((p, i) => <circle key={`r${i}`} cx={p.x} cy={p.y} r={w / 100} className="cursor-move fill-destructive" onPointerDown={startDrag('ref', i)} onClick={e => e.stopPropagation()} />)}
         {points.map((p, i) => <circle key={`p${i}`} cx={p.x} cy={p.y} r={w / 90} fill="currentColor" strokeWidth={w / 600} className="cursor-move stroke-background" onPointerDown={startDrag('pt', i)} onClick={e => e.stopPropagation()} />)}
+        {lastSnapPoint && <circle cx={lastSnapPoint.x} cy={lastSnapPoint.y} r={w / 45} fill="none" stroke="currentColor" strokeWidth={w / 500} strokeDasharray={`${w / 100} ${w / 150}`} pointerEvents="none" />}
       </svg>
     </div> : <p>{photo.error ? 'Photo unavailable' : 'Loading photo…'}</p>}
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <Field label="Plane name"><Input className="w-40" value={name} maxLength={100} placeholder={`Traced plane ${traced.length + 1}`} onChange={e => setName(e.target.value)} /></Field>
-      <div className="pb-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edgeSnap} onChange={e => { setEdgeSnap(e.target.checked); setLastSnap(null); }} disabled={!snapPixels} /> Snap corners to visible image edges</label><p className="text-xs text-muted-foreground">{!snapPixels ? "Edge snapping unavailable for this image." : !edgeSnap ? "Optional: move each click toward a strong nearby image edge." : lastSnap === "snapped" ? "Last corner adjusted to a nearby image edge. Review its position." : lastSnap === "unchanged" ? "No strong edge found nearby; the clicked position was kept." : "Edge snapping is on; each point still needs visual review."}</p></div>
+      <div className="pb-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edgeSnap} onChange={e => { setEdgeSnap(e.target.checked); setLastSnap(null); setLastSnapPoint(null); }} disabled={!snapPixels} /> Snap corners to visible image edges</label><p className="text-xs text-muted-foreground">{!snapPixels ? "Edge snapping unavailable for this image." : !edgeSnap ? "Optional: move each click toward a strong nearby image edge." : lastSnap === "snapped" ? "Last corner adjusted to a nearby image edge. Review its position." : lastSnap === "unchanged" ? "No strong edge found nearby; the clicked position was kept." : "Edge snapping is on; each point still needs visual review."}</p></div>
       <Field label="Pitch (rise / 12)"><Input className="w-24" type="number" min={0} max={24} value={pitch} onChange={e => setPitch(Number(e.target.value))} /></Field>
       <div className="w-52"><Choice label="Roof rises (eave → ridge)" value={uphill} onChange={v => setUphill(v as Uphill)} options={(Object.keys(UPHILL_LABELS) as Uphill[]).map(k => ({ value: k, label: UPHILL_LABELS[k] }))} /></div>
       <Button variant="ghost" size="icon" aria-label="Undo last corner" title="Undo last corner" disabled={!points.length} onClick={() => { setPoints(points.slice(0, -1)); setEdges(edges.slice(0, -1)); }}><Undo2 /></Button>
