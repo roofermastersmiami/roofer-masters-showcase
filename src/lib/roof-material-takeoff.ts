@@ -12,7 +12,7 @@ export type MaterialLine = { item: string; quantity: number; unit: string; basis
 const ceil = (n: number) => Math.ceil(Math.max(0, n));
 /** Preliminary allowance only. Confirm field dimensions, product data, code and manufacturer specifications before ordering. */
 export function calculateRoofMaterialTakeoff(drawing: RoofDrawing, rawOptions: TakeoffOptions = {}) {
-  const options = inputSchema.parse({ ...rawOptions, metalPanelCoverageWidthInches: rawOptions.metalPanelCoverageWidthInches ?? drawing.metal_panel_width_inches ?? 16 });
+  const options = inputSchema.parse({ ...rawOptions, wastePercent: rawOptions.wastePercent ?? drawing.waste, metalPanelCoverageWidthInches: rawOptions.metalPanelCoverageWidthInches ?? drawing.metal_panel_width_inches ?? 16 });
   const measured = measureDrawing(drawing);
   const area = measured.area * (1 + options.wastePercent / 100);
   const squares = area / 100;
