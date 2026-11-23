@@ -39,7 +39,7 @@ export function findCatalogPrice<T extends { system: string; item: string; unit_
   item: string,
 ): T | undefined {
   const normalizedSystem = materialSystem(system);
-  const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/\\s+/g, " ");
+  const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
   if (!normalizedSystem || !item.trim()) return undefined;
   const normalizedItem = normalize(item);
   return catalog.find(
