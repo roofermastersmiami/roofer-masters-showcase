@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { measureDrawing, roofPreset } from './roof-geometry';
+import { measureDrawing, roofPreset, toMaterialReport } from './roof-geometry';
 import { calculateRoofMaterialTakeoff } from './roof-material-takeoff';
 describe('calculateRoofMaterialTakeoff', () => {
   it('calculates preliminary shingle quantities with waste', () => {
@@ -28,6 +28,23 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(r.lines.some(x => x.item === 'Roof membrane allowance' && x.unit === 'sq ft')).toBe(true);
     expect(r.warnings.some(x => x.includes('roll width'))).toBe(true);
   });
+
+  it('does not publish an assumed metal panel width in report data', () => {
+    const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
+    const report = toMaterialReport(d);
+    expect(report).not.toHaveProperty('panel_width_in');
+    expect(report.roof_type).toBe('Metal Roof');
+  });
+  it('rounds package counts up while keeping measured footage fractional', () => {
+    const d = roofPreset('gable', 40.25, 30.5, 6); d.roof_type = 'Shingle Roof';
+    const r = calculateRoofMaterialTakeoff(d, { wastePercent: 0 });
+    for (const line of r.lines.filter(x => ['bundles', 'rolls', 'fasteners'].includes(x.unit))) {
+      expect(Number.isInteger(line.quantity)).toBe(true);
+    }
+    const drip = r.lines.find(x => x.item === 'Drip edge allowance');
+    expect(drip?.quantity % 1).not.toBe(0);
+  });
+
   it('rejects invalid product coverage assumptions', () => {
     const d = roofPreset('flat', 30, 40, 0);
     expect(() => calculateRoofMaterialTakeoff(d, { underlaymentRollCoverageSqft: 0 })).toThrow();
