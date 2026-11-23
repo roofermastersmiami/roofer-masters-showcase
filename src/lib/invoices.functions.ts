@@ -18,6 +18,10 @@ export const createInvoice = createServerFn({ method: "POST" }).middleware([requ
   }
 
   const totals = invoiceTotals(data.items, data.tax_percent);
+  const depositCents = Math.round(totals.total * (data.deposit_percent / 100));
+  if (!Number.isSafeInteger(depositCents) || depositCents < 0 || depositCents > totals.total) {
+    throw new Error("Invoice deposit exceeds the supported amount");
+  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: invoice, error } = await supabaseAdmin.from("crm_invoices").insert({
     lead_id: data.lead_id,
@@ -31,7 +35,7 @@ export const createInvoice = createServerFn({ method: "POST" }).middleware([requ
     subtotal_cents: totals.subtotal,
     tax_cents: totals.tax,
     total_cents: totals.total,
-    deposit_cents: Math.round(totals.total * data.deposit_percent / 100),
+    deposit_cents: depositCents,
     due_date: data.due_date,
     notes: data.notes,
     environment: data.environment,
