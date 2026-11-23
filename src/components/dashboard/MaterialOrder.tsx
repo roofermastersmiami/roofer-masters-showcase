@@ -16,6 +16,7 @@ import {
   type MaterialLine,
 } from "@/lib/material-order";
 import { Field, Choice } from "./CrmControls";
+import { extractRoofReportPdfText } from "@/lib/roof-report-pdf";
 
 const fields: [keyof RoofReport, string][] = [
   ["area_sqft", "Roof area (sq ft)"],
@@ -58,6 +59,7 @@ export function MaterialOrder({
   );
   const [busy, setBusy] = useState(false);
   const [reportText, setReportText] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [parsedLabels, setParsedLabels] = useState<string[]>([]);
   const valid = reportSchema.safeParse(r);
   const lines: MaterialLine[] = useMemo(
@@ -115,6 +117,43 @@ export function MaterialOrder({
             metered AI charges.
           </p>
         </div>
+      </div>
+      <div className="mb-4 rounded-md border border-border p-4">
+        <p className="mb-2 text-sm font-semibold">Import a text-based PDF report</p>
+        <Input
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={pdfBusy}
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            setPdfBusy(true);
+            try {
+              const extracted = await extractRoofReportPdfText(file);
+              if (!extracted.trim()) {
+                toast.error("No selectable text found. This may be a scanned PDF; enter its measurements manually.");
+                return;
+              }
+              setReportText(extracted);
+              const parsed = parseRoofReportText(extracted);
+              if (parsed.found.length) {
+                setR((current) => ({ ...current, ...parsed.values }));
+                setParsedLabels(parsed.found);
+                toast.success(`Read PDF locally and found ${parsed.found.length} labelled fields. Review every value.`);
+              } else {
+                toast.info("PDF text extracted locally. Review it below and use Read pasted text locally.");
+              }
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not read this PDF.");
+            } finally {
+              setPdfBusy(false);
+            }
+          }}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          {pdfBusy ? "Reading PDF on this device…" : "PDF text is extracted in your browser only (25 MB limit). Scanned/image-only PDFs still need manual entry."}
+        </p>
       </div>
       <div className="mb-4 rounded-md border border-border p-4">
         <p className="mb-2 text-sm font-semibold">Paste text copied from your roof report</p>
