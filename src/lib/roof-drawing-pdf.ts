@@ -221,6 +221,9 @@ export async function roofDrawingPdf(
   row('Customer', customer || 'Not provided');
   row('Property address', address || 'Not provided', true);
   row('Roofing system', d.roof_type);
+  if (d.roof_type === 'Metal Roof') {
+    row('Metal panel net coverage', `${d.metal_panel_width_inches ?? 16} inches`);
+  }
   row('Review status', d.verified ? 'Owner-reviewed drawing' : 'Not owner-reviewed', true);
 
   const accuracyLabels = {
