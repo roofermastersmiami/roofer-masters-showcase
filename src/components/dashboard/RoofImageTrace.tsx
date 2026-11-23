@@ -132,6 +132,9 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       </div>
       </div>
     </div> : <p>{photo.error ? 'Photo unavailable' : 'Loading photo…'}</p>}
+    <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
+      Best measurement results come from straight-down aerial images. Angled drone photos have perspective distortion: image scale changes across the roof, so one calibration distance may not produce accurate dimensions everywhere. Use these images for visual tracing only unless you have orthorectified imagery or independent measurements at the roof plane.
+    </div>
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <Field label="Plane name"><Input className="w-40" value={name} maxLength={100} placeholder={`Traced plane ${traced.length + 1}`} onChange={e => setName(e.target.value)} /></Field>
       <div className="pb-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={edgeSnap} onChange={e => { setEdgeSnap(e.target.checked); setLastSnap(null); setLastSnapPoint(null); }} disabled={!snapPixels} /> Snap corners to visible image edges</label><p className="text-xs text-muted-foreground">{!snapPixels ? "Edge snapping unavailable for this image." : !edgeSnap ? "Optional: move each click toward a strong nearby image edge." : lastSnap === "snapped" ? "Last corner adjusted to a nearby image edge. Review its position." : lastSnap === "unchanged" ? "No strong edge found nearby; the clicked position was kept." : "Edge snapping is on; each point still needs visual review."}</p></div>
