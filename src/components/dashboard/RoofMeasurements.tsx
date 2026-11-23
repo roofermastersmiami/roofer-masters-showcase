@@ -395,7 +395,7 @@ export function RoofMeasurements({
       autoAerialAttempted.current = true;
       void loadAerial();
     }
-  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address, media]);
+  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address, media, loadAerial]);
 
   async function upload(file: File) {
     if (
