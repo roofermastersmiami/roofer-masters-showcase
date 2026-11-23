@@ -208,10 +208,13 @@ function facetArea(f: RoofFacetInput): number {
 export function calculateRoofSummary(
   input: RoofCalculationInput
 ): RoofCalculationResult {
-  if (!Array.isArray(input.facets) || !input.facets.length) {
+  if (!input || !Array.isArray(input.facets) || !input.facets.length) {
     throw new Error(
       "At least one roof facet is required."
     );
+  }
+  if (input.edges !== undefined && !Array.isArray(input.edges)) {
+    throw new Error("Roof edges must be provided as an array.");
   }
 
   const facetIds = new Set<string>();
