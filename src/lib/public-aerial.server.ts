@@ -8,10 +8,14 @@ function failure(stage: string, message: string, status?: number) {
   return { error: message + FALLBACK, stage } as const;
 }
 async function request(url: string, timeout: number, fetcher: typeof fetch) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetcher(url, { signal: AbortSignal.timeout(timeout), redirect: "manual" });
+    return await fetcher(url, { signal: controller.signal, redirect: "manual" });
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 /** Fixed keyless Census/USGS sources only; never fetch user-supplied URLs. */
