@@ -111,9 +111,7 @@ describe("local roof report text import", () => {
   });
 
   it("does not read measurements beyond the documented input limit", () => {
-    const parsed = parseRoofReportText(
-      `${"x".repeat(100_001)}\\nRoof area: 2400 sq ft`,
-    );
+    const parsed = parseRoofReportText(`${"x".repeat(100_001)}\\nRoof area: 2400 sq ft`);
     expect(parsed.values.area_sqft).toBeUndefined();
   });
 });
