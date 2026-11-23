@@ -84,9 +84,9 @@ describe("estimate and recorded profitability", () => {
       { system: "Metal Roof", item: "Ridge / hip cap (10 ft)", unit_cents: 2500 },
       { system: "Tile Roof", item: "Ridge / hip cap (10 ft)", unit_cents: 3000 },
     ];
-    expect(findCatalogPrice(catalog, "Standing seam", " ridge / HIP cap (10 ft) ")?.unit_cents).toBe(
-      2500,
-    );
+    expect(
+      findCatalogPrice(catalog, "Standing seam", " ridge / HIP cap (10 ft) ")?.unit_cents,
+    ).toBe(2500);
     expect(findCatalogPrice(catalog, "Standing seam", "unlisted item")).toBeUndefined();
   });
   it("does not import metal quantities for an unsupported coating system", () => {
