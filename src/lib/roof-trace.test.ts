@@ -38,6 +38,14 @@ describe('roof photo calibration', () => {
     expect(plane.points.map(p => p.y)).toEqual([10, 10, 40, 40]);
   });
 
+  it('rejects traced coordinates outside the drawing schema bounds', () => {
+    expect(() => calibratedPlane(
+      [{ x: 0, y: 0 }, { x: 501, y: 0 }, { x: 501, y: 20 }],
+      [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+      20, 6, 'out-of-bounds',
+    )).toThrow(/supported drawing bounds/);
+  });
+
   it('rejects finite image coordinates that overflow during calibration', () => {
     expect(() => calibratedPlane(
       [{ x: 1e308, y: 0 }, { x: -1e308, y: 0 }, { x: 1e308, y: 20 }],
