@@ -51,8 +51,10 @@ export function snapToImageEdge(
         if (alignment > 0.65) support += alignment;
       }
       const continuity = 0.55 + 0.1125 * support;
-      // Favor proximity more strongly so high-contrast shingle texture is less likely to pull the point away from the click.
-      const score = (strength * continuity) / (1 + distance * 0.5);
+      // Cap raw contrast so a single bright shingle/fixture edge cannot overwhelm
+      // a longer, directionally consistent boundary. Distance remains a tie-breaker.
+      const cappedStrength = Math.min(strength, minStrength * 4);
+      const score = (cappedStrength * continuity) / (1 + distance * 0.12);
       if (strength >= minStrength && score > bestScore) {
         best = { point: { x, y }, strength };
         bestScore = score;
