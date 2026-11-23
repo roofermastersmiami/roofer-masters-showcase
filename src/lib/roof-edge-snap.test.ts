@@ -22,14 +22,14 @@ describe('snapToImageEdge', () => {
     expect(result!.point.x).toBeLessThanOrEqual(20);
   });
 
-  it('does not move a point when the search radius is zero', () => {
+  it('keeps a point fixed when the search radius is zero', () => {
     const width = 20, height = 20, data = pixels(width, height);
     for (let y = 0; y < height; y++) for (let x = 10; x < width; x++) {
       const i = (y * width + x) * 4;
       data[i] = data[i + 1] = data[i + 2] = 240;
     }
     const result = snapToImageEdge(data, width, height, { x: 9, y: 10 }, 0, 100);
-    expect(result).toBeNull();
+    expect(result?.point).toEqual({ x: 9, y: 10 });
   });
 
   it('returns null on a flat image and for invalid buffers', () => {
