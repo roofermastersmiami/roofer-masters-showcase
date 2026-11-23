@@ -28,14 +28,11 @@ jobs:
         with:
           node-version: 22.12
 
-      - name: Clear npm cache
-        run: npm cache clean --force
-
-      - name: Install dependencies
-        run: npm install --no-package-lock --no-audit --no-fund --prefer-online
+      - name: Install pinned Prettier
+        run: npm install --global prettier@3.7.3 --no-audit --no-fund
 
       - name: Format tracked project files
-        run: npm run format
+        run: prettier --write .
 
       - name: Commit formatting changes
         run: |
