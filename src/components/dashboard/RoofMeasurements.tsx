@@ -75,7 +75,9 @@ export function RoofMeasurements({
   let startPitch = 6;
   try {
     startPitch = measureDrawing(starting).planes[0]?.pitch ?? 6;
-  } catch {}
+  } catch {
+    // Keep the default pitch when saved geometry cannot be measured.
+  }
   const properties = useQuery(propertiesQuery),
     customers = useQuery(customersQuery),
     drawings = useQuery(drawingsQuery),
