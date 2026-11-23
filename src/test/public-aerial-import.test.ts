@@ -39,7 +39,8 @@ describe("free aerial retrieval", () => {
     expect(url.searchParams.get("f")).toBe("image");
     expect(url.searchParams.get("bboxSR")).toBe("3857");
     expect(url.searchParams.get("size")).toBe("2000,2000");
-    expect(call[1]?.redirect).toBe("manual");
+    expect(call[1]?.redirect).toBe("follow");
+    expect(new Headers(call[1]?.headers).get("accept")).toContain("application/json");
   });
   it("reports geocoder timeout without attempting imagery", async () => {
     const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("timeout"));
@@ -47,6 +48,22 @@ describe("free aerial retrieval", () => {
       stage: "geocoding",
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("rejects an HTML page returned with HTTP 200 by the Census geocoder", async () => {
+    const html = new Response("<html>service page</html>", {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+    const result = await fetchPublicAerial(
+      "Test address",
+      120,
+      vi.fn<typeof fetch>().mockResolvedValue(html),
+    );
+    expect(result).toMatchObject({ stage: "geocoding_response" });
+    if ("error" in result) {
+      expect(result.error).toContain("text/html");
+      expect(result.error).toContain("Add image");
+    }
   });
   it("reports unreadable Census JSON", async () => {
     expect(
