@@ -79,7 +79,7 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(report.roof_type).toBe('Metal Roof');
   });
   it('rounds package counts up while keeping measured footage fractional', () => {
-    const d = roofPreset('gable', 40.25, 30.5, 6); d.roof_type = 'Shingle Roof';
+    const d = roofPreset('gable', 40.37, 30.53, 6); d.roof_type = 'Shingle Roof';
     const r = calculateRoofMaterialTakeoff(d, { wastePercent: 0 });
     for (const line of r.lines.filter(x => ['bundles', 'rolls', 'fasteners'].includes(x.unit))) {
       expect(Number.isInteger(line.quantity)).toBe(true);
