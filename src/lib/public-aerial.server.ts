@@ -4,6 +4,38 @@ const FALLBACK =
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_GEOCODER_BYTES = 1024 * 1024;
 
+async function readBytesLimited(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return null;
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return bytes.byteLength <= maxBytes ? bytes : null;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes;
+  } finally {
+    reader.releaseLock();
+  }
+}
 async function readTextLimited(response: Response, maxBytes: number): Promise<string | null> {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return null;
@@ -143,7 +175,10 @@ export async function fetchPublicAerial(
     return failure("imagery_size", "The aerial image exceeds the 10 MB upload limit.");
   let bytes: Uint8Array;
   try {
-    bytes = new Uint8Array(await img.arrayBuffer());
+    const boundedBytes = await readBytesLimited(img, MAX_BYTES);
+    if (boundedBytes === null)
+      return failure("imagery_size", "The aerial image exceeds the 10 MB upload limit.");
+    bytes = boundedBytes;
   } catch {
     return failure("imagery_download", "The aerial image download was interrupted. Try again.");
   }
