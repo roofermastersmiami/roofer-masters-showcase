@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateEstimate, dollarsToCents, invoiceTotals, invoiceSchema, invoiceState, paymentAmount } from "@/lib/crm-schema";
+import { calculateEstimate, dollarsToCents, invoiceTotals, invoiceSchema, invoiceState, paymentAmount, money } from "@/lib/crm-schema";
 import { proposalMetrics } from "@/lib/crm-reporting";
 describe("CRM invoices and roofing operations",()=>{
   it("calculates line items and tax in integer cents",()=>{expect(invoiceTotals([{description:"Roof",quantity:1.5,unit_cents:10001}],7)).toEqual({subtotal:15002,tax:1050,total:16052});});
@@ -15,4 +15,10 @@ describe("CRM invoices and roofing operations",()=>{
   it("keeps material allowance equal to measured area when waste is zero",()=>{const result=calculateEstimate({sqft:1250,waste:0,material:180,labor:120,permits:0,other:0,margin:0});expect(result.squares).toBe(12.5);expect(result.materialSquares).toBe(12.5);expect(result.materialCents).toBe(225000);expect(result.laborCents).toBe(150000);});
   it("counts a signed proposal once even when multiple links are signed",()=>{const proposals=[{id:"p",is_template:false,amount:100,lead_id:"l",created_at:"2026-11-01"}];const share={proposal_id:"p",signed_at:"2026-11-02",revoked_at:null,expires_at:"2026-12-01"};expect(proposalMetrics(proposals,[share,share]).accepted).toBe(1);expect(proposalMetrics(proposals,[share,share]).acceptance).toBe(100);});
   it("avoids double-counting proposal revisions in expected revenue",()=>{const proposals=[{id:"old",is_template:false,amount:100,lead_id:"l",created_at:"2026-11-01"},{id:"new",is_template:false,amount:150,lead_id:"l",created_at:"2026-11-02"}];const shares=proposals.map((p)=>({proposal_id:p.id,signed_at:null,revoked_at:null,expires_at:"2026-12-01"}));expect(proposalMetrics(proposals,shares,Date.parse("2026-11-20")).expectedCents).toBe(15000);});
+  it("rejects invalid invoice balances before computing status or payment amounts",()=>{
+    expect(()=>invoiceState({status:"issued",total_cents:100,paid_cents:101,due_date:"2026-12-01"})).toThrow("supported range");
+    expect(()=>paymentAmount({total_cents:100,paid_cents:-1,deposit_cents:30},"deposit")).toThrow("supported range");
+    expect(()=>paymentAmount({total_cents:100,paid_cents:0,deposit_cents:101},"balance")).toThrow("supported range");
+    expect(()=>money(Number.MAX_VALUE)).toThrow("supported range");
+  });
 });
