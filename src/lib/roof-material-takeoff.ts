@@ -17,7 +17,11 @@ export function calculateRoofMaterialTakeoff(drawing: RoofDrawing, rawOptions: T
   const area = measured.area * (1 + options.wastePercent / 100);
   const squares = area / 100;
   const lines: MaterialLine[] = [];
-  const add = (item: string, quantity: number, unit: string, basis: string) => { if (quantity > 0) lines.push({ item, quantity: ceil(quantity), unit, basis }); };
+  const add = (item: string, quantity: number, unit: string, basis: string) => {
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+    const wholeUnit = ['bundles', 'rolls', 'fasteners'].includes(unit);
+    lines.push({ item, quantity: wholeUnit ? ceil(quantity) : Math.round(quantity * 10) / 10, unit, basis });
+  };
   if (drawing.roof_type === 'Shingle Roof') {
     add('Shingle bundles', area / options.shingleBundleCoverageSqft, 'bundles', 'Sloped area with selected waste; verify bundle coverage');
     add('Underlayment rolls', area / options.underlaymentRollCoverageSqft, 'rolls', 'Area divided by assumed roll coverage');
@@ -26,14 +30,13 @@ export function calculateRoofMaterialTakeoff(drawing: RoofDrawing, rawOptions: T
     add('Ridge cap allowance', measured.edges.ridge + measured.edges.hip, 'linear ft', 'Ridge and hip lengths');
     add('Fasteners allowance', squares * options.fastenersPerSquare, 'fasteners', 'Allowance only; confirm deck and fastening schedule');
   } else if (drawing.roof_type === 'Metal Roof') {
-    const coverFt = options.metalPanelCoverageInches / 12;
     add('Metal panel coverage allowance', area, 'sq ft', 'Area allowance only; panel count and cut lengths require each measured panel run and layout');
     add('Underlayment rolls', area / options.underlaymentRollCoverageSqft, 'rolls', 'Area divided by assumed roll coverage');
     add('Ridge and hip trim', measured.edges.ridge + measured.edges.hip, 'linear ft', 'Measured ridge and hip edges');
     add('Valley trim', measured.edges.valley, 'linear ft', 'Measured valley edges');
     add('Eave trim', measured.edges.eave, 'linear ft', 'Measured eave edges');
     add('Rake trim', measured.edges.rake, 'linear ft', 'Measured rake edges');
-    add('Fasteners allowance', squares * options.fastenersPerSquare, 'fasteners', 'Allowance only; confirm selected panel system schedule');
+    add('Fasteners allowance', squares * options.fastenersPerSquare, 'fasteners', 'Generic allowance only; replace with selected panel system fastening schedule');
   } else if (drawing.roof_type === 'Tile Roof') {
     add('Tile coverage', area, 'sq ft', 'Area with waste; convert using exact tile exposure and model');
     add('Underlayment rolls', area / options.underlaymentRollCoverageSqft, 'rolls', 'Area divided by assumed roll coverage');
