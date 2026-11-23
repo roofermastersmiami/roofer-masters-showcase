@@ -24,6 +24,21 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(run?.unit).toBe('linear ft');
     expect(run?.quantity).toBeCloseTo(r.orderAreaSqft / (16 / 12), 1);
   });
+
+  it('uses a saved drawing panel width when no override is supplied', () => {
+    const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
+    d.metal_panel_width_inches = 18;
+    const r = calculateRoofMaterialTakeoff(d);
+    expect(r.metalPanelCoverageWidthInches).toBe(18);
+    const report = toMaterialReport(d);
+    expect(report.panel_width_in).toBe(18);
+  });
+  it('keeps the legacy 16-inch default for drawings without a saved width', () => {
+    const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
+    delete d.metal_panel_width_inches;
+    expect(toMaterialReport(d).panel_width_in).toBe(16);
+  });
+
   it('allows a different net coverage when a different panel profile is selected', () => {
     const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
     const r = calculateRoofMaterialTakeoff(d, { metalPanelCoverageWidthInches: 18 });
