@@ -68,7 +68,7 @@ export const confirmInvoiceCheckout = createServerFn({ method: "POST" }).inputVa
 export const cancelInvoiceCheckout = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: unknown) => z.object({ invoice_id: z.string().uuid() }).parse(input)).handler(async ({ data, context }) => {
   const { createStripeClient, getStripeErrorMessage } = await import("./stripe.server");
   try {
-    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['accounting']});
+    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['admin','accounting']});
     if (!owner) return { error: "You do not have access to this action" };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: checkout } = await supabaseAdmin.from("invoice_checkouts").select("id,session_id,environment").eq("invoice_id", data.invoice_id).eq("status", "pending").maybeSingle();
