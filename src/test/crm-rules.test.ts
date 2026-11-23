@@ -7,6 +7,7 @@ import {
   invoiceState,
   paymentAmount,
   money,
+  AMOUNT_RANGE_ERROR,
 } from "@/lib/crm-schema";
 import { proposalMetrics } from "@/lib/crm-reporting";
 describe("CRM invoices and roofing operations", () => {
@@ -34,8 +35,8 @@ describe("CRM invoices and roofing operations", () => {
     expect(() =>
       invoiceTotals([{ description: "Roof", quantity: 1, unit_cents: 100 }], 101),
     ).toThrow();
-    expect(() => dollarsToCents(Number.MAX_VALUE)).toThrow("Amount exceeds the supported range");
-    expect(() => money(Number.MAX_VALUE)).toThrow("Amount exceeds the supported range");
+    expect(() => dollarsToCents(Number.MAX_VALUE)).toThrow(AMOUNT_RANGE_ERROR);
+    expect(() => money(Number.MAX_VALUE)).toThrow(AMOUNT_RANGE_ERROR);
   });
   it("requests only the remaining deposit after partial payments", () => {
     expect(
