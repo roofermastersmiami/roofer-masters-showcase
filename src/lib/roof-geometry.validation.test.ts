@@ -240,3 +240,9 @@ describe('roof preset measurement compatibility', () => {
     expect(() => measureDrawing(preset)).not.toThrow();
   });
 });
+
+describe('roof preset shape validation', () => {
+  it('rejects unsupported runtime shape values', () => {
+    expect(() => roofPreset('dome' as never)).toThrow(/Unsupported roof preset shape/);
+  });
+});
