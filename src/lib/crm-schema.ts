@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AMOUNT_RANGE_ERROR = AMOUNT_RANGE_ERROR;
+export const AMOUNT_RANGE_ERROR = "Amount exceeds the supported range";
 
 export const money = (cents: number) => {
   if (!Number.isSafeInteger(cents)) throw new Error(AMOUNT_RANGE_ERROR);
