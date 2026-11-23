@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { roofPreset, measureDrawing, toMaterialReport, suggestSharedEdgeClassifications } from "@/lib/roof-geometry";
+import { roofPreset, measureDrawing, toMaterialReport, suggestSharedEdgeClassifications, type RoofPlane } from "@/lib/roof-geometry";
 describe("roof geometry", () => {
   it("measures a 40 by 30 flat roof as 1200 square feet and 12 squares", () => {
     const m = measureDrawing(roofPreset("flat", 40, 30));
@@ -99,7 +99,7 @@ describe("reviewable shared roof-edge suggestions", () => {
     const drawing = roofPreset("flat", 2, 2);
     const left = drawing.planes[0];
     if (!left) throw new Error("Missing starter facet");
-    const leftPlane = {
+    const leftPlane: RoofPlane = {
       ...left,
       id: "left",
       name: "Left",
@@ -109,9 +109,9 @@ describe("reviewable shared roof-edge suggestions", () => {
         { x: 0, y: 0, z: 2 },
         { x: -1, y: 1, z: 2 },
       ],
-      edges: ["other", "other", "other", "other"] as const,
+      edges: ["other", "other", "other", "other"],
     };
-    const rightPlane = {
+    const rightPlane: RoofPlane = {
       ...left,
       id: "right",
       name: "Right",
