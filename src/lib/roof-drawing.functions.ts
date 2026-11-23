@@ -2,7 +2,11 @@ import {createServerFn} from '@tanstack/react-start';
 import {requireSupabaseAuth} from '@/integrations/supabase/auth-middleware';
 import {z} from 'zod';
 import {drawingSchema,measureDrawing,toMaterialReport} from './roof-geometry';
-const mediaSchema=z.array(z.object({path:z.string().max(300),name:z.string().max(200),category:z.enum(['aerial','before','after','diagram']),feet_per_pixel:z.number().positive().max(10).optional()})).max(30);
+const safeStoragePath = z.string().min(1).max(300).refine(
+ (path) => !path.startsWith('/') && !path.includes('\\\\') && path.split('/').every((part) => part.length > 0 && part !== '.' && part !== '..'),
+ 'Invalid media storage path',
+);
+const mediaSchema=z.array(z.object({path:safeStoragePath,name:z.string().trim().min(1).max(200),category:z.enum(['aerial','before','after','diagram']),feet_per_pixel:z.number().finite().positive().max(10).optional()})).max(30);
 export const saveRoofDrawing=createServerFn({method:'POST'}).middleware([requireSupabaseAuth]).inputValidator((raw:unknown)=>z.object({property_id:z.string().uuid(),title:z.string().trim().min(1).max(180),geometry:drawingSchema,parent_id:z.string().uuid().nullable(),media:mediaSchema,report_order_id:z.string().uuid().optional()}).parse(raw)).handler(async({data,context})=>{
  const {data:owner}=await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});if(!owner)throw new Error('You do not have access to this action');
  let revision=1;if(data.parent_id){const {data:parent}=await context.supabase.from('roof_drawings').select('revision,property_id').eq('id',data.parent_id).single();if(!parent||parent.property_id!==data.property_id)throw new Error('Drawing property does not match');revision=parent.revision+1;}
