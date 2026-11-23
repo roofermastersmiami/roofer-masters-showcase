@@ -12,7 +12,7 @@ export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
 export const invoiceSchema = z.object({
   lead_id: z.string().uuid(), proposal_id: z.string().uuid().nullable(), title: z.string().trim().min(1).max(180),
   items: z.array(itemSchema).min(1).max(50), tax_percent: z.number().min(0).max(100), deposit_percent: z.number().min(0).max(100),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => !Number.isNaN(Date.parse(v)), "Choose a valid due date"), notes: z.string().max(4000), environment: z.enum(["sandbox", "live"]),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => { const date = new Date(`${v}T00:00:00.000Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v; }, "Choose a valid due date"), notes: z.string().max(4000), environment: z.enum(["sandbox", "live"]),
 }).refine((data) => invoiceTotals(data.items, data.tax_percent).total > 0, "Invoice total must be greater than zero");
 export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
   if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
