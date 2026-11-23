@@ -14,6 +14,7 @@ describe("roof media storage paths", () => {
     "job/../../private.jpg",
     "job//roof.jpg",
     "job/./roof.jpg",
+    "job\\roof.jpg",
     "job\\\\roof.jpg",
     "job/%2e%2e/private.jpg",
     "job/roof photo.jpg",
