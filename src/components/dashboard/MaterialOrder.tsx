@@ -107,8 +107,8 @@ export function MaterialOrder({
           <p className="text-sm font-medium">No paid AI or report-reading credits used</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Keep your EagleView, Hover or other report open and copy its measurements into the
-            fields below. Automatic AI extraction is intentionally disabled to keep this CRM free
-            of metered AI charges.
+            fields below. Automatic AI extraction is intentionally disabled to keep this CRM free of
+            metered AI charges.
           </p>
         </div>
       </div>
