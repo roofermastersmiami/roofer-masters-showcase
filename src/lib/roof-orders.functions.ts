@@ -114,12 +114,16 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    // Material handoff updates roof_jobs, whose RLS policy is production-manager-only.
+    // Estimate handoff is a sales workflow and remains available to office and sales.
+    const allowedRoles =
+      data.target === "materials" ? ["production_manager"] : ["office", "sales"];
     const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
       _user_id: context.userId,
-      _roles: ["office", "sales", "production_manager"],
+      _roles: allowedRoles,
     });
     if (roleError) throw new Error("Could not verify report permissions");
-    if (!owner) throw new Error("You do not have access to this action");
+    if (!owner) throw new Error("You do not have access to transfer this report to that destination");
 
     const { data: order, error: orderError } = await context.supabase
       .from("roof_report_orders")
