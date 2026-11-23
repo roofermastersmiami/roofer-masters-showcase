@@ -56,7 +56,9 @@ function Plane({
       });
       g.setAttribute("position", new Float32BufferAttribute(positions, 3));
       g.computeVertexNormals();
-    } catch {}
+    } catch {
+      // Leave an empty geometry when a plane cannot be triangulated.
+    }
     return g;
   }, [plane]);
   useEffect(() => () => geometry.dispose(), [geometry]);
