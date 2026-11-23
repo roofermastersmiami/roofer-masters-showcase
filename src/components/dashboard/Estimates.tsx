@@ -218,12 +218,20 @@ export function Estimates({
               <p className="text-sm text-muted-foreground">
                 {e.category} · {leads.find((l) => l.id === e.lead_id)?.name ?? "Unassigned"}
               </p>
-              <div className="mt-1 flex flex-wrap gap-2 text-xs">
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                 {e.property_id && e.drawing_id && (
                   <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-0.5 text-primary">
                     Linked roof report
                   </span>
                 )}
+                {(() => {
+                  const roofInputs = estimateInputSchema.safeParse(e.inputs);
+                  return roofInputs.success ? (
+                    <span className="text-muted-foreground">
+                      {roofInputs.data.sqft.toLocaleString()} sq ft · {roofInputs.data.waste}% waste
+                    </span>
+                  ) : null;
+                })()}
                 {e.total_cents === 0 && (
                   <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-muted-foreground">
                     Pricing needed
