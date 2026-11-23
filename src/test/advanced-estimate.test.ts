@@ -10,7 +10,8 @@ it('rejects estimate line collections whose aggregate exceeds safe currency prec
 });
 it('rejects unsafe discounts and selling-price overflow',()=>{
  expect(()=>priceOption({...option,discount_cents:Number.MAX_SAFE_INTEGER+1})).toThrow('Discount exceeds the supported currency range');
- expect(()=>priceOption({...option,margin_pct:95,lines:[{...option.lines[0],quantity:1000000,unit_cents:100000000}]})).toThrow('Selling price exceeds the supported currency range');
+ const largeButValidLines=Array.from({length:10},(_,i)=>({...option.lines[0],id:String(i),quantity:1000000,unit_cents:100000000}));
+ expect(()=>priceOption({...option,margin_pct:95,lines:largeButValidLines})).toThrow('Selling price exceeds the supported currency range');
 });
 
 it('separates actual direct costs and recorded overhead',()=>expect(actualProfit(200000,[{category:'materials',amount_cents:80000},{category:'office',amount_cents:20000}])).toMatchObject({gross:120000,net:100000,margin:50}));
