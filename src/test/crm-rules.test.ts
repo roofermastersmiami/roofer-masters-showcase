@@ -25,6 +25,10 @@ describe("CRM invoices and roofing operations",()=>{
   it("keeps material allowance equal to measured area when waste is zero",()=>{const result=calculateEstimate({sqft:1250,waste:0,material:180,labor:120,permits:0,other:0,margin:0});expect(result.squares).toBe(12.5);expect(result.materialSquares).toBe(12.5);expect(result.materialCents).toBe(225000);expect(result.laborCents).toBe(150000);});
   it("rejects malformed proposal reporting data and unsafe expected revenue",()=>{
     expect(()=>proposalMetrics(null as never,[])).toThrow("valid collections");
+    const duplicate={id:"same",is_template:false,amount:100,lead_id:"l",created_at:"2026-11-01"};
+    expect(()=>proposalMetrics([duplicate,duplicate],[])).toThrow("duplicate proposal IDs");
+    expect(()=>proposalMetrics([{...duplicate,amount:-1}],[])).toThrow("invalid proposal");
+    expect(()=>proposalMetrics([],[],Number.NaN)).toThrow("valid collections");
     expect(()=>proposalMetrics([{id:"p",is_template:false,amount:100,lead_id:"l",created_at:"not-a-date"}],[])).toThrow("invalid proposal");
     expect(()=>proposalMetrics([{id:"p",is_template:false,amount:100,lead_id:"l",created_at:"2026-11-01"}],[{proposal_id:"p",signed_at:null,revoked_at:null,expires_at:"bad-date"}])).toThrow("invalid share");
     expect(()=>proposalMetrics([{id:"p",is_template:false,amount:Number.MAX_VALUE,lead_id:"l",created_at:"2026-11-01"}],[{proposal_id:"p",signed_at:null,revoked_at:null,expires_at:"2026-12-01"}])).toThrow("supported amount");
