@@ -7,6 +7,7 @@ describe('roof photo calibration', () => {
     expect(checkCalibration([], 20, 2000).ok).toBe(false);
     expect(checkCalibration([{ x: 2, y: 2 }, { x: 2, y: 2 }], 20, 2000).ok).toBe(false);
     expect(checkCalibration([{ x: 0, y: 0 }, { x: 100, y: 0 }], 0, 2000).ok).toBe(false);
+    expect(checkCalibration([{ x: Number.NaN, y: 0 }, { x: 100, y: 0 }], 20, 2000).ok).toBe(false);
   });
 
   it('calculates feet per pixel from a known distance', () => {
@@ -27,6 +28,13 @@ describe('roof photo calibration', () => {
     expect(plane.points.map(p => p.x)).toEqual([0, 120, 120, 0]);
     expect(plane.points.map(p => p.z)).toEqual([0, 0, 60, 60]);
     expect(plane.points.map(p => p.y)).toEqual([10, 10, 40, 40]);
+  });
+
+  it('rejects non-finite corner coordinates', () => {
+    expect(() => calibratedPlane(
+      [{ x: 0, y: 0 }, { x: Number.NaN, y: 0 }, { x: 20, y: 20 }],
+      [{ x: 0, y: 0 }, { x: 20, y: 0 }], 1, 6, 'bad',
+    )).toThrow(/finite numbers/);
   });
 
   it('rejects incomplete traced polygons and invalid pitch', () => {
