@@ -1,5 +1,10 @@
 # Roofer Masters Showcase
 
+## Development progress dashboard
+
+A refreshable visual development tracker is published from `docs/progress/index.html` using the GitHub Actions workflow `.github/workflows/progress-pages.yml`. Enable **Settings → Pages → Build and deployment → Source: GitHub Actions** to publish it at `https://roofermastersmiami.github.io/roofer-masters-showcase/`. The dashboard refreshes its commit feed on demand and the workflow also republishes every 30 minutes. The repository is private, so confirm your GitHub Pages plan and site visibility before sharing the published page publicly.
+
+
 Build a professional, modern website for Roofer Masters, a roofing company based in Homestead, Florida, serving all of Miami-Dade and Broward counties. The site should feel bold, trustworthy, and high-end, using deep blue, white, and dark gray colors to match the company branding.
 Create a 3D version of the company logo — a stylized blue roof over a small window, with the name ROOFER MASTERS in strong bold lettering and the tagline YOUR ROOF, OUR MASTERPIECE. Give the logo depth, shading, and a polished 3D effect, and use it in the header, footer, and loading/intro areas of the site.
 Include the following pages and sections:
