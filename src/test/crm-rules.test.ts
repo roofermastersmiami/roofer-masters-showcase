@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateEstimate, invoiceTotals, invoiceSchema, invoiceState, paymentAmount } from "@/lib/crm-schema";
+import { calculateEstimate, dollarsToCents, invoiceTotals, invoiceSchema, invoiceState, paymentAmount } from "@/lib/crm-schema";
 import { proposalMetrics } from "@/lib/crm-reporting";
 describe("CRM invoices and roofing operations",()=>{
   it("calculates line items and tax in integer cents",()=>{expect(invoiceTotals([{description:"Roof",quantity:1.5,unit_cents:10001}],7)).toEqual({subtotal:15002,tax:1050,total:16052});});
+  it("rejects unsafe invoice currency calculations",()=>{expect(()=>invoiceTotals([{description:"Roof",quantity:Number.MAX_VALUE,unit_cents:100}],0)).toThrow();expect(()=>invoiceTotals([{description:"Roof",quantity:1,unit_cents:100}],101)).toThrow();expect(()=>dollarsToCents(Number.MAX_VALUE)).toThrow();});
   it("requests only the remaining deposit after partial payments",()=>{expect(paymentAmount({total_cents:1000000,deposit_cents:300000,paid_cents:100000},"deposit")).toBe(200000);});
   it("requests only the unpaid invoice balance",()=>{expect(paymentAmount({total_cents:1000000,deposit_cents:300000,paid_cents:300000},"balance")).toBe(700000);});
   it("does not request a deposit that is already covered",()=>{expect(paymentAmount({total_cents:1000000,deposit_cents:300000,paid_cents:500000},"deposit")).toBe(0);});
