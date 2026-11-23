@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import {
   calibratedPlane,
   checkCalibration,
+  findSharedEdges,
   snapToExistingCorner,
   validateRoofOutline,
   nextEdgeType,
@@ -71,7 +72,7 @@ export function RoofImageTrace({
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
   const calibration = checkCalibration(reference, feet, w, dimensions.height);
-  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];
+  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];\n  const sharedEdgeMatches = points.length >= 3\n    ? traced.flatMap((plane) => findSharedEdges(points, plane.points, Math.max(3, w * 0.006)).map((match) => ({ ...match, planeName: plane.name })))\n    : [];
 
   const toImage = (clientX: number, clientY: number) => {
     const box = svg.current!.getBoundingClientRect();
@@ -428,6 +429,13 @@ export function RoofImageTrace({
           {outlineIssues.map((issue) => (
             <p key={issue} className="mt-1 text-sm text-destructive">{issue}</p>
           ))}
+          {sharedEdgeMatches.length > 0 && (
+            <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">
+              Shared boundary detected: {sharedEdgeMatches.map((match) =>
+                `edge ${match.edgeA + 1} with ${match.planeName} (within ${match.maxEndpointDistance.toFixed(1)} px)`,
+              ).join("; ")}. Review this connection before verifying the report.
+            </p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />{" "}
