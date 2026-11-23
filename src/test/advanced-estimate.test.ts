@@ -4,6 +4,7 @@ import {
   actualProfit,
   materialSystem,
   findCatalogPrice,
+  catalogForSystem,
   projectInvoices,
   type EstimateOption,
 } from "@/lib/advanced-estimate";
@@ -88,6 +89,19 @@ describe("estimate and recorded profitability", () => {
       findCatalogPrice(catalog, "Standing seam", " ridge / HIP cap (10 ft) ")?.unit_cents,
     ).toBe(2500);
     expect(findCatalogPrice(catalog, "Standing seam", "unlisted item")).toBeUndefined();
+  });
+  it("limits catalog choices to the selected roof system while preserving custom systems", () => {
+    const catalog = [
+      { system: "Metal Roof", item: "Panels", unit_cents: 1000 },
+      { system: "Tile Roof", item: "Tile", unit_cents: 2000 },
+      { system: "Coatings", item: "Coating", unit_cents: 3000 },
+    ];
+    expect(catalogForSystem(catalog, "Standing seam").map((entry) => entry.item)).toEqual([
+      "Panels",
+    ]);
+    expect(catalogForSystem(catalog, "Coatings").map((entry) => entry.item)).toEqual([
+      "Coating",
+    ]);
   });
   it("does not import metal quantities for an unsupported coating system", () => {
     expect(materialSystem("Coatings")).toBeNull();
