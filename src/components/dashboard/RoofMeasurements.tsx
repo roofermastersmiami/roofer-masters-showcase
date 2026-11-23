@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -386,7 +386,7 @@ export function RoofMeasurements({
   }
   const [aerialError, setAerialError] = useState("");
   const [aerialStatus, setAerialStatus] = useState("");
-  async function loadAerial() {
+  const loadAerial = useCallback(async () => {
     const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
     setBusy(true);
@@ -439,7 +439,7 @@ export function RoofMeasurements({
     } finally {
       setBusy(false);
     }
-  }
+  }, [aerialFn, d, media, property, propertyRow?.address, report?.address]);
   const autoAerialAttempted = useRef(false);
   useEffect(() => {
     if (
