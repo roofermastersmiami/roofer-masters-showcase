@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest';
+import { roofPreset } from './roof-geometry';
+import { calculateRoofMaterialTakeoff } from './roof-material-takeoff';
+describe('calculateRoofMaterialTakeoff', () => {
+  it('calculates preliminary shingle quantities with waste', () => {
+    const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Shingle Roof';
+    const r = calculateRoofMaterialTakeoff(d, { wastePercent: 10 });
+    expect(r.orderAreaSqft).toBeCloseTo(r.measuredAreaSqft * 1.1);
+    expect(r.lines.some(x => x.item === 'Shingle bundles')).toBe(true);
+    expect(r.warnings.some(x => x.includes('not site-verified'))).toBe(true);
+  });
+  it('labels metal panel count as an allowance, not a cut list', () => {
+    const d = roofPreset('hip', 40, 60, 5); d.roof_type = 'Metal Roof';
+    const r = calculateRoofMaterialTakeoff(d);
+    expect(r.lines.some(x => x.item === 'Metal panels (area allowance)')).toBe(true);
+    expect(r.warnings.some(x => x.includes('not a cut list'))).toBe(true);
+  });
+  it('rejects invalid product coverage assumptions', () => {
+    const d = roofPreset('flat', 30, 40, 0);
+    expect(() => calculateRoofMaterialTakeoff(d, { underlaymentRollCoverageSqft: 0 })).toThrow();
+  });
+});
