@@ -109,6 +109,70 @@ function edgeKey(a: Point, b: Point) {
   const key = (p: Point) => [p.x, p.y, p.z].map((n) => Math.round(n * 100)).join(",");
   return [key(a), key(b)].sort().join("|");
 }
+
+export type SharedEdgeSuggestion = {
+  planeId: string;
+  edgeIndex: number;
+  type: "ridge" | "valley";
+  sharedWith: string;
+};
+
+/**
+ * Suggest only unmistakable shared ridges/valleys. Both endpoints must sit
+ * clearly above or below the centroid of both adjacent facets. Exterior
+ * edges and ambiguous/hip-like edges are intentionally left for manual review.
+ */
+export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSuggestion[] {
+  const occurrences = new Map<
+    string,
+    { plane: RoofPlane; edgeIndex: number; a: Point; b: Point }[]
+  >();
+  for (const plane of d.planes) {
+    for (let edgeIndex = 0; edgeIndex < plane.points.length; edgeIndex++) {
+      const a = plane.points[edgeIndex];
+      const b = plane.points[(edgeIndex + 1) % plane.points.length];
+      if (!a || !b) continue;
+      const key = edgeKey(a, b);
+      const list = occurrences.get(key) ?? [];
+      list.push({ plane, edgeIndex, a, b });
+      occurrences.set(key, list);
+    }
+  }
+
+  const suggestions: SharedEdgeSuggestion[] = [];
+  for (const shared of occurrences.values()) {
+    if (shared.length !== 2) continue;
+    const first = shared[0];
+    const second = shared[1];
+    if (!first || !second || first.plane.id === second.plane.id) continue;
+
+    const firstCenter = first.plane.points.reduce((sum, point) => sum + point.y, 0) /
+      first.plane.points.length;
+    const secondCenter = second.plane.points.reduce((sum, point) => sum + point.y, 0) /
+      second.plane.points.length;
+    const edgeLow = Math.min(first.a.y, first.b.y);
+    const edgeHigh = Math.max(first.a.y, first.b.y);
+    const toleranceFt = 0.05;
+    const isRidge =
+      edgeLow > firstCenter + toleranceFt && edgeLow > secondCenter + toleranceFt;
+    const isValley =
+      edgeHigh < firstCenter - toleranceFt && edgeHigh < secondCenter - toleranceFt;
+    if (!isRidge && !isValley) continue;
+
+    const type = isRidge ? "ridge" : "valley";
+    if (shared.every((occurrence) => occurrence.plane.edges[occurrence.edgeIndex] === type))
+      continue;
+    for (const occurrence of shared) {
+      suggestions.push({
+        planeId: occurrence.plane.id,
+        edgeIndex: occurrence.edgeIndex,
+        type,
+        sharedWith: occurrence === first ? second.plane.id : first.plane.id,
+      });
+    }
+  }
+  return suggestions;
+}
 export function measureDrawing(raw: RoofDrawing) {
   const d = drawingSchema.parse(raw);
   const planes = d.planes.map((p) => ({ ...planeInfo(p), id: p.id, name: p.name }));

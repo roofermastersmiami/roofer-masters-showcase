@@ -26,6 +26,7 @@ import {
   toMaterialReport,
   distance,
   EDGE_TYPES,
+  suggestSharedEdgeClassifications,
   type RoofDrawing,
   type RoofShape,
 } from "@/lib/roof-geometry";
@@ -144,6 +145,7 @@ export function RoofMeasurements({
     setDirty(true);
   }
   const plane = d.planes.find((p) => p.id === selected);
+  const sharedEdgeSuggestions = suggestSharedEdgeClassifications(d);
   let measurement: ReturnType<typeof measureDrawing> | null = null;
   let error = "";
   try {
@@ -800,6 +802,41 @@ export function RoofMeasurements({
                   </tbody>
                 </table>
               </div>
+              {sharedEdgeSuggestions.length > 0 && (
+                <div className="my-4 rounded-md border border-border p-3">
+                  <p className="text-sm font-semibold">
+                    {sharedEdgeSuggestions.length / 2} shared-edge suggestion
+                    {sharedEdgeSuggestions.length === 2 ? "" : "s"} available
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Geometry-based ridge/valley suggestions only. Exterior eaves and rakes remain
+                    manual. Review the drawing before applying; measurements stay unverified.
+                  </p>
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const next = {
+                        ...d,
+                        planes: d.planes.map((facet) => ({
+                          ...facet,
+                          edges: facet.edges.map((edge, index) => {
+                            const suggestion = sharedEdgeSuggestions.find(
+                              (item) => item.planeId === facet.id && item.edgeIndex === index,
+                            );
+                            return suggestion?.type ?? edge;
+                          }),
+                        })),
+                      };
+                      edit(next);
+                      toast.success("Shared ridge/valley suggestions applied; review before saving");
+                    }}
+                  >
+                    Apply shared-edge suggestions
+                  </Button>
+                </div>
+              )}
               <div className="mt-4 grid gap-2">
                 {plane.edges.map((type, i) => (
                   <Choice
