@@ -121,7 +121,7 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
       const match = source.match(pattern);
       if (!match) continue;
       const n = Number(match[1].replace(/,/g, ""));
-      if (!Number.isFinite(n) || n < 0) continue;
+      if (!Number.isFinite(n) || n < 0 || (key === "pipes" && !Number.isInteger(n))) continue;
       const unit = (match[2] ?? "").toLowerCase();
       (values as Record<string, number>)[key] = convert ? convert(n, unit) : n;
       found.push(label);
