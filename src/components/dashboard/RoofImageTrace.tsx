@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { calibratedPlane, checkCalibration, nextEdgeType, UPHILL_LABELS, type ImagePoint, type Uphill } from '@/lib/roof-trace';
 import { planeInfo, type EdgeType, type RoofPlane } from '@/lib/roof-geometry';
+import { snapToImageEdge } from '@/lib/roof-edge-snap';
 import { Field, Choice } from './CrmControls';
 
 const EDGE_SHORT: Record<EdgeType, string> = { eave: 'Eave', rake: 'Rake', ridge: 'Ridge', hip: 'Hip', valley: 'Valley', other: 'Other' };
@@ -25,6 +26,9 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
   const [replace, setReplace] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
+  const [edgeSnap, setEdgeSnap] = useState(false);
+  const [snapPixels, setSnapPixels] = useState<{ data: Uint8ClampedArray; width: number; height: number } | null>(null);
+  const snapImage = useRef<HTMLImageElement>(null);
   const drag = useRef<{ kind: 'ref' | 'pt'; i: number } | null>(null);
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
@@ -38,8 +42,27 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     return x < 0 || y < 0 || x > dimensions.width || y > dimensions.height ? null : { x, y };
   };
   const addPoint = (p: ImagePoint) => {
-    if (mode === 'calibrate') setReference(reference.length === 2 ? [p] : [...reference, p]);
-    else { setPoints([...points, p]); setEdges([...edges, 'other']); }
+    const snapped = mode === 'trace' && edgeSnap && snapPixels
+      ? snapToImageEdge(snapPixels.data, snapPixels.width, snapPixels.height, p, 18, 55)?.point
+      : null;
+    const point = snapped ?? p;
+    if (mode === 'calibrate') setReference(reference.length === 2 ? [point] : [...reference, point]);
+    else { setPoints([...points, point]); setEdges([...edges, 'other']); }
+  };
+  const prepareSnapPixels = () => {
+    const image = snapImage.current;
+    if (!image?.naturalWidth || !image.naturalHeight) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return setSnapPixels(null);
+      context.drawImage(image, 0, 0);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      setSnapPixels({ data: pixels.data, width: canvas.width, height: canvas.height });
+    } catch {
+      setSnapPixels(null);
+    }
   };
   const onMove = (e: RPointerEvent<SVGSVGElement>) => {
     if (!drag.current) return; const p = toImage(e.clientX, e.clientY); if (!p) return; moved.current = true;
@@ -75,7 +98,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     </div>
     <p className={`mb-3 text-sm ${calibration.ok ? 'text-muted-foreground' : 'text-destructive'}`}>{calibration.ok ? `${feetPerPixel && mode === 'trace' ? 'Auto-calibrated scale' : 'Scale'}: ${calibration.ftPerPx.toFixed(3)} ft per pixel.` : calibration.message}{calibration.ok && calibration.warnings.map(m => <span key={m} className="block text-destructive">{m}</span>)}</p>
     {photo.data ? <div className="relative w-full overflow-hidden rounded-md border border-border">
-      <img src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
+      <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
       <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
         onClick={e => { if (moved.current) { moved.current = false; return; } const p = toImage(e.clientX, e.clientY); if (p) addPoint(p); }}>
@@ -89,6 +112,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     </div> : <p>{photo.error ? 'Photo unavailable' : 'Loading photo…'}</p>}
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <Field label="Plane name"><Input className="w-40" value={name} maxLength={100} placeholder={`Traced plane ${traced.length + 1}`} onChange={e => setName(e.target.value)} /></Field>
+      <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={edgeSnap} onChange={e => setEdgeSnap(e.target.checked)} disabled={!snapPixels} /> Snap corners to visible image edges</label>
       <Field label="Pitch (rise / 12)"><Input className="w-24" type="number" min={0} max={24} value={pitch} onChange={e => setPitch(Number(e.target.value))} /></Field>
       <div className="w-52"><Choice label="Roof rises (eave → ridge)" value={uphill} onChange={v => setUphill(v as Uphill)} options={(Object.keys(UPHILL_LABELS) as Uphill[]).map(k => ({ value: k, label: UPHILL_LABELS[k] }))} /></div>
       <Button variant="ghost" size="icon" aria-label="Undo last corner" title="Undo last corner" disabled={!points.length} onClick={() => { setPoints(points.slice(0, -1)); setEdges(edges.slice(0, -1)); }}><Undo2 /></Button>
