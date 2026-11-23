@@ -106,7 +106,8 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" }).middlewa
     const { data: expired, error } = await supabaseAdmin.from("invoice_checkouts").update({ status: "expired" }).eq("id", checkout.id).eq("status", "pending").select("id").maybeSingle();
     if (error) throw error;
     if (!expired) {
-      const { data: current } = await supabaseAdmin.from("invoice_checkouts").select("status").eq("id", checkout.id).maybeSingle();
+      const { data: current, error: currentError } = await supabaseAdmin.from("invoice_checkouts").select("status").eq("id", checkout.id).maybeSingle();
+      if (currentError) throw new Error("Could not verify checkout status after cancellation");
       if (current?.status === "paid" || current?.status === "expired") return { ok: true };
       return { error: "Checkout status changed. Refresh the invoice before trying again." };
     }
