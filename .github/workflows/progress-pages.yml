@@ -16,6 +16,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
       - name: Read latest commits
         env:
           GH_TOKEN: ${{ github.token }}
@@ -23,12 +25,8 @@ jobs:
           mkdir -p site
           gh api "repos/${GITHUB_REPOSITORY}/commits?sha=main&per_page=30" > /tmp/commits.json
           jq '[.[] | {sha: .sha, message: (.commit.message | split("\n")[0]), date: .commit.committer.date, author: (.author.login // .commit.author.name), url: .html_url}]' /tmp/commits.json > site/commits.json
-      - name: Download dashboard page from repository
-        uses: actions/checkout@v4
       - name: Assemble Pages artifact
-        run: |
-          mkdir -p site
-          cp docs/progress/index.html site/index.html
+        run: cp docs/progress/index.html site/index.html
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
