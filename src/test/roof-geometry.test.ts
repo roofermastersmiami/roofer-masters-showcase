@@ -121,7 +121,7 @@ describe("reviewable shared roof-edge suggestions", () => {
         { x: 1, y: 1, z: 2 },
         { x: 0, y: 0, z: 2 },
       ],
-      edges: ["other", "other", "other", "other"] as const,
+      edges: ["other", "other", "other", "other"],
     };
     drawing.planes = [leftPlane, rightPlane];
     expect(suggestSharedEdgeClassifications(drawing)).toEqual([
