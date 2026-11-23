@@ -5,10 +5,10 @@ export type Uphill = 'up' | 'down' | 'left' | 'right';
 export const UPHILL_LABELS: Record<Uphill, string> = { up: 'Toward top of photo', down: 'Toward bottom of photo', left: 'Toward left of photo', right: 'Toward right of photo' };
 
 /** Checks the two scale points and known distance before any measurement is produced. */
-export function checkCalibration(reference: ImagePoint[], feet: number, imageWidth: number) {
+export function checkCalibration(reference: ImagePoint[], feet: number, imageWidth: number, imageHeight?: number) {
   const a = reference[0], b = reference[1];
   if (!a || !b) return { ok: false, message: 'Click two points on something you know the length of.' } as const;
-  if (![a.x, a.y, b.x, b.y, imageWidth].every(Number.isFinite) || imageWidth <= 0) return { ok: false, message: 'Calibration coordinates are invalid.' } as const;
+  if (![a.x, a.y, b.x, b.y, imageWidth, ...(imageHeight === undefined ? [] : [imageHeight])].every(Number.isFinite) || imageWidth <= 0 || (imageHeight !== undefined && imageHeight <= 0)) return { ok: false, message: 'Calibration coordinates are invalid.' } as const;
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
   if (!Number.isFinite(pixels) || pixels < 1) return { ok: false, message: 'Calibration points must be distinct.' } as const;
   if (!Number.isFinite(feet) || feet <= 0) return { ok: false, message: 'Enter the real distance between the two points in feet.' } as const;
