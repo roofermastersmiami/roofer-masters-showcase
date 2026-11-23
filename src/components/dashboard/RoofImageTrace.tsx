@@ -9,6 +9,7 @@ import {
   calibratedPlane,
   checkCalibration,
   snapToExistingCorner,
+  validateRoofOutline,
   nextEdgeType,
   UPHILL_LABELS,
   type ImagePoint,
@@ -70,6 +71,7 @@ export function RoofImageTrace({
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
   const calibration = checkCalibration(reference, feet, w, dimensions.height);
+  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];
 
   const toImage = (clientX: number, clientY: number) => {
     const box = svg.current!.getBoundingClientRect();
@@ -415,13 +417,18 @@ export function RoofImageTrace({
         </Button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-4">
-        <p className="text-sm text-muted-foreground">
-          {points.length} corners
-          {preview
-            ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter`
-            : ""}{" "}
-          · {traced.length} plane{traced.length === 1 ? "" : "s"} added from this photo
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted-foreground">
+            {points.length} corners
+            {preview
+              ? ` · ${preview.area.toFixed(1)} sq ft sloped · ${preview.perimeter.toFixed(1)} ft perimeter`
+              : ""}{" "}
+            · {traced.length} plane{traced.length === 1 ? "" : "s"} added from this photo
+          </p>
+          {outlineIssues.map((issue) => (
+            <p key={issue} className="mt-1 text-sm text-destructive">{issue}</p>
+          ))}
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />{" "}
           Replace existing roof planes
@@ -434,7 +441,7 @@ export function RoofImageTrace({
           />{" "}
           Snap corners to previous planes
         </label>
-        <Button disabled={points.length < 3 || !calibration.ok} onClick={add}>
+        <Button disabled={points.length < 3 || !calibration.ok || outlineIssues.length > 0} onClick={add}>
           <Plus /> Add traced plane
         </Button>
       </div>
