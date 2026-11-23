@@ -27,7 +27,9 @@ export function FinancialAnalytics() {
   let env = "";
   try {
     env = getStripeEnvironment();
-  } catch {}
+  } catch {
+    // Stripe is optional; analytics can render without environment metadata.
+  }
   const ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
   const costs = (expenses.data ?? []).filter(
     (e) =>
