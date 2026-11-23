@@ -13,7 +13,13 @@ export const loadPublicAerial = createServerFn({ method: "POST" })
           .trim()
           .min(8)
           .max(250)
-          .refine((value) => !/[\u0000-\u001f\u007f]/.test(value), {
+          .refine(
+            (value) =>
+              !Array.from(value).some((character) => {
+                const code = character.charCodeAt(0);
+                return code <= 31 || code === 127;
+              }),
+            {
             message: "Address contains unsupported control characters.",
           }),
         spanMeters: z.number().min(30).max(200).default(70),
