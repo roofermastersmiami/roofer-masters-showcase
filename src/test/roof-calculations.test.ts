@@ -196,4 +196,10 @@ describe("Roof calculation helpers", () => {
     expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:{} as never})).toThrow("edges must be provided as an array");
   });
 
+  it("rejects null facet and edge records with clear validation errors",()=>{
+    expect(()=>calculateRoofSummary({facets:[null as never]})).toThrow("facet must be an object");
+    expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:[null as never]})).toThrow("edge must be an object");
+    expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:[{id:"bad",type:"toString" as never,lengthFt:1}]})).toThrow("unsupported type");
+  });
+
 });
