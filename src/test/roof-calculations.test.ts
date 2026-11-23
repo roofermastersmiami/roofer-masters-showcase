@@ -192,4 +192,8 @@ describe("Roof calculation helpers", () => {
     })).toThrow("supported range");
   });
 
+  it("rejects malformed roof edge collections",()=>{
+    expect(()=>calculateRoofSummary({facets:[{id:"plane-1",surfaceAreaSqFt:100}],edges:{} as never})).toThrow("edges must be provided as an array");
+  });
+
 });
