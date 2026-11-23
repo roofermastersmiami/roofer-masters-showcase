@@ -111,3 +111,23 @@ describe('roof drawing record identifiers', () => {
     }).success).toBe(false);
   });
 });
+
+describe('roof drawing identifier validation', () => {
+  it('rejects blank plane IDs and names', () => {
+    expect(drawingSchema.safeParse({
+      ...drawing,
+      planes: [{ ...drawing.planes[0], id: '   ' }],
+    }).success).toBe(false);
+    expect(drawingSchema.safeParse({
+      ...drawing,
+      planes: [{ ...drawing.planes[0], name: '   ' }],
+    }).success).toBe(false);
+  });
+
+  it('rejects blank penetration IDs', () => {
+    expect(drawingSchema.safeParse({
+      ...drawing,
+      penetrations: [{ id: '  ', kind: 'pipe', x: 5, z: 6, width: 2, length: 3 }],
+    }).success).toBe(false);
+  });
+});
