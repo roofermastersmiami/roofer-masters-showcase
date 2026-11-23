@@ -6,3 +6,10 @@ describe('public aerial scale', () => {
     const b = aerialBox(25.47, -80.48, 70, 1000).bbox; const left=b[0],right=b[2]; if(left===undefined||right===undefined)throw new Error('Missing bounds'); expect((right - left) * Math.cos(25.47 * Math.PI / 180)).toBeCloseTo(70, 3);
   });
 });
+
+it('rejects invalid coordinates and dimensions instead of producing invalid map bounds', () => {
+  expect(() => aerialBox(90, -80, 70, 2000)).toThrow('Latitude');
+  expect(() => aerialBox(25, 181, 70, 2000)).toThrow('Longitude');
+  expect(() => aerialBox(25, -80, 0, 2000)).toThrow('Map span');
+  expect(() => aerialBox(25, -80, 70, 0)).toThrow('Image size');
+});
