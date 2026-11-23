@@ -167,6 +167,13 @@ describe("Roof calculation helpers", () => {
       })
     ).toThrow();
   });
+  it("rejects roofing square order calculations that overflow", () => {
+    expect(() => calculateRoofSummary({
+      facets: [{ id: "large", surfaceAreaSqFt: Number.MAX_VALUE }],
+      wastePercent: 0,
+    })).toThrow("order exceeds the supported range");
+  });
+
   it("rejects geometry conversions and polygon calculations that overflow", () => {
     expect(() => squareMetersToSquareFeet(Number.MAX_VALUE)).toThrow("supported range");
     expect(() => projectedAreaToSurfaceArea(Number.MAX_VALUE, 12)).toThrow("supported range");
