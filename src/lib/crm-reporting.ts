@@ -20,6 +20,7 @@ export function proposalMetrics(
   if (!Array.isArray(proposals) || !Array.isArray(shares) || !Number.isFinite(now)) {
     throw new Error("Proposal metrics require valid collections and a valid current date");
   }
+  const proposalIds = new Set<string>();
   for (const proposal of proposals) {
     if (!proposal || typeof proposal !== "object" ||
         typeof proposal.id !== "string" || !proposal.id ||
@@ -29,6 +30,8 @@ export function proposalMetrics(
         !Number.isFinite(Date.parse(proposal.created_at))) {
       throw new Error("Proposal metrics contain an invalid proposal");
     }
+    if (proposalIds.has(proposal.id)) throw new Error("Proposal metrics contain duplicate proposal IDs");
+    proposalIds.add(proposal.id);
   }
   for (const share of shares) {
     if (!share || typeof share !== "object" ||
