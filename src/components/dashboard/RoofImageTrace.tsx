@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Ruler, Plus, Undo2, Trash2 } from 'lucide-react';
+import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [replace, setReplace] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
   const [edgeSnap, setEdgeSnap] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [lastSnap, setLastSnap] = useState<'snapped' | 'unchanged' | null>(null);
   const [lastSnapPoint, setLastSnapPoint] = useState<ImagePoint | null>(null);
   const [snapPixels, setSnapPixels] = useState<{ data: Uint8ClampedArray; width: number; height: number } | null>(null);
