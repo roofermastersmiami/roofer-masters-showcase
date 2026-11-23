@@ -33,7 +33,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [lastSnapPoint, setLastSnapPoint] = useState<ImagePoint | null>(null);
   const [snapPixels, setSnapPixels] = useState<{ data: Uint8ClampedArray; width: number; height: number } | null>(null);
   const snapImage = useRef<HTMLImageElement>(null);
-  const drag = useRef<{ kind: 'ref' | 'pt'; i: number } | null>(null);
+  const drag = useRef<{ kind: 'ref' | 'pt'; i: number } | { kind: 'pan'; x: number; y: number; panX: number; panY: number } | null>(null);
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
@@ -71,6 +71,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   };
   const onMove = (e: RPointerEvent<SVGSVGElement>) => {
     if (!drag.current) return; const p = toImage(e.clientX, e.clientY); if (!p) return; moved.current = true;
+    if (drag.current.kind === 'pan') { setPan({ x: drag.current.panX + e.clientX - drag.current.x, y: drag.current.panY + e.clientY - drag.current.y }); return; }
     const { kind, i } = drag.current;
     if (kind === 'ref') setReference(r => r.map((q, j) => j === i ? p : q)); else setPoints(r => r.map((q, j) => j === i ? p : q));
   };
@@ -118,7 +119,8 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       <div className="relative w-full overflow-hidden" onWheel={e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); setZoom(z => { const next = Math.max(1, Math.min(4, Number((z + (e.deltaY < 0 ? 0.25 : -0.25)).toFixed(2)))); if (next === 1) setPan({ x: 0, y: 0 }); return next; }); }}>
       <div className="relative w-full" style={{ transform: 'translate(' + pan.x + 'px, ' + pan.y + 'px) scale(' + zoom + ')', transformOrigin: 'center center' }}>
       <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
-      <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
+      <svg ref={svg} className={"absolute inset-0 h-full w-full touch-none text-primary " + (zoom > 1 ? "cursor-grab" : "")} viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
+        onPointerDown={e => { if (zoom > 1 && e.target === e.currentTarget) { drag.current = { kind: "pan", x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }; moved.current = false; e.currentTarget.setPointerCapture(e.pointerId); } }}
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
         onClick={e => { if (moved.current) { moved.current = false; return; } const p = toImage(e.clientX, e.clientY); if (p) addPoint(p); }}>
         {traced.map(t => <g key={t.id} className="text-muted-foreground"><polygon points={t.points.map(p => `${p.x},${p.y}`).join(' ')} fill="currentColor" fillOpacity={0.15} stroke="currentColor" strokeDasharray={`${w / 120}`} strokeWidth={w / 400} /><text x={t.points.reduce((s, p) => s + p.x, 0) / t.points.length} y={t.points.reduce((s, p) => s + p.y, 0) / t.points.length} fontSize={w / 50} textAnchor="middle" fill="currentColor">{t.name}</text></g>)}
