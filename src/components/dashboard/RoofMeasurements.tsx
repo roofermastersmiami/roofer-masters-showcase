@@ -345,20 +345,24 @@ export function RoofMeasurements({
     }
   }
   const [aerialError, setAerialError] = useState("");
+  const [aerialStatus, setAerialStatus] = useState("");
   async function loadAerial() {
     const address = report?.address ?? propertyRow?.address;
     if (!property || !address) return;
     setBusy(true);
     setAerialError("");
+    setAerialStatus("Looking up the property address with the free public mapping service…");
     let stage = "request";
     try {
       const r = await aerialFn({ data: { address, spanMeters: 120 } });
       if ("error" in r) {
         setAerialError(r.error);
+        setAerialStatus("The aerial lookup needs attention. You can retry or upload your own image.");
         toast.error(r.error);
         return;
       }
       stage = "upload";
+      setAerialStatus("Address located. Downloading and securely saving the public aerial image…");
       const path = `drawing-${property}/${crypto.randomUUID()}.png`;
       await uploadAerialImage(r.image, (blob) =>
         supabase.storage.from("roof-job-photos").upload(path, blob, { contentType: "image/png" }),
@@ -376,11 +380,13 @@ export function RoofMeasurements({
       setTraceIndex(next.length - 1);
       setD({ ...d, accuracy: "photo_estimate", image_credit: r.credit, verified: false });
       setDirty(true);
+      setAerialStatus(`Aerial image ready for ${r.matchedAddress}. Trace and review the roof before using measurements.`);
       toast.success("Free public aerial loaded; trace the roof (estimate only)");
     } catch (e) {
       const message =
         stage === "upload" && e instanceof Error ? e.message : aerialInvocationError(e);
       setAerialError(message);
+      setAerialStatus("Aerial loading did not finish. Correct the issue and retry.");
       toast.error(message);
     } finally {
       setBusy(false);
@@ -1030,13 +1036,22 @@ export function RoofMeasurements({
           aerial photo with scale pre-set. Public photos are coarse (often 0.5–1 m detail); results
           are estimates, never survey-grade. No paid provider is used.
         </p>
+        {aerialStatus && (
+          <p
+            className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+            role="status"
+            aria-live="polite"
+          >
+            {aerialStatus}
+          </p>
+        )}
         <div className="flex flex-wrap items-end gap-3">
           <Button
             variant="outline"
             disabled={busy || !property || !(report?.address ?? propertyRow?.address)}
             onClick={() => void loadAerial()}
           >
-            <Upload /> Load free public aerial
+            <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}
           </Button>
           <div className="w-72">
             <Choice
