@@ -40,6 +40,7 @@ describe('metal material order', () => {
   });
 
   it('rejects invalid panel coverage widths', () => {
+    expect(() => materialOrder(metalReport({ panel_width_in: 0 }))).toThrow();
     expect(() => materialOrder(metalReport({ panel_width_in: 5.99 }))).toThrow();
     expect(materialOrder(metalReport({ panel_width_in: 6 })).some(line => line.item.includes('6\"'))).toBe(true);
     expect(() => materialOrder(metalReport({ panel_width_in: 61 }))).toThrow();
