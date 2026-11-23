@@ -10,6 +10,14 @@ describe('roof photo calibration', () => {
     expect(checkCalibration([{ x: Number.NaN, y: 0 }, { x: 100, y: 0 }], 20, 2000).ok).toBe(false);
   });
 
+  it('rejects non-finite calibration points when building a plane', () => {
+    expect(() => calibratedPlane(
+      [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }],
+      [{ x: 0, y: 0 }, { x: Number.POSITIVE_INFINITY, y: 0 }],
+      20, 6, 'bad',
+    )).toThrow(/finite numbers/);
+  });
+
   it('calculates feet per pixel from a known distance', () => {
     const result = checkCalibration([{ x: 100, y: 100 }, { x: 500, y: 100 }], 40, 2000);
     expect(result.ok).toBe(true);
