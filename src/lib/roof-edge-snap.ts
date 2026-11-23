@@ -22,15 +22,23 @@ export function snapToImageEdge(
     return rgba[i]! * 0.299 + rgba[i + 1]! * 0.587 + rgba[i + 2]! * 0.114;
   };
   let best: EdgeSnapResult | null = null;
+  let bestScore = 0;
   for (let y = Math.max(1, cy - r); y <= Math.min(height - 2, cy + r); y++) {
     for (let x = Math.max(1, cx - r); x <= Math.min(width - 2, cx + r); x++) {
+      const distance = Math.hypot(x - point.x, y - point.y);
+      if (distance > r) continue;
       const gx = -gray(x - 1, y - 1) + gray(x + 1, y - 1)
         - 2 * gray(x - 1, y) + 2 * gray(x + 1, y)
         - gray(x - 1, y + 1) + gray(x + 1, y + 1);
       const gy = -gray(x - 1, y - 1) - 2 * gray(x, y - 1) - gray(x + 1, y - 1)
         + gray(x - 1, y + 1) + 2 * gray(x, y + 1) + gray(x + 1, y + 1);
       const strength = Math.hypot(gx, gy);
-      if (strength >= minStrength && (!best || strength > best.strength)) best = { point: { x, y }, strength };
+      // Prefer a nearby usable edge over a much stronger but distant edge.
+      const score = strength / (1 + distance * 0.08);
+      if (strength >= minStrength && score > bestScore) {
+        best = { point: { x, y }, strength };
+        bestScore = score;
+      }
     }
   }
   return best;
