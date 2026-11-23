@@ -199,6 +199,10 @@ describe("Roof calculation helpers", () => {
   it("rejects malformed polygon point collections and missing coordinates", () => {
     expect(() => polygonAreaSqFt(null as never)).toThrow("points must be provided as an array");
     expect(() => polygonAreaSqFt([null, { x: 1, y: 1 }, { x: 2, y: 2 }] as never)).toThrow("point must be an object");
+    const sparsePoints = new Array(3) as Array<{ x: number; y: number }>;
+    sparsePoints[0] = { x: 0, y: 0 };
+    sparsePoints[2] = { x: 1, y: 1 };
+    expect(() => polygonAreaSqFt(sparsePoints)).toThrow("point must be an object");
     expect(() => polygonAreaSqFt([
       { x: 0, y: 0 },
       { x: 10, y: Number.NaN },
