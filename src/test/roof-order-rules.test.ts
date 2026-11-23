@@ -4,6 +4,7 @@ import {
   ownRoofReportSchema,
   assertReportStatus,
   reviewedReport,
+  roofOrderTransferRoles,
 } from "@/lib/roof-order-schema";
 const customer = "bc1ce3a1-e666-4169-9c65-4e17b3d156bb";
 const report = {
@@ -18,6 +19,13 @@ const report = {
   panel_width_in: 16,
   pipes: 2,
 };
+describe("roof report transfer permissions", () => {
+  it("matches destination permissions to the database job policies", () => {
+    expect(roofOrderTransferRoles("estimate")).toEqual(["office", "sales"]);
+    expect(roofOrderTransferRoles("materials")).toEqual(["production_manager"]);
+  });
+});
+
 describe("address-based roof report requests", () => {
   it("starts only company-owned reports, not paid provider orders", () => {
     const input = {
