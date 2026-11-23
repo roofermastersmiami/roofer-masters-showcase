@@ -14,10 +14,13 @@ export function checkCalibration(reference: ImagePoint[], feet: number, imageWid
   if (!Number.isFinite(feet) || feet <= 0) return { ok: false, message: 'Enter the real distance between the two points in feet.' } as const;
   if (feet > 500) return { ok: false, message: 'Known distance over 500 ft looks wrong for one roof.' } as const;
   const ftPerPx = feet / pixels;
+  if (!Number.isFinite(ftPerPx) || ftPerPx <= 0) return { ok: false, message: 'The scale is outside the supported numeric range; use a longer known reference.' } as const;
+  const photoWidthFeet = ftPerPx * imageWidth;
+  if (!Number.isFinite(photoWidthFeet)) return { ok: false, message: 'The calibrated photo width is invalid; check the scale points.' } as const;
   const warnings: string[] = [];
   if (pixels < imageWidth * 0.08) warnings.push('Scale points are very close together; choose a longer known edge for better accuracy.');
-  if (ftPerPx * imageWidth > 600) warnings.push('This scale makes the photo wider than 600 ft; check the known distance.');
-  if (ftPerPx * imageWidth < 10) warnings.push('This scale makes the photo narrower than 10 ft; check the known distance.');
+  if (photoWidthFeet > 600) warnings.push('This scale makes the photo wider than 600 ft; check the known distance.');
+  if (photoWidthFeet < 10) warnings.push('This scale makes the photo narrower than 10 ft; check the known distance.');
   return { ok: true, ftPerPx, warnings } as const;
 }
 
