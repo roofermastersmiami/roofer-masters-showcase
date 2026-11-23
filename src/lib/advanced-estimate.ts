@@ -33,6 +33,20 @@ export const advancedOptionSchema = z.object({
   deposit_pct: z.number().min(0).max(100),
 });
 export type EstimateOption = z.infer<typeof advancedOptionSchema>;
+export function findCatalogPrice<T extends { system: string; item: string; unit_cents: number }>(
+  catalog: T[],
+  system: string,
+  item: string,
+): T | undefined {
+  const normalizedSystem = materialSystem(system);
+  const normalize = (value: string) => value.trim().toLocaleLowerCase().replace(/\\s+/g, " ");
+  if (!normalizedSystem || !item.trim()) return undefined;
+  const normalizedItem = normalize(item);
+  return catalog.find(
+    (entry) =>
+      materialSystem(entry.system) === normalizedSystem && normalize(entry.item) === normalizedItem,
+  );
+}
 export function materialSystem(
   system: string,
 ): "Metal Roof" | "Tile Roof" | "Shingle Roof" | "TPO" | "Flat Roof" | null {
