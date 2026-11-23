@@ -21,4 +21,5 @@ describe("CRM invoices and roofing operations",()=>{
     expect(()=>paymentAmount({total_cents:100,paid_cents:0,deposit_cents:101},"balance")).toThrow("supported range");
     expect(()=>money(Number.MAX_VALUE)).toThrow("supported range");
   });
+  it("rejects invalid timestamps when calculating invoice status",()=>{expect(()=>invoiceState({status:"issued",total_cents:100,paid_cents:0,due_date:"2026-12-01"},Number.NaN)).toThrow("valid current date");});
 });
