@@ -33,8 +33,8 @@ export function snapToImageEdge(
       const gy = -gray(x - 1, y - 1) - 2 * gray(x, y - 1) - gray(x + 1, y - 1)
         + gray(x - 1, y + 1) + 2 * gray(x, y + 1) + gray(x + 1, y + 1);
       const strength = Math.hypot(gx, gy);
-      // Prefer a nearby usable edge over a much stronger but distant edge.
-      const score = strength / (1 + distance * 0.08);
+      // Favor proximity more strongly so high-contrast shingle texture is less likely to pull the point away from the click.
+      const score = strength / (1 + distance * 0.5);
       if (strength >= minStrength && score > bestScore) {
         best = { point: { x, y }, strength };
         bestScore = score;
