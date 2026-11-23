@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { calibratedPlane, snapToExistingCorner, validateRoofOutline } from "@/lib/roof-trace";
+import { calibratedPlane, findSharedEdges, snapToExistingCorner, validateRoofOutline } from "@/lib/roof-trace";
 import { planeInfo } from "@/lib/roof-geometry";
 it("calibrates a 200 by 100 pixel plane from a 20 foot reference", () => {
   const plane = calibratedPlane(
@@ -287,5 +287,36 @@ describe("roof outline validation", () => {
       [{ x: 0, y: 0 }, { x: 100, y: 0 }],
       10, 0, "crossed",
     )).toThrow("crosses itself");
+  });
+});
+
+
+describe("shared roof edge detection", () => {
+  const left = [
+    { x: 0, y: 0 }, { x: 100, y: 0 },
+    { x: 100, y: 100 }, { x: 0, y: 100 },
+  ];
+  it("detects a shared edge traced in the opposite direction", () => {
+    const right = [
+      { x: 100, y: 0 }, { x: 200, y: 0 },
+      { x: 200, y: 100 }, { x: 100, y: 100 },
+    ];
+    expect(findSharedEdges(left, right, 1)).toEqual([
+      { edgeA: 1, edgeB: 3, reversed: true, maxEndpointDistance: 0 },
+    ]);
+  });
+
+  it("allows small tracing differences within the selected tolerance", () => {
+    const adjacent = [
+      { x: 101, y: 1 }, { x: 200, y: 0 },
+      { x: 200, y: 100 }, { x: 99, y: 101 },
+    ];
+    expect(findSharedEdges(left, adjacent, 2)).toHaveLength(1);
+    expect(findSharedEdges(left, adjacent, 0.5)).toHaveLength(0);
+  });
+
+  it("does not report distant or invalid comparisons", () => {
+    expect(findSharedEdges(left, [{ x: 300, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 100 }], 5)).toEqual([]);
+    expect(findSharedEdges(left, left, 0)).toEqual([]);
   });
 });
