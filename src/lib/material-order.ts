@@ -176,9 +176,7 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
     ],
     "pipes",
   );
-  const roof = source
-    .match(/\b(shingle|tile|metal|tpo|flat)\s*(?:roof)?\b/i)?.[1]
-    ?.toLowerCase();
+  const roof = source.match(/\b(shingle|tile|metal|tpo|flat)\s*(?:roof)?\b/i)?.[1]?.toLowerCase();
   if (roof) {
     values.roof_type =
       roof === "shingle"
