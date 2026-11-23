@@ -145,6 +145,19 @@ describe("reviewable shared roof-edge suggestions", () => {
     expect(suggestSharedEdgeClassifications(gable)).toEqual([]);
   });
 
+  it("returns both sides when only one side of a shared edge needs correction", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const west = drawing.planes.find((plane) => plane.id === "West plane");
+    const east = drawing.planes.find((plane) => plane.id === "East plane");
+    if (!west || !east) throw new Error("Missing gable facets");
+    west.edges[1] = "ridge";
+    east.edges[3] = "other";
+    expect(suggestSharedEdgeClassifications(drawing)).toEqual([
+      { planeId: "West plane", edgeIndex: 1, type: "ridge", sharedWith: "East plane" },
+      { planeId: "East plane", edgeIndex: 3, type: "ridge", sharedWith: "West plane" },
+    ]);
+  });
+
   it("does not suggest an edge already classified consistently", () => {
     expect(suggestSharedEdgeClassifications(roofPreset("gable", 40, 30, 6))).toEqual([]);
   });
