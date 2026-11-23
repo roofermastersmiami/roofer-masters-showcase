@@ -400,7 +400,6 @@ export function RoofMeasurements({
   useEffect(() => {
     if (
       shouldAutoLoadAddressAerial({
-        isNewReport: Boolean(report && !initialDrawing),
         address: report?.address ?? propertyRow?.address,
         hasAerial: media.some((item) => item.category === "aerial"),
         alreadyAttempted: autoAerialAttempted.current,
