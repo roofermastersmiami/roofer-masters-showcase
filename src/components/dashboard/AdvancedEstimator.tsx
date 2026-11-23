@@ -504,9 +504,9 @@ export function AdvancedEstimator() {
                   },
                   ...catalogForSystem(catalog.data ?? [], o.system).map((c) => ({
                     value: c.id,
-                    label: `${c.item} · `${money(c.unit_cents)}`,
+                    label: `${c.item} · ${money(c.unit_cents)}`,
                   })),
-                ]}}
+                ]}
               />
             </div>
           </div>
