@@ -31,6 +31,12 @@ export const invoiceSchema = z.object({
 export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
   if (![invoice.total_cents, invoice.paid_cents].every(Number.isSafeInteger) || invoice.total_cents < 0 || invoice.paid_cents < 0 || invoice.paid_cents > invoice.total_cents) throw new Error("Invoice balances are outside the supported range");
   if (!Number.isFinite(now)) throw new Error("Invoice status requires a valid current date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoice.due_date) ||
+      Number.isNaN(Date.parse(`${invoice.due_date}T00:00:00.000Z`)) ||
+      new Date(`${invoice.due_date}T00:00:00.000Z`).toISOString().slice(0, 10) !== invoice.due_date) {
+    throw new Error("Invoice due date is invalid");
+  }
+  if (!["draft", "void", "issued"].includes(invoice.status)) throw new Error("Invoice status is invalid");
   if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
   if (invoice.paid_cents >= invoice.total_cents) return "paid";
   const todayInMiami = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
