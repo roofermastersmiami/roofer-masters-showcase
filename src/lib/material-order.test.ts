@@ -99,4 +99,21 @@ describe("local roof report text import", () => {
     expect(parsed.values.area_sqft).toBeUndefined();
     expect(parsed.values.ridge_lf).toBeUndefined();
   });
+
+  it("recognizes common written units and keeps pitch as a manual-review note", () => {
+    const parsed = parseRoofReportText(
+      "Roof area: 2,400 square feet\\nRidge length: 38 linear feet\\nRoof pitch: 6/12",
+    );
+    expect(parsed.values.area_sqft).toBe(2400);
+    expect(parsed.values.ridge_lf).toBe(38);
+    expect(parsed.values).not.toHaveProperty("pitch");
+    expect(parsed.found).toContain("Pitch (review manually)");
+  });
+
+  it("does not read measurements beyond the documented input limit", () => {
+    const parsed = parseRoofReportText(
+      `${"x".repeat(100_001)}\\nRoof area: 2400 sq ft`,
+    );
+    expect(parsed.values.area_sqft).toBeUndefined();
+  });
 });
