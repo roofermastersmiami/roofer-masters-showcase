@@ -14,11 +14,11 @@ type Traced = { id: string; name: string; points: ImagePoint[] };
 
 export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; onAdd: (plane: RoofPlane, replace: boolean) => void; feetPerPixel?: number }) {
   const photo = useQuery({ queryKey: ['trace-photo', path], queryFn: async () => { const { data, error } = await supabase.storage.from('roof-job-photos').createSignedUrl(path, 300); if (error || !data) throw error; return data.signedUrl; } });
-  const [mode, setMode] = useState<'calibrate' | 'trace'>(feetPerPixel ? 'trace' : 'calibrate');
-  const [reference, setReference] = useState<ImagePoint[]>(feetPerPixel ? [{ x: 0, y: 0 }, { x: 1000, y: 0 }] : []);
+  const [mode, setMode] = useState<'calibrate' | 'trace'>(feetPerPixel && Number.isFinite(feetPerPixel) && feetPerPixel > 0 ? 'trace' : 'calibrate');
+  const [reference, setReference] = useState<ImagePoint[]>(feetPerPixel && Number.isFinite(feetPerPixel) && feetPerPixel > 0 ? [{ x: 0, y: 0 }, { x: 1000, y: 0 }] : []);
   const [points, setPoints] = useState<ImagePoint[]>([]);
   const [edges, setEdges] = useState<EdgeType[]>([]);
-  const [feet, setFeet] = useState(feetPerPixel ? feetPerPixel * 1000 : 0);
+  const [feet, setFeet] = useState(feetPerPixel && Number.isFinite(feetPerPixel) && feetPerPixel > 0 ? feetPerPixel * 1000 : 0);
   const [pitch, setPitch] = useState(6);
   const [uphill, setUphill] = useState<Uphill>('up');
   const [name, setName] = useState('');
@@ -64,16 +64,16 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   return <section className="border-t border-border py-6">
     <h3 className="mb-2 text-lg font-bold">Calibrated photo tracing</h3>
     <div className="mb-4 space-y-1 text-sm text-muted-foreground">
-      <p>1. Set scale: click both ends of something you measured (a wall, eave or driveway) and enter its real length. 2. Trace one roof plane at a time — click corners, drag dots to adjust, click edge labels to set Eave / Rake / Ridge / Hip / Valley. 3. Enter that plane's pitch and which way it rises. 4. Add plane, repeat for every plane on the same photo.</p>
+      <p>Trace each roof plane by clicking its corners, dragging dots to adjust, and choosing Eave / Rake / Ridge / Hip / Valley for each edge. Enter the plane pitch and uphill direction, then add the plane and repeat. Scale is automatic for georeferenced USGS aerials; for uploaded photos, set scale using a known measured distance.</p>
       <p>Photos only give flat (plan) size; slope comes from the pitch you enter. Results stay estimates until you check them on site and mark the report verified. Not survey-grade.</p>
     </div>
-    {feetPerPixel && <p className="mb-4 border-l-2 border-primary pl-3 text-sm">Free public aerial: scale pre-set from map data ({feetPerPixel.toFixed(2)} ft per pixel). This image is coarse (about 1 m per pixel) — use it for rough layout only and recalibrate on a measured edge when possible.</p>}
+    {feetPerPixel && <p className="mb-4 border-l-2 border-primary pl-3 text-sm"><strong>Automatic scale calibration active.</strong> The USGS aerial's georeferenced ground bounds set the image scale to {feetPerPixel.toFixed(3)} ft per pixel. No manual scale points are needed. This public imagery is relatively coarse, so treat dimensions as preliminary estimates and verify critical edges on site. You can still override the scale below if you have a measured reference.</p>}
     <div className="mb-3 flex flex-wrap items-end gap-3">
-      <Button variant={mode === 'calibrate' ? 'secondary' : 'outline'} onClick={() => { setMode('calibrate'); setReference([]); }}><Ruler /> Set two scale points</Button>
+      <Button variant={mode === 'calibrate' ? 'secondary' : 'outline'} onClick={() => { setMode('calibrate'); setReference([]); }}><Ruler /> {feetPerPixel ? 'Override automatic scale' : 'Set two scale points'}</Button>
       <Field label="Known distance (ft)"><Input className="w-28" type="number" min={0.1} value={feet || ''} onChange={e => setFeet(Number(e.target.value))} /></Field>
       <Button variant={mode === 'trace' ? 'secondary' : 'outline'} disabled={!calibration.ok} onClick={() => setMode('trace')}>Trace roof plane</Button>
     </div>
-    <p className={`mb-3 text-sm ${calibration.ok ? 'text-muted-foreground' : 'text-destructive'}`}>{calibration.ok ? `Scale: ${calibration.ftPerPx.toFixed(3)} ft per pixel.` : calibration.message}{calibration.ok && calibration.warnings.map(m => <span key={m} className="block text-destructive">{m}</span>)}</p>
+    <p className={`mb-3 text-sm ${calibration.ok ? 'text-muted-foreground' : 'text-destructive'}`}>{calibration.ok ? `${feetPerPixel && mode === 'trace' ? 'Auto-calibrated scale' : 'Scale'}: ${calibration.ftPerPx.toFixed(3)} ft per pixel.` : calibration.message}{calibration.ok && calibration.warnings.map(m => <span key={m} className="block text-destructive">{m}</span>)}</p>
     {photo.data ? <div className="relative w-full overflow-hidden rounded-md border border-border">
       <img src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
       <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
