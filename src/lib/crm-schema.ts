@@ -1,13 +1,24 @@
 import { z } from "zod";
 
 export const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
-export const dollarsToCents = (dollars: number) => Math.round(dollars * 100);
+export const dollarsToCents = (dollars: number) => {
+  const cents = Math.round(dollars * 100);
+  if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents)) throw new Error("Amount exceeds the supported currency range");
+  return cents;
+};
 export const itemSchema = z.object({ description: z.string().trim().min(1).max(250), quantity: z.number().positive().max(100000), unit_cents: z.number().int().nonnegative().max(100000000) });
 export type InvoiceItem = z.infer<typeof itemSchema>;
 export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
-  const subtotal = items.reduce((sum, item) => sum + Math.round(item.quantity * item.unit_cents), 0);
-  const tax = Math.round(subtotal * taxPercent / 100);
-  return { subtotal, tax, total: subtotal + tax };
+  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) throw new Error("Tax percentage must be between 0 and 100");
+  const subtotal = items.reduce((sum, item) => {
+    const lineTotal = Math.round(item.quantity * item.unit_cents);
+    if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || !Number.isSafeInteger(sum + lineTotal)) throw new Error("Invoice subtotal exceeds the supported amount");
+    return sum + lineTotal;
+  }, 0);
+  const tax = Math.round(subtotal * (taxPercent / 100));
+  const total = subtotal + tax;
+  if (!Number.isSafeInteger(tax) || !Number.isSafeInteger(total)) throw new Error("Invoice total exceeds the supported amount");
+  return { subtotal, tax, total };
 }
 export const invoiceSchema = z.object({
   lead_id: z.string().uuid(), proposal_id: z.string().uuid().nullable(), title: z.string().trim().min(1).max(180),
@@ -34,6 +45,8 @@ export function calculateEstimate(raw: EstimateInputs) {
   const laborCents = dollarsToCents(squares * input.labor);
   const cost = materialCents + laborCents + dollarsToCents(input.permits + input.other);
   const total = Math.round(cost / (1 - input.margin / 100));
+  if (![materialSquares, materialCents, laborCents, cost, total].every(Number.isSafeInteger) && !Number.isSafeInteger(materialSquares)) throw new Error("Estimate exceeds the supported amount");
+  if (![materialCents, laborCents, cost, total].every(Number.isSafeInteger)) throw new Error("Estimate exceeds the supported amount");
   return { squares, materialSquares, materialCents, laborCents, cost, total, profit: total - cost };
 }
 export const CHECKLIST = ["Pre-job inspection", "Permit verified", "Materials delivered", "Tear-off complete", "Dry-in inspection", "Roof installation", "Final inspection", "Site cleanup"];
