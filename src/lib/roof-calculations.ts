@@ -151,6 +151,10 @@ export function polygonAreaSqFt(
     const a = points[i]!;
     const b = points[(i + 1) % points.length]!;
 
+    if (!a || typeof a !== "object" || !b || typeof b !== "object") {
+      throw new Error("Every polygon point must be an object.");
+    }
+
     if (
       !Number.isFinite(a.x) ||
       !Number.isFinite(a.y) ||
