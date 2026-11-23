@@ -3,7 +3,7 @@ import { fetchPublicAerial } from '@/lib/public-aerial.server';
 import { aerialImageBlob, uploadAerialImage, aerialInvocationError } from '@/lib/public-aerial-import';
 function png(width=2000) {
   const bytes=new Uint8Array(24); bytes.set([137,80,78,71,13,10,26,10]);
-  const view=new DataView(bytes.buffer); view.setUint32(16,width); view.setUint32(20,1000); return bytes;
+  const view=new DataView(bytes.buffer); view.setUint32(16,width); view.setUint32(20,2000); return bytes;
 }
 const geo=()=>Response.json({result:{addressMatches:[{coordinates:{x:-80.48,y:25.47},matchedAddress:'Test address'}]}});
 const image=()=>new Response(png(),{headers:{'content-type':'image/png'}});
