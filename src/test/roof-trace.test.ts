@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { calibratedPlane, findSharedEdges, snapToExistingCorner, validateRoofOutline } from "@/lib/roof-trace";
+import {
+  calibratedPlane,
+  findSharedEdges,
+  snapToExistingCorner,
+  validateRoofOutline,
+} from "@/lib/roof-trace";
 import { planeInfo } from "@/lib/roof-geometry";
 it("calibrates a 200 by 100 pixel plane from a 20 foot reference", () => {
   const plane = calibratedPlane(
@@ -236,10 +241,12 @@ it("rejects calibration points below the bottom image boundary", () => {
   ).toBe(true);
 });
 
-
 describe("shared roof corner snapping", () => {
   it("snaps a new plane corner to a nearby previously traced corner", () => {
-    const existing = [{ x: 100, y: 200 }, { x: 300, y: 200 }];
+    const existing = [
+      { x: 100, y: 200 },
+      { x: 300, y: 200 },
+    ];
     expect(snapToExistingCorner({ x: 106, y: 204 }, existing, 10)).toEqual({ x: 100, y: 200 });
   });
 
@@ -255,51 +262,81 @@ describe("shared roof corner snapping", () => {
   });
 });
 
-
 describe("roof outline validation", () => {
   it("accepts a normal closed roof outline", () => {
-    expect(validateRoofOutline([
-      { x: 0, y: 0 }, { x: 200, y: 0 },
-      { x: 200, y: 100 }, { x: 0, y: 100 },
-    ])).toEqual([]);
+    expect(
+      validateRoofOutline([
+        { x: 0, y: 0 },
+        { x: 200, y: 0 },
+        { x: 200, y: 100 },
+        { x: 0, y: 100 },
+      ]),
+    ).toEqual([]);
   });
 
   it("rejects adjacent duplicate corners and tiny outlines", () => {
-    expect(validateRoofOutline([
-      { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 100, y: 0 },
-      { x: 100, y: 100 },
-    ])).toContain("Two neighboring corners overlap; move or remove the duplicate corner.");
-    expect(validateRoofOutline([
-      { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 },
-    ])).toContain("Roof outline is too small or flat to measure.");
+    expect(
+      validateRoofOutline([
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+      ]),
+    ).toContain("Two neighboring corners overlap; move or remove the duplicate corner.");
+    expect(
+      validateRoofOutline([
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+      ]),
+    ).toContain("Roof outline is too small or flat to measure.");
   });
 
   it("rejects a bow-tie outline that crosses itself", () => {
-    expect(validateRoofOutline([
-      { x: 0, y: 0 }, { x: 100, y: 100 },
-      { x: 0, y: 100 }, { x: 100, y: 0 },
-    ])).toContain("Roof outline crosses itself; adjust the corners so the perimeter does not cross.");
+    expect(
+      validateRoofOutline([
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 },
+        { x: 100, y: 0 },
+      ]),
+    ).toContain("Roof outline crosses itself; adjust the corners so the perimeter does not cross.");
   });
 
   it("prevents invalid outlines from becoming measured roof planes", () => {
-    expect(() => calibratedPlane(
-      [{ x: 0, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 100, y: 0 }],
-      [{ x: 0, y: 0 }, { x: 100, y: 0 }],
-      10, 0, "crossed",
-    )).toThrow("crosses itself");
+    expect(() =>
+      calibratedPlane(
+        [
+          { x: 0, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+          { x: 100, y: 0 },
+        ],
+        [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+        ],
+        10,
+        0,
+        "crossed",
+      ),
+    ).toThrow("crosses itself");
   });
 });
 
-
 describe("shared roof edge detection", () => {
   const left = [
-    { x: 0, y: 0 }, { x: 100, y: 0 },
-    { x: 100, y: 100 }, { x: 0, y: 100 },
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 },
   ];
   it("detects a shared edge traced in the opposite direction", () => {
     const right = [
-      { x: 100, y: 0 }, { x: 200, y: 0 },
-      { x: 200, y: 100 }, { x: 100, y: 100 },
+      { x: 100, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 100 },
+      { x: 100, y: 100 },
     ];
     expect(findSharedEdges(left, right, 1)).toEqual([
       { edgeA: 1, edgeB: 3, reversed: true, maxEndpointDistance: 0 },
@@ -308,15 +345,27 @@ describe("shared roof edge detection", () => {
 
   it("allows small tracing differences within the selected tolerance", () => {
     const adjacent = [
-      { x: 101, y: 1 }, { x: 200, y: 0 },
-      { x: 200, y: 100 }, { x: 99, y: 101 },
+      { x: 101, y: 1 },
+      { x: 200, y: 0 },
+      { x: 200, y: 100 },
+      { x: 99, y: 101 },
     ];
     expect(findSharedEdges(left, adjacent, 2)).toHaveLength(1);
     expect(findSharedEdges(left, adjacent, 0.5)).toHaveLength(0);
   });
 
   it("does not report distant or invalid comparisons", () => {
-    expect(findSharedEdges(left, [{ x: 300, y: 0 }, { x: 400, y: 0 }, { x: 400, y: 100 }], 5)).toEqual([]);
+    expect(
+      findSharedEdges(
+        left,
+        [
+          { x: 300, y: 0 },
+          { x: 400, y: 0 },
+          { x: 400, y: 100 },
+        ],
+        5,
+      ),
+    ).toEqual([]);
     expect(findSharedEdges(left, left, 0)).toEqual([]);
   });
 });

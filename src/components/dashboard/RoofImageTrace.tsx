@@ -450,15 +450,20 @@ export function RoofImageTrace({
           ))}
           {sharedEdgeMatches.length > 0 && (
             <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">
-              Shared boundary detected: {sharedEdgeMatches.map((match) =>
-                `edge ${match.edgeA + 1} with ${match.planeName} (within ${match.maxEndpointDistance.toFixed(1)} px)`,
-              ).join("; ")}. Review this connection before verifying the report.
+              Shared boundary detected:{" "}
+              {sharedEdgeMatches
+                .map(
+                  (match) =>
+                    `edge ${match.edgeA + 1} with ${match.planeName} (within ${match.maxEndpointDistance.toFixed(1)} px)`,
+                )
+                .join("; ")}
+              . Review this connection before verifying the report.
             </p>
           )}
           {traced.length > 0 && points.length >= 3 && sharedEdgeMatches.length === 0 && (
             <p className="mt-1 text-sm text-muted-foreground">
-              No matching edge found on the previously traced planes. If these planes should connect,
-              review the corner alignment before verifying the report.
+              No matching edge found on the previously traced planes. If these planes should
+              connect, review the corner alignment before verifying the report.
             </p>
           )}
         </div>

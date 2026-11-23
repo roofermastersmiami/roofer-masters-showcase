@@ -482,8 +482,7 @@ export async function roofDrawingPdf(
     paragraph(photo.category.toUpperCase(), 13, true, NAVY);
     paragraph(photo.name, 9, false, MUTED);
     if (photo.source) paragraph(`Source: ${photo.source}`, 8, false, MUTED);
-    if (photo.matchedAddress)
-      paragraph(`Address match: ${photo.matchedAddress}`, 8, false, MUTED);
+    if (photo.matchedAddress) paragraph(`Address match: ${photo.matchedAddress}`, 8, false, MUTED);
     if (typeof photo.latitude === "number" && typeof photo.longitude === "number") {
       paragraph(
         `Map coordinates: ${photo.latitude.toFixed(6)}, ${photo.longitude.toFixed(6)}`,

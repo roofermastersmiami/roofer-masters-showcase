@@ -40,11 +40,19 @@ export function findSharedEdges(
   }
   const matches: SharedEdgeMatch[] = [];
   for (let i = 0; i < a.length; i++) {
-    const a1 = a[i]!, a2 = a[(i + 1) % a.length]!;
+    const a1 = a[i]!,
+      a2 = a[(i + 1) % a.length]!;
     for (let j = 0; j < b.length; j++) {
-      const b1 = b[j]!, b2 = b[(j + 1) % b.length]!;
-      const direct = Math.max(Math.hypot(a1.x - b1.x, a1.y - b1.y), Math.hypot(a2.x - b2.x, a2.y - b2.y));
-      const reverse = Math.max(Math.hypot(a1.x - b2.x, a1.y - b2.y), Math.hypot(a2.x - b1.x, a2.y - b1.y));
+      const b1 = b[j]!,
+        b2 = b[(j + 1) % b.length]!;
+      const direct = Math.max(
+        Math.hypot(a1.x - b1.x, a1.y - b1.y),
+        Math.hypot(a2.x - b2.x, a2.y - b2.y),
+      );
+      const reverse = Math.max(
+        Math.hypot(a1.x - b2.x, a1.y - b2.y),
+        Math.hypot(a2.x - b1.x, a2.y - b1.y),
+      );
       const reversed = reverse < direct;
       const distance = Math.min(direct, reverse);
       if (distance <= tolerancePx) {
@@ -63,10 +71,7 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
   if (
     points.some(
       (point) =>
-        !Number.isFinite(point.x) ||
-        !Number.isFinite(point.y) ||
-        point.x < 0 ||
-        point.y < 0,
+        !Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.y < 0,
     )
   ) {
     return ["Photo points must have valid, non-negative coordinates."];
@@ -92,12 +97,7 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
     point.y >= Math.min(a.y, b.y) - 1e-7 &&
     point.y <= Math.max(a.y, b.y) + 1e-7;
 
-  const intersects = (
-    a: ImagePoint,
-    b: ImagePoint,
-    c: ImagePoint,
-    d: ImagePoint,
-  ) => {
+  const intersects = (a: ImagePoint, b: ImagePoint, c: ImagePoint, d: ImagePoint) => {
     const abC = cross(a, b, c);
     const abD = cross(a, b, d);
     const cdA = cross(c, d, a);
@@ -124,8 +124,7 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
 
     for (let secondEdge = firstEdge + 1; secondEdge < count; secondEdge += 1) {
       const edgesAreAdjacent =
-        secondEdge === (firstEdge + 1) % count ||
-        (secondEdge + 1) % count === firstEdge;
+        secondEdge === (firstEdge + 1) % count || (secondEdge + 1) % count === firstEdge;
       if (edgesAreAdjacent) continue;
 
       const c = points[secondEdge]!;
