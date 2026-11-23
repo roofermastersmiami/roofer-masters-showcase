@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Package, Save, Printer, Mail, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -62,10 +62,7 @@ export function MaterialOrder({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [parsedLabels, setParsedLabels] = useState<string[]>([]);
   const valid = reportSchema.safeParse(r);
-  const lines: MaterialLine[] = useMemo(
-    () => (valid.success ? materialOrder(valid.data) : []),
-    [valid.success, r],
-  );
+  const lines: MaterialLine[] = valid.success ? materialOrder(valid.data) : [];
   const text = `Material order – ${title}\n${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)\n\n${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}\n\nRoofer Masters · 305-942-3093`;
 
   async function save() {
