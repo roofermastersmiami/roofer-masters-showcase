@@ -18,6 +18,11 @@ type Photo = {
   mime: string;
   category: string;
   name: string;
+  source?: string;
+  matchedAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  feetPerPixel?: number;
 };
 
 export async function roofDrawingPdf(
@@ -479,6 +484,28 @@ export async function roofDrawingPdf(
 
     paragraph(photo.category.toUpperCase(), 13, true, NAVY);
     paragraph(photo.name, 9, false, MUTED);
+    if (photo.matchedAddress)
+      paragraph(`Matched property: ${photo.matchedAddress}`, 8, false, MUTED);
+    if (photo.source) paragraph(`Imagery source: ${photo.source}`, 8, false, MUTED);
+    if (
+      typeof photo.latitude === "number" &&
+      Number.isFinite(photo.latitude) &&
+      typeof photo.longitude === "number" &&
+      Number.isFinite(photo.longitude)
+    )
+      paragraph(
+        `Image center: ${photo.latitude.toFixed(6)}, ${photo.longitude.toFixed(6)}`,
+        7,
+        false,
+        MUTED,
+      );
+    if (typeof photo.feetPerPixel === "number" && photo.feetPerPixel > 0)
+      paragraph(
+        `Image scale: ${photo.feetPerPixel.toFixed(4)} ground ft / pixel (initial estimate; calibrate before measuring)`,
+        7,
+        false,
+        BLUE,
+      );
 
     try {
       const image =
