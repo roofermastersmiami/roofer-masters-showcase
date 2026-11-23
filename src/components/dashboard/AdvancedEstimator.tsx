@@ -122,7 +122,7 @@ export function AdvancedEstimator() {
         lines: materialOrder(report)
           .filter((l) => l.qty > 0 && !l.item.includes("Average panel length"))
           .map((l) => {
-            const price = catalog.data?.find((c) => c.system === o.system && c.item === l.item);
+            const price = catalog.data?.find((c) => c.system === system && c.item === l.item);
             return {
               id: crypto.randomUUID(),
               description: l.item,
