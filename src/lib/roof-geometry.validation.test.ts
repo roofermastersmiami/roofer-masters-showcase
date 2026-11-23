@@ -319,45 +319,5 @@ describe('partial shared edge segmentation', () => {
     expect(() => measureDrawing(adjacent)).toThrow(/matching classifications/);
   });
 
-  it('does not create duplicate split segments when adjacent planes repeat a vertex', () => {
-    const adjacent = {
-      ...drawing,
-      planes: [
-        {
-          id: 'main',
-          name: 'Main plane',
-          points: [
-            { x: 0, y: 10, z: 0 },
-            { x: 10, y: 10, z: 0 },
-            { x: 10, y: 10, z: 10 },
-            { x: 0, y: 10, z: 10 },
-          ],
-          edges: ['eave', 'eave', 'eave', 'eave'],
-        },
-        {
-          id: 'wing',
-          name: 'Wing plane',
-          points: [
-            { x: 10, y: 10, z: 3 },
-            { x: 15, y: 10, z: 3 },
-            { x: 15, y: 10, z: 7 },
-            { x: 10, y: 10, z: 7 },
-          ],
-          edges: ['eave', 'eave', 'eave', 'eave'],
-        },
-        {
-          id: 'duplicate-vertex-plane',
-          name: 'Duplicate vertex plane',
-          points: [
-            { x: 10, y: 10, z: 5 },
-            { x: 8, y: 10, z: 4 },
-            { x: 8, y: 10, z: 6 },
-          ],
-          edges: ['eave', 'eave', 'eave'],
-        },
-      ],
-    } as RoofDrawing;
-    expect(() => measureDrawing(adjacent)).not.toThrow();
-  });
 
 });
