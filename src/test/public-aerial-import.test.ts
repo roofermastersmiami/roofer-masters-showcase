@@ -10,10 +10,10 @@ const image=()=>new Response(png(),{headers:{'content-type':'image/png'}});
 function source(second: Response) { return vi.fn<typeof fetch>().mockResolvedValueOnce(geo()).mockResolvedValueOnce(second); }
 const encoded=()=>`data:image/png;base64,${btoa(String.fromCharCode(...png()))}`;
 describe('free aerial retrieval',()=>{
-  it('exports a fixed USGS 3857 PNG and returns ground scale for 120 m / 1000 px',async()=>{
+  it('exports a fixed USGS 3857 PNG and returns ground scale for 120 m / 2000 px',async()=>{
     const fetcher=source(image()); const r=await fetchPublicAerial('Test address',120,fetcher);
     expect('error' in r).toBe(false); if('error' in r)throw new Error(r.error);
-    expect(r.feetPerPixel).toBeCloseTo(0.3937008,7); expect(r.image).toBe(encoded());
+    expect(r.feetPerPixel).toBeCloseTo(0.1968504,7); expect(r.image).toBe(encoded());
     const call=fetcher.mock.calls[1]; if(!call)throw new Error('USGS was not requested');
     const url=new URL(String(call[0])); expect(url.hostname).toBe('imagery.nationalmap.gov');
     expect(url.searchParams.get('f')).toBe('image'); expect(url.searchParams.get('bboxSR')).toBe('3857'); expect(url.searchParams.get('size')).toBe('2000,2000'); expect(call[1]?.redirect).toBe('manual');
