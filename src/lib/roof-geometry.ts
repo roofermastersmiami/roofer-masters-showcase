@@ -42,6 +42,7 @@ export function measureDrawing(raw:RoofDrawing){
 }
 export type RoofShape='gable'|'hip'|'flat'|'shed'|'mansard'|'complex';
 export function roofPreset(shape:RoofShape,width=40,length=30,pitch=6):RoofDrawing {
+ if(!(['gable','hip','flat','shed','mansard','complex'] as const).includes(shape))throw new Error('Unsupported roof preset shape');
  if(!Number.isFinite(width)||!Number.isFinite(length)||width<=0||length<=0||width>6000||length>6000)throw new Error('Roof width and length must be positive finite values no greater than 6,000 feet');
  if(!Number.isFinite(pitch)||pitch<0||pitch>24)throw new Error('Roof pitch must be between 0 and 24 inches per foot');
  const w=width/2,l=length/2,h=width/2*pitch/12,base=10;
