@@ -9,7 +9,7 @@ export const money = (cents: number) => {
 export const dollarsToCents = (dollars: number) => {
   const cents = Math.round(dollars * 100);
   if (!Number.isFinite(dollars) || !Number.isSafeInteger(cents))
-    throw new Error("Amount exceeds the supported range");
+    throw new Error(AMOUNT_RANGE_ERROR);
   return cents;
 };
 export const itemSchema = z.object({
