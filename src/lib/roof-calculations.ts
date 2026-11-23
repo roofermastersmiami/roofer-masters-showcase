@@ -293,7 +293,7 @@ export function calculateRoofSummary(
       continue;
     }
 
-    if (!(edge.type in linearFeet)) throw new Error(`Edge ${edge.id} has an unsupported type.`);
+    if (!Object.hasOwn(linearFeet, edge.type)) throw new Error(`Edge ${edge.id} has an unsupported type.`);
     unique.set(edge.id, edge);
     const nextLength = linearFeet[edge.type] + edge.lengthFt;
     if (!Number.isFinite(nextLength)) throw new Error("Total edge length exceeds the supported range.");
