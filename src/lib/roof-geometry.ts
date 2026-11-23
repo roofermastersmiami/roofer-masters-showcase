@@ -49,7 +49,7 @@ export function measureDrawing(raw:RoofDrawing){
  const edges:Record<EdgeType,number>={eave:0,rake:0,ridge:0,hip:0,valley:0,other:0};const seen=new Map<string,EdgeType>();
  for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length],type=p.edges[i];if(!a||!b||!type)continue;for(const segment of splitEdgeAtVertices(a,b,vertices)){const key=edgeKey(segment.a,segment.b),existing=seen.get(key);if(existing&&existing!==type)throw new Error('Shared edges must have matching classifications');if(!existing){edges[type]+=distance(segment.a,segment.b);seen.set(key,type);}}}
  const exterior=new Map<string,{length:number;count:number}>();for(const p of d.planes)for(let i=0;i<p.points.length;i++){const a=p.points[i],b=p.points[(i+1)%p.points.length];if(!a||!b)continue;for(const segment of splitEdgeAtVertices(a,b,vertices)){const key=edgeKey(segment.a,segment.b),existing=exterior.get(key);if(existing)existing.count++;else exterior.set(key,{length:distance(segment.a,segment.b),count:1});}}
- for(const edge of exterior.values())if(edge.count>2)throw new Error('Roof geometry contains a non-manifold edge shared by more than two planes');
+ for(const [key,edge] of exterior){if(edge.count>1){const type=seen.get(key);if(type==='eave'||type==='rake')edges[type]-=edge.length;}if(edge.count>2)throw new Error('Roof geometry contains a non-manifold edge shared by more than two planes');}
  const perimeter=[...exterior.values()].filter(e=>e.count===1).reduce((sum,e)=>sum+e.length,0);
  const area=planes.reduce((sum,p)=>sum+p.area,0);return {area,squares:area/100,withWaste:area*(1+d.waste/100),edges,planes,perimeter,penetrations:d.penetrations.length};
 }
