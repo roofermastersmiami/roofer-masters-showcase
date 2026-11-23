@@ -13,9 +13,11 @@ export const createRoofOrder = createServerFn({ method: 'POST' }).middleware([re
 
 export const updateRoofOrder = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => updateRoofOrderSchema.parse(input)).handler(async ({ data, context }) => {
-    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
+    if (roleError) throw new Error('Could not verify report permissions');
     if (!owner) throw new Error('You do not have access to this action');
-    const { data: current } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).single();
+    const { data: current, error: currentError } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).maybeSingle();
+    if (currentError) throw new Error('Could not load report request');
     if (!current) throw new Error('Report request not found');
     assertReportStatus({ ...current, ...data });
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
@@ -42,20 +44,24 @@ export const transferRoofOrder = createServerFn({ method: 'POST' }).middleware([
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid(), target: z.enum(['estimate', 'materials']), job_id: z.string().uuid().optional() }).parse(input)).handler(async ({ data, context }) => {
     const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});
     if (!owner) throw new Error('You do not have access to this action');
-    const { data: order } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).single();
+    const { data: order, error: orderError } = await context.supabase.from('roof_report_orders').select('*').eq('id', data.id).maybeSingle();
+    if (orderError) throw new Error('Could not load report request');
     if (!order) throw new Error('Report request not found');
     const report = reviewedReport(order);
-    const { data: customer } = await context.supabase.from('crm_customers').select('source_lead_id').eq('id', order.customer_id).single();
+    const { data: customer, error: customerError } = await context.supabase.from('crm_customers').select('source_lead_id').eq('id', order.customer_id).maybeSingle();
+    if (customerError) throw new Error('Could not verify report customer');
     if (!customer?.source_lead_id) throw new Error('Link the report to a customer first');
     if (data.target === 'materials') {
       if (!data.job_id) throw new Error('Choose a customer project');
-      const { data: job } = await context.supabase.from('roof_jobs').select('id,lead_id,property_id').eq('id', data.job_id).single();
+      const { data: job, error: jobError } = await context.supabase.from('roof_jobs').select('id,lead_id,property_id').eq('id', data.job_id).maybeSingle();
+      if (jobError) throw new Error('Could not verify customer project');
       if (!job || job.lead_id !== customer.source_lead_id || (job.property_id && job.property_id !== order.property_id)) throw new Error('Report and project must have the same customer and property');
-      const { error } = await context.supabase.from('roof_jobs').update({ property_id: order.property_id, material_order: { report, lines: materialOrder(report), report_order_id: order.id, updated_at: new Date().toISOString() } }).eq('id', job.id);
-      if (error) throw new Error('Could not transfer the material measurements');
+      const { data: updatedJob, error } = await context.supabase.from('roof_jobs').update({ property_id: order.property_id, material_order: { report, lines: materialOrder(report), report_order_id: order.id, updated_at: new Date().toISOString() } }).eq('id', job.id).select('id').maybeSingle();
+      if (error || !updatedJob) throw new Error('Could not transfer the material measurements');
       return { id: job.id };
     }
-    const { data: existing } = await context.supabase.from('roof_estimates').select('id').eq('report_order_id', order.id).limit(1).maybeSingle();
+    const { data: existing, error: existingError } = await context.supabase.from('roof_estimates').select('id').eq('report_order_id', order.id).limit(1).maybeSingle();
+    if (existingError) throw new Error('Could not check for an existing estimate');
     if (existing) return existing;
     const { data: estimate, error } = await context.supabase.from('roof_estimates').insert({ title: `${order.title} — estimate`, category: report.roof_type, lead_id: customer.source_lead_id, property_id: order.property_id, report_order_id: order.id, inputs: { sqft: report.area_sqft, waste: report.waste_pct, material: 0, labor: 0, permits: 0, other: 0, margin: 0 }, total_cents: 0 }).select('id').single();
     if (error || !estimate) throw new Error('Could not create the measurement-linked estimate');
