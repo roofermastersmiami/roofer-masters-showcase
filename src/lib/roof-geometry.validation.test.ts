@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingSchema, planeInfo } from './roof-geometry';
+import { drawingSchema, planeInfo, roofPreset } from './roof-geometry';
 
 const drawing = {
   planes: [{
@@ -56,5 +56,23 @@ describe('roof plane vertex validation', () => {
       edges: ['eave', 'eave', 'eave', 'eave'] as const,
     };
     expect(() => planeInfo(plane)).toThrow(/corners must be distinct/);
+  });
+});
+
+describe('roof preset input validation', () => {
+  it('accepts ordinary roof dimensions and pitch', () => {
+    expect(() => roofPreset('gable', 40, 30, 6)).not.toThrow();
+  });
+
+  it.each([
+    ['zero width', 0, 30, 6],
+    ['negative length', 40, -1, 6],
+    ['infinite width', Number.POSITIVE_INFINITY, 30, 6],
+    ['oversized width', 6001, 30, 6],
+    ['negative pitch', 40, 30, -1],
+    ['pitch over limit', 40, 30, 25],
+    ['infinite pitch', 40, 30, Number.POSITIVE_INFINITY],
+  ])('rejects %s', (_label, width, length, pitch) => {
+    expect(() => roofPreset('gable', width, length, pitch)).toThrow();
   });
 });
