@@ -37,7 +37,7 @@ describe('roof photo calibration', () => {
     const plane = calibratedPlane(
       [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 60 }, { x: 0, y: 60 }],
       [{ x: 0, y: 0 }, { x: 120, y: 0 }],
-      1,
+      120,
       6,
       'test-plane',
       { uphill: 'down' },
@@ -60,7 +60,7 @@ describe('roof photo calibration', () => {
       [{ x: 1e308, y: 0 }, { x: -1e308, y: 0 }, { x: 1e308, y: 20 }],
       [{ x: 0, y: 0 }, { x: 20, y: 0 }],
       20, 6, 'overflow',
-    )).toThrow(/invalid roof coordinates/);
+    )).toThrow(/supported drawing bounds/);
   });
 
   it('rejects calibration distances above 500 feet', () => {
