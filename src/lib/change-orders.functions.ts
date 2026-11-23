@@ -11,13 +11,11 @@ export const createChangeOrder = createServerFn({ method: "POST" })
     });
     if (roleError || !owner) throw new Error("You do not have access to this action");
     const { approved_by, ...fields } = data;
-    const { error } = await context.supabase
-      .from("job_change_orders")
-      .insert({
-        ...fields,
-        approved_by: data.status === "approved" ? approved_by : null,
-        approved_at: data.status === "approved" ? new Date().toISOString() : null,
-      });
+    const { error } = await context.supabase.from("job_change_orders").insert({
+      ...fields,
+      approved_by: data.status === "approved" ? approved_by : null,
+      approved_at: data.status === "approved" ? new Date().toISOString() : null,
+    });
     if (error) throw new Error("Could not save change order");
     return { ok: true };
   });

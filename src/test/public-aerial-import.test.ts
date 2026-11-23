@@ -67,13 +67,11 @@ describe("free aerial retrieval", () => {
     ).toMatchObject({ stage: "address_not_found" });
   });
   it("rejects invalid coordinates before calling USGS", async () => {
-    const f = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        Response.json({
-          result: { addressMatches: [{ coordinates: { x: 0, y: 90 }, matchedAddress: "Test" }] },
-        }),
-      );
+    const f = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        result: { addressMatches: [{ coordinates: { x: 0, y: 90 }, matchedAddress: "Test" }] },
+      }),
+    );
     expect(await fetchPublicAerial("Test address", 120, f)).toMatchObject({
       stage: "geocoding_response",
     });

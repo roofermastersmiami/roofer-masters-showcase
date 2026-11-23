@@ -78,13 +78,11 @@ export function FollowUps({
           onSubmit={(e) => {
             e.preventDefault();
             void mutate(async () => {
-              const result = await supabase
-                .from("crm_tasks")
-                .insert({
-                  title: title.trim(),
-                  lead_id: customer || null,
-                  due_at: new Date(due).toISOString(),
-                });
+              const result = await supabase.from("crm_tasks").insert({
+                title: title.trim(),
+                lead_id: customer || null,
+                due_at: new Date(due).toISOString(),
+              });
               if (!result.error) {
                 setAdding(false);
                 setTitle("");

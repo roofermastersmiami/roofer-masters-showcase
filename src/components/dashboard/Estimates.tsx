@@ -58,15 +58,13 @@ export function Estimates({
     }
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from("roof_estimates")
-        .insert({
-          title,
-          category,
-          lead_id: customer || null,
-          inputs: input,
-          total_cents: result.total,
-        });
+      const { error } = await supabase.from("roof_estimates").insert({
+        title,
+        category,
+        lead_id: customer || null,
+        inputs: input,
+        total_cents: result.total,
+      });
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["roof-estimates"] });
       toast.success("Estimate saved");
