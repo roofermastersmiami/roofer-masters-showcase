@@ -3,7 +3,10 @@ export function oauthReturnPath(value: unknown): string {
     typeof value !== "string" ||
     !value.startsWith("/") ||
     value.startsWith("//") ||
-    /[\\\u0000-\u001f\u007f]/.test(value)
+    value.split("").some((character) => {
+      const code = character.charCodeAt(0);
+      return character === "\\" || code <= 0x1f || code === 0x7f;
+    })
   )
     return "/";
   const origin = "https://app.invalid";
