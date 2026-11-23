@@ -14,8 +14,21 @@ export function stageOf(lead:{pipeline_stage?:string;status:string}):PipelineSta
 type LedgerInvoice={id:string;total_cents:number;paid_cents:number;status:string;environment:string;created_at:string};
 type LedgerPayment={invoice_id:string;amount_cents:number;environment:string;received_at:string};
 export function dashboardLedger(invoices:LedgerInvoice[],payments:LedgerPayment[],environment:string,from:number,to:number){
+  if(!Array.isArray(invoices)||!Array.isArray(payments)||typeof environment!=='string'||!environment.trim()||!Number.isFinite(from)||!(Number.isFinite(to)||to===Infinity)||from>to) throw new Error('Dashboard ledger requires valid collections, environment, and date range');
+  const invoiceIds=new Set<string>();
+  for(const invoice of invoices){
+    if(!invoice||typeof invoice.id!=='string'||!invoice.id||invoiceIds.has(invoice.id)||!Number.isSafeInteger(invoice.total_cents)||!Number.isSafeInteger(invoice.paid_cents)||invoice.total_cents<0||invoice.paid_cents<0||invoice.paid_cents>invoice.total_cents||typeof invoice.status!=='string'||typeof invoice.environment!=='string'||!Number.isFinite(Date.parse(invoice.created_at))) throw new Error('Dashboard ledger contains an invalid or duplicate invoice');
+    invoiceIds.add(invoice.id);
+  }
+  for(const payment of payments){
+    if(!payment||typeof payment.invoice_id!=='string'||!Number.isSafeInteger(payment.amount_cents)||payment.amount_cents<=0||typeof payment.environment!=='string'||!Number.isFinite(Date.parse(payment.received_at))) throw new Error('Dashboard ledger contains an invalid payment');
+  }
   const issued=invoices.filter(i=>i.environment===environment&&i.status==='issued');
   const ids=new Set(issued.map(i=>i.id));
   const received=payments.filter(p=>p.environment===environment&&ids.has(p.invoice_id)&&Date.parse(p.received_at)>=from&&Date.parse(p.received_at)<=to);
-  return {collected:received.reduce((n,p)=>n+p.amount_cents,0),sales:issued.filter(i=>Date.parse(i.created_at)>=from&&Date.parse(i.created_at)<=to).reduce((n,i)=>n+i.total_cents,0),outstanding:issued.reduce((n,i)=>n+Math.max(0,i.total_cents-i.paid_cents),0),received};
+  const collected=received.reduce((n,p)=>n+p.amount_cents,0);
+  const sales=issued.filter(i=>Date.parse(i.created_at)>=from&&Date.parse(i.created_at)<=to).reduce((n,i)=>n+i.total_cents,0);
+  const outstanding=issued.reduce((n,i)=>n+Math.max(0,i.total_cents-i.paid_cents),0);
+  if(![collected,sales,outstanding].every(Number.isSafeInteger)) throw new Error('Dashboard ledger totals exceed the supported amount');
+  return {collected,sales,outstanding,received};
 }
