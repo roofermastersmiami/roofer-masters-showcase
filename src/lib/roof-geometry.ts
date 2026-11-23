@@ -36,24 +36,106 @@ export function measureDrawing(raw:RoofDrawing){
  const area=planes.reduce((sum,p)=>sum+p.area,0);return {area,squares:area/100,withWaste:area*(1+d.waste/100),edges,planes,perimeter,penetrations:d.penetrations.length};
 }
 export type RoofShape='gable'|'hip'|'flat'|'shed'|'mansard'|'complex';
-export function roofPreset(shape:RoofShape,width=40,length=30,pitch=6):RoofDrawing {
- const w=width/2,l=length/2,h=width/2*pitch/12,base=10;
- const point=(x:number,z:number,rise=0):Point=>({x,y:base+rise,z});
- const plane=(name:string,points:Point[],edges:EdgeType[]):RoofPlane=>({id:name,name,points,edges});
- const sw=point(-w,-l),se=point(w,-l),ne=point(w,l),nw=point(-w,l);
- let planes:RoofPlane[]=[];
- if(shape==='flat')planes=[plane('Flat roof',[sw,se,ne,nw],['eave','eave','eave','eave'])];
- else if(shape==='shed')planes=[plane('Shed roof',[sw,se,point(w,l,length*pitch/12),point(-w,l,length*pitch/12)],['eave','rake','eave','rake'])];
- else if(shape==='hip'){
- const a=point(0,-Math.max(0,l-w),Math.min(w,l)*pitch/12),b=point(0,Math.max(0,l-w),Math.min(w,l)*pitch/12);
- if(length===width){const apex=point(0,0,l*pitch/12);planes=[plane('South',[sw,se,apex],['eave','hip','hip']),plane('North',[ne,nw,apex],['eave','hip','hip']),plane('West',[nw,sw,apex],['eave','hip','hip']),plane('East',[se,ne,apex],['eave','hip','hip'])];}
- else if(length<width){const a2=point(-Math.max(0,w-l),0,l*pitch/12),b2=point(Math.max(0,w-l),0,l*pitch/12);planes=[plane('South',[sw,se,b2,a2],['eave','hip','ridge','hip']),plane('North',[nw,a2,b2,ne],['hip','ridge','hip','eave']),plane('West',[sw,a2,nw],['hip','hip','eave']),plane('East',[se,ne,b2],['eave','hip','hip'])];}
- else planes=[plane('West',[sw,a,b,nw],['hip','ridge','hip','eave']),plane('East',[se,ne,b,a],['eave','hip','ridge','hip']),plane('South',[sw,se,a],['eave','hip','hip']),plane('North',[nw,b,ne],['hip','hip','eave'])];
- }else if(shape==='mansard'){
- const inset=Math.min(w,l)*0.3,rise=inset*pitch/12;const a=point(-w+inset,-l+inset,rise),b=point(w-inset,-l+inset,rise),c=point(w-inset,l-inset,rise),d=point(-w+inset,l-inset,rise);
- planes=[plane('South',[sw,se,b,a],['eave','hip','ridge','hip']),plane('East',[se,ne,c,b],['eave','hip','ridge','hip']),plane('North',[ne,nw,d,c],['eave','hip','ridge','hip']),plane('West',[nw,sw,a,d],['eave','hip','ridge','hip']),plane('Upper flat',[a,b,c,d],['ridge','ridge','ridge','ridge'])];
- }else{const a=point(0,-l,h),b=point(0,l,h);planes=[plane('West plane',[sw,a,b,nw],['rake','ridge','rake','eave']),plane('East plane',[a,se,ne,b],['rake','eave','rake','ridge'])];}
- if(shape==='complex'){const wing=roofPreset('hip',width/2,length/2,pitch);planes.push(...wing.planes.map(p=>({...p,id:`wing-${p.id}`,name:`Wing ${p.name}`,points:p.points.map(v=>({...v,x:v.x+width,y:v.y,z:v.z}))})));}
- return {planes,penetrations:[],waste:10,roof_type:'Metal Roof',notes:'',condition:'',verified:false};
+export function roofPreset(
+  shape: RoofShape,
+  width = 40,
+  length = 30,
+  pitch = 6,
+): RoofDrawing {
+  const w = width / 2,
+    l = length / 2,
+    h = ((width / 2) * pitch) / 12,
+    base = 10;
+  const point = (x: number, z: number, rise = 0): Point => ({ x, y: base + rise, z });
+  const plane = (name: string, points: Point[], edges: EdgeType[]): RoofPlane => ({
+    id: name,
+    name,
+    points,
+    edges,
+  });
+  const sw = point(-w, -l),
+    se = point(w, -l),
+    ne = point(w, l),
+    nw = point(-w, l);
+  let planes: RoofPlane[] = [];
+  if (shape === "flat")
+    planes = [plane("Flat roof", [sw, se, ne, nw], ["eave", "eave", "eave", "eave"])];
+  else if (shape === "shed")
+    planes = [
+      plane(
+        "Shed roof",
+        [sw, se, point(w, l, (length * pitch) / 12), point(-w, l, (length * pitch) / 12)],
+        ["eave", "rake", "eave", "rake"],
+      ),
+    ];
+  else if (shape === "hip") {
+    const a = point(0, -Math.max(0, l - w), (Math.min(w, l) * pitch) / 12),
+      b = point(0, Math.max(0, l - w), (Math.min(w, l) * pitch) / 12);
+    if (length === width) {
+      const apex = point(0, 0, (l * pitch) / 12);
+      planes = [
+        plane("South", [sw, se, apex], ["eave", "hip", "hip"]),
+        plane("North", [ne, nw, apex], ["eave", "hip", "hip"]),
+        plane("West", [nw, sw, apex], ["eave", "hip", "hip"]),
+        plane("East", [se, ne, apex], ["eave", "hip", "hip"]),
+      ];
+    } else if (length < width) {
+      const a2 = point(-Math.max(0, w - l), 0, (l * pitch) / 12),
+        b2 = point(Math.max(0, w - l), 0, (l * pitch) / 12);
+      planes = [
+        plane("South", [sw, se, b2, a2], ["eave", "hip", "ridge", "hip"]),
+        plane("North", [nw, a2, b2, ne], ["hip", "ridge", "hip", "eave"]),
+        plane("West", [sw, a2, nw], ["hip", "hip", "eave"]),
+        plane("East", [se, ne, b2], ["eave", "hip", "hip"]),
+      ];
+    } else
+      planes = [
+        plane("West", [sw, a, b, nw], ["hip", "ridge", "hip", "eave"]),
+        plane("East", [se, ne, b, a], ["eave", "hip", "ridge", "hip"]),
+        plane("South", [sw, se, a], ["eave", "hip", "hip"]),
+        plane("North", [nw, b, ne], ["hip", "hip", "eave"]),
+      ];
+  } else if (shape === "mansard") {
+    const inset = Math.min(w, l) * 0.3,
+      rise = (inset * pitch) / 12;
+    const a = point(-w + inset, -l + inset, rise),
+      b = point(w - inset, -l + inset, rise),
+      c = point(w - inset, l - inset, rise),
+      d = point(-w + inset, l - inset, rise);
+    planes = [
+      plane("South", [sw, se, b, a], ["eave", "hip", "ridge", "hip"]),
+      plane("East", [se, ne, c, b], ["eave", "hip", "ridge", "hip"]),
+      plane("North", [ne, nw, d, c], ["eave", "hip", "ridge", "hip"]),
+      plane("West", [nw, sw, a, d], ["eave", "hip", "ridge", "hip"]),
+      plane("Upper flat", [a, b, c, d], ["ridge", "ridge", "ridge", "ridge"]),
+    ];
+  } else {
+    const a = point(0, -l, h),
+      b = point(0, l, h);
+    planes = [
+      plane("West plane", [sw, a, b, nw], ["rake", "ridge", "rake", "eave"]),
+      plane("East plane", [a, se, ne, b], ["rake", "eave", "rake", "ridge"]),
+    ];
+  }
+  if (shape === "complex") {
+    const wing = roofPreset("hip", width / 2, length / 2, pitch);
+    planes.push(
+      ...wing.planes.map((p) => ({
+        ...p,
+        id: `wing-${p.id}`,
+        name: `Wing ${p.name}`,
+        points: p.points.map((v) => ({ ...v, x: v.x + width, y: v.y, z: v.z })),
+      })),
+    );
+  }
+  return {
+    planes,
+    penetrations: [],
+    waste: 10,
+    roof_type: "Metal Roof",
+    notes: "",
+    condition: "",
+    verified: false,
+  };
 }
 export function toMaterialReport(d:RoofDrawing){const m=measureDrawing(d);return {roof_type:d.roof_type,area_sqft:m.area,waste_pct:d.waste,ridge_lf:m.edges.ridge,hips_lf:m.edges.hip,valleys_lf:m.edges.valley,eaves_lf:m.edges.eave,rakes_lf:m.edges.rake,panel_width_in:16,pipes:d.penetrations.filter(p=>p.kind==='pipe'||p.kind==='vent').length};}
