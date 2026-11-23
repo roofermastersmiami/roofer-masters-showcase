@@ -160,15 +160,15 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
     if (!isRidge && !isValley) continue;
 
     const type = isRidge ? "ridge" : "valley";
+    if (shared.every((occurrence) => occurrence.plane.edges[occurrence.edgeIndex] === type))
+      continue;
     for (const occurrence of shared) {
-      if (occurrence.plane.edges[occurrence.edgeIndex] !== type) {
-        suggestions.push({
-          planeId: occurrence.plane.id,
-          edgeIndex: occurrence.edgeIndex,
-          type,
-          sharedWith: occurrence === first ? second.plane.id : first.plane.id,
-        });
-      }
+      suggestions.push({
+        planeId: occurrence.plane.id,
+        edgeIndex: occurrence.edgeIndex,
+        type,
+        sharedWith: occurrence === first ? second.plane.id : first.plane.id,
+      });
     }
   }
   return suggestions;
