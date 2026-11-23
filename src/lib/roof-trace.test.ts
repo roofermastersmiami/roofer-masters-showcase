@@ -38,6 +38,14 @@ describe('roof photo calibration', () => {
     expect(plane.points.map(p => p.y)).toEqual([10, 10, 40, 40]);
   });
 
+  it('rejects finite image coordinates that overflow during calibration', () => {
+    expect(() => calibratedPlane(
+      [{ x: 1e308, y: 0 }, { x: -1e308, y: 0 }, { x: 1e308, y: 20 }],
+      [{ x: 0, y: 0 }, { x: 20, y: 0 }],
+      20, 6, 'overflow',
+    )).toThrow(/invalid roof coordinates/);
+  });
+
   it('rejects calibration distances above 500 feet', () => {
     expect(() => calibratedPlane(
       [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }],
