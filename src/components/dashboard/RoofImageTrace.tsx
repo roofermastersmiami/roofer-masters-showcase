@@ -101,7 +101,17 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       <Button variant={mode === 'trace' ? 'secondary' : 'outline'} disabled={!calibration.ok} onClick={() => setMode('trace')}>Trace roof plane</Button>
     </div>
     <p className={`mb-3 text-sm ${calibration.ok ? 'text-muted-foreground' : 'text-destructive'}`}>{calibration.ok ? `${feetPerPixel && mode === 'trace' ? 'Auto-calibrated scale' : 'Scale'}: ${calibration.ftPerPx.toFixed(3)} ft per pixel.` : calibration.message}{calibration.ok && calibration.warnings.map(m => <span key={m} className="block text-destructive">{m}</span>)}</p>
-    {photo.data ? <div className="relative w-full overflow-hidden rounded-md border border-border">
+    {photo.data ? <div className="overflow-hidden rounded-md border border-border">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
+        <p className="text-xs text-muted-foreground">Zoom: {Math.round(zoom * 100)}%</p>
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="outline" size="icon" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, Number((z - 0.25).toFixed(2))))}><ZoomOut /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, Number((z + 0.25).toFixed(2))))}><ZoomIn /></Button>
+          <Button type="button" variant="ghost" size="icon" aria-label="Reset zoom" title="Reset zoom" disabled={zoom === 1} onClick={() => setZoom(1)}><RotateCcw /></Button>
+        </div>
+      </div>
+      <div className="relative w-full overflow-hidden">
+      <div className="relative w-full" style={{ transform: 'scale(' + zoom + ')', transformOrigin: 'center center' }}>
       <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
       <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
@@ -114,6 +124,8 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
         {points.map((p, i) => <circle key={`p${i}`} cx={p.x} cy={p.y} r={w / 90} fill="currentColor" strokeWidth={w / 600} className="cursor-move stroke-background" onPointerDown={startDrag('pt', i)} onClick={e => e.stopPropagation()} />)}
         {lastSnapPoint && <circle cx={lastSnapPoint.x} cy={lastSnapPoint.y} r={w / 45} fill="none" stroke="currentColor" strokeWidth={w / 500} strokeDasharray={`${w / 100} ${w / 150}`} pointerEvents="none" />}
       </svg>
+      </div>
+      </div>
     </div> : <p>{photo.error ? 'Photo unavailable' : 'Loading photo…'}</p>}
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <Field label="Plane name"><Input className="w-40" value={name} maxLength={100} placeholder={`Traced plane ${traced.length + 1}`} onChange={e => setName(e.target.value)} /></Field>
