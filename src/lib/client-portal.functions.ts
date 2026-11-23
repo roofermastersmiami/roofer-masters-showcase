@@ -55,8 +55,12 @@ export const getClientPortal = createServerFn({ method: 'GET' })
       if (!share || !p.file_path) return [];
       const filePath = p.file_path;
       return [(async () => {
-        const { data: pdf } = await supabaseAdmin.storage.from('roofing-proposals').createSignedUrl(filePath, 60);
-        return { id: p.id, title: p.title, category: p.category, amount: p.amount, signedName: share.signed_name, signedAt: share.signed_at, signature: share.signature_data, url: pdf?.signedUrl ?? null };
+        const { data: pdf, error: pdfError } = await supabaseAdmin.storage.from('roofing-proposals').createSignedUrl(filePath, 60);
+        if (pdfError || !pdf?.signedUrl) {
+          console.error('Client portal signed proposal URL failed', { proposalId: p.id, error: pdfError });
+          throw new Error('Could not load a signed proposal document');
+        }
+        return { id: p.id, title: p.title, category: p.category, amount: p.amount, signedName: share.signed_name, signedAt: share.signed_at, signature: share.signature_data, url: pdf.signedUrl };
       })()];
     }));
     return {
