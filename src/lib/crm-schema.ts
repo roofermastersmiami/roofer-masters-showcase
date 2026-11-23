@@ -45,7 +45,6 @@ export function calculateEstimate(raw: EstimateInputs) {
   const laborCents = dollarsToCents(squares * input.labor);
   const cost = materialCents + laborCents + dollarsToCents(input.permits + input.other);
   const total = Math.round(cost / (1 - input.margin / 100));
-  if (![materialSquares, materialCents, laborCents, cost, total].every(Number.isSafeInteger) && !Number.isSafeInteger(materialSquares)) throw new Error("Estimate exceeds the supported amount");
   if (![materialCents, laborCents, cost, total].every(Number.isSafeInteger)) throw new Error("Estimate exceeds the supported amount");
   return { squares, materialSquares, materialCents, laborCents, cost, total, profit: total - cost };
 }
