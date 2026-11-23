@@ -8,14 +8,19 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" }).inputVal
   const { createStripeClient, getStripeErrorMessage } = await import("./stripe.server");
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: invoice } = await supabaseAdmin.from("crm_invoices").select("id,number,title,environment").eq("token", data.token).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
+    const { data: invoice, error: invoiceError } = await supabaseAdmin.from("crm_invoices").select("id,number,title,environment").eq("token", data.token).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
+    if (invoiceError) throw new Error("Could not load invoice for checkout");
     if (!invoice || invoice.environment !== data.environment) return { error: "This invoice is unavailable in this payment environment." };
     const stripe = createStripeClient(data.environment);
-    const { data: pending } = await supabaseAdmin.from("invoice_checkouts").select("id,session_id").eq("invoice_id", invoice.id).eq("status", "pending").maybeSingle();
+    const { data: pending, error: pendingError } = await supabaseAdmin.from("invoice_checkouts").select("id,session_id").eq("invoice_id", invoice.id).eq("status", "pending").maybeSingle();
+    if (pendingError) throw new Error("Could not verify existing checkout");
     if (pending) {
       if (!pending.session_id) return { error: "Checkout is being prepared. Please try again shortly." };
       const session = await stripe.checkout.sessions.retrieve(pending.session_id);
-      if (session.status === "open") return { clientSecret: session.client_secret ?? "" };
+      if (session.status === "open") {
+        if (!session.client_secret) throw new Error("Stripe checkout is missing its client secret");
+        return { clientSecret: session.client_secret };
+      }
       if (session.payment_status === "paid") {
         const { reconcileInvoiceSession } = await import("./invoice-payments.server");
         await reconcileInvoiceSession(pending.session_id, data.environment);
@@ -58,9 +63,11 @@ export const confirmInvoiceCheckout = createServerFn({ method: "POST" }).inputVa
   const { getStripeErrorMessage } = await import("./stripe.server");
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: invoice } = await supabaseAdmin.from("crm_invoices").select("id").eq("token", data.token).eq("environment", data.environment).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
+    const { data: invoice, error: invoiceError } = await supabaseAdmin.from("crm_invoices").select("id").eq("token", data.token).eq("environment", data.environment).eq("status", "issued").gt("expires_at", new Date().toISOString()).maybeSingle();
+    if (invoiceError) throw new Error("Could not verify invoice");
     if (!invoice) return { error: "Invoice unavailable" };
-    const { data: checkout } = await supabaseAdmin.from("invoice_checkouts").select("id").eq("session_id", data.session_id).eq("invoice_id", invoice.id).eq("environment", data.environment).maybeSingle();
+    const { data: checkout, error: checkoutError } = await supabaseAdmin.from("invoice_checkouts").select("id").eq("session_id", data.session_id).eq("invoice_id", invoice.id).eq("environment", data.environment).maybeSingle();
+    if (checkoutError) throw new Error("Could not verify payment session");
     if (!checkout) return { error: "Payment session does not belong to this invoice" };
     const { reconcileInvoiceSession } = await import("./invoice-payments.server");
     return { paid: await reconcileInvoiceSession(data.session_id, data.environment) };
@@ -70,10 +77,12 @@ export const confirmInvoiceCheckout = createServerFn({ method: "POST" }).inputVa
 export const cancelInvoiceCheckout = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((input: unknown) => z.object({ invoice_id: z.string().uuid() }).parse(input)).handler(async ({ data, context }) => {
   const { createStripeClient, getStripeErrorMessage } = await import("./stripe.server");
   try {
-    const { data: owner } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['admin','accounting']});
+    const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['admin','accounting']});
+    if (roleError) throw new Error("Could not verify accounting permissions");
     if (!owner) return { error: "You do not have access to this action" };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: checkout } = await supabaseAdmin.from("invoice_checkouts").select("id,session_id,environment").eq("invoice_id", data.invoice_id).eq("status", "pending").maybeSingle();
+    const { data: checkout, error: checkoutError } = await supabaseAdmin.from("invoice_checkouts").select("id,session_id,environment").eq("invoice_id", data.invoice_id).eq("status", "pending").maybeSingle();
+    if (checkoutError) throw new Error("Could not load pending checkout");
     if (!checkout) return { ok: true };
     if (!checkout.session_id) return { error: "Checkout is being prepared; please wait" };
     const env = z.enum(["sandbox", "live"]).parse(checkout.environment);
