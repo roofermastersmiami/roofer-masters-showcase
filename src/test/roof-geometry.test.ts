@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { roofPreset, measureDrawing, toMaterialReport } from "@/lib/roof-geometry";
+import { roofPreset, measureDrawing, toMaterialReport, suggestSharedEdgeClassifications } from "@/lib/roof-geometry";
 describe("roof geometry", () => {
   it("measures a 40 by 30 flat roof as 1200 square feet and 12 squares", () => {
     const m = measureDrawing(roofPreset("flat", 40, 30));
@@ -73,5 +73,79 @@ describe("roof geometry", () => {
     p.points[1] = b;
     p.points[2] = a;
     expect(() => measureDrawing(d)).toThrow("cross");
+  });
+});
+
+
+describe("reviewable shared roof-edge suggestions", () => {
+  it("suggests both sides of a clear gable ridge without changing the drawing", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const west = drawing.planes.find((plane) => plane.id === "West plane");
+    const east = drawing.planes.find((plane) => plane.id === "East plane");
+    if (!west || !east) throw new Error("Missing gable facets");
+    west.edges[1] = "other";
+    east.edges[3] = "other";
+
+    const suggestions = suggestSharedEdgeClassifications(drawing);
+    expect(suggestions).toEqual([
+      { planeId: "West plane", edgeIndex: 1, type: "ridge", sharedWith: "East plane" },
+      { planeId: "East plane", edgeIndex: 3, type: "ridge", sharedWith: "West plane" },
+    ]);
+    expect(west.edges[1]).toBe("other");
+    expect(east.edges[3]).toBe("other");
+  });
+
+  it("suggests a clear valley on both adjacent facets", () => {
+    const drawing = roofPreset("flat", 2, 2);
+    const left = drawing.planes[0];
+    if (!left) throw new Error("Missing starter facet");
+    const leftPlane = {
+      ...left,
+      id: "left",
+      name: "Left",
+      points: [
+        { x: -1, y: 1, z: 0 },
+        { x: 0, y: 0, z: 0 },
+        { x: 0, y: 0, z: 2 },
+        { x: -1, y: 1, z: 2 },
+      ],
+      edges: ["other", "other", "other", "other"] as const,
+    };
+    const rightPlane = {
+      ...left,
+      id: "right",
+      name: "Right",
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 1, z: 0 },
+        { x: 1, y: 1, z: 2 },
+        { x: 0, y: 0, z: 2 },
+      ],
+      edges: ["other", "other", "other", "other"] as const,
+    };
+    drawing.planes = [leftPlane, rightPlane];
+    expect(suggestSharedEdgeClassifications(drawing)).toEqual([
+      { planeId: "left", edgeIndex: 1, type: "valley", sharedWith: "right" },
+      { planeId: "right", edgeIndex: 3, type: "valley", sharedWith: "left" },
+    ]);
+  });
+
+  it("leaves exterior and ambiguous shared edges for manual classification", () => {
+    const drawing = roofPreset("flat", 2, 2);
+    expect(suggestSharedEdgeClassifications(drawing)).toEqual([]);
+
+    const gable = roofPreset("gable", 40, 30, 6);
+    const west = gable.planes.find((plane) => plane.id === "West plane");
+    const east = gable.planes.find((plane) => plane.id === "East plane");
+    if (!west || !east) throw new Error("Missing gable facets");
+    west.points[1]!.y = 10;
+    east.points[0]!.y = 10;
+    west.edges[1] = "other";
+    east.edges[3] = "other";
+    expect(suggestSharedEdgeClassifications(gable)).toEqual([]);
+  });
+
+  it("does not suggest an edge already classified consistently", () => {
+    expect(suggestSharedEdgeClassifications(roofPreset("gable", 40, 30, 6))).toEqual([]);
   });
 });
