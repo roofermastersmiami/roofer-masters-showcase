@@ -60,7 +60,7 @@ export function roofPreset(shape:RoofShape,width=40,length=30,pitch=6):RoofDrawi
  const inset=Math.min(w,l)*0.3,rise=inset*pitch/12;const a=point(-w+inset,-l+inset,rise),b=point(w-inset,-l+inset,rise),c=point(w-inset,l-inset,rise),d=point(-w+inset,l-inset,rise);
  planes=[plane('South',[sw,se,b,a],['eave','hip','ridge','hip']),plane('East',[se,ne,c,b],['eave','hip','ridge','hip']),plane('North',[ne,nw,d,c],['eave','hip','ridge','hip']),plane('West',[nw,sw,a,d],['eave','hip','ridge','hip']),plane('Upper flat',[a,b,c,d],['ridge','ridge','ridge','ridge'])];
  }else{const a=point(0,-l,h),b=point(0,l,h);planes=[plane('West plane',[sw,a,b,nw],['rake','ridge','rake','eave']),plane('East plane',[a,se,ne,b],['rake','eave','rake','ridge'])];}
- if(shape==='complex'){const wing=roofPreset('hip',width/2,length/2,pitch);planes.push(...wing.planes.map(p=>({...p,id:`wing-${p.id}`,name:`Wing ${p.name}`,points:p.points.map(v=>({...v,x:v.x+width,y:v.y,z:v.z}))})));}
+ if(shape==='complex'){const wing=roofPreset('hip',width/2,length/2,pitch);planes.push(...wing.planes.map(p=>({...p,id:`wing-${p.id}`,name:`Wing ${p.name}`,points:p.points.map(v=>({...v,x:v.x+width*0.75,y:v.y,z:v.z}))})));}
  return {planes,penetrations:[],waste:10,roof_type:'Metal Roof',notes:'',condition:'',verified:false};
 }
 export function toMaterialReport(d:RoofDrawing){const m=measureDrawing(d);return {roof_type:d.roof_type,area_sqft:m.area,waste_pct:d.waste,ridge_lf:m.edges.ridge,hips_lf:m.edges.hip,valleys_lf:m.edges.valley,eaves_lf:m.edges.eave,rakes_lf:m.edges.rake,panel_width_in:d.metal_panel_width_inches??16,pipes:d.penetrations.filter(p=>p.kind==='pipe'||p.kind==='vent').length};}
