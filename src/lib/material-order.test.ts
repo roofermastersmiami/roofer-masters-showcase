@@ -50,3 +50,52 @@ describe("metal material order", () => {
     expect(() => materialOrder(metalReport({ panel_width_in: 61 }))).toThrow();
   });
 });
+
+
+describe("local roof report text import", () => {
+  it("reads explicitly labelled measurements without guessing", () => {
+    const parsed = parseRoofReportText([
+      "Roof Type: Metal Roof",
+      "Total Roof Area: 2,400 sq ft",
+      "Waste: 10%",
+      "Ridge: 40 LF",
+      "Hips: 20 LF",
+      "Valleys: 15 LF",
+      "Eaves: 80 LF",
+      "Rakes: 40 LF",
+      "Pipe boots: 3",
+    ].join("\\n"));
+    expect(parsed.values).toMatchObject({
+      roof_type: "Metal Roof",
+      area_sqft: 2400,
+      waste_pct: 10,
+      ridge_lf: 40,
+      hips_lf: 20,
+      valleys_lf: 15,
+      eaves_lf: 80,
+      rakes_lf: 40,
+      pipes: 3,
+    });
+    expect(parsed.found).toContain("Roof area");
+    expect(parsed.found).toContain("Pipes / vents");
+  });
+
+  it("converts explicitly labelled roofing squares to square feet", () => {
+    const parsed = parseRoofReportText("Total Roof Area: 24.5 squares");
+    expect(parsed.values.area_sqft).toBe(2450);
+  });
+
+  it("does not invent missing measurements", () => {
+    const parsed = parseRoofReportText("Customer: Example\nAddress: Miami, FL\nPitch: 5/12");
+    expect(parsed.values.area_sqft).toBeUndefined();
+    expect(parsed.values.ridge_lf).toBeUndefined();
+    expect(parsed.values.pipes).toBeUndefined();
+    expect(parsed.found).toEqual([]);
+  });
+
+  it("ignores negative values", () => {
+    const parsed = parseRoofReportText("Roof area: -2400 sq ft\nRidge: -20 LF");
+    expect(parsed.values.area_sqft).toBeUndefined();
+    expect(parsed.values.ridge_lf).toBeUndefined();
+  });
+});
