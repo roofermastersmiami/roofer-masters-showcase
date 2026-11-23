@@ -106,7 +106,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
       <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
         <p className="text-xs text-muted-foreground">Zoom: {Math.round(zoom * 100)}%</p>
         <div className="flex items-center gap-1">
-          <Button type="button" variant="outline" size="icon" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, Number((z - 0.25).toFixed(2))))}><ZoomOut /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 1} onClick={() => setZoom(z => { const next = Math.max(1, Number((z - 0.25).toFixed(2))); if (next === 1) setPan({ x: 0, y: 0 }); return next; })}><ZoomOut /></Button>
           <Button type="button" variant="outline" size="icon" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, Number((z + 0.25).toFixed(2))))}><ZoomIn /></Button>
           <Button type="button" variant="outline" size="icon" aria-label="Pan left" title="Pan left" disabled={zoom === 1} onClick={() => setPan(p => ({ ...p, x: p.x + 70 }))}><ArrowLeft /></Button>
           <Button type="button" variant="outline" size="icon" aria-label="Pan right" title="Pan right" disabled={zoom === 1} onClick={() => setPan(p => ({ ...p, x: p.x - 70 }))}><ArrowRight /></Button>
@@ -115,7 +115,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
           <Button type="button" variant="ghost" size="icon" aria-label="Reset view" title="Reset zoom and position" disabled={zoom === 1 && pan.x === 0 && pan.y === 0} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><RotateCcw /></Button>
         </div>
       </div>
-      <div className="relative w-full overflow-hidden">
+      <div className="relative w-full overflow-hidden" onWheel={e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); setZoom(z => { const next = Math.max(1, Math.min(4, Number((z + (e.deltaY < 0 ? 0.25 : -0.25)).toFixed(2)))); if (next === 1) setPan({ x: 0, y: 0 }); return next; }); }}>
       <div className="relative w-full" style={{ transform: 'translate(' + pan.x + 'px, ' + pan.y + 'px) scale(' + zoom + ')', transformOrigin: 'center center' }}>
       <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
       <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
