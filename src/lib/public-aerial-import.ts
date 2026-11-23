@@ -23,10 +23,8 @@ export function aerialInvocationError(error: unknown) {
   return (/unauthorized|forbidden|access|401|403/i.test(message) ? 'Your session or team role could not authorize aerial import. Sign in again or contact the owner.' : 'The aerial request could not complete. Check your connection and retry; the free services may be temporarily unavailable.') + FALLBACK;
 }
 /** True when an address can be used to fetch a free aerial for a report that has none yet. */
-export function shouldAutoLoadAddressAerial(input: {
+export const shouldAutoLoadAddressAerial = (input: {
   address: string | null | undefined;
   hasAerial: boolean;
   alreadyAttempted: boolean;
-}): boolean {
-  return Boolean(input.address?.trim() && !input.hasAerial && !input.alreadyAttempted);
-}
+}): boolean => Boolean(input.address?.trim() && !input.hasAerial && !input.alreadyAttempted);
