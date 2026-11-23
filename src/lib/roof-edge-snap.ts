@@ -15,7 +15,7 @@ export function snapToImageEdge(
 ): EdgeSnapResult | null {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 3 || height < 3) return null;
   if (rgba.length < width * height * 4 || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
-  if (!Number.isFinite(radius) || !Number.isFinite(minStrength) || minStrength < 0) return null;
+  if (!Number.isFinite(radius) || radius < 0 || !Number.isFinite(minStrength) || minStrength <= 0) return null;
   const cx = Math.round(point.x), cy = Math.round(point.y);
   const r = Math.max(0, Math.min(80, Math.floor(radius)));
   const gray = (x: number, y: number) => {
