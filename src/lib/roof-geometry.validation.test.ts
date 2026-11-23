@@ -147,3 +147,25 @@ describe('roof penetration footprint validation', () => {
     } as any)).toThrow(/must fit within the roof footprint/);
   });
 });
+
+describe('roof penetration overlap validation', () => {
+  it('allows separate penetration footprints', () => {
+    expect(() => measureDrawing({
+      ...drawing,
+      penetrations: [
+        { id: 'pipe-a', kind: 'pipe', x: 5, z: 5, width: 2, length: 2 },
+        { id: 'pipe-b', kind: 'pipe', x: 15, z: 15, width: 2, length: 2 },
+      ],
+    } as RoofDrawing)).not.toThrow();
+  });
+
+  it('rejects intersecting penetration footprints', () => {
+    expect(() => measureDrawing({
+      ...drawing,
+      penetrations: [
+        { id: 'pipe-a', kind: 'pipe', x: 5, z: 5, width: 4, length: 4 },
+        { id: 'vent-b', kind: 'vent', x: 7, z: 5, width: 4, length: 4 },
+      ],
+    } as RoofDrawing)).toThrow(/penetrations .* overlap/);
+  });
+});
