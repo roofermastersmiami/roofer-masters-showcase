@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: repository-format-main
+  cancel-in-progress: false
+
 jobs:
   format:
     name: Apply repository Prettier formatting
@@ -22,7 +26,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22.12
 
       - name: Install dependencies
         run: npm install --no-package-lock
