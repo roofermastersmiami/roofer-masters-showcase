@@ -169,3 +169,28 @@ describe('roof penetration overlap validation', () => {
     } as RoofDrawing)).toThrow(/penetrations .* overlap/);
   });
 });
+
+describe('penetrations crossing concave roof boundaries', () => {
+  it('rejects a penetration whose corners fit but whose interior crosses a roof notch', () => {
+    const concaveDrawing = {
+      ...drawing,
+      planes: [{
+        id: 'u-shaped-roof',
+        name: 'U-shaped roof',
+        points: [
+          { x: 0, y: 10, z: 0 },
+          { x: 20, y: 10, z: 0 },
+          { x: 20, y: 10, z: 20 },
+          { x: 13, y: 10, z: 20 },
+          { x: 13, y: 10, z: 7 },
+          { x: 7, y: 10, z: 7 },
+          { x: 7, y: 10, z: 20 },
+          { x: 0, y: 10, z: 20 },
+        ],
+        edges: ['eave', 'eave', 'eave', 'eave', 'eave', 'eave', 'eave', 'eave'],
+      }],
+      penetrations: [{ id: 'wide-vent', kind: 'vent', x: 10, z: 7, width: 12, length: 6 }],
+    };
+    expect(() => measureDrawing(concaveDrawing as RoofDrawing)).toThrow(/must fit within the roof footprint/);
+  });
+});
