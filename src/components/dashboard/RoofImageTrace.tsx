@@ -75,7 +75,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
     </div>
     <p className={`mb-3 text-sm ${calibration.ok ? 'text-muted-foreground' : 'text-destructive'}`}>{calibration.ok ? `Scale: ${calibration.ftPerPx.toFixed(3)} ft per pixel.` : calibration.message}{calibration.ok && calibration.warnings.map(m => <span key={m} className="block text-destructive">{m}</span>)}</p>
     {photo.data ? <div className="relative w-full overflow-hidden rounded-md border border-border">
-      <img src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
+      <img src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { const width = e.currentTarget.naturalWidth, height = e.currentTarget.naturalHeight; setDimensions({ width, height }); if (feetPerPixel) { setReference([{ x: 0, y: 0 }, { x: width, y: 0 }]); setFeet(feetPerPixel * width); } }} />
       <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
         onClick={e => { if (moved.current) { moved.current = false; return; } const p = toImage(e.clientX, e.clientY); if (p) addPoint(p); }}>
