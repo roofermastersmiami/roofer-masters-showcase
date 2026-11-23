@@ -355,13 +355,13 @@ export function calculateRoofSummary(
         )[0]![0]
       : null;
 
-  const orderSquares =
-    Math.ceil(
-      (totalAreaWithWasteSqFt / SQFT_PER_SQUARE) * 3
-    ) / 3;
-  if (!Number.isFinite(orderSquares)) {
+  const orderUnits = Math.ceil(
+    (totalAreaWithWasteSqFt / SQFT_PER_SQUARE) * 3
+  );
+  if (!Number.isSafeInteger(orderUnits)) {
     throw new Error("Roofing square order exceeds the supported range.");
   }
+  const orderSquares = orderUnits / 3;
 
   return {
     facetSurfaceAreaSqFt,
