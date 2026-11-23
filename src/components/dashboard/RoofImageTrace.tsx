@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
   const [traced, setTraced] = useState<Traced[]>([]);
   const [edgeSnap, setEdgeSnap] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [lastSnap, setLastSnap] = useState<'snapped' | 'unchanged' | null>(null);
   const [lastSnapPoint, setLastSnapPoint] = useState<ImagePoint | null>(null);
   const [snapPixels, setSnapPixels] = useState<{ data: Uint8ClampedArray; width: number; height: number } | null>(null);
@@ -107,11 +108,15 @@ export function RoofImageTrace({ path, onAdd, feetPerPixel }: { path: string; on
         <div className="flex items-center gap-1">
           <Button type="button" variant="outline" size="icon" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, Number((z - 0.25).toFixed(2))))}><ZoomOut /></Button>
           <Button type="button" variant="outline" size="icon" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, Number((z + 0.25).toFixed(2))))}><ZoomIn /></Button>
-          <Button type="button" variant="ghost" size="icon" aria-label="Reset zoom" title="Reset zoom" disabled={zoom === 1} onClick={() => setZoom(1)}><RotateCcw /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Pan left" title="Pan left" disabled={zoom === 1} onClick={() => setPan(p => ({ ...p, x: p.x + 70 }))}><ArrowLeft /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Pan right" title="Pan right" disabled={zoom === 1} onClick={() => setPan(p => ({ ...p, x: p.x - 70 }))}><ArrowRight /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Pan up" title="Pan up" disabled={zoom === 1} onClick={() => setPan(p => ({ ...p, y: p.y + 70 }))}><ArrowUp /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Pan down" title="Pan down" disabled={zoom === 1} onClick={() => setPan(p => ({ ...p, y: p.y - 70 }))}><ArrowDown /></Button>
+          <Button type="button" variant="ghost" size="icon" aria-label="Reset view" title="Reset zoom and position" disabled={zoom === 1 && pan.x === 0 && pan.y === 0} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}><RotateCcw /></Button>
         </div>
       </div>
       <div className="relative w-full overflow-hidden">
-      <div className="relative w-full" style={{ transform: 'scale(' + zoom + ')', transformOrigin: 'center center' }}>
+      <div className="relative w-full" style={{ transform: 'translate(' + pan.x + 'px, ' + pan.y + 'px) scale(' + zoom + ')', transformOrigin: 'center center' }}>
       <img ref={snapImage} src={photo.data} alt="Roof photo used for measuring" className="block max-h-[640px] w-full select-none object-contain" draggable={false} onLoad={e => { setDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight }); prepareSnapPixels(); }} />
       <svg ref={svg} className="absolute inset-0 h-full w-full touch-none text-primary" viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} preserveAspectRatio="xMidYMid meet" aria-label="Roof tracing surface"
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }}
