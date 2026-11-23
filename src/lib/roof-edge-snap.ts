@@ -13,8 +13,10 @@ export function snapToImageEdge(
   radius = 12,
   minStrength = 48,
 ): EdgeSnapResult | null {
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 3 || height < 3) return null;
-  if (rgba.length < width * height * 4 || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 3 || height < 3) return null;
+  const expectedLength = width * height * 4;
+  if (!Number.isSafeInteger(expectedLength) || rgba.length !== expectedLength) return null;
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.y < 0 || point.x >= width || point.y >= height) return null;
   if (!Number.isFinite(radius) || radius < 0 || !Number.isFinite(minStrength) || minStrength <= 0) return null;
   const cx = Math.round(point.x), cy = Math.round(point.y);
   const r = Math.max(0, Math.min(80, Math.floor(radius)));
