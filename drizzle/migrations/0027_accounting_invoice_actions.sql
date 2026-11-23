@@ -21,8 +21,9 @@ BEGIN
  IF p_method NOT IN ('cash','check','bank_transfer','card_external') OR p_amount_cents <= 0 OR p_received_at IS NULL THEN RAISE EXCEPTION 'Invalid payment'; END IF;
  SELECT * INTO inv FROM public.crm_invoices WHERE id = p_invoice_id FOR UPDATE;
  IF inv.id IS NULL OR inv.status <> 'issued' THEN RAISE EXCEPTION 'Issue the invoice before recording a payment'; END IF;
+ IF EXISTS(SELECT 1 FROM public.invoice_checkouts WHERE invoice_id=inv.id AND status='pending') THEN RAISE EXCEPTION 'An online payment is pending; wait for completion or cancel checkout first'; END IF;
  IF p_amount_cents > inv.total_cents - inv.paid_cents THEN RAISE EXCEPTION 'Payment exceeds outstanding balance'; END IF;
- INSERT INTO public.invoice_payments(invoice_id, amount_cents, method, reference, received_at) VALUES(p_invoice_id,p_amount_cents,p_method,left(p_reference,200),p_received_at) RETURNING id INTO payment_id;
+ INSERT INTO public.invoice_payments(invoice_id, amount_cents, method, reference, received_at, environment) VALUES(p_invoice_id,p_amount_cents,p_method,left(p_reference,200),p_received_at,inv.environment) RETURNING id INTO payment_id;
  UPDATE public.crm_invoices SET paid_cents = paid_cents + p_amount_cents WHERE id = p_invoice_id;
  RETURN payment_id;
 END; $$;
