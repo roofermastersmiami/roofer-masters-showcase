@@ -8,7 +8,7 @@ import {Input} from '@/components/ui/input';
 import {Textarea} from '@/components/ui/textarea';
 import {Checkbox} from '@/components/ui/checkbox';
 import {supabase} from '@/integrations/supabase/client';
-import {drawingSchema,roofPreset,measureDrawing,toMaterialReport,EDGE_TYPES,type RoofDrawing,type RoofShape} from '@/lib/roof-geometry';
+import {drawingSchema,roofPreset,measureDrawing,toMaterialReport,distance,EDGE_TYPES,type RoofDrawing,type RoofShape} from '@/lib/roof-geometry';
 import {calculateRoofSummary} from '@/lib/roof-calculations';
 import {saveRoofDrawing} from '@/lib/roof-drawing.functions';
 import {propertiesQuery,customersQuery} from './foundation-data';
@@ -40,6 +40,13 @@ export function RoofMeasurements({report,initialDrawing=null}:{report?:RoofOrder
    name:p.name,
    surfaceAreaSqFt:p.area,
    pitchRisePer12:p.pitch,
+  })),
+  edges:d.planes.flatMap(p=>p.points.map((point,i)=>{
+   const next=p.points[(i+1)%p.points.length]!;
+   const type=p.edges[i]!;
+   const pointKey=(v:typeof point)=>[v.x,v.y,v.z].map(n=>Math.round(n*100)).join(',');
+   const id=[pointKey(point),pointKey(next)].sort().join('|');
+   return {id,type,lengthFt:distance(point,next)};
   })),
   wastePercent:d.waste,
  }):null;
