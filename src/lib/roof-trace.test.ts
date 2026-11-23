@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aerialBox } from './public-aerial';
-import { calibratedPlane, checkCalibration } from './roof-trace';
+import { calibratedPlane, checkCalibration, findSharedEdges, snapToExistingCorner, validateRoofOutline } from './roof-trace';
 
 describe('roof photo calibration', () => {
   it('rejects missing, coincident and invalid scale references', () => {
@@ -108,5 +108,26 @@ describe('public aerial map scale', () => {
     expect(equator.feetPerPixel).toBeCloseTo(0.1968504, 5);
     expect(miami.feetPerPixel).toBeCloseTo(equator.feetPerPixel, 8);
     expect(equator.bbox[2]! - equator.bbox[0]!).toBeLessThan(miami.bbox[2]! - miami.bbox[0]!);
+  });
+});
+
+
+describe('roof tracing geometry helpers', () => {
+  it('snaps a traced point to the nearest existing corner within tolerance', () => {
+    expect(snapToExistingCorner({ x: 11, y: 12 }, [{ x: 10, y: 10 }], 3)).toEqual({ x: 10, y: 10 });
+    expect(snapToExistingCorner({ x: 20, y: 20 }, [{ x: 10, y: 10 }], 3)).toEqual({ x: 20, y: 20 });
+  });
+
+  it('detects shared edges in either direction', () => {
+    const first = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }];
+    const second = [{ x: 20, y: 20 }, { x: 20, y: 0 }, { x: 30, y: 0 }];
+    expect(findSharedEdges(first, second, 0)).toEqual([{ edgeA: 1, edgeB: 0, maxEndpointDistance: 0 }]);
+  });
+
+  it('validates minimum corners, duplicate corners and crossing outlines', () => {
+    expect(validateRoofOutline([{ x: 0, y: 0 }, { x: 20, y: 0 }])).toContain('Draw at least three roof corners.');
+    expect(validateRoofOutline([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 0 }]).length).toBeGreaterThan(0);
+    expect(validateRoofOutline([{ x: 0, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }, { x: 20, y: 0 }])).toContain('Roof outline edges must not cross or touch.');
+    expect(validateRoofOutline([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }])).toEqual([]);
   });
 });
