@@ -371,7 +371,7 @@ export function RoofMeasurements({
   const [aerialError, setAerialError] = useState("");
   const [aerialStatus, setAerialStatus] = useState("");
   async function loadAerial() {
-    const address = report?.address ?? propertyRow?.address;
+    const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
     setBusy(true);
     setAerialError("");
@@ -428,7 +428,7 @@ export function RoofMeasurements({
   useEffect(() => {
     if (
       shouldAutoLoadAddressAerial({
-        address: report?.address ?? propertyRow?.address,
+        address: report?.address?.trim() || propertyRow?.address,
         hasAerial: media.some((item) => item.category === "aerial"),
         alreadyAttempted: autoAerialAttempted.current,
       })
@@ -1034,6 +1034,15 @@ export function RoofMeasurements({
           {media.map((m, i) => (
             <div key={m.path}>
               <DrawingImage path={m.path} name={m.name} />
+              {m.source && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {m.source}
+                  {m.matched_address ? ` · Matched: ${m.matched_address}` : ""}
+                  {typeof m.latitude === "number" && typeof m.longitude === "number"
+                    ? ` · ${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`
+                    : ""}
+                </p>
+              )}
               <Choice
                 label="Photo type"
                 value={m.category}
@@ -1079,7 +1088,7 @@ export function RoofMeasurements({
         <div className="flex flex-wrap items-end gap-3">
           <Button
             variant="outline"
-            disabled={busy || !property || !(report?.address ?? propertyRow?.address)}
+            disabled={busy || !property || !(report?.address?.trim() || propertyRow?.address)}
             onClick={() => void loadAerial()}
           >
             <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}
