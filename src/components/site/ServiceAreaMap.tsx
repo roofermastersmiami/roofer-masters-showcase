@@ -1,6 +1,8 @@
 export function ServiceAreaMap({ className = "" }: { className?: string }) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-border bg-muted shadow-card ${className}`}>
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-border bg-muted shadow-card ${className}`}
+    >
       <iframe
         title="Roofer Masters service area: Miami-Dade and Broward counties"
         src="https://maps.google.com/maps?q=Miami-Dade%20and%20Broward%20County%2C%20Florida&t=&z=9&ie=UTF8&iwloc=&output=embed"

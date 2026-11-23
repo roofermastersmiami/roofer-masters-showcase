@@ -27,7 +27,11 @@ export function SiteFooter() {
             <ul className="mt-4 space-y-2.5 text-sm">
               {SERVICES.map((s) => (
                 <li key={s.slug}>
-                  <Link to="/services" hash={s.slug} className="text-navy-foreground/85 hover:text-navy-foreground">
+                  <Link
+                    to="/services"
+                    hash={s.slug}
+                    className="text-navy-foreground/85 hover:text-navy-foreground"
+                  >
                     {s.name}
                   </Link>
                 </li>
@@ -57,12 +61,18 @@ export function SiteFooter() {
             <h3 className="eyebrow text-navy-foreground/60">Get in touch</h3>
             <ul className="mt-4 space-y-4 text-sm">
               <li>
-                <a href={BUSINESS.phoneHref} className="flex items-center gap-3 font-display text-2xl font-extrabold">
+                <a
+                  href={BUSINESS.phoneHref}
+                  className="flex items-center gap-3 font-display text-2xl font-extrabold"
+                >
                   <Phone className="size-5 text-primary-glow" /> {BUSINESS.phoneDisplay}
                 </a>
               </li>
               <li>
-                <a href={`mailto:${BUSINESS.email}`} className="flex items-center gap-3 text-navy-foreground/85 hover:text-navy-foreground">
+                <a
+                  href={`mailto:${BUSINESS.email}`}
+                  className="flex items-center gap-3 text-navy-foreground/85 hover:text-navy-foreground"
+                >
                   <Mail className="size-4 text-primary-glow" /> {BUSINESS.email}
                 </a>
               </li>
@@ -86,12 +96,17 @@ export function SiteFooter() {
 
         <div className="mt-14 border-t border-navy-foreground/10 py-6">
           <p className="text-xs leading-relaxed text-navy-foreground/55">
-            Roofing company Miami · Metal roof installation Homestead · Roof replacement Miami-Dade ·
-            Roofer Broward County · {AREAS.flatMap((a) => a.cities).slice(0, 12).join(" · ")}
+            Roofing company Miami · Metal roof installation Homestead · Roof replacement Miami-Dade
+            · Roofer Broward County ·{" "}
+            {AREAS.flatMap((a) => a.cities)
+              .slice(0, 12)
+              .join(" · ")}
           </p>
           <div className="mt-4 flex flex-col justify-between gap-2 text-xs text-navy-foreground/55 sm:flex-row">
             <p>© {new Date().getFullYear()} Roofer Masters. All rights reserved.</p>
-            <p className="font-display-wide text-[0.65rem] font-bold uppercase">Your roof, our masterpiece</p>
+            <p className="font-display-wide text-[0.65rem] font-bold uppercase">
+              Your roof, our masterpiece
+            </p>
           </div>
         </div>
       </div>

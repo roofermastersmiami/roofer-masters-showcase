@@ -11,7 +11,8 @@ export function createRoofEdgeMap(
   threshold = 90,
 ): RoofEdgeMap | null {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 3 || height < 3) return null;
-  if (rgba.length !== width * height * 4 || !Number.isFinite(threshold) || threshold < 0) return null;
+  if (rgba.length !== width * height * 4 || !Number.isFinite(threshold) || threshold < 0)
+    return null;
   const gray = new Float32Array(width * height);
   for (let i = 0; i < width * height; i++) {
     const p = i * 4;
@@ -21,11 +22,20 @@ export function createRoofEdgeMap(
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const at = (xx: number, yy: number) => gray[yy * width + xx]!;
-      const gx = -at(x - 1, y - 1) + at(x + 1, y - 1)
-        - 2 * at(x - 1, y) + 2 * at(x + 1, y)
-        - at(x - 1, y + 1) + at(x + 1, y + 1);
-      const gy = -at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1)
-        + at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1);
+      const gx =
+        -at(x - 1, y - 1) +
+        at(x + 1, y - 1) -
+        2 * at(x - 1, y) +
+        2 * at(x + 1, y) -
+        at(x - 1, y + 1) +
+        at(x + 1, y + 1);
+      const gy =
+        -at(x - 1, y - 1) -
+        2 * at(x, y - 1) -
+        at(x + 1, y - 1) +
+        at(x - 1, y + 1) +
+        2 * at(x, y + 1) +
+        at(x + 1, y + 1);
       const strength = Math.hypot(gx, gy);
       if (strength < threshold) continue;
       const p = (y * width + x) * 4;

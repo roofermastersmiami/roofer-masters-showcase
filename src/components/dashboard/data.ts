@@ -52,7 +52,9 @@ export function useUpdateLead() {
       await qc.cancelQueries({ queryKey: ["leads"] });
       const prev = qc.getQueryData<Lead[]>(["leads"]);
       qc.setQueryData<Lead[]>(["leads"], (old) =>
-        old?.map((l) => (l.id === vars.id ? { ...l, ...vars, status: vars.status ?? l.status } : l)),
+        old?.map((l) =>
+          l.id === vars.id ? { ...l, ...vars, status: vars.status ?? l.status } : l,
+        ),
       );
       return { prev };
     },
@@ -74,5 +76,10 @@ export function useDeleteLead() {
 
 export function formatWhen(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

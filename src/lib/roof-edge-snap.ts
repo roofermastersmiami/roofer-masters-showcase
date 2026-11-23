@@ -13,12 +13,23 @@ export function snapToImageEdge(
   radius = 12,
   minStrength = 48,
 ): EdgeSnapResult | null {
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 3 || height < 3) return null;
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 3 || height < 3)
+    return null;
   const expectedLength = width * height * 4;
   if (!Number.isSafeInteger(expectedLength) || rgba.length !== expectedLength) return null;
-  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.y < 0 || point.x >= width || point.y >= height) return null;
-  if (!Number.isFinite(radius) || radius < 0 || !Number.isFinite(minStrength) || minStrength <= 0) return null;
-  const cx = Math.round(point.x), cy = Math.round(point.y);
+  if (
+    !Number.isFinite(point.x) ||
+    !Number.isFinite(point.y) ||
+    point.x < 0 ||
+    point.y < 0 ||
+    point.x >= width ||
+    point.y >= height
+  )
+    return null;
+  if (!Number.isFinite(radius) || radius < 0 || !Number.isFinite(minStrength) || minStrength <= 0)
+    return null;
+  const cx = Math.round(point.x),
+    cy = Math.round(point.y);
   const r = Math.max(0, Math.min(80, Math.floor(radius)));
   const gray = (x: number, y: number) => {
     const i = (y * width + x) * 4;
@@ -27,11 +38,20 @@ export function snapToImageEdge(
   let best: EdgeSnapResult | null = null;
   let bestScore = 0;
   const gradient = (x: number, y: number) => {
-    const gx = -gray(x - 1, y - 1) + gray(x + 1, y - 1)
-      - 2 * gray(x - 1, y) + 2 * gray(x + 1, y)
-      - gray(x - 1, y + 1) + gray(x + 1, y + 1);
-    const gy = -gray(x - 1, y - 1) - 2 * gray(x, y - 1) - gray(x + 1, y - 1)
-      + gray(x - 1, y + 1) + 2 * gray(x, y + 1) + gray(x + 1, y + 1);
+    const gx =
+      -gray(x - 1, y - 1) +
+      gray(x + 1, y - 1) -
+      2 * gray(x - 1, y) +
+      2 * gray(x + 1, y) -
+      gray(x - 1, y + 1) +
+      gray(x + 1, y + 1);
+    const gy =
+      -gray(x - 1, y - 1) -
+      2 * gray(x, y - 1) -
+      gray(x + 1, y - 1) +
+      gray(x - 1, y + 1) +
+      2 * gray(x, y + 1) +
+      gray(x + 1, y + 1);
     return { gx, gy, strength: Math.hypot(gx, gy) };
   };
   for (let y = Math.max(1, cy - r); y <= Math.min(height - 2, cy + r); y++) {
@@ -42,14 +62,18 @@ export function snapToImageEdge(
       if (strength < minStrength) continue;
       // A real boundary tends to continue in its tangent direction. Reward
       // aligned edge support on both sides; isolated shingle texture scores lower.
-      const tangentX = -gy / strength, tangentY = gx / strength;
+      const tangentX = -gy / strength,
+        tangentY = gx / strength;
       let support = 0;
       for (const step of [-4, -2, 2, 4]) {
-        const sx = Math.round(x + tangentX * step), sy = Math.round(y + tangentY * step);
+        const sx = Math.round(x + tangentX * step),
+          sy = Math.round(y + tangentY * step);
         if (sx < 1 || sy < 1 || sx >= width - 1 || sy >= height - 1) continue;
         const neighbor = gradient(sx, sy);
         if (neighbor.strength < minStrength * 0.55) continue;
-        const alignment = Math.abs((neighbor.gx * gx + neighbor.gy * gy) / (neighbor.strength * strength));
+        const alignment = Math.abs(
+          (neighbor.gx * gx + neighbor.gy * gy) / (neighbor.strength * strength),
+        );
         if (alignment > 0.65) support += alignment;
       }
       const continuity = 0.55 + 0.1125 * support;

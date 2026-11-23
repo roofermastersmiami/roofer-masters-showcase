@@ -36,15 +36,40 @@ export const Route = createFileRoute("/gallery")({
 type Cat = "All" | "Drone shots" | "Finished roofs" | "Tear-offs" | "Installations";
 const CATS: Cat[] = ["All", "Drone shots", "Finished roofs", "Tear-offs", "Installations"];
 
-const PHOTOS: { src: string; alt: string; cat: Exclude<Cat, "All">; tall?: boolean; wide?: boolean }[] = [
-  { src: heroImg, alt: "Drone view of a charcoal standing seam metal roof in Homestead", cat: "Drone shots", wide: true },
-  { src: droneTile, alt: "Top-down drone shot of a white flat roof in Coral Gables", cat: "Drone shots" },
+const PHOTOS: {
+  src: string;
+  alt: string;
+  cat: Exclude<Cat, "All">;
+  tall?: boolean;
+  wide?: boolean;
+}[] = [
+  {
+    src: heroImg,
+    alt: "Drone view of a charcoal standing seam metal roof in Homestead",
+    cat: "Drone shots",
+    wide: true,
+  },
+  {
+    src: droneTile,
+    alt: "Top-down drone shot of a white flat roof in Coral Gables",
+    cat: "Drone shots",
+  },
   { src: replacementImg, alt: "Crew tearing off an old shingle roof", cat: "Tear-offs" },
-  { src: reelImg, alt: "Installing self-adhered underlayment on a Miami roof", cat: "Installations", tall: true },
+  {
+    src: reelImg,
+    alt: "Installing self-adhered underlayment on a Miami roof",
+    cat: "Installations",
+    tall: true,
+  },
   { src: tileImg, alt: "New concrete barrel tile roof", cat: "Finished roofs" },
   { src: metalImg, alt: "Seaming standing seam metal panels", cat: "Installations" },
   { src: flatImg, alt: "Drone shot of a white TPO commercial roof in Doral", cat: "Drone shots" },
-  { src: shingleImg, alt: "Finished architectural shingle roof in Kendall", cat: "Finished roofs", wide: true },
+  {
+    src: shingleImg,
+    alt: "Finished architectural shingle roof in Kendall",
+    cat: "Finished roofs",
+    wide: true,
+  },
   { src: repairsImg, alt: "Repairing storm-damaged roof tiles", cat: "Tear-offs" },
   { src: guttersImg, alt: "New seamless white gutters and downspout", cat: "Finished roofs" },
   { src: crewImg, alt: "The Roofer Masters crew at a finished job", cat: "Finished roofs" },
@@ -74,10 +99,20 @@ function GalleryPage() {
         <SectionHeading eyebrow="Before & after" title="Slide to see the difference" />
         <div className="mt-10 grid gap-8 md:grid-cols-2">
           <Reveal>
-            <BeforeAfter before={beforeMetal} after={heroImg} alt="tile roof replaced with standing seam metal" caption="Storm-damaged tile → standing seam metal · Homestead" />
+            <BeforeAfter
+              before={beforeMetal}
+              after={heroImg}
+              alt="tile roof replaced with standing seam metal"
+              caption="Storm-damaged tile → standing seam metal · Homestead"
+            />
           </Reveal>
           <Reveal delay={120}>
-            <BeforeAfter before={beforeShingle} after={shingleImg} alt="old shingle roof replaced with new shingles" caption="Worn shingles → high-wind architectural shingles · Kendall" />
+            <BeforeAfter
+              before={beforeShingle}
+              after={shingleImg}
+              alt="old shingle roof replaced with new shingles"
+              caption="Worn shingles → high-wind architectural shingles · Kendall"
+            />
           </Reveal>
         </div>
       </section>
@@ -93,12 +128,27 @@ function GalleryPage() {
           </div>
           <div className="no-scrollbar -mx-4 mt-10 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-4 md:px-0">
             {REELS.map((r, i) => {
-              const href = r.platform === "instagram" ? BUSINESS.socials.instagram : BUSINESS.socials.tiktok;
+              const href =
+                r.platform === "instagram" ? BUSINESS.socials.instagram : BUSINESS.socials.tiktok;
               const Icon = r.platform === "instagram" ? InstagramIcon : TikTokIcon;
               return (
-                <Reveal key={r.title} delay={i * 90} className="w-[62%] shrink-0 snap-center sm:w-[40%] md:w-auto">
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="group relative block aspect-[9/16] overflow-hidden rounded-2xl bg-charcoal shadow-elegant">
-                    <img src={r.poster} alt={r.title} loading="lazy" className="absolute inset-0 size-full object-cover transition duration-700 group-hover:scale-105" />
+                <Reveal
+                  key={r.title}
+                  delay={i * 90}
+                  className="w-[62%] shrink-0 snap-center sm:w-[40%] md:w-auto"
+                >
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group relative block aspect-[9/16] overflow-hidden rounded-2xl bg-charcoal shadow-elegant"
+                  >
+                    <img
+                      src={r.poster}
+                      alt={r.title}
+                      loading="lazy"
+                      className="absolute inset-0 size-full object-cover transition duration-700 group-hover:scale-105"
+                    />
                     <div className="bg-gradient-fade-bottom absolute inset-0" />
                     <span className="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-navy/60 backdrop-blur">
                       <Icon className="size-4" />
@@ -126,7 +176,9 @@ function GalleryPage() {
               onClick={() => setCat(c)}
               className={cn(
                 "h-11 whitespace-nowrap rounded-full border px-5 text-sm font-bold transition",
-                cat === c ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground hover:border-primary",
+                cat === c
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-foreground hover:border-primary",
               )}
             >
               {c}
@@ -145,21 +197,43 @@ function GalleryPage() {
                 p.wide && "col-span-2",
               )}
             >
-              <img src={p.src} alt={p.alt} loading="lazy" className="size-full object-cover transition duration-700 group-hover:scale-105" />
-              <span className="absolute left-3 top-3 rounded-full bg-card/90 px-3 py-1 text-xs font-bold text-primary">{p.cat}</span>
+              <img
+                src={p.src}
+                alt={p.alt}
+                loading="lazy"
+                className="size-full object-cover transition duration-700 group-hover:scale-105"
+              />
+              <span className="absolute left-3 top-3 rounded-full bg-card/90 px-3 py-1 text-xs font-bold text-primary">
+                {p.cat}
+              </span>
             </button>
           ))}
         </div>
       </section>
 
       {lightbox !== null && photos[lightbox] && (
-        <div role="dialog" aria-label="Photo viewer" className="fixed inset-0 z-[60] flex items-center justify-center bg-navy/95 p-4" onClick={() => setLightbox(null)}>
-          <button type="button" aria-label="Close" className="absolute right-4 top-4 grid size-12 place-items-center rounded-full bg-card text-foreground">
+        <div
+          role="dialog"
+          aria-label="Photo viewer"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-navy/95 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute right-4 top-4 grid size-12 place-items-center rounded-full bg-card text-foreground"
+          >
             <X />
           </button>
           <figure className="max-w-5xl" onClick={(e) => e.stopPropagation()}>
-            <img src={photos[lightbox].src} alt={photos[lightbox].alt} className="max-h-[80vh] w-auto rounded-2xl" />
-            <figcaption className="mt-3 text-center text-sm text-navy-foreground/80">{photos[lightbox].alt}</figcaption>
+            <img
+              src={photos[lightbox].src}
+              alt={photos[lightbox].alt}
+              className="max-h-[80vh] w-auto rounded-2xl"
+            />
+            <figcaption className="mt-3 text-center text-sm text-navy-foreground/80">
+              {photos[lightbox].alt}
+            </figcaption>
           </figure>
         </div>
       )}

@@ -1,12 +1,12 @@
-import type { EdgeType, RoofDrawing } from './roof-geometry';
+import type { EdgeType, RoofDrawing } from "./roof-geometry";
 
 export type SharedEdgeSuggestion = {
   firstPlaneId: string;
   firstEdgeIndex: number;
   secondPlaneId: string;
   secondEdgeIndex: number;
-  type: 'ridge' | 'valley';
-  confidence: 'high' | 'review';
+  type: "ridge" | "valley";
+  confidence: "high" | "review";
 };
 
 /**
@@ -20,17 +20,22 @@ export type SharedEdgeSuggestion = {
  */
 export function suggestSharedEdgeTypes(drawing: RoofDrawing): SharedEdgeSuggestion[] {
   const keyPoint = (p: { x: number; y: number; z: number }) =>
-    [p.x, p.y, p.z].map((n) => Math.round(n * 100)).join(',');
-  const keyEdge = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) =>
-    [keyPoint(a), keyPoint(b)].sort().join('|');
+    [p.x, p.y, p.z].map((n) => Math.round(n * 100)).join(",");
+  const keyEdge = (
+    a: { x: number; y: number; z: number },
+    b: { x: number; y: number; z: number },
+  ) => [keyPoint(a), keyPoint(b)].sort().join("|");
 
-  const edges = new Map<string, Array<{
-    planeId: string;
-    edgeIndex: number;
-    edgeType: EdgeType;
-    edgeMidY: number;
-    centroidY: number;
-  }>>();
+  const edges = new Map<
+    string,
+    Array<{
+      planeId: string;
+      edgeIndex: number;
+      edgeType: EdgeType;
+      edgeMidY: number;
+      centroidY: number;
+    }>
+  >();
 
   for (const plane of drawing.planes) {
     const centroidY = plane.points.reduce((sum, point) => sum + point.y, 0) / plane.points.length;
@@ -57,7 +62,7 @@ export function suggestSharedEdgeTypes(drawing: RoofDrawing): SharedEdgeSuggesti
     if (items.length !== 2) continue;
     const [a, b] = items;
     if (!a || !b) continue;
-    if (a.edgeType === b.edgeType && (a.edgeType === 'ridge' || a.edgeType === 'valley')) continue;
+    if (a.edgeType === b.edgeType && (a.edgeType === "ridge" || a.edgeType === "valley")) continue;
 
     const aboveBoth = a.edgeMidY > a.centroidY + 0.03 && b.edgeMidY > b.centroidY + 0.03;
     const belowBoth = a.edgeMidY < a.centroidY - 0.03 && b.edgeMidY < b.centroidY - 0.03;
@@ -68,8 +73,8 @@ export function suggestSharedEdgeTypes(drawing: RoofDrawing): SharedEdgeSuggesti
       firstEdgeIndex: a.edgeIndex,
       secondPlaneId: b.planeId,
       secondEdgeIndex: b.edgeIndex,
-      type: aboveBoth ? 'ridge' : 'valley',
-      confidence: 'review',
+      type: aboveBoth ? "ridge" : "valley",
+      confidence: "review",
     });
   }
   return suggestions;

@@ -1,29 +1,73 @@
 import { z } from "zod";
 
-export const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+export const money = (cents: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 export const dollarsToCents = (dollars: number) => Math.round(dollars * 100);
-export const itemSchema = z.object({ description: z.string().trim().min(1).max(250), quantity: z.number().positive().max(100000), unit_cents: z.number().int().nonnegative().max(100000000) });
+export const itemSchema = z.object({
+  description: z.string().trim().min(1).max(250),
+  quantity: z.number().positive().max(100000),
+  unit_cents: z.number().int().nonnegative().max(100000000),
+});
 export type InvoiceItem = z.infer<typeof itemSchema>;
 export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
-  const subtotal = items.reduce((sum, item) => sum + Math.round(item.quantity * item.unit_cents), 0);
-  const tax = Math.round(subtotal * taxPercent / 100);
+  const subtotal = items.reduce(
+    (sum, item) => sum + Math.round(item.quantity * item.unit_cents),
+    0,
+  );
+  const tax = Math.round((subtotal * taxPercent) / 100);
   return { subtotal, tax, total: subtotal + tax };
 }
-export const invoiceSchema = z.object({
-  lead_id: z.string().uuid(), proposal_id: z.string().uuid().nullable(), title: z.string().trim().min(1).max(180),
-  items: z.array(itemSchema).min(1).max(50), tax_percent: z.number().min(0).max(100), deposit_percent: z.number().min(0).max(100),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => !Number.isNaN(Date.parse(v)), "Choose a valid due date"), notes: z.string().max(4000), environment: z.enum(["sandbox", "live"]),
-}).refine((data) => invoiceTotals(data.items, data.tax_percent).total > 0, "Invoice total must be greater than zero");
-export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
+export const invoiceSchema = z
+  .object({
+    lead_id: z.string().uuid(),
+    proposal_id: z.string().uuid().nullable(),
+    title: z.string().trim().min(1).max(180),
+    items: z.array(itemSchema).min(1).max(50),
+    tax_percent: z.number().min(0).max(100),
+    deposit_percent: z.number().min(0).max(100),
+    due_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .refine((v) => !Number.isNaN(Date.parse(v)), "Choose a valid due date"),
+    notes: z.string().max(4000),
+    environment: z.enum(["sandbox", "live"]),
+  })
+  .refine(
+    (data) => invoiceTotals(data.items, data.tax_percent).total > 0,
+    "Invoice total must be greater than zero",
+  );
+export function invoiceState(
+  invoice: { status: string; total_cents: number; paid_cents: number; due_date: string },
+  now = Date.now(),
+) {
   if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
   if (invoice.paid_cents >= invoice.total_cents) return "paid";
   if (Date.parse(`${invoice.due_date}T23:59:59-05:00`) < now) return "overdue";
   return invoice.paid_cents > 0 ? "partial" : "unpaid";
 }
-export function paymentAmount(invoice: { total_cents: number; paid_cents: number; deposit_cents: number }, kind: "deposit" | "balance") {
-  return kind === "deposit" ? Math.max(0, Math.min(invoice.deposit_cents - invoice.paid_cents, invoice.total_cents - invoice.paid_cents)) : Math.max(0, invoice.total_cents - invoice.paid_cents);
+export function paymentAmount(
+  invoice: { total_cents: number; paid_cents: number; deposit_cents: number },
+  kind: "deposit" | "balance",
+) {
+  return kind === "deposit"
+    ? Math.max(
+        0,
+        Math.min(
+          invoice.deposit_cents - invoice.paid_cents,
+          invoice.total_cents - invoice.paid_cents,
+        ),
+      )
+    : Math.max(0, invoice.total_cents - invoice.paid_cents);
 }
-export const estimateInputSchema = z.object({ sqft: z.number().positive().max(1000000), waste: z.number().min(0).max(100), material: z.number().nonnegative().max(100000), labor: z.number().nonnegative().max(100000), permits: z.number().nonnegative().max(1000000), other: z.number().nonnegative().max(1000000), margin: z.number().min(0).max(95) });
+export const estimateInputSchema = z.object({
+  sqft: z.number().positive().max(1000000),
+  waste: z.number().min(0).max(100),
+  material: z.number().nonnegative().max(100000),
+  labor: z.number().nonnegative().max(100000),
+  permits: z.number().nonnegative().max(1000000),
+  other: z.number().nonnegative().max(1000000),
+  margin: z.number().min(0).max(95),
+});
 export type EstimateInputs = z.infer<typeof estimateInputSchema>;
 export function calculateEstimate(raw: EstimateInputs) {
   const input = estimateInputSchema.parse(raw);
@@ -35,4 +79,13 @@ export function calculateEstimate(raw: EstimateInputs) {
   const total = Math.round(cost / (1 - input.margin / 100));
   return { squares, materialSquares, materialCents, laborCents, cost, total, profit: total - cost };
 }
-export const CHECKLIST = ["Pre-job inspection", "Permit verified", "Materials delivered", "Tear-off complete", "Dry-in inspection", "Roof installation", "Final inspection", "Site cleanup"];
+export const CHECKLIST = [
+  "Pre-job inspection",
+  "Permit verified",
+  "Materials delivered",
+  "Tear-off complete",
+  "Dry-in inspection",
+  "Roof installation",
+  "Final inspection",
+  "Site cleanup",
+];

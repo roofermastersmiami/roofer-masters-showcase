@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { LEAD_STATUSES, LEAD_STATUS_LABELS, chatStartSchema, leadFormSchema } from "@/lib/lead-schema";
+import {
+  LEAD_STATUSES,
+  LEAD_STATUS_LABELS,
+  chatStartSchema,
+  leadFormSchema,
+} from "@/lib/lead-schema";
 import { BUSINESS } from "@/lib/site";
 
 describe("lead rules", () => {
@@ -14,22 +19,44 @@ describe("lead rules", () => {
   });
 
   it("a call-back request needs a phone number", () => {
-    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "", email: "", source: "callback" });
+    const r = leadFormSchema.safeParse({
+      name: "Ana Perez",
+      phone: "",
+      email: "",
+      source: "callback",
+    });
     expect(r.success).toBe(false);
   });
 
   it("a call-back request with name, phone and address is accepted", () => {
-    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", address: "123 SW 1st St, Homestead, FL 33030", source: "callback" });
+    const r = leadFormSchema.safeParse({
+      name: "Ana Perez",
+      phone: "305-555-0123",
+      email: "",
+      address: "123 SW 1st St, Homestead, FL 33030",
+      source: "callback",
+    });
     expect(r.success).toBe(true);
   });
 
   it("a call-back request without an address is rejected", () => {
-    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", address: "", source: "callback" });
+    const r = leadFormSchema.safeParse({
+      name: "Ana Perez",
+      phone: "305-555-0123",
+      email: "",
+      address: "",
+      source: "callback",
+    });
     expect(r.success).toBe(false);
   });
 
   it("a contact form does not require an address", () => {
-    const r = leadFormSchema.safeParse({ name: "Ana Perez", phone: "305-555-0123", email: "", source: "contact" });
+    const r = leadFormSchema.safeParse({
+      name: "Ana Perez",
+      phone: "305-555-0123",
+      email: "",
+      source: "contact",
+    });
     expect(r.success).toBe(true);
   });
 

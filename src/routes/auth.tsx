@@ -10,16 +10,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/site/Logo";
 import { BUSINESS } from "@/lib/site";
-import { oauthReturnPath } from '@/lib/oauth-return-path';
+import { oauthReturnPath } from "@/lib/oauth-return-path";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({ next: oauthReturnPath(search.next ?? '/dashboard') }),
+  validateSearch: (search: SearchSchemaInput & { next?: unknown }) => ({
+    next: oauthReturnPath(search.next ?? "/dashboard"),
+  }),
   head: () => ({
     meta: [
       { title: "Owner Login | Roofer Masters" },
       { name: "description", content: "Secure login for the Roofer Masters owner dashboard." },
       { property: "og:title", content: "Owner Login | Roofer Masters" },
-      { property: "og:description", content: "Secure login for the Roofer Masters owner dashboard." },
+      {
+        property: "og:description",
+        content: "Secure login for the Roofer Masters owner dashboard.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
@@ -41,11 +46,17 @@ function AuthPage() {
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (active && data.user) void navigate({ href: next, replace: true });
-    }).catch(() => {
-      if (active) setNotice("We couldn’t check your connection. You can still try signing in; if it fails, reconnect and try again.");
-    });
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (active && data.user) void navigate({ href: next, replace: true });
+      })
+      .catch(() => {
+        if (active)
+          setNotice(
+            "We couldn’t check your connection. You can still try signing in; if it fails, reconnect and try again.",
+          );
+      });
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) void navigate({ href: next, replace: true });
     });
@@ -87,8 +98,8 @@ function AuthPage() {
 
   async function social(provider: "google" | "lovable") {
     try {
-      const returnUrl = new URL('/auth', window.location.origin);
-      returnUrl.searchParams.set('next', next);
+      const returnUrl = new URL("/auth", window.location.origin);
+      returnUrl.searchParams.set("next", next);
       const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: returnUrl.href });
       if (result.error) toast.error(result.error.message ?? "Sign-in failed");
     } catch {
@@ -110,7 +121,9 @@ function AuthPage() {
             lead from New to Won.
           </p>
         </div>
-        <p className="relative text-sm text-navy-foreground/60">{BUSINESS.phoneDisplay} · {BUSINESS.email}</p>
+        <p className="relative text-sm text-navy-foreground/60">
+          {BUSINESS.phoneDisplay} · {BUSINESS.email}
+        </p>
       </div>
 
       <div className="flex items-center justify-center p-6">
@@ -120,7 +133,11 @@ function AuthPage() {
           </div>
           <div className="rounded-3xl border border-border bg-card p-7 shadow-elegant">
             <h2 className="text-2xl font-black text-foreground">
-              {mode === "signin" ? "Sign in" : mode === "signup" ? "Create owner account" : "Reset password"}
+              {mode === "signin"
+                ? "Sign in"
+                : mode === "signup"
+                  ? "Create owner account"
+                  : "Reset password"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {mode === "signup"
@@ -136,10 +153,32 @@ function AuthPage() {
                   className="inline-flex h-11 items-center justify-center gap-[10px] rounded-xl border border-[#747775] bg-[#FFFFFF] px-3 font-medium text-[#1F1F1F] text-sm"
                   style={{ fontFamily: "'Google Sans', Manrope, sans-serif" }}
                 >
-                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                    />
+                  </svg>
                   Continue with Google
                 </button>
-                <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => social("lovable")}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl"
+                  onClick={() => social("lovable")}
+                >
                   <LovableMark className="size-[18px]" />
                   Continue with Lovable
                 </Button>
@@ -153,33 +192,87 @@ function AuthPage() {
             <form onSubmit={onSubmit} className="grid gap-4">
               <div className="grid gap-1.5">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" />
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-11"
+                />
               </div>
               {mode !== "forgot" && (
                 <div className="grid gap-1.5">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" />
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11"
+                  />
                 </div>
               )}
-              {notice && <p className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">{notice}</p>}
-              <Button type="submit" variant="hero" size="lg" className="h-12 rounded-xl" disabled={busy}>
+              {notice && (
+                <p className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
+                  {notice}
+                </p>
+              )}
+              <Button
+                type="submit"
+                variant="hero"
+                size="lg"
+                className="h-12 rounded-xl"
+                disabled={busy}
+              >
                 {busy && <Loader2 className="animate-spin" />}
-                {mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
+                {mode === "signin"
+                  ? "Sign in"
+                  : mode === "signup"
+                    ? "Create account"
+                    : "Send reset link"}
               </Button>
             </form>
 
             <div className="mt-5 flex flex-wrap justify-between gap-2 text-sm">
               {mode === "signin" ? (
                 <>
-                  <button type="button" className="font-semibold text-primary" onClick={() => setMode("signup")}>Create owner account</button>
-                  <button type="button" className="text-muted-foreground" onClick={() => setMode("forgot")}>Forgot password?</button>
+                  <button
+                    type="button"
+                    className="font-semibold text-primary"
+                    onClick={() => setMode("signup")}
+                  >
+                    Create owner account
+                  </button>
+                  <button
+                    type="button"
+                    className="text-muted-foreground"
+                    onClick={() => setMode("forgot")}
+                  >
+                    Forgot password?
+                  </button>
                 </>
               ) : (
-                <button type="button" className="font-semibold text-primary" onClick={() => setMode("signin")}>← Back to sign in</button>
+                <button
+                  type="button"
+                  className="font-semibold text-primary"
+                  onClick={() => setMode("signin")}
+                >
+                  ← Back to sign in
+                </button>
               )}
             </div>
           </div>
-          <a href="/" className="mt-6 block text-center text-sm text-muted-foreground hover:text-foreground">← Back to website</a>
+          <a
+            href="/"
+            className="mt-6 block text-center text-sm text-muted-foreground hover:text-foreground"
+          >
+            ← Back to website
+          </a>
         </div>
       </div>
     </div>

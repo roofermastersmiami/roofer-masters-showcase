@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from "vitest";
 
 import {
@@ -29,9 +28,7 @@ describe("Roof calculation helpers", () => {
   });
 
   it("calculates sloped area from projected area", () => {
-    expect(
-      projectedAreaToSurfaceArea(100, 12)
-    ).toBeCloseTo(141.421356);
+    expect(projectedAreaToSurfaceArea(100, 12)).toBeCloseTo(141.421356);
   });
 
   it("does not apply pitch twice to surface area", () => {
@@ -84,14 +81,12 @@ describe("Roof calculation helpers", () => {
   it("rejects conflicting shared edge measurements", () => {
     expect(() =>
       calculateRoofSummary({
-        facets: [
-          { id: "a", surfaceAreaSqFt: 500 },
-        ],
+        facets: [{ id: "a", surfaceAreaSqFt: 500 }],
         edges: [
           { id: "shared-1", type: "ridge", lengthFt: 20 },
           { id: "shared-1", type: "hip", lengthFt: 25 },
         ],
-      })
+      }),
     ).toThrow();
   });
 
@@ -102,7 +97,7 @@ describe("Roof calculation helpers", () => {
         { x: 10, y: 0 },
         { x: 10, y: 10 },
         { x: 0, y: 10 },
-      ])
+      ]),
     ).toBe(100);
   });
 
@@ -116,18 +111,16 @@ describe("Roof calculation helpers", () => {
             projectedAreaSqFt: 900,
           },
         ],
-      })
+      }),
     ).toThrow();
   });
 
   it("rejects invalid waste percentages", () => {
     expect(() =>
       calculateRoofSummary({
-        facets: [
-          { id: "plane-1", surfaceAreaSqFt: 1000 },
-        ],
+        facets: [{ id: "plane-1", surfaceAreaSqFt: 1000 }],
         wastePercent: 60,
-      })
+      }),
     ).toThrow();
   });
 });

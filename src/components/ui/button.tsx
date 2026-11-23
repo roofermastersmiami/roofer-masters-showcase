@@ -18,9 +18,12 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         hero: "bg-gradient-primary text-primary-foreground font-bold shadow-elegant hover:shadow-glow hover:-translate-y-0.5 transition-all shine",
         call: "bg-primary text-primary-foreground font-bold shadow-elegant hover:bg-primary/90 hover:-translate-y-0.5 transition-all",
-        whatsapp: "bg-whatsapp text-whatsapp-foreground font-bold shadow-card hover:brightness-105 hover:-translate-y-0.5 transition-all",
-        light: "bg-card text-primary font-bold shadow-card hover:bg-accent hover:-translate-y-0.5 transition-all",
-        outlineLight: "border border-navy-foreground/30 bg-navy-foreground/5 text-navy-foreground font-semibold backdrop-blur hover:bg-navy-foreground/15",
+        whatsapp:
+          "bg-whatsapp text-whatsapp-foreground font-bold shadow-card hover:brightness-105 hover:-translate-y-0.5 transition-all",
+        light:
+          "bg-card text-primary font-bold shadow-card hover:bg-accent hover:-translate-y-0.5 transition-all",
+        outlineLight:
+          "border border-navy-foreground/30 bg-navy-foreground/5 text-navy-foreground font-semibold backdrop-blur hover:bg-navy-foreground/15",
         navy: "bg-navy text-navy-foreground font-semibold hover:bg-charcoal",
       },
       size: {

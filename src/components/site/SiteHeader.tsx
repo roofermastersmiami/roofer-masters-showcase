@@ -60,8 +60,15 @@ export function SiteHeader() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm" className="hidden xl:inline-flex"><Link to="/instant-estimator">Instant estimate</Link></Button>
-            <Button asChild variant="call" size="lg" className="hidden h-11 rounded-xl sm:inline-flex">
+            <Button asChild variant="outline" size="sm" className="hidden xl:inline-flex">
+              <Link to="/instant-estimator">Instant estimate</Link>
+            </Button>
+            <Button
+              asChild
+              variant="call"
+              size="lg"
+              className="hidden h-11 rounded-xl sm:inline-flex"
+            >
               <a href={BUSINESS.phoneHref}>
                 <Phone /> {BUSINESS.phoneDisplay}
               </a>
@@ -100,7 +107,11 @@ export function SiteHeader() {
               ))}
             </nav>
             <div className="mt-6 grid gap-3">
-              <Button asChild variant="outline" size="tap"><Link to="/instant-estimator" onClick={()=>setOpen(false)}>Instant roof estimate</Link></Button>
+              <Button asChild variant="outline" size="tap">
+                <Link to="/instant-estimator" onClick={() => setOpen(false)}>
+                  Instant roof estimate
+                </Link>
+              </Button>
               <Button asChild variant="call" size="tap">
                 <a href={BUSINESS.phoneHref}>
                   <Phone /> Call {BUSINESS.phoneDisplay}

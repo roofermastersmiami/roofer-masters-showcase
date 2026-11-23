@@ -177,12 +177,14 @@ export function RoofMeasurements({
   let materialTakeoff: ReturnType<typeof calculateRoofMaterialTakeoff> | null = null;
   let materialTakeoffError = "";
   try {
-    if (measurement) materialTakeoff = calculateRoofMaterialTakeoff(d, {
-      wastePercent: d.waste,
-      metalPanelCoverageWidthInches: d.metal_panel_width_inches ?? 16,
-    });
+    if (measurement)
+      materialTakeoff = calculateRoofMaterialTakeoff(d, {
+        wastePercent: d.waste,
+        metalPanelCoverageWidthInches: d.metal_panel_width_inches ?? 16,
+      });
   } catch (e) {
-    materialTakeoffError = e instanceof Error ? e.message : "Material takeoff is unavailable for this drawing.";
+    materialTakeoffError =
+      e instanceof Error ? e.message : "Material takeoff is unavailable for this drawing.";
   }
   const propertyRow = properties.data?.find((p) => p.id === property),
     customer = customers.data?.find((c) => c.id === propertyRow?.customer_id);
@@ -813,17 +815,30 @@ export function RoofMeasurements({
                 </table>
               </div>
               <div className="mt-3">
-                <Button size="sm" variant="outline" onClick={() => {
-                  const suggestions = suggestSharedEdgeTypes(d);
-                  if (!suggestions.length) {
-                    toast.info("No unambiguous shared ridge or valley edges were detected. Review plane geometry and edge labels manually.");
-                    return;
-                  }
-                  const next = applySharedEdgeSuggestions(d, suggestions);
-                  edit(next);
-                  toast.success(`${suggestions.length} shared edge suggestion(s) applied. Review every label before saving.`);
-                }}>Suggest shared ridges &amp; valleys</Button>
-                <p className="mt-1 text-xs text-muted-foreground">Uses adjacent 3D roof-plane heights only. Suggestions are not verified; exterior eaves and rakes remain manual.</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const suggestions = suggestSharedEdgeTypes(d);
+                    if (!suggestions.length) {
+                      toast.info(
+                        "No unambiguous shared ridge or valley edges were detected. Review plane geometry and edge labels manually.",
+                      );
+                      return;
+                    }
+                    const next = applySharedEdgeSuggestions(d, suggestions);
+                    edit(next);
+                    toast.success(
+                      `${suggestions.length} shared edge suggestion(s) applied. Review every label before saving.`,
+                    );
+                  }}
+                >
+                  Suggest shared ridges &amp; valleys
+                </Button>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Uses adjacent 3D roof-plane heights only. Suggestions are not verified; exterior
+                  eaves and rakes remain manual.
+                </p>
               </div>
               <div className="mt-4 grid gap-2">
                 {plane.edges.map((type, i) => (
@@ -924,15 +939,49 @@ export function RoofMeasurements({
           </div>
         </section>
       )}
-      {materialTakeoffError && <p role="alert" className="my-3 border-l-2 border-destructive pl-3 text-sm text-destructive">Material takeoff could not be calculated: {materialTakeoffError}</p>}
+      {materialTakeoffError && (
+        <p
+          role="alert"
+          className="my-3 border-l-2 border-destructive pl-3 text-sm text-destructive"
+        >
+          Material takeoff could not be calculated: {materialTakeoffError}
+        </p>
+      )}
       {materialTakeoff && (
         <section className="border-t border-border py-6">
           <h3 className="mb-2 text-lg font-bold">Preliminary material takeoff</h3>
-          <p className="mb-3 text-sm text-muted-foreground">{materialTakeoff.orderAreaSqft.toFixed(0)} sq ft including {materialTakeoff.wastePercent}% waste · {materialTakeoff.orderSquares.toFixed(2)} order squares</p>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">Material</th><th className="py-2 text-right">Quantity</th><th className="py-2">Unit</th><th className="py-2">Basis</th></tr></thead><tbody>
-            {materialTakeoff.lines.map((line, i) => <tr key={i} className="border-b border-border/60"><td className="py-2">{line.item}</td><td className="py-2 text-right tabular-nums">{line.quantity}</td><td className="py-2">{line.unit}</td><td className="py-2 text-muted-foreground">{line.basis}</td></tr>)}
-          </tbody></table></div>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-700">{materialTakeoff.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {materialTakeoff.orderAreaSqft.toFixed(0)} sq ft including{" "}
+            {materialTakeoff.wastePercent}% waste · {materialTakeoff.orderSquares.toFixed(2)} order
+            squares
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Material</th>
+                  <th className="py-2 text-right">Quantity</th>
+                  <th className="py-2">Unit</th>
+                  <th className="py-2">Basis</th>
+                </tr>
+              </thead>
+              <tbody>
+                {materialTakeoff.lines.map((line, i) => (
+                  <tr key={i} className="border-b border-border/60">
+                    <td className="py-2">{line.item}</td>
+                    <td className="py-2 text-right tabular-nums">{line.quantity}</td>
+                    <td className="py-2">{line.unit}</td>
+                    <td className="py-2 text-muted-foreground">{line.basis}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-amber-700">
+            {materialTakeoff.warnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
+            ))}
+          </ul>
         </section>
       )}
       <section className="grid gap-6 py-6 lg:grid-cols-2">
@@ -949,7 +998,16 @@ export function RoofMeasurements({
               }))}
             />
             {d.roof_type === "Metal Roof" && (
-              <Field label="Metal panel net coverage (in)"><Input type="number" min={6} max={60} step="0.125" value={d.metal_panel_width_inches ?? 16} onChange={(e) => edit({ ...d, metal_panel_width_inches: Number(e.target.value) })} /></Field>
+              <Field label="Metal panel net coverage (in)">
+                <Input
+                  type="number"
+                  min={6}
+                  max={60}
+                  step="0.125"
+                  value={d.metal_panel_width_inches ?? 16}
+                  onChange={(e) => edit({ ...d, metal_panel_width_inches: Number(e.target.value) })}
+                />
+              </Field>
             )}
             <Field label="Waste (%)">
               <Input

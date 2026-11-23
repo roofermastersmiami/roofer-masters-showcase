@@ -11,9 +11,15 @@ export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
       { title: "Set a New Password | Roofer Masters" },
-      { name: "description", content: "Choose a new password for your Roofer Masters owner account." },
+      {
+        name: "description",
+        content: "Choose a new password for your Roofer Masters owner account.",
+      },
       { property: "og:title", content: "Set a New Password | Roofer Masters" },
-      { property: "og:description", content: "Choose a new password for your Roofer Masters owner account." },
+      {
+        property: "og:description",
+        content: "Choose a new password for your Roofer Masters owner account.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
@@ -42,16 +48,34 @@ function ResetPassword() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-steel p-6">
-      <form onSubmit={onSubmit} className="w-full max-w-md rounded-3xl border border-border bg-card p-7 shadow-elegant">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-md rounded-3xl border border-border bg-card p-7 shadow-elegant"
+      >
         <div className="mb-6 flex justify-center">
           <Logo className="h-20" />
         </div>
         <h1 className="text-2xl font-black text-foreground">Set a new password</h1>
         <div className="mt-5 grid gap-1.5">
           <Label htmlFor="pw">New password</Label>
-          <Input id="pw" type="password" minLength={8} required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" />
+          <Input
+            id="pw"
+            type="password"
+            minLength={8}
+            required
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-11"
+          />
         </div>
-        <Button type="submit" variant="hero" size="lg" className="mt-5 h-12 w-full rounded-xl" disabled={busy}>
+        <Button
+          type="submit"
+          variant="hero"
+          size="lg"
+          className="mt-5 h-12 w-full rounded-xl"
+          disabled={busy}
+        >
           Save password
         </Button>
       </form>

@@ -39,7 +39,12 @@ export const localBusinessJsonLd = {
       opens: "08:00",
       closes: "17:00",
     },
-    { "@type": "OpeningHoursSpecification", dayOfWeek: "Saturday", opens: "10:00", closes: "13:00" },
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: "Saturday",
+      opens: "10:00",
+      closes: "13:00",
+    },
   ],
   sameAs: Object.values(BUSINESS.socials),
   hasOfferCatalog: {

@@ -1,4 +1,5 @@
 <!-- LOVABLE:BEGIN -->
+
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
 > published git history — force pushing, or rebasing/amending/squashing commits
@@ -27,9 +28,11 @@ use the editor.
   `LOVABLE_API_KEY`. When Lovable does not provide one, users can bring their
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
+
 <!-- LOVABLE:END -->
 
 ## Project rules
+
 - Public forms and chat write leads only through server functions in `src/lib/leads.functions.ts` (service-role client, zod-validated); browsers have no insert access to `leads`/`lead_messages`, so validation and abuse checks can't be bypassed.
 - Lead form rules (required fields, pipeline stages) live in `src/lib/lead-schema.ts` and are shared by client and server; tests in `src/test/lead-rules.test.ts` cover them.
 - Owner access = `admin` row in `user_roles` (trigger on business-email confirmation). Team roles (office, sales, production_manager, crew, accounting) are enforced by `has_any_role` in RLS, storage policies, RPCs and server functions; `src/lib/team-roles.ts` mirrors them for navigation only. Money tables are owner/accounting only; crew read assigned jobs solely through a server projection.

@@ -1,12 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { ROOF_CATEGORIES, proposalSchema, validPdfHeader, shareIsActive, signatureSchema } from "@/lib/proposal-schema";
-import { generateProposalPdf, applyPdfEdits, changePdfPages, getPdfFields } from "@/lib/proposal-pdf";
+import {
+  ROOF_CATEGORIES,
+  proposalSchema,
+  validPdfHeader,
+  shareIsActive,
+  signatureSchema,
+} from "@/lib/proposal-schema";
+import {
+  generateProposalPdf,
+  applyPdfEdits,
+  changePdfPages,
+  getPdfFields,
+} from "@/lib/proposal-pdf";
 
-const details = { title: "Roofing proposal", category: "Metal Roof" as const, is_template: false, lead_id: null, scope: "Standing seam metal roof", terms: "", amount: 12345.67 };
+const details = {
+  title: "Roofing proposal",
+  category: "Metal Roof" as const,
+  is_template: false,
+  lead_id: null,
+  scope: "Standing seam metal roof",
+  terms: "",
+  amount: 12345.67,
+};
 describe("Roofing proposal rules", () => {
   for (const category of ["Metal Roof", "Tile Roof", "Shingle Roof", "TPO", "Flat Roof"] as const) {
-    it(`supports ${category} templates`, () => { expect(ROOF_CATEGORIES).toContain(category); expect(proposalSchema.parse({ ...details, category, is_template: true }).category).toBe(category); });
+    it(`supports ${category} templates`, () => {
+      expect(ROOF_CATEGORIES).toContain(category);
+      expect(proposalSchema.parse({ ...details, category, is_template: true }).category).toBe(
+        category,
+      );
+    });
   }
   it("accepts PDF uploads and rejects non-PDF bytes", async () => {
     expect(validPdfHeader(await generateProposalPdf(details))).toBe(true);
@@ -14,16 +38,30 @@ describe("Roofing proposal rules", () => {
   });
   it("saves added PDF text into the document", async () => {
     const bytes = await generateProposalPdf(details);
-    const result = await applyPdfEdits(bytes, [{ id: "note", page: 0, x: 0.1, y: 0.5, kind: "text", text: "Roof upgrade", size: 14 }], []);
+    const result = await applyPdfEdits(
+      bytes,
+      [{ id: "note", page: 0, x: 0.1, y: 0.5, kind: "text", text: "Roof upgrade", size: 14 }],
+      [],
+    );
     const pdf = await PDFDocument.load(result);
     expect(pdf.getPageCount()).toBe(1);
     expect(result.length).toBeGreaterThan(bytes.length);
   });
   it("fills existing PDF form fields", async () => {
-    const pdf = await PDFDocument.create(); const page = pdf.addPage(); const field = pdf.getForm().createTextField("Roof type"); field.addToPage(page); const bytes = await pdf.save();
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage();
+    const field = pdf.getForm().createTextField("Roof type");
+    field.addToPage(page);
+    const bytes = await pdf.save();
     const fields = await getPdfFields(bytes);
-    const result = await applyPdfEdits(bytes, [], fields.map((f) => ({ ...f, value: "TPO" })));
-    expect((await PDFDocument.load(result)).getForm().getTextField("Roof type").getText()).toBe("TPO");
+    const result = await applyPdfEdits(
+      bytes,
+      [],
+      fields.map((f) => ({ ...f, value: "TPO" })),
+    );
+    expect((await PDFDocument.load(result)).getForm().getTextField("Roof type").getText()).toBe(
+      "TPO",
+    );
   });
   it("merges and rotates proposal pages", async () => {
     const bytes = await generateProposalPdf(details);
@@ -33,16 +71,41 @@ describe("Roofing proposal rules", () => {
     expect((await PDFDocument.load(rotated)).getPage(0).getRotation().angle).toBe(90);
   });
   it("revoked and expired links cannot authorize customer access", () => {
-    expect(shareIsActive({ revoked_at: "2026-11-20T00:00:00Z", expires_at: "2026-12-20T00:00:00Z" }, Date.parse("2026-11-21T00:00:00Z"))).toBe(false);
-    expect(shareIsActive({ revoked_at: null, expires_at: "2026-11-20T00:00:00Z" }, Date.parse("2026-11-21T00:00:00Z"))).toBe(false);
-    expect(shareIsActive({ revoked_at: null, expires_at: "2026-12-20T00:00:00Z" }, Date.parse("2026-11-21T00:00:00Z"))).toBe(true);
+    expect(
+      shareIsActive(
+        { revoked_at: "2026-11-20T00:00:00Z", expires_at: "2026-12-20T00:00:00Z" },
+        Date.parse("2026-11-21T00:00:00Z"),
+      ),
+    ).toBe(false);
+    expect(
+      shareIsActive(
+        { revoked_at: null, expires_at: "2026-11-20T00:00:00Z" },
+        Date.parse("2026-11-21T00:00:00Z"),
+      ),
+    ).toBe(false);
+    expect(
+      shareIsActive(
+        { revoked_at: null, expires_at: "2026-12-20T00:00:00Z" },
+        Date.parse("2026-11-21T00:00:00Z"),
+      ),
+    ).toBe(true);
   });
   it("requires a name and a drawn PNG signature for customer sign-off", () => {
     const token = crypto.randomUUID();
     const png = `data:image/png;base64,${btoa("fake-png-bytes")}`;
-    expect(signatureSchema.parse({ token, name: "Elena Vargas", signature: png }).name).toBe("Elena Vargas");
+    expect(signatureSchema.parse({ token, name: "Elena Vargas", signature: png }).name).toBe(
+      "Elena Vargas",
+    );
     expect(() => signatureSchema.parse({ token, name: "  ", signature: png })).toThrow();
-    expect(() => signatureSchema.parse({ token, name: "Elena Vargas", signature: "data:image/jpeg;base64,AAAA" })).toThrow();
-    expect(() => signatureSchema.parse({ token, name: "Elena Vargas", signature: "not-a-data-url" })).toThrow();
+    expect(() =>
+      signatureSchema.parse({
+        token,
+        name: "Elena Vargas",
+        signature: "data:image/jpeg;base64,AAAA",
+      }),
+    ).toThrow();
+    expect(() =>
+      signatureSchema.parse({ token, name: "Elena Vargas", signature: "not-a-data-url" }),
+    ).toThrow();
   });
 });

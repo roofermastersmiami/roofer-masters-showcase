@@ -1,12 +1,17 @@
-const RELOAD_KEY = 'rm-module-reload-at';
+const RELOAD_KEY = "rm-module-reload-at";
 const RELOAD_COOLDOWN_MS = 60_000;
 
 export function isModuleLoadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /importing a module script failed|failed to fetch dynamically imported module|error loading dynamically imported module|loading chunk .+ failed|unable to preload css/i.test(message);
+  return /importing a module script failed|failed to fetch dynamically imported module|error loading dynamically imported module|loading chunk .+ failed|unable to preload css/i.test(
+    message,
+  );
 }
 
-export function claimModuleReload(storage: Pick<Storage, 'getItem' | 'setItem'>, now: number): boolean {
+export function claimModuleReload(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  now: number,
+): boolean {
   try {
     const previous = Number(storage.getItem(RELOAD_KEY));
     if (previous > 0 && now - previous < RELOAD_COOLDOWN_MS) return false;
@@ -42,6 +47,6 @@ export function installModuleLoadRecovery(target: Window): () => void {
       // Leave the normal error boundary available when storage is disabled.
     }
   };
-  target.addEventListener('vite:preloadError', recover);
-  return () => target.removeEventListener('vite:preloadError', recover);
+  target.addEventListener("vite:preloadError", recover);
+  return () => target.removeEventListener("vite:preloadError", recover);
 }

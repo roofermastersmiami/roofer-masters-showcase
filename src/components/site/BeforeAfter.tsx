@@ -34,9 +34,22 @@ export function BeforeAfter({
           if (e.buttons === 1 || e.pointerType === "touch") update(e.clientX);
         }}
       >
-        <img src={after} alt={`After: ${alt}`} loading="lazy" className="absolute inset-0 size-full object-cover" />
-        <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
-          <img src={before} alt={`Before: ${alt}`} loading="lazy" className="absolute inset-0 size-full object-cover" />
+        <img
+          src={after}
+          alt={`After: ${alt}`}
+          loading="lazy"
+          className="absolute inset-0 size-full object-cover"
+        />
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+        >
+          <img
+            src={before}
+            alt={`Before: ${alt}`}
+            loading="lazy"
+            className="absolute inset-0 size-full object-cover"
+          />
         </div>
         <span className="absolute left-3 top-3 rounded-full bg-charcoal/85 px-3 py-1 text-xs font-bold uppercase tracking-wider text-navy-foreground">
           Before
@@ -59,7 +72,11 @@ export function BeforeAfter({
           className="absolute inset-0 size-full cursor-ew-resize opacity-0"
         />
       </div>
-      {caption && <figcaption className="mt-3 text-sm font-semibold text-muted-foreground">{caption}</figcaption>}
+      {caption && (
+        <figcaption className="mt-3 text-sm font-semibold text-muted-foreground">
+          {caption}
+        </figcaption>
+      )}
     </figure>
   );
 }

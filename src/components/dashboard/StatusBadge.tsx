@@ -1,4 +1,9 @@
-import { LEAD_SOURCE_LABELS, LEAD_STATUS_LABELS, type LeadSource, type LeadStatus } from "@/lib/lead-schema";
+import {
+  LEAD_SOURCE_LABELS,
+  LEAD_STATUS_LABELS,
+  type LeadSource,
+  type LeadStatus,
+} from "@/lib/lead-schema";
 import { cn } from "@/lib/utils";
 
 export const STATUS_STYLES: Record<LeadStatus, string> = {
@@ -11,7 +16,13 @@ export const STATUS_STYLES: Record<LeadStatus, string> = {
 
 export function StatusBadge({ status, className }: { status: LeadStatus; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold", STATUS_STYLES[status], className)}>
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold",
+        STATUS_STYLES[status],
+        className,
+      )}
+    >
       {LEAD_STATUS_LABELS[status]}
     </span>
   );
