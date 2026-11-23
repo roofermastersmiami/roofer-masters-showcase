@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { materialOrder } from './material-order';
+import { materialOrder, type RoofReport } from './material-order';
 
-const metalReport = (overrides: Record<string, unknown> = {}) => ({
+const metalReport = (overrides: Partial<RoofReport> = {}): RoofReport => ({
   roof_type: 'Metal Roof' as const,
   area_sqft: 2400,
   waste_pct: 10,
