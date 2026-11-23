@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingSchema, measureDrawing, planeInfo, roofPreset } from './roof-geometry';
+import { drawingSchema, measureDrawing, planeInfo, roofPreset, type RoofDrawing } from './roof-geometry';
 
 const drawing = {
   planes: [{
@@ -137,7 +137,7 @@ describe('roof penetration footprint validation', () => {
     expect(() => measureDrawing({
       ...drawing,
       penetrations: [{ id: 'pipe-inside', kind: 'pipe', x: 10, z: 10, width: 2, length: 2 }],
-    } as any)).not.toThrow();
+    } as RoofDrawing)).not.toThrow();
   });
 
   it('rejects a penetration that extends beyond the roof edge', () => {
