@@ -74,3 +74,33 @@ export function suggestSharedEdgeTypes(drawing: RoofDrawing): SharedEdgeSuggesti
   }
   return suggestions;
 }
+
+/** Apply only the edge pairs returned by the reviewable suggestion pass. */
+export function applySharedEdgeSuggestions(
+  drawing: RoofDrawing,
+  suggestions: SharedEdgeSuggestion[],
+): RoofDrawing {
+  if (suggestions.length === 0) return drawing;
+  const byPlane = new Map<string, Map<number, EdgeType>>();
+  for (const suggestion of suggestions) {
+    for (const [planeId, edgeIndex] of [
+      [suggestion.firstPlaneId, suggestion.firstEdgeIndex],
+      [suggestion.secondPlaneId, suggestion.secondEdgeIndex],
+    ] as const) {
+      if (!Number.isInteger(edgeIndex) || edgeIndex < 0) continue;
+      const edges = byPlane.get(planeId) ?? new Map<number, EdgeType>();
+      edges.set(edgeIndex, suggestion.type);
+      byPlane.set(planeId, edges);
+    }
+  }
+  let changed = false;
+  const planes = drawing.planes.map((plane) => {
+    const updates = byPlane.get(plane.id);
+    if (!updates) return plane;
+    const edges = plane.edges.map((edge, index) => updates.get(index) ?? edge);
+    if (edges.every((edge, index) => edge === plane.edges[index])) return plane;
+    changed = true;
+    return { ...plane, edges };
+  });
+  return changed ? { ...drawing, planes, verified: false } : drawing;
+}
