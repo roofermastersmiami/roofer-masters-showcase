@@ -94,7 +94,7 @@ describe("local roof report text import", () => {
     expect(parsed.found).toEqual(["Pitch (review manually)"]);
   });
 
-  it("recognizes simple pipe counts as well as boots and vent labels", () => {\n    const parsed = parseRoofReportText("Pipes: 2\\nVent count: 3\\nPenetrations: 1");\n    expect(parsed.values.pipes).toBe(2);\n    expect(parsed.found).toContain("Pipes / vents");\n  });\n\n  it("ignores negative values", () => {
+  it("recognizes simple pipe counts as well as boots and vent labels", () => {\n    const parsed = parseRoofReportText("Pipes: 2\nVent count: 3\nPenetrations: 1");\n    expect(parsed.values.pipes).toBe(2);\n    expect(parsed.found).toContain("Pipes / vents");\n  });\n\n  it("ignores negative values", () => {
     const parsed = parseRoofReportText("Roof area: -2400 sq ft\nRidge: -20 LF");
     expect(parsed.values.area_sqft).toBeUndefined();
     expect(parsed.values.ridge_lf).toBeUndefined();
@@ -102,7 +102,7 @@ describe("local roof report text import", () => {
 
   it("recognizes common written units and keeps pitch as a manual-review note", () => {
     const parsed = parseRoofReportText(
-      "Roof area: 2,400 square feet\\nRidge length: 38 linear feet\\nRoof pitch: 6/12",
+      "Roof area: 2,400 square feet\nRidge length: 38 linear feet\nRoof pitch: 6/12",
     );
     expect(parsed.values.area_sqft).toBe(2400);
     expect(parsed.values.ridge_lf).toBe(38);
@@ -111,7 +111,7 @@ describe("local roof report text import", () => {
   });
 
   it("does not read measurements beyond the documented input limit", () => {
-    const parsed = parseRoofReportText(`${"x".repeat(100_001)}\\nRoof area: 2400 sq ft`);
+    const parsed = parseRoofReportText(`${"x".repeat(100_001)}\nRoof area: 2400 sq ft`);
     expect(parsed.values.area_sqft).toBeUndefined();
   });
 });
