@@ -194,3 +194,28 @@ describe('penetrations crossing concave roof boundaries', () => {
     expect(() => measureDrawing(concaveDrawing as RoofDrawing)).toThrow(/must fit within the roof footprint/);
   });
 });
+
+describe('exact penetration containment', () => {
+  it('detects a narrow roof notch missed by sparse boundary samples', () => {
+    const notchedRoof = {
+      ...drawing,
+      planes: [{
+        id: 'narrow-notch',
+        name: 'Narrow notch roof',
+        points: [
+          { x: 0, y: 10, z: 0 },
+          { x: 20, y: 10, z: 0 },
+          { x: 20, y: 10, z: 20 },
+          { x: 9.5, y: 10, z: 20 },
+          { x: 9.5, y: 10, z: 7 },
+          { x: 9.3, y: 10, z: 7 },
+          { x: 9.3, y: 10, z: 20 },
+          { x: 0, y: 10, z: 20 },
+        ],
+        edges: Array(8).fill('eave'),
+      }],
+      penetrations: [{ id: 'wide-skylight', kind: 'skylight', x: 10, z: 7, width: 12, length: 6 }],
+    };
+    expect(() => measureDrawing(notchedRoof as RoofDrawing)).toThrow(/must fit within the roof footprint/);
+  });
+});
