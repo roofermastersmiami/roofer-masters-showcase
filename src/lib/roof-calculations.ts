@@ -266,12 +266,12 @@ export function calculateRoofSummary(
   }
 
   const wasteAreaSqFt =
-    facetSurfaceAreaSqFt * wastePercent / 100;
+    facetSurfaceAreaSqFt * (wastePercent / 100);
 
   const totalAreaWithWasteSqFt =
     facetSurfaceAreaSqFt + wasteAreaSqFt;
 
-  if (!Number.isFinite(totalAreaWithWasteSqFt)) {
+  if (!Number.isFinite(wasteAreaSqFt) || !Number.isFinite(totalAreaWithWasteSqFt)) {
     throw new Error("Total roof area with waste exceeds the supported range.");
   }
 
@@ -355,6 +355,14 @@ export function calculateRoofSummary(
         )[0]![0]
       : null;
 
+  const orderSquares =
+    Math.ceil(
+      (totalAreaWithWasteSqFt / SQFT_PER_SQUARE) * 3
+    ) / 3;
+  if (!Number.isFinite(orderSquares)) {
+    throw new Error("Roofing square order exceeds the supported range.");
+  }
+
   return {
     facetSurfaceAreaSqFt,
     baseAreaSqFt: facetSurfaceAreaSqFt,
@@ -367,10 +375,7 @@ export function calculateRoofSummary(
     ),
 
     // Round material orders up to the next 1/3 square.
-    orderSquares:
-      Math.ceil(
-        (totalAreaWithWasteSqFt / SQFT_PER_SQUARE) * 3
-      ) / 3,
+    orderSquares,
 
     linearFeet,
 
