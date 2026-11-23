@@ -45,7 +45,7 @@ describe("metal material order", () => {
     expect(() => materialOrder(metalReport({ panel_width_in: 0 }))).toThrow();
     expect(() => materialOrder(metalReport({ panel_width_in: 5.99 }))).toThrow();
     expect(
-      materialOrder(metalReport({ panel_width_in: 6 })).some((line) => line.item.includes('6\"')),
+      materialOrder(metalReport({ panel_width_in: 6 })).some((line) => line.item.includes('6"')),
     ).toBe(true);
     expect(() => materialOrder(metalReport({ panel_width_in: 61 }))).toThrow();
   });
