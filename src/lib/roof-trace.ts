@@ -59,14 +59,24 @@ export function findSharedEdges(
 export function validateRoofOutline(points: ImagePoint[]): string[] {
   const issues: string[] = [];
   if (points.length < 3) return ["Draw at least three corners."];
-  if (points.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.y < 0)) {
+
+  if (
+    points.some(
+      (point) =>
+        !Number.isFinite(point.x) ||
+        !Number.isFinite(point.y) ||
+        point.x < 0 ||
+        point.y < 0,
+    )
+  ) {
     return ["Photo points must have valid, non-negative coordinates."];
   }
 
   const count = points.length;
-  for (let i = 0; i < count; i++) {
-    const next = points[(i + 1) % count]!;
-    if (Math.hypot(points[i]!.x - next.x, points[i]!.y - next.y) < 0.5) {
+  for (let index = 0; index < count; index += 1) {
+    const current = points[index]!;
+    const next = points[(index + 1) % count]!;
+    if (Math.hypot(current.x - next.x, current.y - next.y) < 0.5) {
       issues.push("Two neighboring corners overlap; move or remove the duplicate corner.");
       break;
     }
@@ -74,23 +84,31 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
 
   const cross = (a: ImagePoint, b: ImagePoint, c: ImagePoint) =>
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-  const onSegment = (a: ImagePoint, b: ImagePoint, p: ImagePoint) =>
-    Math.abs(cross(a, b, p)) < 1e-7 &&
-    p.x >= Math.min(a.x, b.x) - 1e-7 &&
-    p.x <= Math.max(a.x, b.x) + 1e-7 &&
-    p.y >= Math.min(a.y, b.y) - 1e-7 &&
-    p.y <= Math.max(a.y, b.y) + 1e-7;
-  const intersects = (a: ImagePoint, b: ImagePoint, c: ImagePoint, d: ImagePoint) => {
+
+  const onSegment = (a: ImagePoint, b: ImagePoint, point: ImagePoint) =>
+    Math.abs(cross(a, b, point)) < 1e-7 &&
+    point.x >= Math.min(a.x, b.x) - 1e-7 &&
+    point.x <= Math.max(a.x, b.x) + 1e-7 &&
+    point.y >= Math.min(a.y, b.y) - 1e-7 &&
+    point.y <= Math.max(a.y, b.y) + 1e-7;
+
+  const intersects = (
+    a: ImagePoint,
+    b: ImagePoint,
+    c: ImagePoint,
+    d: ImagePoint,
+  ) => {
     const abC = cross(a, b, c);
     const abD = cross(a, b, d);
     const cdA = cross(c, d, a);
     const cdB = cross(c, d, b);
-    if (
+
+    const crossesProperly =
       ((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
-      ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))
-    ) {
-      return true;
-    }
+      ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0));
+
+    if (crossesProperly) return true;
+
     return (
       (Math.abs(abC) < 1e-7 && onSegment(a, b, c)) ||
       (Math.abs(abD) < 1e-7 && onSegment(a, b, d)) ||
@@ -99,28 +117,37 @@ export function validateRoofOutline(points: ImagePoint[]): string[] {
     );
   };
 
-  // Check non-adjacent edges before area: a bow-tie can have zero signed area.
-  for (let i = 0; i < count; i++) {
-    const a = points[i]!;
-    const b = points[(i + 1) % count]!;
-    for (let j = i + 1; j < count; j++) {
-      if (j === i || j === (i + 1) % count || (j + 1) % count === i) continue;
-      const c = points[j]!;
-      const d = points[(j + 1) % count]!;
+  // Check non-adjacent edges first: a bow-tie can have zero signed area.
+  for (let firstEdge = 0; firstEdge < count; firstEdge += 1) {
+    const a = points[firstEdge]!;
+    const b = points[(firstEdge + 1) % count]!;
+
+    for (let secondEdge = firstEdge + 1; secondEdge < count; secondEdge += 1) {
+      const edgesAreAdjacent =
+        secondEdge === (firstEdge + 1) % count ||
+        (secondEdge + 1) % count === firstEdge;
+      if (edgesAreAdjacent) continue;
+
+      const c = points[secondEdge]!;
+      const d = points[(secondEdge + 1) % count]!;
       if (intersects(a, b, c, d)) {
-        issues.push("Roof outline crosses itself; adjust the corners so the perimeter does not cross.");
-        return issues;
+        return [
+          ...issues,
+          "Roof outline crosses itself; adjust the corners so the perimeter does not cross.",
+        ];
       }
     }
   }
 
-  const twiceArea = points.reduce((sum, p, i) => {
-    const q = points[(i + 1) % count]!;
-    return sum + p.x * q.y - q.x * p.y;
+  const twiceArea = points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % count]!;
+    return sum + point.x * next.y - next.x * point.y;
   }, 0);
+
   if (Math.abs(twiceArea) / 2 < 1) {
     issues.push("Roof outline is too small or flat to measure.");
   }
+
   return issues;
 }
 
