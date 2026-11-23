@@ -357,7 +357,9 @@ export function RoofMeasurements({
       const r = await aerialFn({ data: { address, spanMeters: 120 } });
       if ("error" in r) {
         setAerialError(r.error);
-        setAerialStatus("The aerial lookup needs attention. You can retry or upload your own image.");
+        setAerialStatus(
+          "The aerial lookup needs attention. You can retry or upload your own image.",
+        );
         toast.error(r.error);
         return;
       }
@@ -380,7 +382,9 @@ export function RoofMeasurements({
       setTraceIndex(next.length - 1);
       setD({ ...d, accuracy: "photo_estimate", image_credit: r.credit, verified: false });
       setDirty(true);
-      setAerialStatus(`Aerial image ready for ${r.matchedAddress}. Trace and review the roof before using measurements.`);
+      setAerialStatus(
+        `Aerial image ready for ${r.matchedAddress}. Trace and review the roof before using measurements.`,
+      );
       toast.success("Free public aerial loaded; trace the roof (estimate only)");
     } catch (e) {
       const message =
