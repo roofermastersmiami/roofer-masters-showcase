@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fetchPublicAerial } from '@/lib/public-aerial.server';
 import { aerialImageBlob, uploadAerialImage, aerialInvocationError } from '@/lib/public-aerial-import';
-function png(width=1000) {
+function png(width=2000) {
   const bytes=new Uint8Array(24); bytes.set([137,80,78,71,13,10,26,10]);
   const view=new DataView(bytes.buffer); view.setUint32(16,width); view.setUint32(20,1000); return bytes;
 }
@@ -15,8 +15,8 @@ describe('free aerial retrieval',()=>{
     expect('error' in r).toBe(false); if('error' in r)throw new Error(r.error);
     expect(r.feetPerPixel).toBeCloseTo(0.3937008,7); expect(r.image).toBe(encoded());
     const call=fetcher.mock.calls[1]; if(!call)throw new Error('USGS was not requested');
-    const url=new URL(String(call[0])); expect(url.hostname).toBe('basemap.nationalmap.gov');
-    expect(url.searchParams.get('f')).toBe('image'); expect(url.searchParams.get('bboxSR')).toBe('3857'); expect(url.searchParams.get('size')).toBe('1000,1000'); expect(call[1]?.redirect).toBe('manual');
+    const url=new URL(String(call[0])); expect(url.hostname).toBe('imagery.nationalmap.gov');
+    expect(url.searchParams.get('f')).toBe('image'); expect(url.searchParams.get('bboxSR')).toBe('3857'); expect(url.searchParams.get('size')).toBe('2000,2000'); expect(call[1]?.redirect).toBe('manual');
   });
   it('reports geocoder timeout without attempting imagery',async()=>{
     const fetcher=vi.fn<typeof fetch>().mockRejectedValue(new Error('timeout'));
