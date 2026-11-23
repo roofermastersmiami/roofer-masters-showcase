@@ -7,9 +7,12 @@ export const instantInputSchema = z.object({
   owner: z.boolean(), language: z.enum(['en', 'es']),
 });
 export const rateSchema = z.object({category:z.enum(ROOF_TYPES),low_cents:z.number().int().positive().max(10000000),high_cents:z.number().int().positive().max(10000000),enabled:z.boolean()}).refine(v=>v.high_cents>=v.low_cents,'Maximum must be at least the minimum');
-export function instantRange(input:z.infer<typeof instantInputSchema>, rate:{low_cents:number;high_cents:number;enabled:boolean}|null) {
+export function instantRange(input:z.infer<typeof instantInputSchema>, rawRate:unknown) {
   const checked = instantInputSchema.parse(input);
-  if (!rate?.enabled || checked.county === 'Other') return null;
+  if (checked.county === 'Other') return null;
+  const parsedRate = rateSchema.safeParse(rawRate);
+  if (!parsedRate.success || !parsedRate.data.enabled || parsedRate.data.category !== checked.category) return null;
+  const rate = parsedRate.data;
   return {low:Math.round(checked.sqft/100*rate.low_cents),high:Math.round(checked.sqft/100*rate.high_cents)};
 }
 export function qualifyRoofLead(input:z.infer<typeof instantInputSchema>) {
