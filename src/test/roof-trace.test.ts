@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { calibratedPlane, snapToExistingCorner } from "@/lib/roof-trace";
+import { calibratedPlane, snapToExistingCorner, validateRoofOutline } from "@/lib/roof-trace";
 import { planeInfo } from "@/lib/roof-geometry";
 it("calibrates a 200 by 100 pixel plane from a 20 foot reference", () => {
   const plane = calibratedPlane(
@@ -252,5 +252,40 @@ describe("shared roof corner snapping", () => {
     const point = { x: 106, y: 204 };
     expect(snapToExistingCorner(point, [{ x: Number.NaN, y: 0 }], 10)).toEqual(point);
     expect(snapToExistingCorner(point, [{ x: 100, y: 200 }], 0)).toEqual(point);
+  });
+});
+
+
+describe("roof outline validation", () => {
+  it("accepts a normal closed roof outline", () => {
+    expect(validateRoofOutline([
+      { x: 0, y: 0 }, { x: 200, y: 0 },
+      { x: 200, y: 100 }, { x: 0, y: 100 },
+    ])).toEqual([]);
+  });
+
+  it("rejects adjacent duplicate corners and tiny outlines", () => {
+    expect(validateRoofOutline([
+      { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 100, y: 0 },
+      { x: 100, y: 100 },
+    ])).toContain("Two neighboring corners overlap; move or remove the duplicate corner.");
+    expect(validateRoofOutline([
+      { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 },
+    ])).toContain("Roof outline is too small or flat to measure.");
+  });
+
+  it("rejects a bow-tie outline that crosses itself", () => {
+    expect(validateRoofOutline([
+      { x: 0, y: 0 }, { x: 100, y: 100 },
+      { x: 0, y: 100 }, { x: 100, y: 0 },
+    ])).toContain("Roof outline crosses itself; adjust the corners so the perimeter does not cross.");
+  });
+
+  it("prevents invalid outlines from becoming measured roof planes", () => {
+    expect(() => calibratedPlane(
+      [{ x: 0, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 100, y: 0 }],
+      [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+      10, 0, "crossed",
+    )).toThrow("crosses itself");
   });
 });
