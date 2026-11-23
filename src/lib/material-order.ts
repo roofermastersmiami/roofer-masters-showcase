@@ -112,7 +112,12 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
   const source = text.slice(0, 100_000);
   const values: Partial<RoofReport> = {};
   const found: string[] = [];
-  const read = (label: string, patterns: RegExp[], key: keyof RoofReport, convert?: (n: number, unit: string) => number) => {
+  const read = (
+    label: string,
+    patterns: RegExp[],
+    key: keyof RoofReport,
+    convert?: (n: number, unit: string) => number,
+  ) => {
     for (const pattern of patterns) {
       const match = source.match(pattern);
       if (!match) continue;
@@ -126,21 +131,56 @@ export function parseRoofReportText(text: string): ParsedRoofReportText {
   };
   const number = "([\\d,]+(?:\\.\\d+)?)";
   const unit = "\\s*(sq\\.?\\s*ft|square feet|sq(?:uares?)?|squares?|sf|lf|linear feet|feet|ft|%)?";
-  read("Roof area", [new RegExp("(?:total\\s+)?(?:roof\\s+)?area\\s*[:=]?\\s*" + number + unit, "i"), new RegExp("total\\s+(\\d[\\d,]*(?:\\.\\d+)?)\\s*(squares?)", "i")], "area_sqft", (n, u) => /square|squares|^sq$/.test(u) ? n * 100 : n);
+  read(
+    "Roof area",
+    [
+      new RegExp("(?:total\\s+)?(?:roof\\s+)?area\\s*[:=]?\\s*" + number + unit, "i"),
+      new RegExp("total\\s+(\\d[\\d,]*(?:\\.\\d+)?)\\s*(squares?)", "i"),
+    ],
+    "area_sqft",
+    (n, u) => (/square|squares|^sq$/.test(u) ? n * 100 : n),
+  );
   read("Waste", [new RegExp("waste(?:\\s+factor)?\\s*[:=]?\\s*" + number + "\\s*%?", "i")], "waste_pct");
   const linear = (label: string, aliases: string[], key: keyof RoofReport) => {
     const names = aliases.join("|");
-    read(label, [new RegExp("(?:" + names + ")(?:\\s+(?:length|total))?\\s*[:=]?\\s*" + number + "\\s*(lf|linear feet|feet|ft)?", "i")], key);
+    read(
+      label,
+      [
+        new RegExp(
+          "(?:" + names + ")(?:\\s+(?:length|total))?\\s*[:=]?\\s*" + number + "\\s*(lf|linear feet|feet|ft)?",
+          "i",
+        ),
+      ],
+      key,
+    );
   };
   linear("Ridge", ["ridge", "ridges"], "ridge_lf");
   linear("Hips", ["hip", "hips"], "hips_lf");
   linear("Valleys", ["valley", "valleys"], "valleys_lf");
   linear("Eaves", ["eave", "eaves"], "eaves_lf");
   linear("Rakes", ["rake", "rakes"], "rakes_lf");
-  read("Pipes / vents", [new RegExp("(?:pipe\\s+(?:boots?|flashings?)|vents?|penetrations)\\s*(?:count)?\\s*[:=]?\\s*" + number, "i")], "pipes");
+  read(
+    "Pipes / vents",
+    [
+      new RegExp(
+        "(?:pipe\\s+(?:boots?|flashings?)|vents?|penetrations)\\s*(?:count)?\\s*[:=]?\\s*" + number,
+        "i",
+      ),
+    ],
+    "pipes",
+  );
   const roof = source.match(/\\b(shingle|tile|metal|tpo|flat)\\s*(?:roof)?\\b/i)?.[1]?.toLowerCase();
   if (roof) {
-    values.roof_type = roof === "shingle" ? "Shingle Roof" : roof === "tile" ? "Tile Roof" : roof === "metal" ? "Metal Roof" : roof === "tpo" ? "TPO" : "Flat Roof";
+    values.roof_type =
+      roof === "shingle"
+        ? "Shingle Roof"
+        : roof === "tile"
+          ? "Tile Roof"
+          : roof === "metal"
+            ? "Metal Roof"
+            : roof === "tpo"
+              ? "TPO"
+              : "Flat Roof";
     found.push("Roof type");
   }
   const pitch = source.match(/(?:roof\\s+)?pitch\\s*[:=]?\\s*(\\d{1,2}\\s*[:/]\\s*12)/i)?.[1];
