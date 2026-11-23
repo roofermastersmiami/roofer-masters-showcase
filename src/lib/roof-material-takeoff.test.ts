@@ -15,6 +15,21 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(r.lines.some(x => x.item === 'Metal panel coverage allowance' && x.unit === 'sq ft')).toBe(true);
     expect(r.warnings.some(x => x.includes('not a panel count or cut list'))).toBe(true);
   });
+
+  it('uses 16-inch net coverage for equivalent metal panel run length', () => {
+    const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
+    const r = calculateRoofMaterialTakeoff(d);
+    expect(r.metalPanelCoverageWidthInches).toBe(16);
+    const run = r.lines.find(x => x.item === 'Equivalent metal panel run length');
+    expect(run?.unit).toBe('linear ft');
+    expect(run?.quantity).toBeCloseTo(r.orderAreaSqft / (16 / 12), 1);
+  });
+  it('allows a different net coverage when a different panel profile is selected', () => {
+    const d = roofPreset('gable', 40, 30, 6); d.roof_type = 'Metal Roof';
+    const r = calculateRoofMaterialTakeoff(d, { metalPanelCoverageWidthInches: 18 });
+    expect(r.metalPanelCoverageWidthInches).toBe(18);
+  });
+
   it('preserves fractional linear footage instead of rounding every edge up', () => {
     const d = roofPreset('gable', 40.25, 30.5, 6); d.roof_type = 'Shingle Roof';
     const r = calculateRoofMaterialTakeoff(d, { wastePercent: 0 });
