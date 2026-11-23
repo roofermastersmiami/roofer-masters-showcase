@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { shareIsActive, signatureSchema } from "./proposal-schema";
@@ -7,6 +8,8 @@ export const createProposalShare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ proposalId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
+    setResponseHeader("Cache-Control", "private, no-store");
+    setResponseHeader("Referrer-Policy", "no-referrer");
     const { data: owner, error: roleError } = await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales']});
     if (roleError || !owner) throw new Error("You do not have access to this action");
     const { data: proposal, error: proposalError } = await context.supabase.from("proposals").select("id, file_path, is_template").eq("id", data.proposalId).maybeSingle();
@@ -35,6 +38,8 @@ export const revokeProposalShare = createServerFn({ method: "POST" })
 export const getSharedProposal = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ token: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "private, no-store");
+    setResponseHeader("Referrer-Policy", "no-referrer");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: share, error: shareError } = await supabaseAdmin.from("proposal_shares").select("proposal_id, expires_at, revoked_at, signed_name, signed_at").eq("token", data.token).maybeSingle();
     if (shareError) throw new Error("Could not verify proposal link");
@@ -52,6 +57,8 @@ export const getSharedProposal = createServerFn({ method: "GET" })
 export const signSharedProposal = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => signatureSchema.parse(input))
   .handler(async ({ data }) => {
+    setResponseHeader("Cache-Control", "private, no-store");
+    setResponseHeader("Referrer-Policy", "no-referrer");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: share, error: shareError } = await supabaseAdmin.from("proposal_shares").select("id, expires_at, revoked_at, signed_at").eq("token", data.token).maybeSingle();
     if (shareError) throw new Error("Could not verify proposal link");
