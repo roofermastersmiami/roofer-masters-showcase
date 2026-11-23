@@ -34,3 +34,14 @@ it('rejects missing or absurd scale and warns on short scale lines', () => {
   expect(short.ok && short.warnings.length>0).toBe(true);
 });
 it('cycles edge types', () => { expect(nextEdgeType('eave')).toBe('rake'); expect(nextEdgeType('other')).toBe('eave'); });
+
+it('rejects non-finite or out-of-image calibration points', () => {
+  expect(checkCalibration([{x:0,y:0},{x:1001,y:0}],20,1000).ok).toBe(false);
+  expect(checkCalibration([{x:0,y:0},{x:Number.NaN,y:0}],20,1000).ok).toBe(false);
+  expect(checkCalibration([{x:0,y:-1},{x:100,y:0}],20,1000).ok).toBe(false);
+});
+it('rejects invalid traced coordinates and unrealistic reference lengths', () => {
+  const ref=[{x:0,y:0},{x:100,y:0}];
+  expect(() => calibratedPlane([{x:0,y:0},{x:100,y:0},{x:0,y:100}],ref,501,0,'bad')).toThrow('500 feet');
+  expect(() => calibratedPlane([{x:0,y:0},{x:Number.NaN,y:0},{x:0,y:100}],ref,10,0,'bad')).toThrow('coordinates');
+});
