@@ -25,13 +25,13 @@ export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
   const subtotal = validatedItems.reduce((sum, item) => {
     const lineTotal = Math.round(item.quantity * item.unit_cents);
     if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || !Number.isSafeInteger(sum + lineTotal))
-      throw new Error("Invoice subtotal exceeds the supported amount");
+      throw new Error("Amount exceeds the supported range");
     return sum + lineTotal;
   }, 0);
   const tax = Math.round(subtotal * (taxPercent / 100));
   const total = subtotal + tax;
   if (!Number.isSafeInteger(tax) || !Number.isSafeInteger(total))
-    throw new Error("Invoice total exceeds the supported amount");
+    throw new Error("Amount exceeds the supported range");
   return { subtotal, tax, total };
 }
 export const invoiceSchema = z
