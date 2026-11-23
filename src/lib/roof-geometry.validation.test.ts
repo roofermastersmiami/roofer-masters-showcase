@@ -263,6 +263,20 @@ describe('roof preset shape validation', () => {
   });
 });
 
+
+describe('roof plane pitch calculation', () => {
+  it('reports the entered rise-over-run pitch for a sloped plane', () => {
+    const result = measureDrawing(roofPreset('gable', 40, 30, 6));
+    expect(result.planes[0]?.pitch).toBeCloseTo(6, 6);
+    expect(result.planes[1]?.pitch).toBeCloseTo(6, 6);
+  });
+
+  it('reports zero pitch for a flat plane', () => {
+    const result = measureDrawing(roofPreset('flat', 40, 30, 0));
+    expect(result.planes[0]?.pitch).toBeCloseTo(0, 8);
+  });
+});
+
 describe('partial shared roof edges', () => {
   it('subtracts a T-junction attachment from the exterior perimeter', () => {
     const result = measureDrawing(roofPreset('complex', 40, 30, 6));
