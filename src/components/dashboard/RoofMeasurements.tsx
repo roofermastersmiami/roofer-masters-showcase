@@ -442,9 +442,8 @@ export function RoofMeasurements({
   }, [aerialFn, d, media, property, propertyRow?.address, report?.address]);
   const autoAerialAttempted = useRef<string | null>(null);
   const aerialAddress = report?.address?.trim() || propertyRow?.address?.trim() || "";
-  const aerialAttemptKey = property && aerialAddress
-    ? `${property}:${aerialAddress.toLocaleLowerCase()}`
-    : "";
+  const aerialAttemptKey =
+    property && aerialAddress ? `${property}:${aerialAddress.toLocaleLowerCase()}` : "";
   useEffect(() => {
     if (
       shouldAutoLoadAddressAerial({
