@@ -255,16 +255,20 @@ export function RoofMeasurements({
         let mime = blob.type;
         if (mime === "image/webp") {
           const bitmap = await createImageBitmap(blob);
-          const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("Photo conversion failed");
-          ctx.drawImage(bitmap, 0, 0);
-          bitmap.close();
-          const converted = await new Promise<Blob | null>((resolve) =>
-            canvas.toBlob(resolve, "image/png"),
-          );
+          let converted: Blob | null;
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("Photo conversion failed");
+            ctx.drawImage(bitmap, 0, 0);
+            converted = await new Promise<Blob | null>((resolve) =>
+              canvas.toBlob(resolve, "image/png"),
+            );
+          } finally {
+            bitmap.close();
+          }
           if (!converted) throw new Error("Photo conversion failed");
           if (
             converted.size > maxPhotoBytes ||
