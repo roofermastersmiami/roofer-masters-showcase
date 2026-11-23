@@ -15,14 +15,9 @@ export const loadPublicAerial = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) =>
     z
       .object({
-        address: z
-          .string()
-          .trim()
-          .min(8)
-          .max(250)
-          .refine(hasNoControlCharacters, {
-            message: "Address contains unsupported control characters.",
-          }),
+        address: z.string().trim().min(8).max(250).refine(hasNoControlCharacters, {
+          message: "Address contains unsupported control characters.",
+        }),
         spanMeters: z.number().min(30).max(200).default(70),
       })
       .parse(raw),
