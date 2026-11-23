@@ -98,9 +98,14 @@ export const startChat = createServerFn({ method: "POST" })
       console.error("startChat failed", error);
       throw new Error("Chat is unavailable right now. Please call 305-942-3093.");
     }
-    await db
+    const { error: messageError } = await db
       .from("lead_messages")
       .insert({ lead_id: lead.id, sender: "customer", body: data.message });
+    if (messageError) {
+      console.error("startChat message insert failed", messageError);
+      await db.from("leads").delete().eq("id", lead.id).eq("chat_token", lead.chat_token);
+      throw new Error("Chat is unavailable right now. Please call 305-942-3093.");
+    }
     return { leadId: lead.id, token: lead.chat_token };
   });
 
