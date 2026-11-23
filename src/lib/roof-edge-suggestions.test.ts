@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { suggestSharedEdgeTypes } from './roof-edge-suggestions';
+import { applySharedEdgeSuggestions, suggestSharedEdgeTypes } from './roof-edge-suggestions';
 import type { RoofDrawing, RoofPlane } from './roof-geometry';
 
 function plane(id: string, points: RoofPlane['points']): RoofPlane {
@@ -83,5 +83,30 @@ describe('suggestSharedEdgeTypes', () => {
     ]);
 
     expect(suggestSharedEdgeTypes(drawing([left, right]))).toEqual([]);
+  });
+});
+
+describe('applySharedEdgeSuggestions', () => {
+  it('updates both sides of each shared edge and keeps the drawing unverified', () => {
+    const left = plane('left', [
+      { x: 0, y: 10, z: -1 }, { x: 0, y: 10, z: 1 }, { x: -2, y: 0, z: 0 },
+    ]);
+    const right = plane('right', [
+      { x: 0, y: 10, z: 1 }, { x: 0, y: 10, z: -1 }, { x: 2, y: 0, z: 0 },
+    ]);
+    const source = drawing([left, right]);
+    const suggestions = suggestSharedEdgeTypes(source);
+    const updated = applySharedEdgeSuggestions(source, suggestions);
+    expect(updated.planes[0]?.edges[0]).toBe('ridge');
+    expect(updated.planes[1]?.edges[0]).toBe('ridge');
+    expect(updated.verified).toBe(false);
+    expect(source.planes[0]?.edges[0]).toBe('other');
+  });
+
+  it('returns the original drawing when there are no suggestions', () => {
+    const source = drawing([plane('single', [
+      { x: 0, y: 10, z: -1 }, { x: 0, y: 10, z: 1 }, { x: -2, y: 0, z: 0 },
+    ])]);
+    expect(applySharedEdgeSuggestions(source, [])).toBe(source);
   });
 });
