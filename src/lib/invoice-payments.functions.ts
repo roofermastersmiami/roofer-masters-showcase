@@ -33,7 +33,24 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" }).inputVal
     }
     const { data: reservation, error: reserveError } = await supabaseAdmin.rpc("reserve_invoice_checkout", { p_token: data.token, p_environment: data.environment, p_kind: data.kind });
     if (reserveError || !reservation) return { error: reserveError?.message ?? "Could not prepare payment" };
-    const reserved = z.object({ id: z.string().uuid(), amount: z.number().int().min(50) }).parse(reservation);
+    const reservationSchema = z.object({
+      id: z.string().uuid(),
+      amount: z.number().int().min(50).max(Number.MAX_SAFE_INTEGER),
+    });
+    const parsedReservation = reservationSchema.safeParse(reservation);
+    if (!parsedReservation.success) {
+      const recoverableId = z.object({ id: z.string().uuid() }).safeParse(reservation);
+      if (recoverableId.success) {
+        const { error: releaseError } = await supabaseAdmin
+          .from("invoice_checkouts")
+          .update({ status: "failed" })
+          .eq("id", recoverableId.data.id)
+          .eq("status", "pending");
+        if (releaseError) throw new Error("Invalid checkout reservation could not be released; owner review required");
+      }
+      throw new Error("Payment reservation returned invalid data; please try again");
+    }
+    const reserved = parsedReservation.data;
     try {
       const prices = await stripe.prices.list({ lookup_keys: ["roofing_invoice_base"], limit: 1 });
       const price = prices.data[0];
