@@ -17,7 +17,8 @@ export const invoiceSchema = z.object({
 export function invoiceState(invoice: { status: string; total_cents: number; paid_cents: number; due_date: string }, now = Date.now()) {
   if (invoice.status === "draft" || invoice.status === "void") return invoice.status;
   if (invoice.paid_cents >= invoice.total_cents) return "paid";
-  if (Date.parse(`${invoice.due_date}T23:59:59-05:00`) < now) return "overdue";
+  const todayInMiami = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  if (invoice.due_date < todayInMiami) return "overdue";
   return invoice.paid_cents > 0 ? "partial" : "unpaid";
 }
 export function paymentAmount(invoice: { total_cents: number; paid_cents: number; deposit_cents: number }, kind: "deposit" | "balance") {
