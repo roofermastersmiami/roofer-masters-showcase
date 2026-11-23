@@ -241,6 +241,22 @@ describe('roof preset measurement compatibility', () => {
   });
 });
 
+
+describe('roof preset footprint perimeter', () => {
+  it.each([
+    ['gable', 40, 30],
+    ['hip-longitudinal', 40, 30],
+    ['hip-transverse', 30, 40],
+    ['mansard', 40, 30],
+    ['shed', 40, 30],
+    ['flat', 40, 30],
+  ] as const)('keeps the exterior footprint for %s', (shape, width, length) => {
+    const result = measureDrawing(roofPreset(shape === 'hip-longitudinal' || shape === 'hip-transverse' ? 'hip' : shape, width, length, 6));
+    expect(result.perimeter).toBeCloseTo(2 * (width + length), 2);
+    expect(result.area).toBeGreaterThan(0);
+  });
+});
+
 describe('roof preset shape validation', () => {
   it('rejects unsupported runtime shape values', () => {
     expect(() => roofPreset('dome' as never)).toThrow(/Unsupported roof preset shape/);
