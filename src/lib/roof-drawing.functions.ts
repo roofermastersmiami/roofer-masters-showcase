@@ -2,10 +2,8 @@ import {createServerFn} from '@tanstack/react-start';
 import {requireSupabaseAuth} from '@/integrations/supabase/auth-middleware';
 import {z} from 'zod';
 import {drawingSchema,measureDrawing,toMaterialReport} from './roof-geometry';
-const safeStoragePath = z.string().min(1).max(300).refine(
- (path) => !path.startsWith('/') && !path.includes('\\\\') && path.split('/').every((part) => part.length > 0 && part !== '.' && part !== '..'),
- 'Invalid media storage path',
-);
+import {isSafeRoofMediaPath} from './roof-media';
+const safeStoragePath = z.string().min(1).max(300).refine(isSafeRoofMediaPath, 'Invalid media storage path');
 const mediaSchema=z.array(z.object({path:safeStoragePath,name:z.string().trim().min(1).max(200),category:z.enum(['aerial','before','after','diagram']),feet_per_pixel:z.number().finite().positive().max(10).optional()})).max(30);
 export const saveRoofDrawing=createServerFn({method:'POST'}).middleware([requireSupabaseAuth]).inputValidator((raw:unknown)=>z.object({property_id:z.string().uuid(),title:z.string().trim().min(1).max(180),geometry:drawingSchema,parent_id:z.string().uuid().nullable(),media:mediaSchema,report_order_id:z.string().uuid().optional()}).parse(raw)).handler(async({data,context})=>{
  const {data:owner}=await context.supabase.rpc('has_any_role',{_user_id:context.userId,_roles:['office','sales','production_manager']});if(!owner)throw new Error('You do not have access to this action');
