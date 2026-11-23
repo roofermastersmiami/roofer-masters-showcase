@@ -9,11 +9,11 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(r.lines.some(x => x.item === 'Shingle bundles')).toBe(true);
     expect(r.warnings.some(x => x.includes('not site-verified'))).toBe(true);
   });
-  it('labels metal panel count as an allowance, not a cut list', () => {
+  it('reports metal coverage in area units without inventing a panel count', () => {
     const d = roofPreset('hip', 40, 60, 5); d.roof_type = 'Metal Roof';
     const r = calculateRoofMaterialTakeoff(d);
-    expect(r.lines.some(x => x.item === 'Metal panels (area allowance)')).toBe(true);
-    expect(r.warnings.some(x => x.includes('not a cut list'))).toBe(true);
+    expect(r.lines.some(x => x.item === 'Metal panel coverage allowance' && x.unit === 'sq ft')).toBe(true);
+    expect(r.warnings.some(x => x.includes('not a panel count or cut list'))).toBe(true);
   });
   it('rejects invalid product coverage assumptions', () => {
     const d = roofPreset('flat', 30, 40, 0);
