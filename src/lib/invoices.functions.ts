@@ -9,8 +9,19 @@ export const createInvoice = createServerFn({ method: "POST" }).middleware([requ
   const { data: lead } = await context.supabase.from("leads").select("name,email,address").eq("id", data.lead_id).single();
   if (!lead) throw new Error("Choose an existing customer");
   if (data.proposal_id) {
-    const { data: proposal } = await context.supabase.from("proposals").select("lead_id,is_template").eq("id", data.proposal_id).single();
-    if (!proposal || proposal.is_template || proposal.lead_id !== data.lead_id) throw new Error("Proposal must belong to this customer");
+    const { data: proposal, error: proposalError } = await context.supabase.from("proposals").select("lead_id,is_template,property_id").eq("id", data.proposal_id).single();
+    if (proposalError || !proposal || proposal.is_template || proposal.lead_id !== data.lead_id) throw new Error("Proposal must belong to this customer");
+    const totals = invoiceTotals(data.items, data.tax_percent);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: invoice, error } = await supabaseAdmin.from("crm_invoices").insert({ lead_id: data.lead_id, proposal_id: data.proposal_id, property_id: proposal.property_id, title: data.title, customer_name: lead.name, customer_email: lead.email ?? "", customer_address: lead.address ?? "", items: data.items, subtotal_cents: totals.subtotal, tax_cents: totals.tax, total_cents: totals.total, deposit_cents: Math.round(totals.total * data.deposit_percent / 100), due_date: data.due_date, notes: data.notes, environment: data.environment }).select("id").single();
+    if (error || !invoice) throw new Error("Could not save invoice");
+    return invoice;
+  }
+  const totals = invoiceTotals(data.items, data.tax_percent);
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: invoice, error } = await supabaseAdmin.from("crm_invoices").insert({ lead_id: data.lead_id, proposal_id: null, property_id: null, title: data.title, customer_name: lead.name, customer_email: lead.email ?? "", customer_address: lead.address ?? "", items: data.items, subtotal_cents: totals.subtotal, tax_cents: totals.tax, total_cents: totals.total, deposit_cents: Math.round(totals.total * data.deposit_percent / 100), due_date: data.due_date, notes: data.notes, environment: data.environment }).select("id").single();
+  if (error || !invoice) throw new Error("Could not save invoice");
+  return invoice;
   }
   const totals = invoiceTotals(data.items, data.tax_percent);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
