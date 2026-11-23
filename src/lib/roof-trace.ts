@@ -29,10 +29,10 @@ export function nextEdgeType(t: EdgeType): EdgeType { return EDGE_TYPES[(EDGE_TY
  */
 export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], feet: number, pitch: number, id: string, opts: { uphill?: Uphill; edges?: EdgeType[]; name?: string } = {}): RoofPlane {
   const a = reference[0], b = reference[1];
-  if (!a || !b || !Number.isFinite(feet) || feet <= 0) throw new Error('Set two calibration points and a known distance');
+  if (!a || !b || !Number.isFinite(feet) || feet <= 0 || feet > 500) throw new Error('Enter a known distance greater than 0 and no more than 500 feet');
   if (![a.x, a.y, b.x, b.y].every(Number.isFinite)) throw new Error('Calibration coordinates must be finite numbers');
   const pixels = Math.hypot(b.x - a.x, b.y - a.y);
-  if (pixels < 1) throw new Error('Calibration points must be distinct');
+  if (!Number.isFinite(pixels) || pixels < 1) throw new Error('Calibration points must be distinct and at least one pixel apart');
   if (points.length < 3 || !Number.isFinite(pitch) || pitch < 0 || pitch > 24) throw new Error('Draw at least three corners and enter a valid pitch');
   if (points.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y))) throw new Error('Roof corner coordinates must be finite numbers');
   const scale = feet / pixels, origin = a, uphill = opts.uphill ?? 'down';
