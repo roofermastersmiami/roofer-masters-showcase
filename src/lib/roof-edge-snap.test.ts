@@ -37,6 +37,14 @@ describe('snapToImageEdge', () => {
     expect(snapToImageEdge(new Uint8ClampedArray(4), 20, 20, { x: 10, y: 10 })).toBeNull();
   });
 
+  it('rejects mismatched buffers, unsafe dimensions and points outside the image', () => {
+    const data = pixels(20, 20);
+    expect(snapToImageEdge(new Uint8ClampedArray(20 * 20 * 4 + 1), 20, 20, { x: 10, y: 10 })).toBeNull();
+    expect(snapToImageEdge(data, Number.MAX_SAFE_INTEGER, 20, { x: 10, y: 10 })).toBeNull();
+    expect(snapToImageEdge(data, 20, 20, { x: -1, y: 10 })).toBeNull();
+    expect(snapToImageEdge(data, 20, 20, { x: 20, y: 10 })).toBeNull();
+  });
+
   it('keeps candidates inside the circular search radius', () => {
     const width = 30, height = 30, data = pixels(width, height);
     for (let y = 14; y < height; y++) for (let x = 14; x < width; x++) {
