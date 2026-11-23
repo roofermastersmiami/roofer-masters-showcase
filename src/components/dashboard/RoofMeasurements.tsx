@@ -55,6 +55,10 @@ type Media = {
   name: string;
   category: "aerial" | "before" | "after" | "diagram";
   feet_per_pixel?: number;
+  source?: string;
+  matched_address?: string;
+  latitude?: number;
+  longitude?: number;
 };
 export function RoofMeasurements({
   report,
@@ -115,6 +119,16 @@ export function RoofMeasurements({
                 Number.isFinite(m["feet_per_pixel"]) &&
                 m["feet_per_pixel"] > 0
                   ? { feet_per_pixel: m["feet_per_pixel"] }
+                  : {}),
+                ...(typeof m["source"] === "string" ? { source: m["source"].slice(0, 80) } : {}),
+                ...(typeof m["matched_address"] === "string"
+                  ? { matched_address: m["matched_address"].slice(0, 250) }
+                  : {}),
+                ...(typeof m["latitude"] === "number" && Number.isFinite(m["latitude"])
+                  ? { latitude: m["latitude"] }
+                  : {}),
+                ...(typeof m["longitude"] === "number" && Number.isFinite(m["longitude"])
+                  ? { longitude: m["longitude"] }
                   : {}),
               },
             ]
@@ -228,7 +242,17 @@ export function RoofMeasurements({
           bytes = new Uint8Array(await converted.arrayBuffer());
           mime = "image/png";
         }
-        photos.push({ bytes, mime, category: item.category, name: item.name });
+        photos.push({
+          bytes,
+          mime,
+          category: item.category,
+          name: item.name,
+          ...(item.source ? { source: item.source } : {}),
+          ...(item.matched_address ? { matchedAddress: item.matched_address } : {}),
+          ...(typeof item.latitude === "number" ? { latitude: item.latitude } : {}),
+          ...(typeof item.longitude === "number" ? { longitude: item.longitude } : {}),
+          ...(item.feet_per_pixel ? { feetPerPixel: item.feet_per_pixel } : {}),
+        });
       }
       const bytes = await roofDrawingPdf(
         title,
@@ -376,6 +400,10 @@ export function RoofMeasurements({
           name: `Public aerial · ${r.matchedAddress}`.slice(0, 200),
           category: "aerial" as const,
           feet_per_pixel: r.feetPerPixel,
+          source: "USGS National Map NAIP imagery",
+          matched_address: r.matchedAddress,
+          latitude: r.lat,
+          longitude: r.lon,
         },
       ];
       setMedia(next);
