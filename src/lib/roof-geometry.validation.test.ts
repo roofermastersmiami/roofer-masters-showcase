@@ -94,3 +94,20 @@ describe('roof polygon boundary validation', () => {
     expect(() => planeInfo(plane)).toThrow(/edges cross or touch/);
   });
 });
+
+describe('roof drawing record identifiers', () => {
+  it('rejects duplicate roof plane IDs', () => {
+    expect(drawingSchema.safeParse({
+      ...drawing,
+      planes: [drawing.planes[0], { ...drawing.planes[0], name: 'Second plane' }],
+    }).success).toBe(false);
+  });
+
+  it('rejects duplicate penetration IDs', () => {
+    const penetration = { id: 'same-id', kind: 'pipe', x: 5, z: 6, width: 2, length: 3 };
+    expect(drawingSchema.safeParse({
+      ...drawing,
+      penetrations: [penetration, { ...penetration, kind: 'vent' }],
+    }).success).toBe(false);
+  });
+});
