@@ -9,6 +9,19 @@ describe('calculateRoofMaterialTakeoff', () => {
     expect(r.lines.some(x => x.item === 'Shingle bundles')).toBe(true);
     expect(r.warnings.some(x => x.includes('not site-verified'))).toBe(true);
   });
+
+  it('uses the drawing waste setting unless an explicit takeoff override is supplied', () => {
+    const d = roofPreset('gable', 40, 30, 6);
+    d.roof_type = 'Shingle Roof';
+    d.waste = 15;
+    const fromDrawing = calculateRoofMaterialTakeoff(d);
+    expect(fromDrawing.wastePercent).toBe(15);
+    expect(fromDrawing.orderAreaSqft).toBeCloseTo(fromDrawing.measuredAreaSqft * 1.15);
+    const overridden = calculateRoofMaterialTakeoff(d, { wastePercent: 5 });
+    expect(overridden.wastePercent).toBe(5);
+    expect(overridden.orderAreaSqft).toBeCloseTo(overridden.measuredAreaSqft * 1.05);
+  });
+
   it('reports metal coverage in area units without inventing a panel count', () => {
     const d = roofPreset('hip', 40, 60, 5); d.roof_type = 'Metal Roof';
     const r = calculateRoofMaterialTakeoff(d);
