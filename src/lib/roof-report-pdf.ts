@@ -1,3 +1,5 @@
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
+
 /**
  * Extract selectable text from a PDF entirely in the browser.
  * The PDF bytes are never uploaded; image-only/scanned pages return little or no text.
@@ -14,10 +16,7 @@ export async function extractRoofReportPdfText(file: File): Promise<string> {
   }
 
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/legacy/build/pdf.worker.mjs",
-    import.meta.url,
-  ).toString();
+  pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const document = await pdfjs.getDocument({ data: bytes }).promise;
