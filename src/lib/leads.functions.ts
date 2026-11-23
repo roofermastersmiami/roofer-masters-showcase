@@ -103,7 +103,8 @@ export const startChat = createServerFn({ method: "POST" })
       .insert({ lead_id: lead.id, sender: "customer", body: data.message });
     if (messageError) {
       console.error("startChat message insert failed", messageError);
-      await db.from("leads").delete().eq("id", lead.id).eq("chat_token", lead.chat_token);
+      const { error: cleanupError } = await db.from("leads").delete().eq("id", lead.id).eq("chat_token", lead.chat_token);
+      if (cleanupError) console.error("startChat cleanup failed", cleanupError);
       throw new Error("Chat is unavailable right now. Please call 305-942-3093.");
     }
     return { leadId: lead.id, token: lead.chat_token };
@@ -111,12 +112,16 @@ export const startChat = createServerFn({ method: "POST" })
 
 async function verifyChat(leadId: string, token: string) {
   const db = await admin();
-  const { data } = await db
+  const { data, error } = await db
     .from("leads")
     .select("id")
     .eq("id", leadId)
     .eq("chat_token", token)
     .maybeSingle();
+  if (error) {
+    console.error("verifyChat failed", error);
+    throw new Error("Could not verify your chat session. Please try again.");
+  }
   if (!data) throw new Error("Chat session not found");
   return db;
 }
@@ -136,11 +141,15 @@ export const getChatMessages = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => chatFetchSchema.parse(data))
   .handler(async ({ data }) => {
     const db = await verifyChat(data.leadId, data.token);
-    const { data: rows } = await db
+    const { data: rows, error } = await db
       .from("lead_messages")
       .select("id, sender, body, created_at")
       .eq("lead_id", data.leadId)
       .order("created_at", { ascending: true })
       .limit(200);
+    if (error) {
+      console.error("getChatMessages failed", error);
+      throw new Error("Could not load chat messages. Please try again.");
+    }
     return rows ?? [];
   });
