@@ -72,7 +72,8 @@ export function RoofImageTrace({
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
   const calibration = checkCalibration(reference, feet, w, dimensions.height);
-  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];\n  const sharedEdgeMatches = points.length >= 3\n    ? traced.flatMap((plane) => findSharedEdges(points, plane.points, Math.max(3, w * 0.006)).map((match) => ({ ...match, planeName: plane.name })))\n    : [];
+  const outlineIssues = points.length >= 3 ? validateRoofOutline(points) : [];
+  const sharedEdgeMatches = points.length >= 3\n    ? traced.flatMap((plane) => findSharedEdges(points, plane.points, Math.max(3, w * 0.006)).map((match) => ({ ...match, planeName: plane.name })))\n    : [];
 
   const toImage = (clientX: number, clientY: number) => {
     const box = svg.current!.getBoundingClientRect();
