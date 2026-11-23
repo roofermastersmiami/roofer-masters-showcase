@@ -514,6 +514,7 @@ export function RoofMeasurements({
         <Choice
           label="Property"
           value={property || "none"}
+          disabled={busy}
           onChange={(v) => {
             if (
               v !== property &&
@@ -561,6 +562,7 @@ export function RoofMeasurements({
         <Choice
           label="Saved drawing"
           value={parent ?? "new"}
+          disabled={busy}
           onChange={(v) => {
             if (v === "new") {
               if (dirty && !confirm("Discard unsaved changes and start a fresh drawing?")) return;
