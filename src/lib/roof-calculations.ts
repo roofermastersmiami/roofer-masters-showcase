@@ -201,10 +201,21 @@ function facetArea(f: RoofFacetInput): number {
 export function calculateRoofSummary(
   input: RoofCalculationInput
 ): RoofCalculationResult {
-  if (!input.facets.length) {
+  if (!Array.isArray(input.facets) || !input.facets.length) {
     throw new Error(
       "At least one roof facet is required."
     );
+  }
+
+  const facetIds = new Set<string>();
+  for (const facet of input.facets) {
+    if (typeof facet.id !== "string" || !facet.id.trim()) {
+      throw new Error("Every roof facet must have a non-empty id.");
+    }
+    if (facetIds.has(facet.id)) {
+      throw new Error(`Duplicate roof facet id: ${facet.id}.`);
+    }
+    facetIds.add(facet.id);
   }
 
   const wastePercent = input.wastePercent ?? 10;
@@ -225,11 +236,19 @@ export function calculateRoofSummary(
       0
     );
 
+  if (!Number.isFinite(facetSurfaceAreaSqFt)) {
+    throw new Error("Total roof surface area exceeds the supported range.");
+  }
+
   const wasteAreaSqFt =
     facetSurfaceAreaSqFt * wastePercent / 100;
 
   const totalAreaWithWasteSqFt =
     facetSurfaceAreaSqFt + wasteAreaSqFt;
+
+  if (!Number.isFinite(totalAreaWithWasteSqFt)) {
+    throw new Error("Total roof area with waste exceeds the supported range.");
+  }
 
   const linearFeet: Record<RoofEdgeType, number> = {
     eave: 0,
@@ -244,6 +263,9 @@ export function calculateRoofSummary(
   const unique = new Map<string, RoofEdgeInput>();
 
   for (const edge of input.edges ?? []) {
+    if (typeof edge.id !== "string" || !edge.id.trim()) {
+      throw new Error("Every roof edge must have a non-empty id.");
+    }
     nonNegative(
       edge.lengthFt,
       `Edge ${edge.id} length`
