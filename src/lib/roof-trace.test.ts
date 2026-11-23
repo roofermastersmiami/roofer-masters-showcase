@@ -38,6 +38,14 @@ describe('roof photo calibration', () => {
     expect(plane.points.map(p => p.y)).toEqual([10, 10, 40, 40]);
   });
 
+  it('rejects calibration distances above 500 feet', () => {
+    expect(() => calibratedPlane(
+      [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }],
+      [{ x: 0, y: 0 }, { x: 20, y: 0 }],
+      501, 6, 'bad',
+    )).toThrow(/no more than 500 feet/);
+  });
+
   it('rejects non-finite corner coordinates', () => {
     expect(() => calibratedPlane(
       [{ x: 0, y: 0 }, { x: Number.NaN, y: 0 }, { x: 20, y: 20 }],
