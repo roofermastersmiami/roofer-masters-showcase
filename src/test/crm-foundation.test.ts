@@ -8,4 +8,23 @@ describe('CRM foundation',()=>{
  it('excludes sandbox and draft receipts from live metrics',()=>{expect(dashboardLedger([{id:'a',total_cents:1000,paid_cents:0,status:'draft',environment:'live',created_at:'2026-11-21'},{id:'b',total_cents:1000,paid_cents:1000,status:'issued',environment:'sandbox',created_at:'2026-11-21'}],[{invoice_id:'a',amount_cents:1000,environment:'live',received_at:'2026-11-21'},{invoice_id:'b',amount_cents:1000,environment:'sandbox',received_at:'2026-11-21'}],'live',0,Infinity).collected).toBe(0);});
  it('requires a real property address of at least five characters',()=>{expect(propertySchema.safeParse({customer_id:'11111111-1111-4111-8111-111111111111',label:'Home',address:'',notes:''}).success).toBe(false);});
  it('rejects unsupported customer types',()=>{expect(customerSchema.safeParse({name:'Ana Perez',phone:'',email:'',billing_address:'',customer_type:'administrator',notes:''}).success).toBe(false);});
+ it('trims customer names and rejects whitespace-only names',()=>{
+  const valid={name:'  Ana Perez  ',phone:'',email:'',billing_address:'',customer_type:'residential',notes:''};
+  expect(customerSchema.parse(valid).name).toBe('Ana Perez');
+  expect(customerSchema.safeParse({...valid,name:'   '}).success).toBe(false);
+ });
+ it('rejects malformed customer email and oversized notes',()=>{
+  const valid={name:'Ana Perez',phone:'',email:'',billing_address:'',customer_type:'residential',notes:''};
+  expect(customerSchema.safeParse({...valid,email:'not-an-email'}).success).toBe(false);
+  expect(customerSchema.safeParse({...valid,notes:'x'.repeat(4001)}).success).toBe(false);
+ });
+ it('requires a valid customer UUID when linking a property',()=>{
+  expect(propertySchema.safeParse({customer_id:'not-a-uuid',label:'Home',address:'123 Main Street',notes:''}).success).toBe(false);
+ });
+ it('rejects blank property labels and overlong property notes',()=>{
+  const valid={customer_id:'11111111-1111-4111-8111-111111111111',label:'Home',address:'123 Main Street',notes:''};
+  expect(propertySchema.safeParse({...valid,label:'  '}).success).toBe(false);
+  expect(propertySchema.safeParse({...valid,notes:'x'.repeat(4001)}).success).toBe(false);
+ });
+
 });
