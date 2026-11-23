@@ -440,19 +440,25 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }, [aerialFn, d, media, property, propertyRow?.address, report?.address]);
-  const autoAerialAttempted = useRef(false);
+  const autoAerialAttempted = useRef<string | null>(null);
+  const aerialAddress = report?.address?.trim() || propertyRow?.address?.trim() || "";
+  const aerialAttemptKey = property && aerialAddress
+    ? `${property}:${aerialAddress.toLocaleLowerCase()}`
+    : "";
   useEffect(() => {
     if (
       shouldAutoLoadAddressAerial({
-        address: report?.address?.trim() || propertyRow?.address,
+        address: aerialAddress,
         hasAerial: media.some((item) => item.category === "aerial"),
-        alreadyAttempted: autoAerialAttempted.current,
+        alreadyAttempted: autoAerialAttempted.current === aerialAttemptKey,
       })
     ) {
-      autoAerialAttempted.current = true;
+      // Track the property/address pair, not a global boolean: switching properties
+      // should trigger a fresh lookup while rerenders must not duplicate requests.
+      autoAerialAttempted.current = aerialAttemptKey;
       void loadAerial();
     }
-  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address, media, loadAerial]);
+  }, [aerialAttemptKey, aerialAddress, report?.id, initialDrawing?.id, media, loadAerial]);
 
   async function upload(file: File) {
     if (
