@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AMOUNT_RANGE_ERROR = "Amount exceeds the supported range";
+export const AMOUNT_RANGE_ERROR = AMOUNT_RANGE_ERROR;
 
 export const money = (cents: number) => {
   if (!Number.isSafeInteger(cents)) throw new Error(AMOUNT_RANGE_ERROR);
@@ -27,13 +27,13 @@ export function invoiceTotals(items: InvoiceItem[], taxPercent: number) {
   const subtotal = validatedItems.reduce((sum, item) => {
     const lineTotal = Math.round(item.quantity * item.unit_cents);
     if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || !Number.isSafeInteger(sum + lineTotal))
-      throw new Error("Amount exceeds the supported range");
+      throw new Error(AMOUNT_RANGE_ERROR);
     return sum + lineTotal;
   }, 0);
   const tax = Math.round(subtotal * (taxPercent / 100));
   const total = subtotal + tax;
   if (!Number.isSafeInteger(tax) || !Number.isSafeInteger(total))
-    throw new Error("Amount exceeds the supported range");
+    throw new Error(AMOUNT_RANGE_ERROR);
   return { subtotal, tax, total };
 }
 export const invoiceSchema = z
