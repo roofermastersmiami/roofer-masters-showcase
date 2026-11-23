@@ -22,7 +22,9 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" }).inputVal
         return { error: "Payment received. Refresh this invoice for its updated balance." };
       }
       if (session.status === "complete") return { error: "Your payment is still processing. Please wait for confirmation." };
-      await supabaseAdmin.from("invoice_checkouts").update({ status: "expired" }).eq("id", pending.id);
+      const { data: expired, error: expireError } = await supabaseAdmin.from("invoice_checkouts").update({ status: "expired" }).eq("id", pending.id).eq("status", "pending").select("id").maybeSingle();
+      if (expireError) throw expireError;
+      if (!expired) return { error: "Checkout status changed while preparing payment. Refresh the invoice and try again." };
     }
     const { data: reservation, error: reserveError } = await supabaseAdmin.rpc("reserve_invoice_checkout", { p_token: data.token, p_environment: data.environment, p_kind: data.kind });
     if (reserveError || !reservation) return { error: reserveError?.message ?? "Could not prepare payment" };
@@ -84,8 +86,13 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" }).middlewa
     }
     if (session.status === "complete") return { error: "Payment is processing and cannot be canceled yet" };
     if (session.status === "open") await stripe.checkout.sessions.expire(checkout.session_id);
-    const { error } = await supabaseAdmin.from("invoice_checkouts").update({ status: "expired" }).eq("id", checkout.id);
+    const { data: expired, error } = await supabaseAdmin.from("invoice_checkouts").update({ status: "expired" }).eq("id", checkout.id).eq("status", "pending").select("id").maybeSingle();
     if (error) throw error;
+    if (!expired) {
+      const { data: current } = await supabaseAdmin.from("invoice_checkouts").select("status").eq("id", checkout.id).maybeSingle();
+      if (current?.status === "paid" || current?.status === "expired") return { ok: true };
+      return { error: "Checkout status changed. Refresh the invoice before trying again." };
+    }
     return { ok: true };
   } catch (error) { return { error: getStripeErrorMessage(error) }; }
 });
