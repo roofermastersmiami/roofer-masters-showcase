@@ -68,6 +68,8 @@ describe('snapToImageEdge', () => {
     const data = pixels(20, 20);
     expect(snapToImageEdge(data, 20, 20, { x: 10, y: 10 }, Number.NaN, 20)).toBeNull();
     expect(snapToImageEdge(data, 20, 20, { x: 10, y: 10 }, 5, -1)).toBeNull();
+    expect(snapToImageEdge(data, 20, 20, { x: 10, y: 10 }, 5, 0)).toBeNull();
+    expect(snapToImageEdge(data, 20, 20, { x: 10, y: 10 }, -1, 20)).toBeNull();
   });
 
   it('clamps the search to image boundaries', () => {
