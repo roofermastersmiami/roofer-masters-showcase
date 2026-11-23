@@ -58,7 +58,7 @@ export function ProposalComposer({ config, leads, onClose, onSaved }: { config: 
   const close = () => { if (busy) return; if (!dirty || confirm("Discard unsaved proposal details?")) onClose(); };
   return <Dialog open onOpenChange={(open) => { if (!open) close(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
     <DialogHeader><DialogTitle>{config.existing ? "Edit" : "Create"} {config.template ? "roofing template" : "proposal"}</DialogTitle><DialogDescription className="sr-only">Proposal details and PDF source</DialogDescription></DialogHeader>
-    <form onSubmit={save} onChange={() => setDirty(true)} className="grid gap-5">
+    <form onSubmit={save} onChange={() => { setDirty(true); if (!file) setPdfSource("details"); }} className="grid gap-5">
       <div className="grid gap-2"><Label htmlFor="proposal-title">{config.template ? "Template name" : "Proposal title"}</Label><Input id="proposal-title" required maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2"><Label htmlFor="proposal-category">Roof category</Label><Select value={category} onValueChange={(value) => { setCategory(value); setDirty(true); }}><SelectTrigger id="proposal-category"><SelectValue /></SelectTrigger><SelectContent>{ROOF_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
