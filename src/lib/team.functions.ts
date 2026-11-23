@@ -22,7 +22,7 @@ async function gate(context: { supabase: any; userId: string }, roles: string[])
 
 /** Owner: list team accounts and roles. Only existing sign-ups appear; nobody is invited. */
 export const listTeam = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
-  await gate(context, []);
+  await gate(context, ['admin']);
   const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
   const { data: roles, error } = await supabaseAdmin.from('user_roles').select('user_id,role');
   if (error) throw new Error('Could not load team');
@@ -33,7 +33,7 @@ export const listTeam = createServerFn({ method: 'POST' }).middleware([requireSu
 export const setTeamRole = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => z.object({ email: z.string().trim().email().max(255), role: z.enum(ASSIGNABLE), grant: z.boolean() }).parse(raw))
   .handler(async ({ data, context }) => {
-    await gate(context, []);
+    await gate(context, ['admin']);
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
     const users = await listAuthUsers(supabaseAdmin);
     const user = users.find(u => u.email?.toLowerCase() === data.email.toLowerCase());
