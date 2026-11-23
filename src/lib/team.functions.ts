@@ -1,9 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 const ASSIGNABLE = ["office", "sales", "production_manager", "crew", "accounting"] as const;
 
-async function gate(context: { supabase: any; userId: string }, roles: string[]) {
+async function gate(context: { supabase: SupabaseClient<Database>; userId: string }, roles: string[]) {
   const { data, error } = await context.supabase.rpc("has_any_role", {
     _user_id: context.userId,
     _roles: roles,
