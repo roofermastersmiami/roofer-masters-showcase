@@ -18,9 +18,10 @@ export const REPORT_STATUSES = [
   "cancelled",
 ] as const;
 
-
 export function roofOrderTransferRoles(target: "estimate" | "materials") {
-  return target === "materials" ? (["production_manager"] as const) : (["office", "sales"] as const);
+  return target === "materials"
+    ? (["production_manager"] as const)
+    : (["office", "sales"] as const);
 }
 
 export const REPORT_STATUS_LABELS = {

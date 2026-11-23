@@ -123,7 +123,8 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       _roles: [...allowedRoles],
     });
     if (roleError) throw new Error("Could not verify report permissions");
-    if (!owner) throw new Error("You do not have access to transfer this report to that destination");
+    if (!owner)
+      throw new Error("You do not have access to transfer this report to that destination");
 
     const { data: order, error: orderError } = await context.supabase
       .from("roof_report_orders")
