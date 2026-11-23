@@ -20,8 +20,9 @@ export const loadPublicAerial = createServerFn({ method: "POST" })
                 return code <= 31 || code === 127;
               }),
             {
-            message: "Address contains unsupported control characters.",
-          }),
+              message: "Address contains unsupported control characters.",
+            },
+          ),
         spanMeters: z.number().min(30).max(200).default(70),
       })
       .parse(raw),

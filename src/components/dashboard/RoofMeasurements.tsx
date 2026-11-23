@@ -266,8 +266,13 @@ export function RoofMeasurements({
             canvas.toBlob(resolve, "image/png"),
           );
           if (!converted) throw new Error("Photo conversion failed");
-          if (converted.size > maxPhotoBytes || totalPhotoBytes + converted.size > maxTotalPhotoBytes)
-            throw new Error("Converted report photos exceed the 10 MB per-photo or 30 MB total limit");
+          if (
+            converted.size > maxPhotoBytes ||
+            totalPhotoBytes + converted.size > maxTotalPhotoBytes
+          )
+            throw new Error(
+              "Converted report photos exceed the 10 MB per-photo or 30 MB total limit",
+            );
           bytes = new Uint8Array(await converted.arrayBuffer());
           mime = "image/png";
         }
