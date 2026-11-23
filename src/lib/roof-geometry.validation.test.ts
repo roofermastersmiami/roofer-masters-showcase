@@ -349,9 +349,9 @@ describe('partial shared edge segmentation', () => {
           id: 'duplicate-vertex-plane',
           name: 'Duplicate vertex plane',
           points: [
-            { x: 10, y: 10, z: 3 },
-            { x: 10, y: 10, z: 7 },
-            { x: 12, y: 10, z: 5 },
+            { x: 10, y: 10, z: 5 },
+            { x: 8, y: 10, z: 4 },
+            { x: 8, y: 10, z: 6 },
           ],
           edges: ['eave', 'eave', 'eave'],
         },
