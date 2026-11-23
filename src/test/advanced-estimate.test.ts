@@ -99,9 +99,7 @@ describe("estimate and recorded profitability", () => {
     expect(catalogForSystem(catalog, "Standing seam").map((entry) => entry.item)).toEqual([
       "Panels",
     ]);
-    expect(catalogForSystem(catalog, "Coatings").map((entry) => entry.item)).toEqual([
-      "Coating",
-    ]);
+    expect(catalogForSystem(catalog, "Coatings").map((entry) => entry.item)).toEqual(["Coating"]);
   });
   it("does not import metal quantities for an unsupported coating system", () => {
     expect(materialSystem("Coatings")).toBeNull();
