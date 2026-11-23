@@ -55,3 +55,81 @@ export function calibratedPlane(points: ImagePoint[], reference: ImagePoint[], f
   planeInfo(plane);
   return plane;
 }
+
+/** Snap an image point to the nearest existing traced corner within a pixel tolerance. */
+export function snapToExistingCorner(point: ImagePoint, existing: ImagePoint[], tolerance: number): ImagePoint {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(tolerance) || tolerance < 0) return point;
+  let nearest: ImagePoint | null = null;
+  let nearestDistance = tolerance;
+  for (const candidate of existing) {
+    if (!Number.isFinite(candidate.x) || !Number.isFinite(candidate.y)) continue;
+    const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
+    if (distance <= nearestDistance) { nearest = candidate; nearestDistance = distance; }
+  }
+  return nearest ? { x: nearest.x, y: nearest.y } : point;
+}
+
+/** Finds approximately coincident boundary edges between two traced image polygons. */
+export function findSharedEdges(a: ImagePoint[], b: ImagePoint[], tolerance: number): Array<{
+  edgeA: number; edgeB: number; maxEndpointDistance: number;
+}> {
+  if (!Number.isFinite(tolerance) || tolerance < 0 || a.length < 2 || b.length < 2) return [];
+  const matches: Array<{ edgeA: number; edgeB: number; maxEndpointDistance: number }> = [];
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i], a2 = a[(i + 1) % a.length];
+    if (!a1 || !a2) continue;
+    for (let j = 0; j < b.length; j++) {
+      const b1 = b[j], b2 = b[(j + 1) % b.length];
+      if (!b1 || !b2) continue;
+      const direct = Math.max(Math.hypot(a1.x - b1.x, a1.y - b1.y), Math.hypot(a2.x - b2.x, a2.y - b2.y));
+      const reverse = Math.max(Math.hypot(a1.x - b2.x, a1.y - b2.y), Math.hypot(a2.x - b1.x, a2.y - b1.y));
+      const maxEndpointDistance = Math.min(direct, reverse);
+      if (maxEndpointDistance <= tolerance) matches.push({ edgeA: i, edgeB: j, maxEndpointDistance });
+    }
+  }
+  return matches;
+}
+
+function segmentsIntersect(a: ImagePoint, b: ImagePoint, c: ImagePoint, d: ImagePoint): boolean {
+  const orient = (p: ImagePoint, q: ImagePoint, r: ImagePoint) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const on = (p: ImagePoint, q: ImagePoint, r: ImagePoint) =>
+    Math.abs(orient(p, q, r)) < 1e-8 &&
+    r.x >= Math.min(p.x, q.x) - 1e-8 && r.x <= Math.max(p.x, q.x) + 1e-8 &&
+    r.y >= Math.min(p.y, q.y) - 1e-8 && r.y <= Math.max(p.y, q.y) + 1e-8;
+  const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+  return (o1 * o2 < 0 && o3 * o4 < 0) || on(a, b, c) || on(a, b, d) || on(c, d, a) || on(c, d, b);
+}
+
+/** Returns user-readable issues that prevent an unsafe traced polygon from being added. */
+export function validateRoofOutline(points: ImagePoint[]): string[] {
+  const issues: string[] = [];
+  if (points.length < 3) return ['Draw at least three roof corners.'];
+  if (points.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.y < 0)) {
+    issues.push('Roof corners must have finite, non-negative image coordinates.');
+    return issues;
+  }
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    if (a && b && Math.hypot(a.x - b.x, a.y - b.y) < 1) issues.push('Adjacent roof corners must be at least one pixel apart.');
+  }
+  if (new Set(points.map(p => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)).size < 3) issues.push('Roof outline needs at least three distinct corners.');
+  let twiceArea = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    if (a && b) twiceArea += a.x * b.y - b.x * a.y;
+  }
+  if (Math.abs(twiceArea) / 2 < 1) issues.push('Roof outline is too small or flat to measure.');
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    if (!a || !b) continue;
+    for (let j = i + 1; j < points.length; j++) {
+      if (j === i || j === i + 1 || (i === 0 && j === points.length - 1)) continue;
+      const c = points[j], d = points[(j + 1) % points.length];
+      if (c && d && segmentsIntersect(a, b, c, d)) {
+        issues.push('Roof outline edges must not cross or touch.');
+        return [...new Set(issues)];
+      }
+    }
+  }
+  return [...new Set(issues)];
+}
