@@ -95,7 +95,7 @@ describe("local roof report text import", () => {
   });
 
   it("recognizes simple pipe counts as well as boots and vent labels", () => {
-    const parsed = parseRoofReportText("Pipes: 2\\nVent count: 3\\nPenetrations: 1");
+    const parsed = parseRoofReportText("Pipes: 2\nVent count: 3\nPenetrations: 1");
     expect(parsed.values.pipes).toBe(2);
     expect(parsed.found).toContain("Pipes / vents");
   });
