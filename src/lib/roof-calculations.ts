@@ -133,6 +133,12 @@ export function projectedAreaToSurfaceArea(
 export function polygonAreaSqFt(
   points: Array<{ x: number; y: number }>
 ): number {
+  if (!Array.isArray(points)) {
+    throw new Error("Polygon points must be provided as an array.");
+  }
+  if (points.some(point => !point || typeof point !== "object")) {
+    throw new Error("Every polygon point must be an object.");
+  }
   if (points.length < 3) {
     throw new Error(
       "A polygon needs at least three points."
@@ -147,7 +153,9 @@ export function polygonAreaSqFt(
 
     if (
       !Number.isFinite(a.x) ||
-      !Number.isFinite(a.y)
+      !Number.isFinite(a.y) ||
+      !Number.isFinite(b.x) ||
+      !Number.isFinite(b.y)
     ) {
       throw new Error(
         "Polygon coordinates must be finite."
