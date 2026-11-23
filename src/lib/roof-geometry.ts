@@ -30,10 +30,13 @@ function edgeKey(a:Point,b:Point){const key=(p:Point)=>[p.x,p.y,p.z].map(n=>Math
 function splitEdgeAtVertices(a:Point,b:Point,vertices:Point[]){
  const delta=sub(b,a),lengthSquared=dot(delta,delta);
  if(lengthSquared<1e-12)return [{a,b}];
- const points=vertices.map(point=>({point,t:dot(sub(point,a),delta)/lengthSquared}))
+ const candidates=vertices.map(point=>({point,t:dot(sub(point,a),delta)/lengthSquared}))
   .filter(({point,t})=>t>1e-6&&t<1-1e-6&&distance(point,{x:a.x+delta.x*t,y:a.y+delta.y*t,z:a.z+delta.z*t})<=0.001)
-  .sort((u,v)=>u.t-v.t).map(item=>item.point);
- const chain=[a,...points,b];return chain.slice(0,-1).map((start,index)=>({a:start,b:chain[index+1]!}));
+  .sort((u,v)=>u.t-v.t);
+ const points:{point:Point;t:number}[]=[];
+ for(const candidate of candidates){const previous=points[points.length-1];if(!previous||Math.abs(candidate.t-previous.t)>1e-6)points.push(candidate);}
+ const chain=[a,...points.map(item=>item.point),b];
+ return chain.slice(0,-1).map((start,index)=>({a:start,b:chain[index+1]!})).filter(segment=>distance(segment.a,segment.b)>=0.001);
 }
 
 export function measureDrawing(raw:RoofDrawing){
