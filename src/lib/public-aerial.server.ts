@@ -11,7 +11,11 @@ async function request(url: string, timeout: number, fetcher: typeof fetch) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    return await fetcher(url, { signal: controller.signal, redirect: "manual" });
+    return await fetcher(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: { Accept: "application/json, image/png;q=0.9, */*;q=0.1" },
+    });
   } catch {
     return null;
   } finally {
@@ -42,14 +46,22 @@ export async function fetchPublicAerial(
     return failure("geocoding_response", "The free Census response could not be read.", geo.status);
   }
 
+  const contentType = geo.headers.get("content-type") ?? "unknown";
+  if (!contentType.toLowerCase().includes("json")) {
+    return failure(
+      "geocoding_response",
+      `Census did not return JSON (${contentType}, HTTP ${geo.status}). The address service may be redirecting to an HTML page; try again later or use Add image.`,
+      geo.status,
+    );
+  }
+
   let result: unknown;
   try {
     result = JSON.parse(body);
   } catch {
-    const contentType = geo.headers.get("content-type") ?? "unknown";
     return failure(
       "geocoding_response",
-      `Census returned a non-JSON response (${contentType}, HTTP ${geo.status}).`,
+      `Census returned malformed JSON (${contentType}, HTTP ${geo.status}).`,
       geo.status,
     );
   }
