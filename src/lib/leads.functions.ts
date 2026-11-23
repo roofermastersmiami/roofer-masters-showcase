@@ -38,12 +38,16 @@ async function tooManyRecent(phone: string, email: string) {
     .filter(Boolean)
     .join(",");
   if (!filters) return false;
-  const { count } = await db
+  const { count, error } = await db
     .from("leads")
     .select("id", { count: "exact", head: true })
     .gte("created_at", since)
     .or(filters);
-  return (count ?? 0) >= 5;
+  if (error || count === null) {
+    console.error("Lead rate-limit check failed", error);
+    throw new Error("We could not verify your request right now. Please call 305-942-3093.");
+  }
+  return count >= 5;
 }
 
 export const submitLead = createServerFn({ method: "POST" })
