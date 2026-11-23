@@ -9,7 +9,7 @@ export const reportSchema = z.object({
   valleys_lf: z.number().min(0).max(100000),
   eaves_lf: z.number().min(0).max(100000),
   rakes_lf: z.number().min(0).max(100000),
-  panel_width_in: z.number().positive().max(60).default(16),
+  panel_width_in: z.number().min(6).max(60).default(16),
   pipes: z.number().int().min(0).max(500).default(0),
 });
 export type RoofReport = z.input<typeof reportSchema>;
