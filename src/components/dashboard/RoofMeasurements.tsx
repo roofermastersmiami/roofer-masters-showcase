@@ -903,12 +903,12 @@ export function RoofMeasurements({
               {sharedEdgeSuggestions.length > 0 && (
                 <div className="my-4 rounded-md border border-border p-3">
                   <p className="text-sm font-semibold">
-                    {sharedEdgeSuggestions.length / 2} shared-edge suggestion
-                    {sharedEdgeSuggestions.length === 2 ? "" : "s"} available
+                    {sharedEdgeSuggestions.length} roof-edge classification
+                    {sharedEdgeSuggestions.length === 1 ? " suggestion" : " suggestions"} available
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Geometry-based ridge/valley suggestions only. Exterior eaves and rakes remain
-                    manual. Review the drawing before applying; measurements stay unverified.
+                    Geometry-based ridge, valley, hip, eave, and rake suggestions. Review every
+                    highlighted edge before applying; these suggestions do not verify measurements.
                   </p>
                   <Button
                     className="mt-3"
@@ -929,7 +929,7 @@ export function RoofMeasurements({
                       };
                       edit(next);
                       toast.success(
-                        "Shared ridge/valley suggestions applied; review before saving",
+                        "Roof-edge suggestions applied; review every classification before saving",
                       );
                     }}
                   >
