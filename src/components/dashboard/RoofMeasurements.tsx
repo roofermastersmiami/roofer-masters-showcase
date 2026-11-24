@@ -44,7 +44,7 @@ import { RoofImageTrace } from "./RoofImageTrace";
 import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
-import { shouldAutoSearchFootprint, type BuildingFootprint } from "@/lib/building-footprint";
+import { footprintToDraftPlane, shouldAutoSearchFootprint, type BuildingFootprint } from "@/lib/building-footprint";
 import {
   uploadAerialImage,
   aerialInvocationError,
@@ -446,17 +446,9 @@ export function RoofMeasurements({
       setFootprints(result.footprints);
       const candidate = result.footprints[0];
       if (candidate && report && !initialDrawing && !userEditedDrawing.current) {
-        const cos = Math.cos((candidate.center.lat * Math.PI) / 180);
-        const points = candidate.points.map((point) => ({
-          x: (point.lon - candidate.center.lon) * 111320 * cos,
-          y: 10,
-          z: (candidate.center.lat - point.lat) * 110540,
-        }));
         const plane = {
+          ...footprintToDraftPlane(candidate),
           id: `osm-footprint-${candidate.id}-${Date.now()}`,
-          name: "Preliminary mapped building footprint",
-          points,
-          edges: points.map(() => "other" as const),
         };
         edit({ ...d, planes: [plane], accuracy: "photo_estimate", verified: false });
         setSelected(plane.id);
