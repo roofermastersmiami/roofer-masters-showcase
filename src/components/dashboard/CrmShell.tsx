@@ -196,11 +196,7 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (
-              ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"].includes(
-                data.theme_palette,
-              )
-            )
+            if (["default", ...THEME_IDS].includes(data.theme_palette))
               setTheme(data.theme_palette);
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
