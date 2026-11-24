@@ -274,6 +274,13 @@
       "when": 1795654000000,
       "tag": "0038_company_branding_and_themes",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795655000000,
+      "tag": "0039_company_accounts_and_memberships",
+      "breakpoints": true
     }
   ]
 }
