@@ -104,7 +104,7 @@ export function FreeAiReceptionist({ className }: { className?: string }) {
 
   function chooseSlot(slot: Slot) {
     const selected = localTime(slot.start);
-    void sendMessage(`I confirm the ${selected} appointment. Please book this time for me.`);
+    void sendMessage(`I confirm the appointment for ${slot.start} (Eastern Time display: ${selected}). Please book this exact time for me.`);
   }
 
   return (
