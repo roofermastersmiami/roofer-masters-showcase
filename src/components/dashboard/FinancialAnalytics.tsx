@@ -176,11 +176,11 @@ export function FinancialAnalytics() {
         />
       </div>
       <p className="mb-5 text-xs font-semibold uppercase text-muted-foreground">
-        {env === "sandbox"
-          ? "Sandbox invoices and payments — expenses are reported independently"
-          : env === "unavailable"
-            ? "Payment environment unavailable — totals cannot be verified"
-            : "Sandbox invoices and payments — expenses are reported independently"}{" "}
+        {env === "live"
+          ? "Live invoices and payments — expenses are reported independently"
+          : env === "sandbox"
+            ? "Sandbox invoices and payments — expenses are reported independently"
+            : "Payment environment unavailable — totals cannot be verified"}{" "}
         · Cash basis
       </p>
       {jobs.error && !failed && (
