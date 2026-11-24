@@ -28,6 +28,26 @@ describe("OpenStreetMap building footprint parsing", () => {
     expect(result[0]?.areaSqFt).toBeGreaterThan(100);
     expect(result[0]?.areaSqFt).toBeLessThan(10000);
     expect(result[0]?.points).toHaveLength(4);
+    // The geocoded address lies on this outline, so its building match is exact.
+    expect(result[0]?.containsAddress).toBe(true);
+    expect(result[0]?.distanceMeters).toBe(0);
+  });
+
+  it("marks an address inside a footprint and reports zero distance to that building", () => {
+    const enclosing = [
+      { lat: origin.lat - 0.0001, lon: origin.lon - 0.0001 },
+      { lat: origin.lat - 0.0001, lon: origin.lon + 0.0001 },
+      { lat: origin.lat + 0.0001, lon: origin.lon + 0.0001 },
+      { lat: origin.lat + 0.0001, lon: origin.lon - 0.0001 },
+      { lat: origin.lat - 0.0001, lon: origin.lon - 0.0001 },
+    ];
+    const result = parseBuildingFootprints(
+      { elements: [{ type: "way", id: 43, geometry: enclosing }] },
+      origin,
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]?.containsAddress).toBe(true);
+    expect(result[0]?.distanceMeters).toBe(0);
   });
 
   it("uses the area centroid for irregular building outlines", () => {
