@@ -743,7 +743,6 @@ export function SatelliteRoofTrace({
                   const [a, b] = [event.touches[0]!, event.touches[1]!];
                   pinchStartDistance.current = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
                   pinchStartZoom.current = zoom;
-                  suppressNextMapClick.current = true;
                 }
               }}
               onTouchMove={(event) => {
