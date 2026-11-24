@@ -24,10 +24,10 @@ export const drawingSchema = z.object({
       z.object({
         id: z.string(),
         kind: z.enum(["chimney", "skylight", "vent", "pipe", "other"]),
-        x: z.number(),
-        z: z.number(),
-        width: z.number().positive(),
-        length: z.number().positive(),
+        x: z.number().finite().min(-10000).max(10000),
+        z: z.number().finite().min(-10000).max(10000),
+        width: z.number().finite().positive().max(2000),
+        length: z.number().finite().positive().max(2000),
       }),
     )
     .max(500),
