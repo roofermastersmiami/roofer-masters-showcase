@@ -14,7 +14,7 @@ const base = {
   rakes_lf: 80,
 };
 const q = (lines: ReturnType<typeof materialOrder>, s: string) =>
-  lines.find((l) => l.item.includes(s))?.qty;
+  lines.find((l) => l.item.toLocaleLowerCase().includes(s.toLocaleLowerCase()))?.qty;
 const metal = {
   roof_type: "Metal Roof" as const,
   metal_plane_runs: [
