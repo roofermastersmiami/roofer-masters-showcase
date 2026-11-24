@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { addDays, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subWeeks } from "date-fns";
-import { ArrowLeft, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, ExternalLink, Pencil, Phone, Mail, MapPin } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Appointment = {
   id: string;
@@ -46,6 +49,10 @@ export function CrmCalendar({
   const [anchor, setAnchor] = useState(new Date());
   const [mode, setMode] = useState<"month" | "week" | "day">("week");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [editStart, setEditStart] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [savingAppointment, setSavingAppointment] = useState(false);
   const qc = useQueryClient();
   const from = mode === "month" ? startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }) : mode === "week" ? startOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
   const to = mode === "month" ? endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }) : mode === "week" ? endOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
@@ -76,6 +83,33 @@ export function CrmCalendar({
           : Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor, { weekStartsOn: 1 }), i)),
     [anchor, mode, from, to],
   );
+  const openAppointment = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setEditStart(format(new Date(appointment.start_time), "yyyy-MM-dd'T'HH:mm"));
+    setEditNotes(appointment.notes ?? "");
+  };
+  const saveAppointment = async () => {
+    if (!selectedAppointment || !editStart) return;
+    const start = new Date(editStart);
+    if (Number.isNaN(start.getTime()) || start.getMinutes() !== 0 || start.getTime() <= Date.now()) {
+      toast.error("Choose a future appointment time on the hour");
+      return;
+    }
+    setSavingAppointment(true);
+    const { error } = await db.from("appointments").update({
+      start_time: start.toISOString(),
+      end_time: new Date(start.getTime() + 3600000).toISOString(),
+      notes: editNotes.trim(),
+    }).eq("id", selectedAppointment.id);
+    setSavingAppointment(false);
+    if (error) {
+      toast.error(error.message?.toLowerCase().includes("overlap") ? "That time conflicts with another appointment" : "Could not save changes. Check business hours and availability.");
+      return;
+    }
+    toast.success("Appointment updated");
+    setSelectedAppointment(null);
+    await qc.invalidateQueries({ queryKey: ["crm-appointments"] });
+  };
   const changeStatus = async (id: string, status: Appointment["status"]) => {
     setBusyId(id);
     const { error } = await db.from("appointments").update({ status }).eq("id", id);
