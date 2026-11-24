@@ -187,7 +187,7 @@ function Walls({ drawing, color }: { drawing: RoofDrawing; color: string }) {
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
     <mesh geometry={geometry}>
-      <meshStandardMaterial color={color} side={DoubleSide} roughness={0.9} />
+      <meshStandardMaterial color="#b8b2a7" side={DoubleSide} roughness={0.96} />
     </mesh>
   );
 }
