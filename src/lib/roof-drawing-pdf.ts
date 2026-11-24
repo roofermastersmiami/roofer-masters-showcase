@@ -490,9 +490,19 @@ export async function roofDrawingPdf(
   drawHeader(page, "SKETCH REPORT | PITCH DIAGRAM");
   y = PAGE_H - 112;
   section("ROOF PITCH SUMMARY");
-  paragraph("Pitch is calculated from the modeled roof planes. A plane with assumed or preliminary geometry is not a field-verified pitch measurement.", 8, false, MUTED);
-  const pitchRows = m.planes.map((plane) => `${plane.name}: ${plane.pitch.toFixed(1)}:12  |  ${plane.area.toFixed(1)} sq ft  |  ${(plane.area / 100).toFixed(2)} squares`);
-  pitchRows.forEach((line, index) => row(line.split(":")[0], line.slice(line.indexOf(":") + 1), index % 2 === 0));
+  paragraph(
+    "Pitch is calculated from the modeled roof planes. A plane with assumed or preliminary geometry is not a field-verified pitch measurement.",
+    8,
+    false,
+    MUTED,
+  );
+  const pitchRows = m.planes.map(
+    (plane) =>
+      `${plane.name}: ${plane.pitch.toFixed(1)}:12  |  ${plane.area.toFixed(1)} sq ft  |  ${(plane.area / 100).toFixed(2)} squares`,
+  );
+  pitchRows.forEach((line, index) =>
+    row(line.split(":")[0], line.slice(line.indexOf(":") + 1), index % 2 === 0),
+  );
   const pitchLabel = m.planes.length ? `${m.planes[0]!.pitch.toFixed(1)}:12` : "Not available";
   paragraph(`Modeled plane pitch reference: ${pitchLabel}`, 10, true, BLUE);
 
@@ -507,23 +517,59 @@ export async function roofDrawingPdf(
   const minZ = Math.min(...allPoints.map((point) => point.z));
   const maxZ = Math.max(...allPoints.map((point) => point.z));
   const diagram = { x: MARGIN + 28, y: 235, width: PAGE_W - MARGIN * 2 - 56, height: 390 };
-  const scale = Math.min(diagram.width / Math.max(1, maxX - minX), diagram.height / Math.max(1, maxZ - minZ));
-  const mapPoint = (point: {x:number;z:number}) => ({ x: diagram.x + (point.x - minX) * scale + (diagram.width - (maxX-minX)*scale)/2, y: diagram.y + (point.z-minZ)*scale + (diagram.height-(maxZ-minZ)*scale)/2 });
-  const edgeColors = { eave: rgb(0.1,0.55,0.2), rake: rgb(0.1,0.35,0.85), ridge: rgb(0.85,0.1,0.1), hip: rgb(0.65,0.25,0.7), valley: rgb(0.95,0.5,0.05), other: MUTED } as const;
-  d.planes.forEach((plane) => plane.points.forEach((point, index) => {
-    const next = plane.points[(index + 1) % plane.points.length];
-    if (!next) return;
-    const a = mapPoint(point); const b = mapPoint(next);
-    page.drawLine({ start: a, end: b, thickness: 2.4, color: edgeColors[plane.edges[index] ?? "other"] });
-  }));
-  let legendY = 205;
-  (["eave","rake","ridge","hip","valley","other"] as const).forEach((type) => {
-    const x = MARGIN + ((["eave","rake","ridge","hip","valley","other"] as const).indexOf(type) % 3) * 175;
-    const yPos = legendY - Math.floor((["eave","rake","ridge","hip","valley","other"] as const).indexOf(type) / 3) * 18;
-    page.drawLine({ start:{x,y:yPos+3}, end:{x:x+22,y:yPos+3}, thickness:3, color:edgeColors[type] });
-    page.drawText(type.toUpperCase(), {x:x+28,y:yPos,size:7,font:bold,color:INK});
+  const scale = Math.min(
+    diagram.width / Math.max(1, maxX - minX),
+    diagram.height / Math.max(1, maxZ - minZ),
+  );
+  const mapPoint = (point: { x: number; z: number }) => ({
+    x: diagram.x + (point.x - minX) * scale + (diagram.width - (maxX - minX) * scale) / 2,
+    y: diagram.y + (point.z - minZ) * scale + (diagram.height - (maxZ - minZ) * scale) / 2,
   });
-  paragraph("Edge colors reflect the saved roof-plane classifications. Unclassified edges are shown in gray; geometry-based suggestions must be reviewed before applying.", 7, false, MUTED);
+  const edgeColors = {
+    eave: rgb(0.1, 0.55, 0.2),
+    rake: rgb(0.1, 0.35, 0.85),
+    ridge: rgb(0.85, 0.1, 0.1),
+    hip: rgb(0.65, 0.25, 0.7),
+    valley: rgb(0.95, 0.5, 0.05),
+    other: MUTED,
+  } as const;
+  d.planes.forEach((plane) =>
+    plane.points.forEach((point, index) => {
+      const next = plane.points[(index + 1) % plane.points.length];
+      if (!next) return;
+      const a = mapPoint(point);
+      const b = mapPoint(next);
+      page.drawLine({
+        start: a,
+        end: b,
+        thickness: 2.4,
+        color: edgeColors[plane.edges[index] ?? "other"],
+      });
+    }),
+  );
+  let legendY = 205;
+  (["eave", "rake", "ridge", "hip", "valley", "other"] as const).forEach((type) => {
+    const x =
+      MARGIN +
+      ((["eave", "rake", "ridge", "hip", "valley", "other"] as const).indexOf(type) % 3) * 175;
+    const yPos =
+      legendY -
+      Math.floor((["eave", "rake", "ridge", "hip", "valley", "other"] as const).indexOf(type) / 3) *
+        18;
+    page.drawLine({
+      start: { x, y: yPos + 3 },
+      end: { x: x + 22, y: yPos + 3 },
+      thickness: 3,
+      color: edgeColors[type],
+    });
+    page.drawText(type.toUpperCase(), { x: x + 28, y: yPos, size: 7, font: bold, color: INK });
+  });
+  paragraph(
+    "Edge colors reflect the saved roof-plane classifications. Unclassified edges are shown in gray; geometry-based suggestions must be reviewed before applying.",
+    7,
+    false,
+    MUTED,
+  );
 
   // Detailed measurement pages
   addPage();
@@ -650,14 +696,31 @@ export async function roofDrawingPdf(
   drawHeader(page, "SKETCH REPORT | AREA DIAGRAM");
   y = PAGE_H - 112;
   section("ROOF PLANE AREA DIAGRAM");
-  paragraph("Each shaded outline represents a modeled roof plane. Plane areas are calculated from the current 3D drawing.", 8, false, MUTED);
+  paragraph(
+    "Each shaded outline represents a modeled roof plane. Plane areas are calculated from the current 3D drawing.",
+    8,
+    false,
+    MUTED,
+  );
   d.planes.forEach((plane, index) => {
     ensureSpace(30);
     const pts = plane.points.map((point) => mapPoint(point));
-    pts.forEach((point, i) => { const next = pts[(i+1)%pts.length]; if(next) page.drawLine({start:point,end:next,thickness:1.8,color:BLUE}); });
-    const center = pts.reduce((acc,point)=>({x:acc.x+point.x/pts.length,y:acc.y+point.y/pts.length}),{x:0,y:0});
-    const area = m.planes.find((item)=>item.id===plane.id)?.area ?? 0;
-    page.drawText(`${plane.name}  |  ${area.toFixed(1)} SF  |  ${(area/100).toFixed(2)} SQ`,{x:center.x-34,y:center.y,size:7,font:bold,color:NAVY});
+    pts.forEach((point, i) => {
+      const next = pts[(i + 1) % pts.length];
+      if (next) page.drawLine({ start: point, end: next, thickness: 1.8, color: BLUE });
+    });
+    const center = pts.reduce(
+      (acc, point) => ({ x: acc.x + point.x / pts.length, y: acc.y + point.y / pts.length }),
+      { x: 0, y: 0 },
+    );
+    const area = m.planes.find((item) => item.id === plane.id)?.area ?? 0;
+    page.drawText(`${plane.name}  |  ${area.toFixed(1)} SF  |  ${(area / 100).toFixed(2)} SQ`, {
+      x: center.x - 34,
+      y: center.y,
+      size: 7,
+      font: bold,
+      color: NAVY,
+    });
   });
   // Material takeoff
   section("MATERIAL TAKEOFF");
