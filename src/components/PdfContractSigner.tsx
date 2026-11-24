@@ -29,7 +29,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { emailRoofReportPdfs } from "@/lib/pdf-email.functions";
 
-type FieldKind = "signature" | "name" | "date" | "initials" | "text";
+type FieldKind = "signature" | "name" | "date" | "initials" | "text" | "erase";
 export type PdfSignField = {
   id: string;
   kind: FieldKind;
@@ -71,6 +71,7 @@ const fieldLabel: Record<FieldKind, string> = {
   date: "Date signed",
   initials: "Initials",
   text: "Custom text",
+  erase: "Whiteout / erase",
 };
 const makeField = (kind: FieldKind, page: number): PdfSignField => ({
   id: crypto.randomUUID(),
@@ -78,8 +79,8 @@ const makeField = (kind: FieldKind, page: number): PdfSignField => ({
   page,
   x: 0.12,
   y: 0.72,
-  width: kind === "signature" ? 0.3 : 0.25,
-  height: kind === "signature" ? 0.09 : 0.045,
+  width: kind === "signature" ? 0.3 : kind === "erase" ? 0.35 : 0.25,
+  height: kind === "signature" ? 0.09 : kind === "erase" ? 0.07 : 0.045,
   fontSize: kind === "signature" ? 22 : 12,
   value:
     kind === "date"
@@ -134,6 +135,7 @@ export function PdfContractSigner({
   const [typedSignature, setTypedSignature] = useState("");
   const signatureRef = useRef<SignatureCanvas>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const pageScrollRefs = useRef<Array<HTMLDivElement | null>>([]);
   const canvasRefs = useRef<Array<HTMLCanvasElement | null>>([]);
   const dragRef = useRef<{
     id: string;
@@ -418,7 +420,9 @@ export function PdfContractSigner({
         const width = field.width * size.width;
         const height = field.height * size.height;
         const y = size.height - field.y * size.height - height;
-        if (field.kind === "signature" && field.imageData) {
+        if (field.kind === "erase") {
+          page.drawRectangle({ x, y, width, height, color: rgb(1, 1, 1), borderColor: rgb(1, 1, 1) });
+        } else if (field.kind === "signature" && field.imageData) {
           const png = await pdf.embedPng(field.imageData);
           const scale = Math.min(width / png.width, height / png.height);
           page.drawImage(png, {
@@ -602,7 +606,8 @@ export function PdfContractSigner({
     { kind: "name", label: "Full name", icon: Type },
     { kind: "date", label: "Date signed", icon: CalendarDays },
     { kind: "initials", label: "Initials", icon: Type },
-    { kind: "text", label: "Custom text", icon: Plus },
+    { kind: "text", label: "Add / replace text", icon: Type },
+    { kind: "erase", label: "Whiteout / erase", icon: Trash2 },
   ];
   const activePageFields = useMemo(
     () => fields.filter((field) => field.page === activePage),
@@ -691,7 +696,7 @@ export function PdfContractSigner({
                   ? "Add signature using the signature pad"
                   : "Enter field value"
               }
-              disabled={selected.kind === "signature"}
+              disabled={selected.kind === "signature" || selected.kind === "erase"}
               onChange={(e) => updateField(selected.id, { value: e.target.value })}
             />
           </div>
@@ -737,6 +742,7 @@ export function PdfContractSigner({
               }
             />
           </div>
+          {selected.kind === "erase" && <span className="pb-2 text-xs text-muted-foreground">This area will be covered with white when exported. Place replacement text over it afterward.</span>}
           {selected.kind === "signature" && (
             <Button type="button" variant="outline" onClick={() => setSignatureOpen(true)}>
               <PenLine className="mr-1 size-4" />
@@ -774,12 +780,13 @@ export function PdfContractSigner({
           Upload a PDF or open a report that already has a measurement PDF.
         </div>
       )}
-      {drawFieldMode && <p className="text-xs text-blue-700">Click and drag on the PDF to draw a fillable text field. You can resize it afterward.</p>}
+      {drawFieldMode && <p className="text-xs text-blue-700">Click and drag on the PDF to create a text area. For replacing existing content, add a Whiteout / erase area first, then add replacement text above it. Select any item to move, resize, edit, or delete it.</p>}
+      {sourceBytes && <p className="text-xs text-muted-foreground">PDF editor: select an item to move or resize it. Use Whiteout / erase to cover old wording, then Add / replace text to write the corrected information. Export applies the edits to a new PDF; your uploaded original stays unchanged.</p>}
       {sourceBytes && (
         <div className="h-[min(68dvh,760px)] min-h-[320px] overflow-y-auto overscroll-contain rounded-lg bg-muted/60 p-3">
           <div className="mx-auto flex max-w-5xl flex-col items-center gap-5">
             {pages.map((page, index) => (
-              <div key={index} className="w-full">
+              <div key={index} ref={(el) => { pageScrollRefs.current[index] = el; }} className={cn("w-full rounded-lg p-1 transition-shadow", activePage === index ? "ring-2 ring-primary" : "")}>
                 <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
                     Page {index + 1} of {pages.length}
@@ -787,7 +794,10 @@ export function PdfContractSigner({
                   <Button
                     size="sm"
                     variant={activePage === index ? "secondary" : "ghost"}
-                    onClick={() => setActivePage(index)}
+                    onClick={() => {
+                      setActivePage(index);
+                      pageScrollRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
                   >
                     Edit this page
                   </Button>
@@ -806,7 +816,7 @@ export function PdfContractSigner({
                     className="block h-auto w-full"
                   />
                   <div
-                    className="absolute inset-0"
+                    className={cn("absolute inset-0 touch-none", drawFieldMode ? "cursor-crosshair" : "")}
                     onPointerDown={(event) => beginDrawField(event, index)}
                     onPointerMove={moveDrag}
                     onPointerUp={() => {
@@ -820,7 +830,6 @@ export function PdfContractSigner({
                       drawStartRef.current = null;
                       setDrawDraft(null);
                     }}
-                    className={drawFieldMode ? "cursor-crosshair" : ""}
                   >
                     {fields
                       .filter((field) => field.page === index)
@@ -840,7 +849,7 @@ export function PdfContractSigner({
                             else if (isClientMode) setClientFieldOpen(true);
                           }}
                           onPointerDown={(event) => beginDrag(event, field)}
-                          className={`absolute flex cursor-move items-center border-2 px-1 ${selectedId === field.id ? "border-blue-600 bg-blue-100/60" : "border-blue-400/70 bg-blue-50/40"}`}
+                          className={`absolute flex cursor-move items-center border-2 px-1 ${field.kind === "erase" ? "border-dashed border-amber-500 bg-white" : selectedId === field.id ? "border-blue-600 bg-blue-100/60" : "border-blue-400/70 bg-blue-50/40"}`}
                           style={{
                             left: `${field.x * 100}%`,
                             top: `${field.y * 100}%`,
@@ -857,7 +866,7 @@ export function PdfContractSigner({
                             />
                           ) : (
                             <span className="max-w-full truncate overflow-hidden text-blue-900">
-                              {field.value || fieldLabel[field.kind]}
+                              {field.kind === "erase" ? "Whiteout area" : field.value || fieldLabel[field.kind]}
                             </span>
                           )}
                           {selectedId === field.id && !isClientMode && (
