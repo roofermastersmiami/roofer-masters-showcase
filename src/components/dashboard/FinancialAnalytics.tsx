@@ -28,7 +28,8 @@ export function FinancialAnalytics() {
   try {
     env = getStripeEnvironment();
   } catch {
-    // Show an empty environment label when Stripe configuration is unavailable.
+    // Keep the ledger input valid so missing payment configuration cannot crash the page.
+    env = "unavailable";
   }
   const ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
   const costs = (expenses.data ?? []).filter(
@@ -41,7 +42,12 @@ export function FinancialAnalytics() {
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     start > end;
-  const loading = expenses.isPending || payments.isPending || invoices.isPending || links.isPending;
+  const loading =
+    expenses.isPending ||
+    payments.isPending ||
+    invoices.isPending ||
+    jobs.isPending ||
+    links.isPending;
   const rows = [
     ["Payments received", ledger.collected],
     ["Issued invoice sales", ledger.sales],
@@ -155,7 +161,9 @@ export function FinancialAnalytics() {
       <p className="mb-5 text-xs font-semibold uppercase text-muted-foreground">
         {env === "sandbox"
           ? "Test environment — not live business revenue"
-          : "Live recorded transactions"}{" "}
+          : env === "unavailable"
+            ? "Payment environment unavailable — totals cannot be verified"
+            : "Live recorded transactions"}{" "}
         · Cash basis
       </p>
       {failed ? (
