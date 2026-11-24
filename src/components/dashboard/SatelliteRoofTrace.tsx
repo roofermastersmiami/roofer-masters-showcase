@@ -366,6 +366,7 @@ export function SatelliteRoofTrace({
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
+  const [selectedBuildingCenter, setSelectedBuildingCenter] = useState<TracePoint | null>(null);
   const [error, setError] = useState("");
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
@@ -424,6 +425,9 @@ export function SatelliteRoofTrace({
     skipNextAddressSearch.current = true;
     setLocation(result);
     setMapCenter({ lat: Number(result.lat), lon: Number(result.lon) });
+    setPoints([]);
+    setSelectedBuildingCenter(null);
+    setAutoTraced(false);
     setAddress(result.display_name);
     setResults([]);
     setPoints([]);
@@ -532,9 +536,17 @@ export function SatelliteRoofTrace({
       if (!elements) throw new Error("OpenStreetMap building lookup failed");
       const footprint = nearestBuildingFootprint(elements, { lat, lon });
       if (!footprint) throw new Error("No nearby mapped building outline was found");
+      const footprintCenter = {
+        lat: footprint.reduce((sum, point) => sum + point.lat, 0) / footprint.length,
+        lon: footprint.reduce((sum, point) => sum + point.lon, 0) / footprint.length,
+      };
       setPoints(footprint);
+      setSelectedBuildingCenter(footprintCenter);
+      // Center the aerial on the selected building, not just the street address.
+      // Keep the geocoded address pin visible as a separate reference marker.
+      setMapCenter(footprintCenter);
       setAutoTraced(true);
-      setZoom((value) => Math.max(value, 2));
+      setZoom((value) => Math.max(value, 3));
       // OSM provides a ground outline, not roof facets. Create an explicitly
       // unverified starter gable so the estimator immediately sees a 3D model.
       try {
@@ -819,6 +831,16 @@ export function SatelliteRoofTrace({
                 height={MAP_HEIGHT}
                 preserveAspectRatio="none"
               />
+              {selectedBuildingCenter && bounds && (
+                <g
+                  transform={`translate(${((selectedBuildingCenter.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - selectedBuildingCenter.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
+                  pointerEvents="none"
+                >
+                  <circle r="25" fill="#16a34a" fillOpacity="0.18" stroke="#86efac" strokeWidth="3" />
+                  <circle r="7" fill="#16a34a" stroke="white" strokeWidth="3" />
+                  <text x="32" y="6" fill="white" stroke="#14532d" strokeWidth="5" paintOrder="stroke" fontSize="19" fontWeight="800">TARGET HOUSE</text>
+                </g>
+              )}
               {center && bounds && (
                 <g
                   transform={`translate(${((center.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - center.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
