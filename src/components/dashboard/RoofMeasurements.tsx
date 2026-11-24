@@ -662,7 +662,9 @@ export function RoofMeasurements({
           </div>
         }
       />
-      <RoofPdfLayoutEditor value={pdfLayout} onChange={setPdfLayout} />\n      {workspaceAddress && (
+      <RoofPdfLayoutEditor value={pdfLayout} onChange={setPdfLayout} />
+      \n{" "}
+      {workspaceAddress && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
