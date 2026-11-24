@@ -43,6 +43,9 @@ export const SECTION_ROLES: Record<string, readonly R[]> = {
   "my-jobs": ["crew"],
 };
 export function canOpen(roles: readonly string[], section: string) {
+  // Reject unknown section IDs before the owner shortcut. This keeps future or
+  // attacker-supplied navigation IDs closed until explicitly added here.
+  if (!Object.hasOwn(SECTION_ROLES, section)) return false;
   if (roles.includes("admin")) return section !== "my-jobs";
   return (SECTION_ROLES[section] ?? []).some((r) => roles.includes(r));
 }
