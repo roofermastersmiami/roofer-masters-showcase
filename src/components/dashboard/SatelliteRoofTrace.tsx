@@ -367,6 +367,7 @@ export function SatelliteRoofTrace({
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [baseMap, setBaseMap] = useState<"satellite" | "streets">("satellite");
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
@@ -399,7 +400,7 @@ export function SatelliteRoofTrace({
     [mapCenter, imageryZoom],
   );
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/${baseMap === "satellite" ? "World_Imagery" : "World_Street_Map"}/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
     : "";
 
   useEffect(() => {
@@ -685,6 +686,26 @@ export function SatelliteRoofTrace({
       {location && bounds && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1 rounded-md border border-border p-1" aria-label="Map layer">
+              <Button
+                type="button"
+                size="sm"
+                variant={baseMap === "satellite" ? "secondary" : "ghost"}
+                aria-pressed={baseMap === "satellite"}
+                onClick={() => setBaseMap("satellite")}
+              >
+                <Satellite className="h-4 w-4" /> Satellite
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={baseMap === "streets" ? "secondary" : "ghost"}
+                aria-pressed={baseMap === "streets"}
+                onClick={() => setBaseMap("streets")}
+              >
+                <MapPin className="h-4 w-4" /> 2D streets
+              </Button>
+            </div>
             <Button
               type="button"
               size="sm"
@@ -1182,7 +1203,7 @@ export function SatelliteRoofTrace({
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Imagery: Esri World Imagery. Building footprints and address lookup: OpenStreetMap.
+            Map layer: Esri ${baseMap === "satellite" ? "World Imagery" : "World Street Map"}. Building footprints and address lookup: OpenStreetMap.
             Click corners in order around one roof plane.
           </p>
         </>
