@@ -191,9 +191,14 @@ export function RoofReports({
                   </p>
                   <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     {row.file_path && (
-                      <Button onClick={() => void downloadReport(row)}>
-                        <Download /> Download PDF
-                      </Button>
+                      <>
+                        <Button variant="outline" onClick={() => void viewReport(row)}>
+                          <Eye /> View PDF
+                        </Button>
+                        <Button onClick={() => void downloadReport(row)}>
+                          <Download /> Download PDF
+                        </Button>
+                      </>
                     )}
                     <Button variant="outline" onClick={() => onOpenMeasurement(row.id)}>
                       {row.file_path ? "Open measurements" : "Continue measurements"} <ArrowRight />
@@ -212,6 +217,46 @@ export function RoofReports({
             : "No roof measurement reports yet. Create one in Roof measurements."}
         </Empty>
       )}
+      <Dialog
+        open={!!viewingReport}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingReport(null);
+            setPdfUrl((previous) => {
+              if (previous) URL.revokeObjectURL(previous);
+              return null;
+            });
+            setZoom(1);
+          }
+        }}
+      >
+        <DialogContent className="flex h-[92vh] w-[96vw] max-w-6xl flex-col gap-3">
+          <DialogHeader>
+            <DialogTitle className="break-words">{viewingReport?.title || "Roof measurement report"}</DialogTitle>
+            <DialogDescription>{viewingReport?.address}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="icon" aria-label="Zoom out" disabled={zoom <= 0.5} onClick={() => setZoom((value) => Math.max(0.5, Number((value - 0.25).toFixed(2))))}><ZoomOut /></Button>
+              <span className="min-w-14 text-center text-sm tabular-nums">{Math.round(zoom * 100)}%</span>
+              <Button type="button" variant="outline" size="icon" aria-label="Zoom in" disabled={zoom >= 2.5} onClick={() => setZoom((value) => Math.min(2.5, Number((value + 0.25).toFixed(2))))}><ZoomIn /></Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setZoom(1)}>Fit width</Button>
+            </div>
+            {viewingReport && <Button type="button" onClick={() => void downloadReport(viewingReport)}><Download /> Download PDF</Button>}
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto rounded-md bg-muted/50">
+            {pdfLoading ? (
+              <p className="p-6 text-sm text-muted-foreground">Loading PDF…</p>
+            ) : pdfUrl ? (
+              <div className="mx-auto h-full min-h-[70vh]" style={{ width: `${100 * zoom}%` }}>
+                <iframe title="Roof measurement PDF preview" src={pdfUrl} className="h-full min-h-[70vh] w-full border-0" />
+              </div>
+            ) : (
+              <p className="p-6 text-sm text-muted-foreground">PDF preview is unavailable.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!pendingDelete}
         onOpenChange={(open) => {
