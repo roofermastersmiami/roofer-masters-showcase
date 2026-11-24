@@ -223,7 +223,7 @@ export function CrmCalendar({
                   </div>
                   <div className="space-y-1">
                     {matches.slice(0, 3).map((appointment) => (
-                      <button key={appointment.id} type="button" onClick={() => void openReport(appointment)} className={cn("block w-full truncate rounded border-l-2 px-1.5 py-1 text-left text-[10px] hover:ring-1 hover:ring-primary", serviceColors[appointment.service_type] ?? serviceColors.Other, appointment.status === "Cancelled" && "opacity-50 line-through")}>
+                      <button key={appointment.id} type="button" onClick={() => openAppointment(appointment)} className={cn("block w-full truncate rounded border-l-2 px-1.5 py-1 text-left text-[10px] hover:ring-1 hover:ring-primary", serviceColors[appointment.service_type] ?? serviceColors.Other, appointment.status === "Cancelled" && "opacity-50 line-through")}>
                         <span className="font-semibold">{format(new Date(appointment.start_time), "h:mm a")}</span> {appointment.customer_name}
                       </button>
                     ))}
@@ -256,7 +256,7 @@ export function CrmCalendar({
                     <div key={day.toISOString() + hour} className="min-h-24 border-b border-l p-1">
                       {matches.map((appointment) => (
                         <article key={appointment.id} className={cn("mb-1 rounded-md border-l-4 p-2 text-xs", serviceColors[appointment.service_type] ?? serviceColors.Other, appointment.status === "Cancelled" && "opacity-50 line-through")}>
-                          <p className="font-semibold">{format(new Date(appointment.start_time), "h:mm a")} · {appointment.customer_name}</p>
+                          <button type="button" className="text-left font-semibold hover:underline" onClick={() => openAppointment(appointment)}>{format(new Date(appointment.start_time), "h:mm a")} · {appointment.customer_name}</button>
                           <p className="mt-1 line-clamp-2">{appointment.service_type}</p>
                           <p className="mt-1 line-clamp-2 text-muted-foreground">{appointment.property_address}</p>
                           <p className="mt-1 text-muted-foreground">{appointment.source === "manual" ? "Manual" : "AI receptionist"} · {appointment.status}</p>
@@ -269,6 +269,7 @@ export function CrmCalendar({
                                 <SelectItem value="Cancelled">Cancelled</SelectItem>
                               </SelectContent>
                             </Select>
+                            <Button size="icon" variant="outline" className="size-7" title="Appointment details" onClick={() => openAppointment(appointment)}><Pencil className="size-3" /></Button>
                             {onOpenRoofReport && <Button size="icon" variant="outline" className="size-7" title="Open roof report" onClick={() => void openReport(appointment)}><ExternalLink className="size-3" /></Button>}
                           </div>
                         </article>
@@ -281,6 +282,49 @@ export function CrmCalendar({
           </div>
         </div>
       )}
+
+      <Dialog open={Boolean(selectedAppointment)} onOpenChange={(open) => !open && setSelectedAppointment(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          {selectedAppointment && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Appointment details</DialogTitle>
+                <DialogDescription>Review customer information, update notes, or reschedule this one-hour visit.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="font-semibold">{selectedAppointment.customer_name}</p>
+                  <p className="text-muted-foreground">{selectedAppointment.service_type}</p>
+                </div>
+                <div className="grid gap-2 rounded-lg bg-muted/40 p-3">
+                  <a className="flex items-center gap-2 hover:underline" href={"tel:" + selectedAppointment.customer_phone}><Phone className="size-4" />{selectedAppointment.customer_phone}</a>
+                  {selectedAppointment.customer_email && <a className="flex items-center gap-2 break-all hover:underline" href={"mailto:" + selectedAppointment.customer_email}><Mail className="size-4" />{selectedAppointment.customer_email}</a>}
+                  <p className="flex items-start gap-2"><MapPin className="mt-0.5 size-4 shrink-0" />{selectedAppointment.property_address}</p>
+                  <p className="text-xs text-muted-foreground">Booked by {selectedAppointment.source === "manual" ? "office staff" : selectedAppointment.source.replaceAll("_", " ")} · {selectedAppointment.status}</p>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="appointment-start" className="text-sm font-medium">Reschedule date and time</label>
+                  <Input id="appointment-start" type="datetime-local" step={3600} value={editStart} onChange={(event) => setEditStart(event.target.value)} />
+                  <p className="text-xs text-muted-foreground">One-hour appointments, Monday–Saturday, 8 AM–6 PM Eastern. Time is entered using this device's local timezone.</p>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="appointment-notes" className="text-sm font-medium">Appointment notes</label>
+                  <Textarea id="appointment-notes" rows={3} value={editNotes} onChange={(event) => setEditNotes(event.target.value)} placeholder="Access instructions, customer requests, or job details…" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={busyId === selectedAppointment.id} onClick={() => void changeStatus(selectedAppointment.id, "Scheduled")}>Mark scheduled</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={busyId === selectedAppointment.id} onClick={() => void changeStatus(selectedAppointment.id, "Completed")}>Mark completed</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={busyId === selectedAppointment.id} onClick={() => void changeStatus(selectedAppointment.id, "Cancelled")}>Cancel appointment</Button>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                {onOpenRoofReport && <Button type="button" variant="outline" onClick={() => void openReport(selectedAppointment)}><ExternalLink className="mr-2 size-4" />Open roof report</Button>}
+                <Button type="button" onClick={() => void saveAppointment()} disabled={savingAppointment}>{savingAppointment ? "Saving…" : "Save changes"}</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
       {!isLoading && appointments.length === 0 && (
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           No appointments scheduled for this period.
