@@ -231,7 +231,7 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (current.file_path) {
-      if (!current.file_path.startsWith(`roof-report/${data.id}/`) || !/^roof-report\\/[a-f0-9-]+\\/[a-f0-9-]+\\.pdf$/.test(current.file_path)) {
+      if (!current.file_path.startsWith(`roof-report/${data.id}/`) || !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(current.file_path)) {
         throw new Error("The report contains an unexpected file path. Contact an administrator before deleting it.");
       }
       const { error: storageError } = await supabaseAdmin.storage
