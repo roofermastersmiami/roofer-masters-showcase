@@ -103,3 +103,13 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
       ];
   }
 }
+
+/** Escape untrusted text before inserting it into an HTML document. */
+export function escapeMaterialOrderHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
