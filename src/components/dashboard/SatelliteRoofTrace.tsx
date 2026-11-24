@@ -836,9 +836,26 @@ export function SatelliteRoofTrace({
                   transform={`translate(${((selectedBuildingCenter.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - selectedBuildingCenter.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
                   pointerEvents="none"
                 >
-                  <circle r="25" fill="#16a34a" fillOpacity="0.18" stroke="#86efac" strokeWidth="3" />
+                  <circle
+                    r="25"
+                    fill="#16a34a"
+                    fillOpacity="0.18"
+                    stroke="#86efac"
+                    strokeWidth="3"
+                  />
                   <circle r="7" fill="#16a34a" stroke="white" strokeWidth="3" />
-                  <text x="32" y="6" fill="white" stroke="#14532d" strokeWidth="5" paintOrder="stroke" fontSize="19" fontWeight="800">TARGET HOUSE</text>
+                  <text
+                    x="32"
+                    y="6"
+                    fill="white"
+                    stroke="#14532d"
+                    strokeWidth="5"
+                    paintOrder="stroke"
+                    fontSize="19"
+                    fontWeight="800"
+                  >
+                    TARGET HOUSE
+                  </text>
                 </g>
               )}
               {center && bounds && (

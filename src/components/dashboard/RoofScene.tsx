@@ -277,9 +277,10 @@ export default function RoofScene({
         key={`${view}-${fitKey}`}
         frameloop={view === "3d" && autoRotate ? "always" : "demand"}
         camera={{
-          position: view === "plan"
-            ? [sceneCenter[0], sceneCenter[1] + extent * 1.5, sceneCenter[2] + 0.01]
-            : [sceneCenter[0] + extent * 0.9, sceneCenter[1] + extent, sceneCenter[2] + extent],
+          position:
+            view === "plan"
+              ? [sceneCenter[0], sceneCenter[1] + extent * 1.5, sceneCenter[2] + 0.01]
+              : [sceneCenter[0] + extent * 0.9, sceneCenter[1] + extent, sceneCenter[2] + extent],
           fov: 42,
           near: 0.1,
           far: 20000,
@@ -296,11 +297,16 @@ export default function RoofScene({
             rotation-x={-Math.PI / 2}
           />
         </Environment>
-        <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} position={[sceneCenter[0], 0, sceneCenter[2]]} />
+        <gridHelper
+          args={[extent * 2, 20, colors.edge, colors.ground]}
+          position={[sceneCenter[0], 0, sceneCenter[2]]}
+        />
         {aerialImageUrl && (
           <AerialGround
             url={aerialImageUrl}
-            position={aerialImageCenter ?? (addressPin ? [addressPin.x, 0.05, addressPin.z] : [0, 0.05, 0])}
+            position={
+              aerialImageCenter ?? (addressPin ? [addressPin.x, 0.05, addressPin.z] : [0, 0.05, 0])
+            }
           />
         )}
         <Walls drawing={drawing} color={colors.ground} />
