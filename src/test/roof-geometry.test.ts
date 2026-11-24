@@ -197,7 +197,6 @@ describe("roof edge topology validation", () => {
   });
 });
 
-
 describe("roof penetration dimension validation", () => {
   it("accepts valid penetration dimensions and coordinates", () => {
     const drawing = roofPreset("flat");
