@@ -423,7 +423,7 @@ export function PdfContractSigner({
       const { error: uploadError } = await supabase.storage.from("roofing-proposals").upload(path, new Blob([Uint8Array.from(sourceBytes)], { type: "application/pdf" }), { contentType: "application/pdf" });
       if (uploadError) throw uploadError;
       const templateFields = fields.map((field) => ({ ...field, id: crypto.randomUUID(), value: "", imageData: undefined }));
-      const { error: insertError } = await supabase.from("pdf_sign_templates").insert({ id, name, file_path: path, fields: templateFields, created_by: userResult.user.id });
+      const { error: insertError } = await supabase.from("pdf_sign_templates").insert({ id, name, file_path: path, fields: templateFields as unknown as import("@/integrations/supabase/types").Json, created_by: userResult.user.id });
       if (insertError) {
         await supabase.storage.from("roofing-proposals").remove([path]);
         throw insertError;
@@ -491,7 +491,7 @@ export function PdfContractSigner({
   useEffect(() => {
     let cancelled = false;
     void supabase.from("pdf_sign_templates").select("id,name,file_path,fields").order("updated_at", { ascending: false }).then(({ data, error }) => {
-      if (!cancelled && !error && data) setTemplates(data as typeof templates);
+      if (!cancelled && !error && data) setTemplates(data.map((row) => ({ ...row, fields: Array.isArray(row.fields) ? row.fields as unknown as PdfSignField[] : [] })));
     });
     return () => { cancelled = true; };
   }, []);
