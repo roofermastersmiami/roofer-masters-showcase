@@ -6,7 +6,7 @@ function configuredStripeEnvironment() {
     return getStripeEnvironment();
   } catch {
     // Expenses are environment-scoped; do not crash CRM routes when payments are not configured.
-    return null;
+    return "live";
   }
 }
 export const costCatalogQuery = queryOptions({
