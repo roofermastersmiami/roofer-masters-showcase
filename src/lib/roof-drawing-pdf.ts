@@ -515,7 +515,12 @@ export async function roofDrawingPdf(
   row("Selected waste allowance", `${d.waste}%`);
   row("Area including selected waste", `${m.withWaste.toFixed(2)} sq ft`, true);
   row("Total perimeter", `${m.perimeter.toFixed(2)} ft`);
-  paragraph("SUGGESTED WASTE: This is a planning allowance. The sample waste method applies only to standard architectural shingles with a closed, single-cut valley system. Ridge cap, hip cap, and starter bundles are separate quantities. Confirm the correct allowance for the selected roofing system and actual roof layout.", 7.5, false, MUTED);
+  paragraph(
+    "SUGGESTED WASTE: This is a planning allowance. The sample waste method applies only to standard architectural shingles with a closed, single-cut valley system. Ridge cap, hip cap, and starter bundles are separate quantities. Confirm the correct allowance for the selected roofing system and actual roof layout.",
+    7.5,
+    false,
+    MUTED,
+  );
   if (d.geo_reference)
     row(
       "Geocoded address point",
