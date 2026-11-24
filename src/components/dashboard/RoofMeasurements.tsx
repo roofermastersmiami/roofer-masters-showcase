@@ -196,6 +196,10 @@ export function RoofMeasurements({
       (!j.property_id || j.property_id === property),
   );
   async function save() {
+    if (report && !initialDrawing && !userEditedDrawing.current) {
+      toast.error("Add a measured roof dimension or trace the actual roof before saving this report");
+      return;
+    }
     if (!measurement || !property) {
       toast.error("Choose a property and correct the drawing first");
       return;
@@ -226,6 +230,10 @@ export function RoofMeasurements({
     }
   }
   async function exportPdf(share = false) {
+    if (report && !initialDrawing && !userEditedDrawing.current) {
+      toast.error("Add measured roof geometry before exporting this property report");
+      return;
+    }
     if (!measurement) return;
     if (share && (!parent || dirty || !customer?.source_lead_id)) {
       toast.error("Save this drawing and link its customer first");
@@ -549,7 +557,15 @@ export function RoofMeasurements({
             >
               <Download /> PDF report
             </Button>
-            <Button disabled={busy || !measurement || !property} onClick={() => void save()}>
+            <Button
+              disabled={
+                busy ||
+                !measurement ||
+                !property ||
+                (!!report && !initialDrawing && !userEditedDrawing.current)
+              }
+              onClick={() => void save()}
+            >
               <Save /> Save revision
             </Button>
           </div>
@@ -557,8 +573,9 @@ export function RoofMeasurements({
       />
       {report && !initialDrawing && (
         <p className="mb-5 border-l-2 border-primary pl-3 text-sm text-muted-foreground">
-          Starter geometry only — enter measured dimensions or trace a calibrated aerial image
-          before reviewing this property.
+          Starter geometry only — add measured dimensions or trace the actual roof outline and set
+          its pitch before saving or exporting this property report. Satellite traces are estimates
+          and must be checked against field measurements.
         </p>
       )}
       <div className="mb-5 grid gap-3 md:grid-cols-3">
