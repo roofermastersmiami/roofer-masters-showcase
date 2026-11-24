@@ -34,4 +34,13 @@ describe("team roles", () => {
     for (const r of ["office", "sales", "production_manager", "crew", "accounting"])
       for (const s of ["team", "content", "instant"]) expect(canOpen([r], s)).toBe(false);
   });
+  it("fails closed for unknown navigation sections", () => {
+    expect(canOpen(["office"], "company-settings")).toBe(false);
+    expect(canOpen(["crew"], "billing")).toBe(false);
+  });
+  it("does not combine unrelated roles into owner privileges", () => {
+    expect(canOpen(["office", "crew"], "financials")).toBe(false);
+    expect(seesMoney(["office", "crew"])).toBe(false);
+    expect(canOpen(["sales", "accounting"], "invoices")).toBe(true);
+  });
 });
