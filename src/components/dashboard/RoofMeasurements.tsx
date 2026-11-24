@@ -30,6 +30,7 @@ import {
   measureDrawing,
   toMaterialReport,
   distance,
+  addressPinPosition,
   EDGE_TYPES,
   suggestSharedEdgeClassifications,
   type RoofDrawing,
@@ -160,6 +161,21 @@ export function RoofMeasurements({
       );
     });
   const [aerialImageUrl, setAerialImageUrl] = useState("");
+  const aerialGroundImage = media.find(
+    (item) =>
+      item.category === "aerial" &&
+      item.source === "USGS National Map NAIP imagery" &&
+      Number.isFinite(item.latitude) &&
+      Number.isFinite(item.longitude),
+  );
+  const aerialImageCenter = aerialGroundImage && d.geo_reference
+    ? addressPinPosition({
+        addressLatitude: aerialGroundImage.latitude!,
+        addressLongitude: aerialGroundImage.longitude!,
+        originLatitude: d.geo_reference.originLatitude,
+        originLongitude: d.geo_reference.originLongitude,
+      })
+    : null;
   useEffect(() => {
     const aerial = media.find((item) => item.category === "aerial");
     if (!aerial) {
@@ -959,7 +975,8 @@ export function RoofMeasurements({
               >
                 <Scene
                   drawing={d}
-                  aerialImageUrl={aerialImageUrl}
+                  aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
+                  aerialImageCenter={aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined}
                   selected={selected}
                   onSelect={setSelected}
                   view={view}
