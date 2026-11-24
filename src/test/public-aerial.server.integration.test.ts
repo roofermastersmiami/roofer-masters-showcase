@@ -68,6 +68,7 @@ describe("Census-to-USGS aerial server integration", () => {
     expect(censusUrl.searchParams.get("address")).toBe(ADDRESS);
     expect(censusUrl.searchParams.get("benchmark")).toBe("Public_AR_Current");
     expect(censusUrl.searchParams.get("format")).toBe("json");
+    expect(censusCall[1]?.headers).toMatchObject({ Accept: "application/json" });
 
     const imageryUrl = new URL(String(imageryCall[0]));
     expect(imageryUrl.hostname).toBe("imagery.nationalmap.gov");
