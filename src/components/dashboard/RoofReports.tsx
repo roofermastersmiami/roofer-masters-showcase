@@ -67,6 +67,7 @@ export function RoofReports({
 
   const query = search.trim().toLocaleLowerCase();
   const rows = (orders.data ?? []).filter((row) => {
+    if (!row.file_path) return false;
     const customerName =
       customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "";
     return `${customerName} ${row.address} ${row.title}`.toLocaleLowerCase().includes(query);
