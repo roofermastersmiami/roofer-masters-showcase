@@ -1195,7 +1195,14 @@ export function RoofMeasurements({
             </div>
           )}
         </div>
-        {footprintMessage && <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm" role="status">{footprintMessage}</p>}
+        {footprintMessage && (
+          <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm" role="status">
+            {footprintMessage}{" "}
+            <a className="underline underline-offset-4" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+              OpenStreetMap attribution and license
+            </a>
+          </p>
+        )}
         {footprints.length > 0 && (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {footprints.map((footprint) => (
@@ -1229,6 +1236,14 @@ export function RoofMeasurements({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {footprint.points.length} outline corners · OSM building type: {footprint.buildingType}
                 </p>
+                <a
+                  className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
+                  href={`https://www.openstreetmap.org/way/${footprint.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Inspect source outline on OpenStreetMap
+                </a>
               </div>
             ))}
           </div>
