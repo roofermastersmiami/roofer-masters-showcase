@@ -150,7 +150,6 @@ export async function fetchPublicAerial(
     bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return {
     image: `data:image/png;base64,${btoa(bin)}`,
-    feetPerPixel: box.feetPerPixel,
     matchedAddress: match.matchedAddress,
     lat,
     lon,

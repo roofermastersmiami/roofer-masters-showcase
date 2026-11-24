@@ -403,7 +403,6 @@ export function RoofMeasurements({
           path,
           name: `Public aerial · ${r.matchedAddress}`.slice(0, 200),
           category: "aerial" as const,
-          feet_per_pixel: r.feetPerPixel,
           source: "USGS National Map NAIP imagery",
           matched_address: r.matchedAddress,
           latitude: r.lat,
@@ -415,9 +414,9 @@ export function RoofMeasurements({
       setD({ ...d, accuracy: "photo_estimate", image_credit: r.credit, verified: false });
       setDirty(true);
       setAerialStatus(
-        `Aerial image ready for ${r.matchedAddress}. Trace and review the roof before using measurements.`,
+        `Aerial image ready for ${r.matchedAddress}. This resampled public image has no dependable pixel-level measurement scale. Calibrate against a known distance before tracing; review all measurements on site.`,
       );
-      toast.success("Free public aerial loaded; trace the roof (estimate only)");
+      toast.success("Free public aerial loaded; calibrate a known distance before tracing");
     } catch (e) {
       const message =
         stage === "upload" && e instanceof Error ? e.message : aerialInvocationError(e);
