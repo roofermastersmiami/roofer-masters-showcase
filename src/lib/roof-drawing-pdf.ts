@@ -582,13 +582,10 @@ export async function roofDrawingPdf(
     m.area * 1.15,
     m.area * 1.2,
   ];
-  if (suggestedWastePct === null) {
-    wasteValues[3] = null;
-  }
   const wasteRow = wasteValues.map((area) =>
     area === null ? "Manual review" : `${area.toFixed(0)} SF`,
   );
-  if (suggestedWastePct !== null) wasteRow[3] = `${suggestedWastePct.toFixed(1)}% / ${wasteValues[3]!.toFixed(0)} SF`;
+  if (suggestedWastePct !== null) wasteRow[3] = `${suggestedWastePct.toFixed(1)}% / ${(m.area + suggestedExtraSqFt).toFixed(0)} SF`;
   page.drawRectangle({ x: MARGIN, y: y - 5, width: PAGE_W - MARGIN * 2, height: 20, color: LIGHT });
   wasteRow.forEach((value, index) => {
     let output = value;
