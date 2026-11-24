@@ -36,11 +36,14 @@ describe("material orders from roof report", () => {
   it("drip edge from eaves + rakes", () => {
     expect(q(materialOrder({ ...base, ...metal }), "Drip edge")).toBe(22);
   });
-  it("metal: panels = eave length / 16in coverage plus waste", () => {
-    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Metal panels")).toBe(100);
+  it("metal: panel count is calculated from each measured plane and product coverage", () => {
+    expect(q(materialOrder({ ...base, ...metal }), "measured plane cut list")).toBe(100);
   });
-  it("valleys: metal valley flashing in 10 ft pieces", () => {
-    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Valley flashing")).toBe(3);
+  it("metal: measured valley flashing uses the shared takeoff calculator", () => {
+    expect(q(materialOrder({ ...base, ...metal }), "Valley")).toBe(4);
+  });
+  it("metal: refuses to create a cut list without plane runs and product data", () => {
+    expect(() => materialOrder({ ...base, roof_type: "Metal Roof" })).toThrow(/measured eave-to-ridge/);
   });
   it("TPO includes insulation boards", () => {
     expect(q(materialOrder({ ...base, roof_type: "TPO" }), "Insulation")).toBe(69);
