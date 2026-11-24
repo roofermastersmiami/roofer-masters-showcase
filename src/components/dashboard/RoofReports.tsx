@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { createRoofOrder } from "@/lib/roof-orders.functions";
 import { roofOrderSchema } from "@/lib/roof-order-schema";
-import { customersQuery, propertiesQuery } from "./foundation-data";
+import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
@@ -29,7 +29,6 @@ export function RoofReports({
   initialAddress?: string;
 }) {
   const customers = useQuery(customersQuery),
-    properties = useQuery(propertiesQuery),
     orders = useQuery(roofOrdersQuery),
     drawings = useQuery(drawingsQuery),
     qc = useQueryClient();
@@ -40,7 +39,6 @@ export function RoofReports({
     [search, setSearch] = useState(""),
     [legacy, setLegacy] = useState(false);
   const [form, setForm] = useState({
-    customer_id: initialCustomer,
     address: initialAddress,
     title: "Roof measurement report",
     provider: "manual" as const,
@@ -50,7 +48,7 @@ export function RoofReports({
   async function submit() {
     const parsed = roofOrderSchema.safeParse(form);
     if (!parsed.success) {
-      toast.error("Select a customer and enter their complete property address");
+      toast.error("Enter the complete property address");
       return;
     }
     setBusy(true);
@@ -189,22 +187,6 @@ export function RoofReports({
               void submit();
             }}
           >
-            <Choice
-              label="Customer"
-              value={form.customer_id || "none"}
-              onChange={(v) => {
-                const id = v === "none" ? "" : v;
-                setForm({
-                  ...form,
-                  customer_id: id,
-                  address: properties.data?.find((p) => p.customer_id === id)?.address ?? "",
-                });
-              }}
-              options={[
-                { value: "none", label: "Choose customer" },
-                ...(customers.data ?? []).map((c) => ({ value: c.id, label: c.name })),
-              ]}
-            />
             <Field label="Customer property address">
               <Input
                 required
@@ -230,7 +212,7 @@ export function RoofReports({
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </Field>
-            <Button disabled={busy || !form.customer_id} type="submit">
+            <Button disabled={busy || form.address.trim().length < 8} type="submit">
               <Plus /> {busy ? "Creating…" : "Create my roof report"}
             </Button>
           </form>
