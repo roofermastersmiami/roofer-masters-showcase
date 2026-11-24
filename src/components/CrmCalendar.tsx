@@ -1,6 +1,27 @@
 import { useMemo, useState } from "react";
-import { addDays, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subWeeks } from "date-fns";
-import { ArrowLeft, ArrowRight, CalendarDays, ExternalLink, Pencil, Phone, Mail, MapPin } from "lucide-react";
+import {
+  addDays,
+  addWeeks,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+  subWeeks,
+} from "date-fns";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  ExternalLink,
+  Pencil,
+  Phone,
+  Mail,
+  MapPin,
+} from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +36,14 @@ import {
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type Appointment = {
   id: string;
@@ -54,8 +82,18 @@ export function CrmCalendar({
   const [editNotes, setEditNotes] = useState("");
   const [savingAppointment, setSavingAppointment] = useState(false);
   const qc = useQueryClient();
-  const from = mode === "month" ? startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }) : mode === "week" ? startOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
-  const to = mode === "month" ? endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 }) : mode === "week" ? endOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
+  const from =
+    mode === "month"
+      ? startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 })
+      : mode === "week"
+        ? startOfWeek(anchor, { weekStartsOn: 1 })
+        : anchor;
+  const to =
+    mode === "month"
+      ? endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 })
+      : mode === "week"
+        ? endOfWeek(anchor, { weekStartsOn: 1 })
+        : anchor;
   const db = supabase as any;
   const {
     data: appointments = [],
@@ -80,7 +118,9 @@ export function CrmCalendar({
         ? [anchor]
         : mode === "month"
           ? eachDayOfInterval({ start: from, end: to })
-          : Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor, { weekStartsOn: 1 }), i)),
+          : Array.from({ length: 7 }, (_, i) =>
+              addDays(startOfWeek(anchor, { weekStartsOn: 1 }), i),
+            ),
     [anchor, mode, from, to],
   );
   const openAppointment = (appointment: Appointment) => {
@@ -91,19 +131,30 @@ export function CrmCalendar({
   const saveAppointment = async () => {
     if (!selectedAppointment || !editStart) return;
     const start = new Date(editStart);
-    if (Number.isNaN(start.getTime()) || start.getMinutes() !== 0 || start.getTime() <= Date.now()) {
+    if (
+      Number.isNaN(start.getTime()) ||
+      start.getMinutes() !== 0 ||
+      start.getTime() <= Date.now()
+    ) {
       toast.error("Choose a future appointment time on the hour");
       return;
     }
     setSavingAppointment(true);
-    const { error } = await db.from("appointments").update({
-      start_time: start.toISOString(),
-      end_time: new Date(start.getTime() + 3600000).toISOString(),
-      notes: editNotes.trim(),
-    }).eq("id", selectedAppointment.id);
+    const { error } = await db
+      .from("appointments")
+      .update({
+        start_time: start.toISOString(),
+        end_time: new Date(start.getTime() + 3600000).toISOString(),
+        notes: editNotes.trim(),
+      })
+      .eq("id", selectedAppointment.id);
     setSavingAppointment(false);
     if (error) {
-      toast.error(error.message?.toLowerCase().includes("overlap") ? "That time conflicts with another appointment" : "Could not save changes. Check business hours and availability.");
+      toast.error(
+        error.message?.toLowerCase().includes("overlap")
+          ? "That time conflicts with another appointment"
+          : "Could not save changes. Check business hours and availability.",
+      );
       return;
     }
     toast.success("Appointment updated");
@@ -119,7 +170,7 @@ export function CrmCalendar({
       return;
     }
     toast.success(`Appointment marked ${status.toLowerCase()}`);
-    setSelectedAppointment((current) => current?.id === id ? { ...current, status } : current);
+    setSelectedAppointment((current) => (current?.id === id ? { ...current, status } : current));
     await qc.invalidateQueries({ queryKey: ["crm-appointments"] });
   };
   const openReport = async (appointment: Appointment) => {
@@ -162,7 +213,15 @@ export function CrmCalendar({
             variant="outline"
             size="icon"
             aria-label="Previous period"
-            onClick={() => setAnchor(mode === "month" ? new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1) : mode === "week" ? subWeeks(anchor, 1) : addDays(anchor, -1))}
+            onClick={() =>
+              setAnchor(
+                mode === "month"
+                  ? new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1)
+                  : mode === "week"
+                    ? subWeeks(anchor, 1)
+                    : addDays(anchor, -1),
+              )
+            }
           >
             <ArrowLeft className="size-4" />
           </Button>
@@ -173,11 +232,22 @@ export function CrmCalendar({
             variant="outline"
             size="icon"
             aria-label="Next period"
-            onClick={() => setAnchor(mode === "month" ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1) : mode === "week" ? addWeeks(anchor, 1) : addDays(anchor, 1))}
+            onClick={() =>
+              setAnchor(
+                mode === "month"
+                  ? new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1)
+                  : mode === "week"
+                    ? addWeeks(anchor, 1)
+                    : addDays(anchor, 1),
+              )
+            }
           >
             <ArrowRight className="size-4" />
           </Button>
-          <Select value={mode} onValueChange={(value) => setMode(value as "month" | "week" | "day")}>
+          <Select
+            value={mode}
+            onValueChange={(value) => setMode(value as "month" | "week" | "day")}
+          >
             <SelectTrigger className="w-28">
               <SelectValue />
             </SelectTrigger>
@@ -190,7 +260,9 @@ export function CrmCalendar({
         </div>
       </div>
       <p className="text-sm font-medium">
-        {mode === "month" ? format(anchor, "MMMM yyyy") : `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`}
+        {mode === "month"
+          ? format(anchor, "MMMM yyyy")
+          : `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`}
       </p>
       <div className="flex flex-wrap gap-2 text-xs">
         {Object.entries(serviceColors).map(([service, color]) => (
@@ -210,25 +282,65 @@ export function CrmCalendar({
         <div className="overflow-hidden rounded-xl border">
           <div className="grid grid-cols-7 border-b bg-muted/40">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
-              <div key={label} className="p-2 text-center text-xs font-semibold text-muted-foreground">{label}</div>
+              <div
+                key={label}
+                className="p-2 text-center text-xs font-semibold text-muted-foreground"
+              >
+                {label}
+              </div>
             ))}
           </div>
           <div className="grid grid-cols-7">
             {days.map((day) => {
-              const matches = appointments.filter((appointment) => isSameDay(new Date(appointment.start_time), day));
+              const matches = appointments.filter((appointment) =>
+                isSameDay(new Date(appointment.start_time), day),
+              );
               return (
-                <div key={day.toISOString()} className={cn("min-h-32 border-b border-r p-1.5", !isSameMonth(day, anchor) && "bg-muted/20 text-muted-foreground", isSameDay(day, new Date()) && "bg-primary/5")}>
+                <div
+                  key={day.toISOString()}
+                  className={cn(
+                    "min-h-32 border-b border-r p-1.5",
+                    !isSameMonth(day, anchor) && "bg-muted/20 text-muted-foreground",
+                    isSameDay(day, new Date()) && "bg-primary/5",
+                  )}
+                >
                   <div className="mb-1 flex items-center justify-between">
-                    <span className={cn("text-xs font-semibold", isSameDay(day, new Date()) && "rounded-full bg-primary px-1.5 py-0.5 text-primary-foreground")}>{format(day, "d")}</span>
-                    <span className="text-[10px] text-muted-foreground">{matches.length || ""}</span>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold",
+                        isSameDay(day, new Date()) &&
+                          "rounded-full bg-primary px-1.5 py-0.5 text-primary-foreground",
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {matches.length || ""}
+                    </span>
                   </div>
                   <div className="space-y-1">
                     {matches.slice(0, 3).map((appointment) => (
-                      <button key={appointment.id} type="button" onClick={() => openAppointment(appointment)} className={cn("block w-full truncate rounded border-l-2 px-1.5 py-1 text-left text-[10px] hover:ring-1 hover:ring-primary", serviceColors[appointment.service_type] ?? serviceColors.Other, appointment.status === "Cancelled" && "opacity-50 line-through")}>
-                        <span className="font-semibold">{format(new Date(appointment.start_time), "h:mm a")}</span> {appointment.customer_name}
+                      <button
+                        key={appointment.id}
+                        type="button"
+                        onClick={() => openAppointment(appointment)}
+                        className={cn(
+                          "block w-full truncate rounded border-l-2 px-1.5 py-1 text-left text-[10px] hover:ring-1 hover:ring-primary",
+                          serviceColors[appointment.service_type] ?? serviceColors.Other,
+                          appointment.status === "Cancelled" && "opacity-50 line-through",
+                        )}
+                      >
+                        <span className="font-semibold">
+                          {format(new Date(appointment.start_time), "h:mm a")}
+                        </span>{" "}
+                        {appointment.customer_name}
                       </button>
                     ))}
-                    {matches.length > 3 && <p className="px-1 text-[10px] text-muted-foreground">+{matches.length - 3} more appointments</p>}
+                    {matches.length > 3 && (
+                      <p className="px-1 text-[10px] text-muted-foreground">
+                        +{matches.length - 3} more appointments
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -237,17 +349,32 @@ export function CrmCalendar({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border">
-          <div className={cn("grid min-w-[720px]", mode === "day" ? "grid-cols-[72px_1fr]" : "grid-cols-[64px_repeat(7,minmax(130px,1fr))]")}>
+          <div
+            className={cn(
+              "grid min-w-[720px]",
+              mode === "day"
+                ? "grid-cols-[72px_1fr]"
+                : "grid-cols-[64px_repeat(7,minmax(130px,1fr))]",
+            )}
+          >
             <div className="border-b bg-muted/40 p-2 text-xs text-muted-foreground">Time</div>
             {days.map((day) => (
-              <div key={day.toISOString()} className={cn("border-b border-l bg-muted/40 p-2 text-center", isSameDay(day, new Date()) && "bg-primary/10")}>
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "border-b border-l bg-muted/40 p-2 text-center",
+                  isSameDay(day, new Date()) && "bg-primary/10",
+                )}
+              >
                 <p className="text-xs text-muted-foreground">{format(day, "EEE")}</p>
                 <p className="font-semibold">{format(day, "MMM d")}</p>
               </div>
             ))}
             {hours.map((hour) => (
               <div key={hour} className="contents">
-                <div className="h-24 border-b p-2 text-xs text-muted-foreground">{format(new Date(2026, 0, 1, hour), "h a")}</div>
+                <div className="h-24 border-b p-2 text-xs text-muted-foreground">
+                  {format(new Date(2026, 0, 1, hour), "h a")}
+                </div>
                 {days.map((day) => {
                   const matches = appointments.filter((appointment) => {
                     const start = new Date(appointment.start_time);
@@ -256,22 +383,67 @@ export function CrmCalendar({
                   return (
                     <div key={day.toISOString() + hour} className="min-h-24 border-b border-l p-1">
                       {matches.map((appointment) => (
-                        <article key={appointment.id} className={cn("mb-1 rounded-md border-l-4 p-2 text-xs", serviceColors[appointment.service_type] ?? serviceColors.Other, appointment.status === "Cancelled" && "opacity-50 line-through")}>
-                          <button type="button" className="text-left font-semibold hover:underline" onClick={() => openAppointment(appointment)}>{format(new Date(appointment.start_time), "h:mm a")} · {appointment.customer_name}</button>
+                        <article
+                          key={appointment.id}
+                          className={cn(
+                            "mb-1 rounded-md border-l-4 p-2 text-xs",
+                            serviceColors[appointment.service_type] ?? serviceColors.Other,
+                            appointment.status === "Cancelled" && "opacity-50 line-through",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            className="text-left font-semibold hover:underline"
+                            onClick={() => openAppointment(appointment)}
+                          >
+                            {format(new Date(appointment.start_time), "h:mm a")} ·{" "}
+                            {appointment.customer_name}
+                          </button>
                           <p className="mt-1 line-clamp-2">{appointment.service_type}</p>
-                          <p className="mt-1 line-clamp-2 text-muted-foreground">{appointment.property_address}</p>
-                          <p className="mt-1 text-muted-foreground">{appointment.source === "manual" ? "Manual" : "AI receptionist"} · {appointment.status}</p>
+                          <p className="mt-1 line-clamp-2 text-muted-foreground">
+                            {appointment.property_address}
+                          </p>
+                          <p className="mt-1 text-muted-foreground">
+                            {appointment.source === "manual" ? "Manual" : "AI receptionist"} ·{" "}
+                            {appointment.status}
+                          </p>
                           <div className="mt-2 flex flex-wrap gap-1">
-                            <Select value={appointment.status} onValueChange={(value) => void changeStatus(appointment.id, value as Appointment["status"])} disabled={busyId === appointment.id}>
-                              <SelectTrigger className="h-7 w-28 bg-background text-[11px]"><SelectValue /></SelectTrigger>
+                            <Select
+                              value={appointment.status}
+                              onValueChange={(value) =>
+                                void changeStatus(appointment.id, value as Appointment["status"])
+                              }
+                              disabled={busyId === appointment.id}
+                            >
+                              <SelectTrigger className="h-7 w-28 bg-background text-[11px]">
+                                <SelectValue />
+                              </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="Scheduled">Scheduled</SelectItem>
                                 <SelectItem value="Completed">Completed</SelectItem>
                                 <SelectItem value="Cancelled">Cancelled</SelectItem>
                               </SelectContent>
                             </Select>
-                            <Button size="icon" variant="outline" className="size-7" title="Appointment details" onClick={() => openAppointment(appointment)}><Pencil className="size-3" /></Button>
-                            {onOpenRoofReport && <Button size="icon" variant="outline" className="size-7" title="Open roof report" onClick={() => void openReport(appointment)}><ExternalLink className="size-3" /></Button>}
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="size-7"
+                              title="Appointment details"
+                              onClick={() => openAppointment(appointment)}
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                            {onOpenRoofReport && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="size-7"
+                                title="Open roof report"
+                                onClick={() => void openReport(appointment)}
+                              >
+                                <ExternalLink className="size-3" />
+                              </Button>
+                            )}
                           </div>
                         </article>
                       ))}
@@ -284,13 +456,18 @@ export function CrmCalendar({
         </div>
       )}
 
-      <Dialog open={Boolean(selectedAppointment)} onOpenChange={(open) => !open && setSelectedAppointment(null)}>
+      <Dialog
+        open={Boolean(selectedAppointment)}
+        onOpenChange={(open) => !open && setSelectedAppointment(null)}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           {selectedAppointment && (
             <>
               <DialogHeader>
                 <DialogTitle>Appointment details</DialogTitle>
-                <DialogDescription>Review customer information, update notes, or reschedule this one-hour visit.</DialogDescription>
+                <DialogDescription>
+                  Review customer information, update notes, or reschedule this one-hour visit.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 text-sm">
                 <div>
@@ -298,29 +475,110 @@ export function CrmCalendar({
                   <p className="text-muted-foreground">{selectedAppointment.service_type}</p>
                 </div>
                 <div className="grid gap-2 rounded-lg bg-muted/40 p-3">
-                  <a className="flex items-center gap-2 hover:underline" href={"tel:" + selectedAppointment.customer_phone}><Phone className="size-4" />{selectedAppointment.customer_phone}</a>
-                  {selectedAppointment.customer_email && <a className="flex items-center gap-2 break-all hover:underline" href={"mailto:" + selectedAppointment.customer_email}><Mail className="size-4" />{selectedAppointment.customer_email}</a>}
-                  <p className="flex items-start gap-2"><MapPin className="mt-0.5 size-4 shrink-0" />{selectedAppointment.property_address}</p>
-                  <p className="text-xs text-muted-foreground">Booked by {selectedAppointment.source === "manual" ? "office staff" : selectedAppointment.source.replaceAll("_", " ")} · {selectedAppointment.status}</p>
+                  <a
+                    className="flex items-center gap-2 hover:underline"
+                    href={"tel:" + selectedAppointment.customer_phone}
+                  >
+                    <Phone className="size-4" />
+                    {selectedAppointment.customer_phone}
+                  </a>
+                  {selectedAppointment.customer_email && (
+                    <a
+                      className="flex items-center gap-2 break-all hover:underline"
+                      href={"mailto:" + selectedAppointment.customer_email}
+                    >
+                      <Mail className="size-4" />
+                      {selectedAppointment.customer_email}
+                    </a>
+                  )}
+                  <p className="flex items-start gap-2">
+                    <MapPin className="mt-0.5 size-4 shrink-0" />
+                    {selectedAppointment.property_address}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Booked by{" "}
+                    {selectedAppointment.source === "manual"
+                      ? "office staff"
+                      : selectedAppointment.source.replaceAll("_", " ")}{" "}
+                    · {selectedAppointment.status}
+                  </p>
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor="appointment-start" className="text-sm font-medium">Reschedule date and time</label>
-                  <Input id="appointment-start" type="datetime-local" step={3600} value={editStart} onChange={(event) => setEditStart(event.target.value)} />
-                  <p className="text-xs text-muted-foreground">One-hour appointments, Monday–Saturday, 8 AM–6 PM Eastern. Time is entered using this device's local timezone.</p>
+                  <label htmlFor="appointment-start" className="text-sm font-medium">
+                    Reschedule date and time
+                  </label>
+                  <Input
+                    id="appointment-start"
+                    type="datetime-local"
+                    step={3600}
+                    value={editStart}
+                    onChange={(event) => setEditStart(event.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    One-hour appointments, Monday–Saturday, 8 AM–6 PM Eastern. Time is entered using
+                    this device's local timezone.
+                  </p>
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor="appointment-notes" className="text-sm font-medium">Appointment notes</label>
-                  <Textarea id="appointment-notes" rows={3} value={editNotes} onChange={(event) => setEditNotes(event.target.value)} placeholder="Access instructions, customer requests, or job details…" />
+                  <label htmlFor="appointment-notes" className="text-sm font-medium">
+                    Appointment notes
+                  </label>
+                  <Textarea
+                    id="appointment-notes"
+                    rows={3}
+                    value={editNotes}
+                    onChange={(event) => setEditNotes(event.target.value)}
+                    placeholder="Access instructions, customer requests, or job details…"
+                  />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" disabled={busyId === selectedAppointment.id} onClick={() => void changeStatus(selectedAppointment.id, "Scheduled")}>Mark scheduled</Button>
-                  <Button type="button" size="sm" variant="outline" disabled={busyId === selectedAppointment.id} onClick={() => void changeStatus(selectedAppointment.id, "Completed")}>Mark completed</Button>
-                  <Button type="button" size="sm" variant="outline" disabled={busyId === selectedAppointment.id} onClick={() => void changeStatus(selectedAppointment.id, "Cancelled")}>Cancel appointment</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyId === selectedAppointment.id}
+                    onClick={() => void changeStatus(selectedAppointment.id, "Scheduled")}
+                  >
+                    Mark scheduled
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyId === selectedAppointment.id}
+                    onClick={() => void changeStatus(selectedAppointment.id, "Completed")}
+                  >
+                    Mark completed
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyId === selectedAppointment.id}
+                    onClick={() => void changeStatus(selectedAppointment.id, "Cancelled")}
+                  >
+                    Cancel appointment
+                  </Button>
                 </div>
               </div>
               <DialogFooter className="gap-2">
-                {onOpenRoofReport && <Button type="button" variant="outline" onClick={() => void openReport(selectedAppointment)}><ExternalLink className="mr-2 size-4" />Open roof report</Button>}
-                <Button type="button" onClick={() => void saveAppointment()} disabled={savingAppointment}>{savingAppointment ? "Saving…" : "Save changes"}</Button>
+                {onOpenRoofReport && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void openReport(selectedAppointment)}
+                  >
+                    <ExternalLink className="mr-2 size-4" />
+                    Open roof report
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => void saveAppointment()}
+                  disabled={savingAppointment}
+                >
+                  {savingAppointment ? "Saving…" : "Save changes"}
+                </Button>
               </DialogFooter>
             </>
           )}

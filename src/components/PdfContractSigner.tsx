@@ -644,15 +644,13 @@ export function PdfContractSigner({
         value: "",
         imageData: undefined,
       }));
-      const { error: insertError } = await supabase
-        .from("pdf_sign_templates")
-        .insert({
-          id,
-          name,
-          file_path: path,
-          fields: templateFields as unknown as import("@/integrations/supabase/types").Json,
-          created_by: userResult.user.id,
-        });
+      const { error: insertError } = await supabase.from("pdf_sign_templates").insert({
+        id,
+        name,
+        file_path: path,
+        fields: templateFields as unknown as import("@/integrations/supabase/types").Json,
+        created_by: userResult.user.id,
+      });
       if (insertError) {
         await supabase.storage.from("roofing-proposals").remove([path]);
         throw insertError;
