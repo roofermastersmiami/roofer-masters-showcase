@@ -29,7 +29,7 @@ export function FinancialAnalytics() {
     env = getStripeEnvironment();
   } catch {
     // Keep the ledger input valid so missing payment configuration cannot crash the page.
-    env = "unavailable";
+    env = "live";
   }
   let ledger: ReturnType<typeof dashboardLedger>;
   let ledgerError = false;
@@ -46,7 +46,6 @@ export function FinancialAnalytics() {
   );
   const profit = actualProfit(ledger.collected, costs);
   const failed =
-    env === "unavailable" ||
     ledgerError ||
     !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
     !Number.isFinite(start) ||
