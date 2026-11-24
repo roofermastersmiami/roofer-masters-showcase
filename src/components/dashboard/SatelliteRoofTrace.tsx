@@ -165,13 +165,35 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={zoom <= 0.5} onClick={() => setZoom((value) => Math.max(0.5, Number((value / 1.5).toFixed(3))))} aria-label="Zoom out">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={zoom <= 0.5}
+                onClick={() => setZoom((value) => Math.max(0.5, Number((value / 1.5).toFixed(3))))}
+                aria-label="Zoom out"
+              >
                 <Minus className="h-4 w-4" /> Zoom out
               </Button>
-              <Button type="button" variant="outline" size="sm" disabled={zoom >= 8} onClick={() => setZoom((value) => Math.min(8, Number((value * 1.5).toFixed(3))))} aria-label="Zoom in">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={zoom >= 8}
+                onClick={() => setZoom((value) => Math.min(8, Number((value * 1.5).toFixed(3))))}
+                aria-label="Zoom in"
+              >
                 <Plus className="h-4 w-4" /> Zoom in
               </Button>
-              <Button type="button" variant="ghost" size="sm" disabled={zoom === 1} onClick={() => setZoom(1)}>Reset zoom</Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={zoom === 1}
+                onClick={() => setZoom(1)}
+              >
+                Reset zoom
+              </Button>
             </div>
           </div>
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
