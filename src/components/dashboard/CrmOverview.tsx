@@ -11,6 +11,8 @@ import {
   CalendarDays,
   SlidersHorizontal,
   GripVertical,
+  ArrowUp,
+  ArrowDown,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -152,6 +154,14 @@ export function CrmOverview() {
     { label: "New leads", value: String(selectedLeads.length), icon: Users, section: "pipeline", note: `${selectedLeads.length ? Math.round((converted.length / selectedLeads.length) * 100) : 0}% lead conversion` },
   ].sort((a, b) => { const ai = cardOrder.indexOf(a.label), bi = cardOrder.indexOf(b.label); return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi); });
   const moveCard = (from: string, to: string) => { const next = [...cardOrder], i = next.indexOf(from), j = next.indexOf(to); if (i < 0 || j < 0) return; next.splice(i, 1); next.splice(j, 0, from); setCardOrder(next); };
+  const moveCardBy = (label: string, offset: number) => {
+    const current = metricCards.map((card) => card.label).filter((name) => !hiddenCards.includes(name));
+    const index = current.indexOf(label), target = index + offset;
+    if (index < 0 || target < 0 || target >= current.length) return;
+    const next = [...current];
+    [next[index], next[target]] = [next[target], next[index]];
+    setCardOrder(next);
+  };
   return (
     <div>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -231,7 +241,7 @@ export function CrmOverview() {
         {metricCards.filter((card) => !hiddenCards.includes(card.label)).map((card) => (
           <article key={card.label} draggable onDragStart={() => setDraggedCard(card.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== card.label) moveCard(draggedCard, card.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)}
             className={`cursor-grab rounded-lg ${cardStyle === "outlined" ? "border border-border bg-card" : cardStyle === "soft" ? "border border-transparent bg-muted/70" : "border border-border bg-card shadow-lg"} ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === card.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
-            <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{card.label}</span><span className="flex items-center gap-2"><GripVertical className="size-4 text-muted-foreground" /><card.icon className="size-5" style={{ color: accent }} /></span></div>
+            <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{card.label}</span><span className="flex items-center gap-1"><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${card.label} earlier`} title={`Move ${card.label} earlier`} disabled={metricCards.filter((item) => !hiddenCards.includes(item.label)).findIndex((item) => item.label === card.label) === 0} onClick={() => moveCardBy(card.label, -1)}><ArrowUp className="size-3.5" /></Button><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${card.label} later`} title={`Move ${card.label} later`} disabled={metricCards.filter((item) => !hiddenCards.includes(item.label)).findIndex((item) => item.label === card.label) === metricCards.filter((item) => !hiddenCards.includes(item.label)).length - 1} onClick={() => moveCardBy(card.label, 1)}><ArrowDown className="size-3.5" /></Button><GripVertical className="size-4 text-muted-foreground" aria-hidden="true" /><card.icon className="size-5" style={{ color: accent }} /></span></div>
             <p className="mt-4 break-words text-3xl font-bold">{card.value}</p>
             <div className="mt-4 flex items-center justify-between"><span className="text-xs text-muted-foreground">{card.note}</span><Button size="icon" variant="ghost" title={`View ${card.label.toLowerCase()}`} aria-label={`View ${card.label.toLowerCase()}`} onClick={() => go(card.section)}><ArrowUpRight className="size-4" /></Button></div>
           </article>
