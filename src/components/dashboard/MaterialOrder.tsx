@@ -49,7 +49,7 @@ export function MaterialOrder({
       : {
           roof_type: "Shingle Roof",
           area_sqft: 0,
-          waste_pct: 10,
+          waste_pct: undefined,
           ridge_lf: 0,
           hips_lf: 0,
           valleys_lf: 0,
