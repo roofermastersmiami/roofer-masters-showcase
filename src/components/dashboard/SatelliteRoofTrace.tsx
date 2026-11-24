@@ -504,6 +504,9 @@ export function SatelliteRoofTrace({
       suppressNextMapClick.current = false;
       return;
     }
+    // Pan mode is navigation-only: a stationary click must never create a
+    // roof vertex or move the explicitly placed house target.
+    if (panMode) return;
     const point = tracePointFromPointer(
       event.clientX,
       event.clientY,
