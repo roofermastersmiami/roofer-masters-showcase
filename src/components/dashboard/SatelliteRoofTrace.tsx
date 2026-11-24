@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { planeInfo, type RoofPlane, type Point, type GeoReference } from "@/lib/roof-geometry";
+import { planeInfo, type RoofPlane, type Point, type GeoReference, type EdgeType } from "@/lib/roof-geometry";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type PitchDirection = "north" | "south" | "east" | "west";
@@ -95,8 +95,8 @@ export function nearestBuildingFootprint(
   return candidates[0]?.ring ?? null;
 }
 
-const MAP_WIDTH = 1024;
-const MAP_HEIGHT = 640;
+const MAP_WIDTH = 2048;
+const MAP_HEIGHT = 1280;
 const TILE_SPAN = 0.0015;
 const METERS_TO_FEET = 1 / 0.3048;
 
@@ -362,11 +362,17 @@ export function SatelliteRoofTrace({
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
+  const [drawingMode, setDrawingMode] = useState<"outline" | "diy">("outline");
+  const [planeName, setPlaneName] = useState("Roof plane 1");
+  const [edgeTypes, setEdgeTypes] = useState<EdgeType[]>([]);
   const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
+  const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
+  const [mapViewportElement, setMapViewportElement] = useState<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
@@ -391,8 +397,23 @@ export function SatelliteRoofTrace({
         : null,
     [mapCenter, zoom],
   );
+  useEffect(() => {
+    const viewport = mapViewportElement;
+    if (!viewport) return;
+    // Native non-passive listener is required: browsers may otherwise scroll
+    // the document instead of allowing the map to consume the wheel gesture.
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (Math.abs(event.deltaY) < 1) return;
+      setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
+    };
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", handleWheel);
+  }, [mapViewportElement]);
+
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
     : "";
 
   useEffect(() => {
@@ -505,6 +526,7 @@ export function SatelliteRoofTrace({
     if (point) {
       setAutoTraced(false);
       setPoints((current) => [...current, point]);
+      setEdgeTypes((current) => [...current, "other"]);
     }
   }
   async function autoTraceBuildingFootprint() {
@@ -780,12 +802,62 @@ export function SatelliteRoofTrace({
               </div>
             </div>
           </div>
-          <div className="overflow-hidden rounded-lg border border-border bg-muted">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3">
+            <div className="mr-auto">
+              <h4 className="font-semibold">Roof drawing method</h4>
+              <p className="text-xs text-muted-foreground">Choose automatic building-outline lookup or draw and classify each roof plane yourself.</p>
+            </div>
+            <Button type="button" size="sm" variant={drawingMode === "outline" ? "default" : "outline"} onClick={() => setDrawingMode("outline")}>Building outline</Button>
+            <Button type="button" size="sm" variant={drawingMode === "diy" ? "default" : "outline"} onClick={() => { setDrawingMode("diy"); setError(""); }}>Draw-It-Yourself</Button>
+          </div>
+          {drawingMode === "diy" && (
+            <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
+              <h4 className="font-semibold">Draw-It-Yourself roof measurement</h4>
+              <p className="text-sm text-muted-foreground">Tap the satellite image to place corners in order around one roof plane. Repeat for every plane. Enter the pitch and classify each boundary edge to build a detailed takeoff. Your entries remain user-drawn measurements until field verified.</p>
+              <label className="block text-sm">Plane name
+                <Input value={planeName} onChange={(e) => setPlaneName(e.target.value)} placeholder="e.g. Front main slope" className="mt-1 max-w-sm" />
+              </label>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
+            <span className="mr-auto text-sm font-medium">Map interaction</span>
+            <Button type="button" size="sm" variant={mapInteraction === "draw" ? "default" : "outline"} onClick={() => setMapInteraction("draw")}>
+              <MousePointer2 className="h-4 w-4" /> Draw roof
+            </Button>
+            <Button type="button" size="sm" variant={mapInteraction === "pan" ? "default" : "outline"} onClick={() => setMapInteraction("pan")}>
+              <ArrowLeft className="h-4 w-4" /> Move map
+            </Button>
+            <span className="text-xs text-muted-foreground">{mapInteraction === "pan" ? "Drag the map to move around; use wheel or pinch to zoom." : "Click roof corners to add tracing points."}</span>
+          </div>
+          <div ref={setMapViewportElement} className="overflow-hidden rounded-lg border border-border bg-muted overscroll-contain" style={{ touchAction: "none" }}>
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className="block aspect-[8/5] w-full cursor-crosshair touch-none"
-              onClick={addMapPoint}
+              className={`block aspect-[8/5] w-full touch-none ${mapInteraction === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
+              onClick={(event) => {
+                if (mapInteraction === "pan") return;
+                addMapPoint(event);
+              }}
+              onPointerDown={(event) => {
+                if (mapInteraction !== "pan" || !mapCenter) return;
+                event.preventDefault();
+                mapPanStart.current = { x: event.clientX, y: event.clientY, center: mapCenter };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
               onPointerMove={(event) => {
+                if (mapPanStart.current) {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) {
+                    const dx = event.clientX - mapPanStart.current.x;
+                    const dy = event.clientY - mapPanStart.current.y;
+                    const longitudeSpan = (bounds.east - bounds.west);
+                    const latitudeSpan = (bounds.north - bounds.south);
+                    setMapCenter({
+                      lon: mapPanStart.current.center.lon - (dx / rect.width) * longitudeSpan,
+                      lat: mapPanStart.current.center.lat + (dy / rect.height) * latitudeSpan,
+                    });
+                  }
+                  return;
+                }
                 const index = draggingPoint.current;
                 if (index === null) return;
                 const point = tracePointFromPointer(
@@ -797,12 +869,14 @@ export function SatelliteRoofTrace({
                   setPoints((current) => current.map((item, i) => (i === index ? point : item)));
               }}
               onPointerUp={() => {
+                mapPanStart.current = null;
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
                   suppressNextMapClick.current = true;
                 }
               }}
               onPointerCancel={() => {
+                mapPanStart.current = null;
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
               }}
@@ -832,10 +906,6 @@ export function SatelliteRoofTrace({
               }}
               onTouchEnd={(event) => {
                 if (event.touches.length < 2) pinchStartDistance.current = null;
-              }}
-              onWheel={(event) => {
-                event.preventDefault();
-                setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
               }}
               onDoubleClick={(event) => {
                 event.preventDefault();
@@ -946,6 +1016,31 @@ export function SatelliteRoofTrace({
               </text>
             </svg>
           </div>
+          {drawingMode === "diy" && points.length >= 2 && (
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <h4 className="font-semibold">Classify plane boundary edges</h4>
+              <p className="text-xs text-muted-foreground">Edge 1 joins corner 1 to corner 2. The final edge closes the plane from the last corner to corner 1. Shared internal edges should receive the same classification on adjacent planes.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {points.map((_, index) => {
+                  const next = (index + 1) % points.length;
+                  const edgeLabels: Record<EdgeType, string> = { eave: "Eave", rake: "Rake", ridge: "Ridge", hip: "Hip", valley: "Valley", other: "Other / unclassified" };
+                  return (
+                    <label key={index} className="flex items-center justify-between gap-2 text-sm">
+                      <span>Edge {index + 1} ({index + 1} → {next + 1})</span>
+                      <select
+                        value={edgeTypes[index] ?? "other"}
+                        onChange={(event) => setEdgeTypes((current) => current.map((value, edgeIndex) => edgeIndex === index ? event.target.value as EdgeType : value))}
+                        className="h-9 rounded-md border border-input bg-background px-2"
+                        aria-label={`Classify edge ${index + 1}`}
+                      >
+                        {Object.entries(edgeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm">
               Roof pitch (rise / 12)
@@ -978,6 +1073,7 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setAutoTraced(false);
                 setPoints((current) => current.slice(0, -1));
+                setEdgeTypes((current) => current.slice(0, -1));
               }}
               disabled={!points.length}
             >
@@ -989,6 +1085,7 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setAutoTraced(false);
                 setPoints([]);
+                setEdgeTypes([]);
               }}
               disabled={!points.length}
             >
@@ -1000,11 +1097,23 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
+                  const drawnPlane = satelliteTraceToPlane(points, Number(pitch), pitchDirection);
+                  const namedPlane: RoofPlane = {
+                    ...drawnPlane,
+                    name: drawingMode === "diy" ? (planeName.trim() || `Roof plane ${Date.now()}`) : drawnPlane.name,
+                    edges: drawingMode === "diy" && edgeTypes.length === points.length
+                      ? edgeTypes
+                      : drawnPlane.edges,
+                  };
                   const accepted = onAdd(
-                    [satelliteTraceToPlane(points, Number(pitch), pitchDirection)],
+                    [namedPlane],
                     traceGeoReference(points, center!),
                   );
-                  if (accepted !== false) setPoints([]);
+                  if (accepted !== false) {
+                    setPoints([]);
+                    setEdgeTypes([]);
+                    if (drawingMode === "diy") setPlaneName(`Roof plane ${Date.now()}`);
+                  }
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
                 } finally {
@@ -1012,7 +1121,7 @@ export function SatelliteRoofTrace({
                 }
               }}
             >
-              <MapPin className="h-4 w-4" /> Add traced plane
+              <MapPin className="h-4 w-4" /> {drawingMode === "diy" ? "Add DIY roof plane" : "Add traced plane"}
             </Button>
           </div>
 
@@ -1107,7 +1216,7 @@ export function SatelliteRoofTrace({
           )}
           <p className="text-xs text-muted-foreground">
             Imagery: Esri World Imagery. Building footprints and address lookup: OpenStreetMap.
-            Click corners in order around one roof plane.
+            DIY mode: draw each roof plane separately and classify every edge; the software calculates its dimensions and area from the traced geometry.
           </p>
         </>
       )}
