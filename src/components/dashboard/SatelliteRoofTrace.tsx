@@ -303,7 +303,7 @@ export function SatelliteRoofTrace({
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
   const [error, setError] = useState("");
-  const initialLookupStarted = useRef(false);
+  const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
   const suppressNextMapClick = useRef(false);
@@ -366,8 +366,22 @@ export function SatelliteRoofTrace({
   }
   useEffect(() => {
     const query = initialAddress.trim();
-    if (!query || initialLookupStarted.current) return;
-    initialLookupStarted.current = true;
+    if (query === lastInitialAddress.current) return;
+    lastInitialAddress.current = query;
+
+    // The roof workspace can stay mounted while the selected property changes.
+    // Clear the previous property's pin and trace immediately so they cannot be
+    // mistaken for the newly selected address while geocoding is in flight.
+    setLocation(null);
+    setPoints([]);
+    setAutoTraced(false);
+    setResults([]);
+    setZoom(1);
+    setError("");
+    skipNextAddressSearch.current = Boolean(query);
+    setAddress(query);
+    if (!query) return;
+
     const controller = new AbortController();
     void (async () => {
       try {
