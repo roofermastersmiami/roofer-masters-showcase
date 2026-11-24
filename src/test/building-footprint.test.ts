@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   footprintToDraftPlane,
+  footprintGeoReference,
   parseBuildingFootprints,
   shouldAutoSearchFootprint,
 } from "@/lib/building-footprint";
@@ -15,6 +16,11 @@ const square = [
 ];
 
 describe("OpenStreetMap building footprint parsing", () => {
+  it("anchors a selected ground footprint to the geocoded address point", () => {
+    const footprint = { id: 12, points: [], areaSqFt: 1000, center: { lat: 25.76, lon: -80.19 }, distanceMeters: 8, containsAddress: false, buildingType: "house" };
+    expect(footprintGeoReference(footprint, { lat: 25.7601, lon: -80.1898 })).toEqual({ addressLatitude: 25.7601, addressLongitude: -80.1898, originLatitude: 25.76, originLongitude: -80.19 });
+  });
+
   it("returns closed nearby building outlines with approximate ground area", () => {
     const result = parseBuildingFootprints(
       {
