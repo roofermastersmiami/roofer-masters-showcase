@@ -116,7 +116,10 @@ export function RoofReports({
         // drawing workspace without making the estimator repeat the action.
         const created = await create({
           data: {
-            address: result.matchedAddress,
+            // Keep the exact saved CRM address so the server can reuse this
+            // property's existing customer/property records instead of creating
+            // a duplicate from the geocoder's normalized display address.
+            address,
             title: "Roof measurement report",
             provider: "manual",
             notes: "",
