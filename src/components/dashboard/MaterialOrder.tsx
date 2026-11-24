@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ROOF_TYPES } from "@/lib/instant-estimate-schema";
 import {
   materialOrder,
+  materialOrderWarnings,
   escapeMaterialOrderHtml,
   reportSchema,
   type RoofReport,
@@ -109,9 +110,10 @@ export function MaterialOrder({
     () => (valid.success ? materialOrder(valid.data) : []),
     [valid.success, r],
   );
+  const warnings = valid.success ? materialOrderWarnings(valid.data) : [];
   const text = `Material order – ${title}
 ${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
-
+${warnings.length ? `\nREVIEW REQUIRED:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : ""}
 ${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}
 
 Roofer Masters · 305-942-3093`;
@@ -197,6 +199,16 @@ Roofer Masters · 305-942-3093`;
             </Field>
           ))}
       </div>
+      {warnings.length > 0 && (
+        <div role="note" className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+          <p className="mb-1 font-semibold">Metal panel takeoff — review required</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {lines.length ? (
         <table className="mt-4 w-full text-sm">
           <tbody>
