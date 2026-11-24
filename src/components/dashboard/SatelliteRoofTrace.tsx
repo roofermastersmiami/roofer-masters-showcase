@@ -178,7 +178,8 @@ export function satelliteTraceToGablePlanes(
   }
   const axisValues = local.map(axisValue);
   const axisSpan = Math.max(...axisValues) - Math.min(...axisValues);
-  if (axisSpan <= 0.001) throw new Error("The traced outline is too narrow for this ridge direction.");
+  if (axisSpan <= 0.001)
+    throw new Error("The traced outline is too narrow for this ridge direction.");
   // Offset the center ridge across the traced footprint without changing its orientation.
   const centerAxis =
     local.reduce((sum, p) => sum + axisValue(p), 0) / local.length +
@@ -735,7 +736,9 @@ export function SatelliteRoofTrace({
                 className="mt-2 block w-full accent-primary"
                 aria-label="Ridge position offset"
               />
-              <span className="text-xs text-muted-foreground">Move the ridge across the traced width</span>
+              <span className="text-xs text-muted-foreground">
+                Move the ridge across the traced width
+              </span>
             </label>
             <Button
               type="button"
@@ -745,7 +748,12 @@ export function SatelliteRoofTrace({
                 setBusy(true);
                 try {
                   onAdd(
-                    satelliteTraceToGablePlanes(points, Number(pitch), ridgeAxis, ridgeOffsetPercent),
+                    satelliteTraceToGablePlanes(
+                      points,
+                      Number(pitch),
+                      ridgeAxis,
+                      ridgeOffsetPercent,
+                    ),
                   );
                   setPoints([]);
                 } catch (e) {
@@ -762,9 +770,9 @@ export function SatelliteRoofTrace({
               Split into 2 gable planes
             </Button>
             <p className="basis-full text-xs text-muted-foreground">
-              Creates two preliminary facets along the selected ridge direction. Adjust the
-              ridge position for an off-center roof; confirm the ridge, eaves, overhangs, and pitch
-              before using quantities. Irregular outlines that cannot be split cleanly are rejected.
+              Creates two preliminary facets along the selected ridge direction. Adjust the ridge
+              position for an off-center roof; confirm the ridge, eaves, overhangs, and pitch before
+              using quantities. Irregular outlines that cannot be split cleanly are rejected.
             </p>
           </div>
           {autoTraced && (
