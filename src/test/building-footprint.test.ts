@@ -26,11 +26,11 @@ describe("OpenStreetMap building footprint parsing", () => {
   it("uses the area centroid for irregular building outlines", () => {
     const lShape = [
       { lat: origin.lat, lon: origin.lon },
-      { lat: origin.lat, lon: origin.lon + 0.00004 },
-      { lat: origin.lat + 0.00001, lon: origin.lon + 0.00004 },
-      { lat: origin.lat + 0.00001, lon: origin.lon + 0.00001 },
-      { lat: origin.lat + 0.00004, lon: origin.lon + 0.00001 },
-      { lat: origin.lat + 0.00004, lon: origin.lon },
+      { lat: origin.lat, lon: origin.lon + 0.00006 },
+      { lat: origin.lat + 0.000015, lon: origin.lon + 0.00006 },
+      { lat: origin.lat + 0.000015, lon: origin.lon + 0.000015 },
+      { lat: origin.lat + 0.00006, lon: origin.lon + 0.000015 },
+      { lat: origin.lat + 0.00006, lon: origin.lon },
       { lat: origin.lat, lon: origin.lon },
     ];
     const result = parseBuildingFootprints({
@@ -39,8 +39,8 @@ describe("OpenStreetMap building footprint parsing", () => {
     expect(result).toHaveLength(1);
     // The L-shaped polygon's area centroid is about 1.36/4 units from
     // the lower-left corner, not the 2/4 vertex-average position.
-    expect(result[0]!.center.lat - origin.lat).toBeCloseTo(0.0000136, 5);
-    expect(result[0]!.center.lon - origin.lon).toBeCloseTo(0.0000136, 5);
+    expect(result[0]!.center.lat - origin.lat).toBeCloseTo(0.00001536, 5);
+    expect(result[0]!.center.lon - origin.lon).toBeCloseTo(0.00001536, 5);
   });
 
   it("rejects open, invalid, oversized, and distant polygons", () => {
@@ -74,7 +74,7 @@ describe("OpenStreetMap building footprint parsing", () => {
     expect(parseBuildingFootprints(null, origin)).toEqual([]);
     expect(parseBuildingFootprints({ elements: "bad" }, origin)).toEqual([]);
     const elements = Array.from({ length: 12 }, (_, index) => ({
-      type: "way", id: index + 1, geometry: square.map((p) => ({ ...p, lon: p.lon + index * 0.00001 })),
+      type: "way", id: index + 1, geometry: square.map((p) => ({ ...p, lon: p.lon + index * 0.000015 })),
     }));
     expect(parseBuildingFootprints({ elements }, origin)).toHaveLength(8);
   });
