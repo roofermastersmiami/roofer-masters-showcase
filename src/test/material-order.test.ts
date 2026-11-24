@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { materialOrder, escapeMaterialOrderHtml } from "@/lib/material-order";
+import { materialOrder, escapeMaterialOrderHtml, materialOrderWarnings } from "@/lib/material-order";
 const base = {
   area_sqft: 2000,
   waste_pct: 10,
@@ -49,11 +49,22 @@ describe("metal panel length and validation", () => {
   });
 });
 
-
 describe("material order print escaping", () => {
   it("escapes HTML metacharacters in customer-controlled print text", () => {
     expect(escapeMaterialOrderHtml(`Roof <script>alert("x")</script> & 'metal'`)).toBe(
       "Roof &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;metal&#39;",
     );
+  });
+});
+
+
+describe("material takeoff review warnings", () => {
+  it("flags aggregate metal panel quantities as preliminary", () => {
+    const warnings = materialOrderWarnings({ ...base, roof_type: "Metal Roof" });
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join(" ")).toContain("not a panel cut list");
+  });
+  it("does not show metal panel warnings for other roof systems", () => {
+    expect(materialOrderWarnings({ ...base, roof_type: "Shingle Roof" })).toEqual([]);
   });
 });
