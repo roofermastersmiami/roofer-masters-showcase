@@ -7,6 +7,7 @@ import {
   Eye,
   FileText,
   MapPin,
+  PenLine,
   Search,
   Trash2,
   ZoomIn,
@@ -28,6 +29,7 @@ import { customersQuery } from "./foundation-data";
 import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
 import { downloadPdf } from "./proposal-data";
 import { Empty, SectionHeading } from "./CrmControls";
+import { PdfContractSigner } from "@/components/PdfContractSigner";
 
 export function RoofReports({
   onOpenMeasurement,
@@ -43,6 +45,7 @@ export function RoofReports({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; address: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
+  const [signingReport, setSigningReport] = useState<RoofOrder | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -110,7 +113,6 @@ export function RoofReports({
 
   const query = search.trim().toLocaleLowerCase();
   const rows = (orders.data ?? []).filter((row) => {
-    if (!row.file_path) return false;
     const customerName =
       customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "";
     return `${customerName} ${row.address} ${row.title}`.toLocaleLowerCase().includes(query);
@@ -131,7 +133,7 @@ export function RoofReports({
           />
         </div>
         <p className="text-sm text-muted-foreground">
-          Completed measurement PDFs · Roofer Masters · Swipe left to delete
+          Roof reports, measurement PDFs, and customer contract signing · Swipe left to delete
         </p>
       </div>
       {orders.error && (
@@ -219,6 +221,9 @@ export function RoofReports({
                     )}
                     <Button variant="outline" onClick={() => onOpenMeasurement(row.id)}>
                       {row.file_path ? "Open measurements" : "Continue measurements"} <ArrowRight />
+                    </Button>
+                    <Button onClick={() => setSigningReport(row)}>
+                      <PenLine /> Fill &amp; Sign
                     </Button>
                   </div>
                 </article>
@@ -311,6 +316,28 @@ export function RoofReports({
               <p className="p-6 text-sm text-muted-foreground">PDF preview is unavailable.</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!signingReport} onOpenChange={(open) => { if (!open) setSigningReport(null); }}>
+        <DialogContent className="flex h-[94vh] w-[98vw] max-w-7xl flex-col gap-3 overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Fill &amp; Sign Contract</DialogTitle>
+            <DialogDescription>
+              Add signatures and contract fields to a PDF for {signingReport?.address ?? "this property"}.
+            </DialogDescription>
+          </DialogHeader>
+          {signingReport && (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <PdfContractSigner
+                reportId={signingReport.id}
+                leadId={customers.data?.find((customer) => customer.id === signingReport.customer_id)?.source_lead_id ?? null}
+                propertyAddress={signingReport.address}
+                sourcePdfPath={signingReport.file_path}
+                sourceBucket="roofing-proposals"
+                onSaved={() => setSigningReport(null)}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       <Dialog
