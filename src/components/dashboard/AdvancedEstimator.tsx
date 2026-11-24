@@ -421,7 +421,8 @@ export function AdvancedEstimator() {
                         type="number"
                         min={0}
                         step="0.01"
-                        value={l.unit_cents / 100}
+                        value={l.unit_cents > 0 ? l.unit_cents / 100 : ""}
+                        placeholder="Unpriced — add approved rate"
                         onChange={(e) =>
                           update({
                             ...o,
@@ -435,7 +436,7 @@ export function AdvancedEstimator() {
                       />
                     </td>
                     <td className="whitespace-nowrap">
-                      {money(Math.round(l.quantity * l.unit_cents))}
+                      {l.unit_cents > 0 ? money(Math.round(l.quantity * l.unit_cents)) : "UNPRICED"}
                     </td>
                     <td>
                       <Button
@@ -565,16 +566,16 @@ export function AdvancedEstimator() {
           {totals ? (
             <div className="grid gap-5 border-y border-border py-6 sm:grid-cols-3">
               {[
-                ["Internal cost", totals.cost],
-                ["Internal profit before tax", totals.profit],
-                ["Customer total", totals.total],
-                ["Deposit", totals.deposit],
-                ["Balance", totals.balance],
-                ["Tax", totals.tax],
+                ["Internal cost", unpricedItems.length ? null : totals.cost],
+                ["Internal profit before tax", unpricedItems.length ? null : totals.profit],
+                ["Customer total", unpricedItems.length ? null : totals.total],
+                ["Deposit", unpricedItems.length ? null : totals.deposit],
+                ["Balance", unpricedItems.length ? null : totals.balance],
+                ["Tax", unpricedItems.length ? null : totals.tax],
               ].map(([label, value]) => (
                 <div key={label}>
                   <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="mt-1 text-xl font-bold">{money(Number(value))}</p>
+                  <p className="mt-1 text-xl font-bold">{value === null ? "UNPRICED" : money(Number(value))}</p>
                 </div>
               ))}
             </div>
@@ -585,7 +586,7 @@ export function AdvancedEstimator() {
           )}
           <div className="mt-5 flex gap-3">
             <Button
-              disabled={busy || dirty || !savedId || !totals || totals.total <= 0}
+              disabled={busy || dirty || !savedId || !totals || totals.total <= 0 || unpricedItems.length > 0}
               onClick={() => void proposal()}
             >
               <FileText /> Customer proposal

@@ -33,6 +33,18 @@ describe("material orders from roof report", () => {
   });
 });
 
+describe("automatic material waste", () => {
+  it("uses the complexity-based default for shingle when no override is supplied", () => {
+    const lines = materialOrder({ ...base, waste_pct: undefined, roof_type: "Shingle Roof" });
+    expect(q(lines, "Architectural")).toBe(68);
+  });
+
+  it("uses the flat-system default waste when no override is supplied", () => {
+    const lines = materialOrder({ ...base, waste_pct: undefined, roof_type: "Flat Roof" });
+    expect(q(lines, "SBS Granulated")).toBe(23);
+  });
+});
+
 describe("metal panel length and validation", () => {
   it("does not add area waste to the average panel cut length", () => {
     const noWaste = q(

@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { ROOF_TYPES } from "./instant-estimate-schema";
+import { calculateRoofTakeoff } from "@/utils/materialTakeoff";
+
 export const reportSchema = z.object({
   roof_type: z.enum(ROOF_TYPES),
   area_sqft: z.number().positive().max(1000000),
-  waste_pct: z.number().min(0).max(50),
+  waste_pct: z.number().min(0).max(50).optional(),
   ridge_lf: z.number().min(0).max(100000),
   hips_lf: z.number().min(0).max(100000),
   valleys_lf: z.number().min(0).max(100000),
@@ -11,19 +13,43 @@ export const reportSchema = z.object({
   rakes_lf: z.number().min(0).max(100000),
   panel_width_in: z.number().min(6).max(48).default(16),
   pipes: z.number().int().min(0).max(500).default(0),
+  dominant_pitch: z.number().finite().min(0).max(24).default(0),
+  flat_installation_method: z.enum(["torch", "peel_and_stick"]).default("torch"),
 });
 export type RoofReport = z.input<typeof reportSchema>;
-export type MaterialLine = { item: string; qty: number; unit: string };
+export type MaterialLine = { item: string; qty: number; unit: string; code?: string; category?: string };
 const up = (n: number) => Math.max(0, Math.ceil(n - 1e-9));
 /** Material takeoff from a roof measurement report. 1 square = 100 sq ft. */
 export function materialOrder(input: RoofReport): MaterialLine[] {
   const r = reportSchema.parse(input);
   const boots = { item: "Pipe boots / flashings", qty: r.pipes, unit: "pcs" };
-  const area = r.area_sqft * (1 + r.waste_pct / 100);
+  const wastePct = r.waste_pct ?? (r.roof_type === "Flat Roof" ? 10 : 12);
+  const area = r.area_sqft * (1 + wastePct / 100);
   const sq = area / 100;
   const edges = r.eaves_lf + r.rakes_lf;
   const caps = r.ridge_lf + r.hips_lf;
   const drip = { item: "Drip edge / edge metal (10 ft)", qty: up(edges / 10), unit: "pcs" };
+  if (["Shingle Roof", "Tile Roof", "Flat Roof"].includes(r.roof_type)) {
+    const system = r.roof_type === "Shingle Roof" ? "shingle" : r.roof_type === "Tile Roof" ? "tile" : "flat_modbit";
+    const takeoff = calculateRoofTakeoff({
+      totalAreaSqFt: r.area_sqft,
+      dominantPitch: r.dominant_pitch ?? 0,
+      ridgesFt: r.ridge_lf,
+      hipsFt: r.hips_lf,
+      valleysFt: r.valleys_lf,
+      eavesFt: r.eaves_lf,
+      rakesFt: r.rakes_lf,
+      penetrationsCount: r.pipes,
+      ...(system === "flat_modbit" ? { flatInstallationMethod: r.flat_installation_method } : {}),
+    }, system, r.waste_pct);
+    return takeoff.lineItems.map((line) => ({
+      item: line.name,
+      qty: line.quantity,
+      unit: line.unit,
+      code: line.code,
+      category: line.category,
+    }));
+  }
   switch (r.roof_type) {
     case "Shingle Roof":
       return [
@@ -45,7 +71,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
       return [
         {
           item: `Metal panels (${r.panel_width_in}" coverage)`,
-          qty: up(((r.eaves_lf * 12) / r.panel_width_in) * (1 + r.waste_pct / 100)),
+          qty: up(((r.eaves_lf * 12) / r.panel_width_in) * (1 + wastePct / 100)),
           unit: "panels",
         },
         {

@@ -427,6 +427,7 @@ export function toMaterialReport(d: RoofDrawing) {
     eaves_lf: m.edges.eave,
     rakes_lf: m.edges.rake,
     panel_width_in: 16,
+    dominant_pitch: [...m.planes].sort((a, b) => b.area - a.area)[0]?.pitch ?? 0,
     pipes: d.penetrations.filter((p) => p.kind === "pipe" || p.kind === "vent").length,
   };
 }
