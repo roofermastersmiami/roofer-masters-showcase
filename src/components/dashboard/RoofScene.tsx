@@ -8,7 +8,7 @@ import {
   CanvasTexture,
   SRGBColorSpace,
 } from "three";
-import { planeInfo, distance, type RoofDrawing, type RoofPlane } from "@/lib/roof-geometry";
+import { planeInfo, distance, addressPinPosition, type RoofDrawing, type RoofPlane } from "@/lib/roof-geometry";
 import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
 function Dimension({ text, position }: { text: string; position: [number, number, number] }) {
   const texture = useMemo(() => {
@@ -224,6 +224,7 @@ export default function RoofScene({
       ground: resolve("--muted"),
     });
   }, []);
+  const addressPin = drawing.geo_reference ? addressPinPosition(drawing.geo_reference) : null;
   const extent = Math.max(
     30,
     ...drawing.planes.flatMap((p) =>
@@ -261,6 +262,23 @@ export default function RoofScene({
         </Environment>
         <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
         <Walls drawing={drawing} color={colors.ground} />
+        {addressPin && (
+          <group position={[addressPin.x, 0, addressPin.z]} name="Geocoded property address">
+            <mesh rotation-x={-Math.PI / 2} position={[0, 0.12, 0]}>
+              <ringGeometry args={[0.75, 1.05, 28]} />
+              <meshBasicMaterial color="#DC2626" side={DoubleSide} />
+            </mesh>
+            <mesh position={[0, 2.2, 0]}>
+              <cylinderGeometry args={[0.12, 0.12, 3.6, 12]} />
+              <meshStandardMaterial color="#DC2626" />
+            </mesh>
+            <mesh position={[0, 4.2, 0]}>
+              <sphereGeometry args={[0.62, 18, 18]} />
+              <meshStandardMaterial color="#DC2626" emissive="#7F1D1D" emissiveIntensity={0.35} />
+            </mesh>
+            <Dimension text="ADDRESS" position={[0, 5.5, 0]} />
+          </group>
+        )}
         {drawing.planes.map((p) => (
           <Plane
             key={p.id}
