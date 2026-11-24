@@ -428,7 +428,7 @@ export function SatelliteRoofTrace({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setPoints((current) => current.slice(0, -1))
+              onClick={() => setPoints((current) => current.slice(0, -1))}
               disabled={!points.length}
             >
               <RotateCcw className="h-4 w-4" /> Undo point
