@@ -9,7 +9,7 @@ function configuredStripeEnvironment() {
     return getStripeEnvironment();
   } catch {
     // Payment configuration is optional for CRM access; callers render a clear unavailable state.
-    return "live";
+    return "sandbox";
   }
 }
 export const tasksQuery = queryOptions({
