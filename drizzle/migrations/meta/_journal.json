@@ -225,6 +225,13 @@
       "when": 1795232240000,
       "tag": "0031_production_manager_roof_report_files",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795232300000,
+      "tag": "0032_swipe_delete_customers",
+      "breakpoints": true
     }
   ]
 }
