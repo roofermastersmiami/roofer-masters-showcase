@@ -72,7 +72,7 @@ describe("Census-to-USGS aerial server integration", () => {
 
     const imageryUrl = new URL(String(imageryCall[0]));
     expect(imageryUrl.hostname).toBe("imagery.nationalmap.gov");
-    expect(imageryUrl.pathname).toContain("/USGSNAIPPlus/ImageServer/export");
+    expect(imageryUrl.pathname).toBe("/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage");
     expect(imageryUrl.searchParams.get("f")).toBe("image");
     expect(imageryUrl.searchParams.get("format")).toBe("png");
     expect(imageryUrl.searchParams.get("bboxSR")).toBe("3857");
