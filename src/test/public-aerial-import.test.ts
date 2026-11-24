@@ -5,6 +5,7 @@ import {
   uploadAerialImage,
   aerialInvocationError,
   shouldAutoLoadAddressAerial,
+  addressAerialRequestKey,
 } from "@/lib/public-aerial-import";
 function png(width = 2000, height = 2000) {
   const bytes = new Uint8Array(24);
@@ -192,23 +193,58 @@ describe("private aerial upload", () => {
 });
 
 describe("automatic address aerial loading", () => {
-  it("loads free imagery once for any address-linked report without an aerial", () => {
+  it("loads free imagery once for a new address-linked report", () => {
+    const requestKey = addressAerialRequestKey("report-1", "123 Main St, Miami, FL");
+    expect(requestKey).toBe("report-1:123 main st, miami, fl");
     expect(
       shouldAutoLoadAddressAerial({
         address: "123 Main St, Miami, FL",
+        requestKey: "report-1",
         hasAerial: false,
-        alreadyAttempted: false,
+        attemptedKey: "",
       }),
     ).toBe(true);
   });
-  it("does not auto-load when the address is missing, an aerial is saved or a request was already attempted", () => {
+  it("does not repeat the same report and normalized address attempt", () => {
+    const requestKey = addressAerialRequestKey("report-1", "123 Main St, Miami, FL");
+    expect(
+      shouldAutoLoadAddressAerial({
+        address: " 123 MAIN ST, MIAMI, FL ",
+        requestKey: "report-1",
+        hasAerial: false,
+        attemptedKey: requestKey,
+      }),
+    ).toBe(false);
+  });
+  it("retries for another report or a changed address", () => {
+    const attemptedKey = addressAerialRequestKey("report-1", "123 Main St, Miami, FL");
+    expect(
+      shouldAutoLoadAddressAerial({
+        address: "123 Main St, Miami, FL",
+        requestKey: "report-2",
+        hasAerial: false,
+        attemptedKey,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoLoadAddressAerial({
+        address: "456 Oak Ave, Miami, FL",
+        requestKey: "report-1",
+        hasAerial: false,
+        attemptedKey,
+      }),
+    ).toBe(true);
+  });
+  it("does not auto-load without an address, request identity or when an aerial exists", () => {
     const base = {
       address: "123 Main St, Miami, FL",
+      requestKey: "report-1",
       hasAerial: false,
-      alreadyAttempted: false,
+      attemptedKey: "",
     };
     expect(shouldAutoLoadAddressAerial({ ...base, address: " " })).toBe(false);
+    expect(shouldAutoLoadAddressAerial({ ...base, requestKey: "" })).toBe(false);
     expect(shouldAutoLoadAddressAerial({ ...base, hasAerial: true })).toBe(false);
-    expect(shouldAutoLoadAddressAerial({ ...base, alreadyAttempted: true })).toBe(false);
+    expect(addressAerialRequestKey("", base.address)).toBe("");
   });
 });
