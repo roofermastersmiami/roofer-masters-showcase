@@ -168,7 +168,6 @@ describe("reviewable shared roof-edge suggestions", () => {
   });
 });
 
-
 describe("roof preset dimension validation", () => {
   it("accepts supported finite dimensions and pitch", () => {
     expect(() => roofPreset("gable", 500, 500, 24)).not.toThrow();
