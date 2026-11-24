@@ -239,6 +239,13 @@
       "when": 1795560000000,
       "tag": "0033_restore_roof_report_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795650000000,
+      "tag": "0034_roof_report_client_contact",
+      "breakpoints": true
     }
   ]
 }
