@@ -218,3 +218,21 @@ export function shouldAutoSearchFootprint(
 ): boolean {
   return Boolean(address?.trim() && requestKey && requestKey !== attemptedKey);
 }
+
+
+const METERS_TO_FEET = 1 / 0.3048;
+
+/** Convert a mapped ground footprint into the CRM's feet-based draft geometry. */
+export function footprintToDraftPlane(footprint: BuildingFootprint) {
+  const cos = Math.cos((footprint.center.lat * Math.PI) / 180);
+  return {
+    id: `osm-footprint-${footprint.id}`,
+    name: "Preliminary mapped building footprint",
+    points: footprint.points.map((point) => ({
+      x: (point.lon - footprint.center.lon) * 111320 * cos * METERS_TO_FEET,
+      y: 10,
+      z: (footprint.center.lat - point.lat) * 110540 * METERS_TO_FEET,
+    })),
+    edges: footprint.points.map(() => "other" as const),
+  };
+}
