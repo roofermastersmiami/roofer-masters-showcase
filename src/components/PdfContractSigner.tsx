@@ -273,8 +273,8 @@ export function PdfContractSigner({
     const resize = resizeRef.current;
     if (resize && !isClientMode) {
       updateField(resize.id, {
-        width: Math.max(0.05, Math.min(0.9, resize.width + (event.clientX - resize.pointerX) / resize.rect.width)),
-        height: Math.max(0.02, Math.min(0.3, resize.height + (event.clientY - resize.pointerY) / resize.rect.height)),
+        width: Math.max(0.05, Math.min(1 - (fields.find((field) => field.id === resize.id)?.x ?? 0.05), resize.width + (event.clientX - resize.pointerX) / resize.rect.width)),
+        height: Math.max(0.02, Math.min(1 - (fields.find((field) => field.id === resize.id)?.y ?? 0.05), resize.height + (event.clientY - resize.pointerY) / resize.rect.height)),
       });
       return;
     }
@@ -813,7 +813,7 @@ export function PdfContractSigner({
                             else if (isClientMode) setClientFieldOpen(true);
                           }}
                           onPointerDown={(event) => beginDrag(event, field)}
-                          className={`absolute flex cursor-move items-center overflow-hidden border-2 px-1 ${selectedId === field.id ? "border-blue-600 bg-blue-100/60" : "border-blue-400/70 bg-blue-50/40"}`}
+                          className={`absolute flex cursor-move items-center border-2 px-1 ${selectedId === field.id ? "border-blue-600 bg-blue-100/60" : "border-blue-400/70 bg-blue-50/40"}`}
                           style={{
                             left: `${field.x * 100}%`,
                             top: `${field.y * 100}%`,
@@ -826,10 +826,10 @@ export function PdfContractSigner({
                             <img
                               src={field.imageData}
                               alt="Signature preview"
-                              className="h-full max-w-full object-contain"
+                              className="pointer-events-none h-full max-w-full object-contain"
                             />
                           ) : (
-                            <span className="truncate text-blue-900">
+                            <span className="max-w-full truncate overflow-hidden text-blue-900">
                               {field.value || fieldLabel[field.kind]}
                             </span>
                           )}
