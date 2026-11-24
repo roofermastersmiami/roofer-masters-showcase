@@ -14,6 +14,7 @@ import {
   addressPinPosition,
   type RoofDrawing,
   type RoofPlane,
+  type SharedEdgeSuggestion,
 } from "@/lib/roof-geometry";
 import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
 function Dimension({ text, position }: { text: string; position: [number, number, number] }) {
@@ -48,12 +49,14 @@ function Plane({
   onSelect,
   colors,
   faceColor,
+  suggestions,
 }: {
   plane: RoofPlane;
   selected: boolean;
   onSelect: () => void;
   colors: { roof: string; selected: string; edge: string };
   faceColor: string;
+  suggestions: SharedEdgeSuggestion[];
 }) {
   const geometry = useMemo(() => {
     const g = new BufferGeometry();
@@ -71,6 +74,7 @@ function Plane({
     return g;
   }, [plane]);
   useEffect(() => () => geometry.dispose(), [geometry]);
+  const suggestedEdges = new Map(suggestions.map((item) => [item.edgeIndex, item.type]));
   return (
     <group>
       <mesh
@@ -97,12 +101,12 @@ function Plane({
                 [p.x, p.y + 0.04, p.z],
                 [b.x, b.y + 0.04, b.z],
               ]}
-              color={ROOF_EDGE_STYLES[plane.edges[i] ?? "other"].color}
-              lineWidth={selected ? 3 : 2}
+              color={ROOF_EDGE_STYLES[suggestedEdges.get(i) ?? plane.edges[i] ?? "other"].color}
+              lineWidth={suggestedEdges.has(i) ? 4 : selected ? 3 : 2}
             />
             {selected && (
               <Dimension
-                text={`${(plane.edges[i] ?? "other").toUpperCase()} · ${distance(p, b).toFixed(1)} ft`}
+                text={`${(suggestedEdges.get(i) ?? plane.edges[i] ?? "other").toUpperCase()}${suggestedEdges.has(i) ? " · SUGGESTED" : ""} · ${distance(p, b).toFixed(1)} ft`}
                 position={[(p.x + b.x) / 2, (p.y + b.y) / 2 + 0.55, (p.z + b.z) / 2]}
               />
             )}
@@ -189,6 +193,7 @@ function Walls({ drawing, color }: { drawing: RoofDrawing; color: string }) {
 }
 export default function RoofScene({
   drawing,
+  edgeSuggestions = [],
   aerialImageUrl,
   aerialImageCenter,
   selected,
@@ -200,6 +205,7 @@ export default function RoofScene({
   zoomKey,
 }: {
   drawing: RoofDrawing;
+  edgeSuggestions?: SharedEdgeSuggestion[];
   aerialImageUrl?: string;
   aerialImageCenter?: [number, number, number];
   selected: string;
@@ -340,6 +346,7 @@ export default function RoofScene({
             faceColor={
               ROOF_FACE_COLORS[drawing.planes.indexOf(p) % ROOF_FACE_COLORS.length] ?? colors.roof
             }
+            suggestions={edgeSuggestions.filter((item) => item.planeId === p.id)}
           />
         ))}
         {drawing.penetrations.map((p) => {
