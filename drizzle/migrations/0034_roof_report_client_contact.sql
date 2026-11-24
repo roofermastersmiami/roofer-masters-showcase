@@ -4,8 +4,6 @@ ALTER TABLE public.roof_report_orders
   ADD COLUMN IF NOT EXISTS customer_phone text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS customer_email text NOT NULL DEFAULT '';
 
-DROP FUNCTION IF EXISTS public.create_roof_report_request(text, text, text, text);
-
 CREATE OR REPLACE FUNCTION public.create_roof_report_request(
   p_address text,
   p_title text,
