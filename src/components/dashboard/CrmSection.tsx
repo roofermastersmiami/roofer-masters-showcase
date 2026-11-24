@@ -81,7 +81,7 @@ export function CrmSection({ section }: { section: string }) {
       return <FinancialAnalytics />;
     case "roof-reports":
       return <RoofReports onOpenMeasurement={openRoofMeasurements} />;
-    case "measurements":
+    case "appointments":\n      return <CrmCalendar onOpenRoofReport={openRoofMeasurements} />;\n    case "measurements":
       return (
         <RoofMeasurementsTab
           selectedReportId={selectedRoofReportId}
