@@ -9,7 +9,11 @@ import {
   SRGBColorSpace,
 } from "three";
 import { planeInfo, distance, type RoofDrawing, type RoofPlane } from "@/lib/roof-geometry";
-import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
+import {
+  PENETRATION_COLORS,
+  ROOF_EDGE_STYLES,
+  ROOF_FACE_COLORS,
+} from "@/lib/roof-feature-styles";
 function Dimension({ text, position }: { text: string; position: [number, number, number] }) {
   const texture = useMemo(() => {
     const c = document.createElement("canvas");
@@ -253,7 +257,9 @@ export default function RoofScene({
             selected={p.id === selected}
             onSelect={() => onSelect(p.id)}
             colors={colors}
-            faceColor={ROOF_FACE_COLORS[drawing.planes.indexOf(p) % ROOF_FACE_COLORS.length] ?? colors.roof}
+            faceColor={
+              ROOF_FACE_COLORS[drawing.planes.indexOf(p) % ROOF_FACE_COLORS.length] ?? colors.roof
+            }
           />
         ))}
         {drawing.penetrations.map((p) => {
@@ -265,7 +271,14 @@ export default function RoofScene({
             <group key={p.id} position={[p.x, highest + 0.6, p.z]}>
               {p.kind === "pipe" ? (
                 <mesh>
-                  <cylinderGeometry args={[Math.max(p.width, p.length) * 0.32, Math.max(p.width, p.length) * 0.32, 1.5, 20]} />
+                  <cylinderGeometry
+                    args={[
+                      Math.max(p.width, p.length) * 0.32,
+                      Math.max(p.width, p.length) * 0.32,
+                      1.5,
+                      20,
+                    ]}
+                  />
                   <meshStandardMaterial color={PENETRATION_COLORS.pipe} />
                 </mesh>
               ) : (
