@@ -47,7 +47,7 @@ export const CRM_SECTIONS = [
   "my-jobs",
 ] as const;
 export function CrmSection({ section }: { section: string }) {
-  const { leads, onOpen, openProposals, proposalLeadId, clearProposalLead, roofReportRequest, selectedRoofReportId, openRoofMeasurements } = useCrm();
+  const { leads, onOpen, openProposals, proposalLeadId, clearProposalLead, roofReportRequest, clearRoofReportRequest, selectedRoofReportId, openRoofMeasurements } = useCrm();
   const [chatId, setChatId] = useState<string | null>(null);
   const roles = useRoles();
   if (!canOpen(roles, section))
@@ -77,6 +77,7 @@ export function CrmSection({ section }: { section: string }) {
           initialPropertyId={roofReportRequest?.propertyId}
           initialAddress={roofReportRequest?.address ?? ""}
           onOpenMeasurement={openRoofMeasurements}
+          onRequestHandled={clearRoofReportRequest}
         />
       );
     case "measurements":
