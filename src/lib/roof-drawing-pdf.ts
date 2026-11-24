@@ -840,7 +840,18 @@ export async function roofDrawingPdf(
     { x: 510, width: 55 },
   ];
 
-  const materials = materialOrder(toMaterialReport(d));
+  let materials: ReturnType<typeof materialOrder> = [];
+  try {
+    materials = materialOrder(toMaterialReport(d));
+  } catch (error) {
+    if (d.roof_type !== "Metal Roof") throw error;
+    paragraph(
+      "Architectural metal takeoff omitted: add measured eave-to-ridge runs for every roof plane and the selected product coverage / fastening specifications in Material Order before generating an order-ready cut list.",
+      8,
+      true,
+      BLUE,
+    );
+  }
   materials.forEach((item, i) => {
     tableRow([item.item, String(item.qty), item.unit], materialCols, i);
   });

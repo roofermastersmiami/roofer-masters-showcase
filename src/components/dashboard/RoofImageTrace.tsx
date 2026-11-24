@@ -30,6 +30,7 @@ import {
   type Uphill,
 } from "@/lib/roof-trace";
 import { planeInfo, type EdgeType, type RoofPlane } from "@/lib/roof-geometry";
+import { ROOF_EDGE_STYLES } from "@/lib/roof-feature-styles";
 import { Field, Choice } from "./CrmControls";
 
 const EDGE_SHORT: Record<EdgeType, string> = {
@@ -68,6 +69,7 @@ export function RoofImageTrace({
   const [uphill, setUphill] = useState<Uphill>("up");
   const [name, setName] = useState("");
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
+  const [photoTarget, setPhotoTarget] = useState<ImagePoint>({ x: 500, y: 350 });
   const [photoZoom, setPhotoZoom] = useState(1);
   const [photoPan, setPhotoPan] = useState({ x: 0, y: 0 });
   const [panMode, setPanMode] = useState(false);
@@ -76,7 +78,7 @@ export function RoofImageTrace({
   const [replace, setReplace] = useState(true);
   const [snapCorners, setSnapCorners] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
-  const drag = useRef<{ kind: "ref" | "pt"; i: number } | null>(null);
+  const drag = useRef<{ kind: "ref" | "pt" | "target"; i: number } | null>(null);
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
   const w = dimensions.width;
@@ -93,10 +95,14 @@ export function RoofImageTrace({
       : [];
 
   const toImage = (clientX: number, clientY: number) => {
-    const box = svg.current!.getBoundingClientRect();
-    const s = Math.min(box.width / dimensions.width, box.height / dimensions.height);
-    const x = (clientX - box.left - (box.width - dimensions.width * s) / 2) / s,
-      y = (clientY - box.top - (box.height - dimensions.height * s) / 2) / s;
+    const surface = svg.current;
+    const matrix = surface?.getScreenCTM();
+    if (!surface || !matrix) return null;
+    const point = surface.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const local = point.matrixTransform(matrix.inverse());
+    const x = local.x, y = local.y;
     return x < 0 || y < 0 || x > dimensions.width || y > dimensions.height ? null : { x, y };
   };
   const addPoint = (p: ImagePoint) => {
@@ -126,7 +132,8 @@ export function RoofImageTrace({
     if (!p) return;
     moved.current = true;
     const { kind, i } = drag.current;
-    if (kind === "ref") setReference((r) => r.map((q, j) => (j === i ? p : q)));
+    if (kind === "target") setPhotoTarget(p);
+    else if (kind === "ref") setReference((r) => r.map((q, j) => (j === i ? p : q)));
     else {
       const next = snapCorners
         ? snapToExistingCorner(
@@ -246,7 +253,7 @@ export function RoofImageTrace({
       {photo.data ? (
         <div className="relative w-full overflow-hidden rounded-md border border-border">
           <div className="absolute left-2 top-2 z-20 rounded-md bg-background/95 px-2 py-1 text-xs font-semibold shadow">
-            Red pin = photo target · move with arrow controls
+            Drag the red photo target onto the house. Zoom in for precise placement.
           </div>
           <div className="absolute right-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 rounded-md border bg-background/95 p-1 shadow">
             <Button
@@ -340,7 +347,7 @@ export function RoofImageTrace({
           <img
             src={photo.data}
             alt="Roof photo used for measuring"
-            className="block max-h-[640px] w-full select-none object-contain"
+            className="block max-h-[900px] w-full select-none object-contain"
             style={{
               transform: `translate(${photoPan.x}px, ${photoPan.y}px) scale(${photoZoom})`,
               transformOrigin: "center center",
@@ -350,6 +357,7 @@ export function RoofImageTrace({
               const width = e.currentTarget.naturalWidth,
                 height = e.currentTarget.naturalHeight;
               setDimensions({ width, height });
+              setPhotoTarget({ x: width / 2, y: height / 2 });
             }}
           />
           <svg
@@ -418,39 +426,17 @@ export function RoofImageTrace({
               if (p) addPoint(p);
             }}
           >
-            {
-              <g pointerEvents="none">
-                <circle
-                  cx={w / 2}
-                  cy={dimensions.height / 2}
-                  r={Math.max(18, w / 45)}
-                  fill="#dc2626"
-                  fillOpacity="0.16"
-                  stroke="#dc2626"
-                  strokeWidth={w / 300}
-                />
-                <circle
-                  cx={w / 2}
-                  cy={dimensions.height / 2}
-                  r={Math.max(7, w / 120)}
-                  fill="#dc2626"
-                  stroke="white"
-                  strokeWidth={w / 300}
-                />
-                <text
-                  x={w / 2 + w / 35}
-                  y={dimensions.height / 2 - w / 45}
-                  fontSize={w / 45}
-                  fontWeight="700"
-                  fill="white"
-                  stroke="#111827"
-                  strokeWidth="4"
-                  paintOrder="stroke"
-                >
-                  PHOTO TARGET
-                </text>
-              </g>
-            }
+            <g
+              className="cursor-grab"
+              onPointerDown={(event) => startDrag("target", 0)(event)}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <circle cx={photoTarget.x} cy={photoTarget.y} r={Math.max(22, w / 42)} fill="#dc2626" fillOpacity="0.18" stroke="#dc2626" strokeWidth={w / 260} />
+              <circle cx={photoTarget.x} cy={photoTarget.y} r={Math.max(9, w / 100)} fill="#dc2626" stroke="white" strokeWidth={w / 260} />
+              <text x={photoTarget.x + w / 32} y={photoTarget.y - w / 45} fontSize={w / 45} fontWeight="700" fill="white" stroke="#111827" strokeWidth="4" paintOrder="stroke" pointerEvents="none">
+                PHOTO TARGET · DRAG ME
+              </text>
+            </g>
             {traced.map((t) => (
               <g key={t.id} className="text-muted-foreground">
                 <polygon
@@ -493,6 +479,7 @@ export function RoofImageTrace({
             {points.length >= 3 &&
               points.map((p, i) => {
                 const q = points[(i + 1) % points.length]!;
+                const edge = ROOF_EDGE_STYLES[edges[i] ?? "other"];
                 return (
                   <g
                     key={`e${i}`}
@@ -504,22 +491,25 @@ export function RoofImageTrace({
                     }}
                     className="cursor-pointer"
                   >
+                    <line x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke={edge.color} strokeWidth={w / 180} />
                     <rect
                       x={(p.x + q.x) / 2 - w / 28}
                       y={(p.y + q.y) / 2 - w / 70}
                       width={w / 14}
                       height={w / 35}
                       rx={w / 200}
-                      className="fill-background"
-                      stroke="currentColor"
-                      strokeWidth={w / 600}
+                      fill="#ffffff"
+                      fillOpacity={0.94}
+                      stroke={edge.color}
+                      strokeWidth={w / 450}
                     />
                     <text
                       x={(p.x + q.x) / 2}
                       y={(p.y + q.y) / 2 + w / 200}
                       fontSize={w / 60}
                       textAnchor="middle"
-                      className="fill-foreground"
+                      fill={edge.color}
+                      fontWeight="700"
                     >
                       {EDGE_SHORT[edges[i] ?? "other"]}
                     </text>

@@ -14,19 +14,36 @@ const base = {
   rakes_lf: 80,
 };
 const q = (lines: ReturnType<typeof materialOrder>, s: string) =>
-  lines.find((l) => l.item.includes(s))?.qty;
+  lines.find((l) => l.item.toLocaleLowerCase().includes(s.toLocaleLowerCase()))?.qty;
+const metal = {
+  roof_type: "Metal Roof" as const,
+  metal_plane_runs: [
+    { eaveLengthFt: 60, panelRunFt: 20 },
+    { eaveLengthFt: 60, panelRunFt: 20 },
+  ],
+  metal_config: {
+    panelCoverageIn: 16,
+    underlaymentCoverageSqFtPerRoll: 200,
+    fastenersPerPanel: 4,
+    fastenersPerBox: 250,
+    trimStickLengthFt: 10,
+  },
+};
 describe("material orders from roof report", () => {
   it("shingle: 3 bundles per square incl. waste", () => {
     expect(q(materialOrder({ ...base, roof_type: "Shingle Roof" }), "Architectural")).toBe(66);
   });
   it("drip edge from eaves + rakes", () => {
-    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Drip edge")).toBe(20);
+    expect(q(materialOrder({ ...base, ...metal }), "Drip Edge")).toBe(22);
   });
-  it("metal: panels = eave length / 16in coverage plus waste", () => {
-    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Metal panels")).toBe(99);
+  it("metal: panel count is calculated from each measured plane and product coverage", () => {
+    expect(q(materialOrder({ ...base, ...metal }), "measured plane cut list")).toBe(100);
   });
-  it("valleys: metal valley flashing in 10 ft pieces", () => {
-    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Valley flashing")).toBe(3);
+  it("metal: measured valley flashing uses the shared takeoff calculator", () => {
+    expect(q(materialOrder({ ...base, ...metal }), "Valley")).toBe(4);
+  });
+  it("metal: refuses to create a cut list without plane runs and product data", () => {
+    expect(() => materialOrder({ ...base, roof_type: "Metal Roof" })).toThrow(/measured eave-to-ridge/);
   });
   it("TPO includes insulation boards", () => {
     expect(q(materialOrder({ ...base, roof_type: "TPO" }), "Insulation")).toBe(69);
@@ -46,22 +63,9 @@ describe("automatic material waste", () => {
 });
 
 describe("metal panel length and validation", () => {
-  it("does not add area waste to the average panel cut length", () => {
-    const noWaste = q(
-      materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 0 }),
-      "Average panel length",
-    );
-    const withWaste = q(
-      materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 15 }),
-      "Average panel length",
-    );
-    expect(noWaste).toBe(17);
-    expect(withWaste).toBe(noWaste);
-  });
-
   it("rejects negative dimensions and waste above the supported limit", () => {
-    expect(() => materialOrder({ ...base, roof_type: "Metal Roof", eaves_lf: -1 })).toThrow();
-    expect(() => materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 51 })).toThrow();
+    expect(() => materialOrder({ ...base, ...metal, eaves_lf: -1 })).toThrow();
+    expect(() => materialOrder({ ...base, ...metal, waste_pct: 51 })).toThrow();
   });
 });
 
@@ -74,10 +78,13 @@ describe("material order print escaping", () => {
 });
 
 describe("material takeoff review warnings", () => {
-  it("flags aggregate metal panel quantities as preliminary", () => {
+  it("requires measured roof planes and product specifications before metal ordering", () => {
     const warnings = materialOrderWarnings({ ...base, roof_type: "Metal Roof" });
-    expect(warnings).toHaveLength(2);
-    expect(warnings.join(" ")).toContain("not a panel cut list");
+    expect(warnings).toHaveLength(1);
+    expect(warnings.join(" ")).toContain("measured eave-to-ridge run");
+  });
+  it("keeps a final verification warning after product-specific inputs are supplied", () => {
+    expect(materialOrderWarnings({ ...base, ...metal }).join(" ")).toContain("manufacturer's approved system");
   });
   it("does not show metal panel warnings for other roof systems", () => {
     expect(materialOrderWarnings({ ...base, roof_type: "Shingle Roof" })).toEqual([]);

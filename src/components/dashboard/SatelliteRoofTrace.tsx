@@ -21,6 +21,7 @@ import {
   type GeoReference,
   type EdgeType,
 } from "@/lib/roof-geometry";
+import { ROOF_EDGE_STYLES } from "@/lib/roof-feature-styles";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type PitchDirection = "north" | "south" | "east" | "west";
@@ -369,13 +370,15 @@ export function SatelliteRoofTrace({
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
   const [drawingMode, setDrawingMode] = useState<"outline" | "diy">("outline");
-  const [planeName, setPlaneName] = useState("Roof plane 1");
+  const [planeName, setPlaneName] = useState("Main roof section");
   const [edgeTypes, setEdgeTypes] = useState<EdgeType[]>([]);
   const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [baseMap, setBaseMap] = useState<"satellite" | "streets">("satellite");
+  const [placingTarget, setPlacingTarget] = useState(false);
   const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
   const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
   const [mapViewportElement, setMapViewportElement] = useState<HTMLDivElement | null>(null);
@@ -387,21 +390,23 @@ export function SatelliteRoofTrace({
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
+  const draggingTarget = useRef(false);
   const suppressNextMapClick = useRef(false);
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
+  const imageryZoom = zoom;
   const bounds = useMemo(
     () =>
       mapCenter
         ? {
-            west: mapCenter.lon - TILE_SPAN / zoom,
-            east: mapCenter.lon + TILE_SPAN / zoom,
-            south: mapCenter.lat - (TILE_SPAN * 0.7) / zoom,
-            north: mapCenter.lat + (TILE_SPAN * 0.7) / zoom,
+            west: mapCenter.lon - TILE_SPAN / imageryZoom,
+            east: mapCenter.lon + TILE_SPAN / imageryZoom,
+            south: mapCenter.lat - (TILE_SPAN * 0.7) / imageryZoom,
+            north: mapCenter.lat + (TILE_SPAN * 0.7) / imageryZoom,
           }
         : null,
-    [mapCenter, zoom],
+    [mapCenter, imageryZoom],
   );
   useEffect(() => {
     const viewport = mapViewportElement;
@@ -419,7 +424,7 @@ export function SatelliteRoofTrace({
   }, [mapViewportElement]);
 
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/${baseMap === "satellite" ? "World_Imagery" : "World_Street_Map"}/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
     : "";
 
   useEffect(() => {
@@ -524,25 +529,34 @@ export function SatelliteRoofTrace({
       suppressNextMapClick.current = false;
       return;
     }
+    if (mapInteraction === "pan") return;
     const point = tracePointFromPointer(
       event.clientX,
       event.clientY,
       event.currentTarget.getBoundingClientRect(),
     );
-    if (point) {
+    if (!point) return;
+    if (placingTarget) {
+      setSelectedBuildingCenter(point);
+      setMapCenter(point);
+      setPlacingTarget(false);
       setAutoTraced(false);
-      setPoints((current) => [...current, point]);
-      setEdgeTypes((current) => [...current, "other"]);
+      setError("");
+      return;
     }
+    setAutoTraced(false);
+    setPoints((current) => [...current, point]);
+    setEdgeTypes((current) => [...current, "other"]);
   }
   async function autoTraceBuildingFootprint() {
     if (!location) return;
     setAutoTraceBusy(true);
     setError("");
     try {
-      const lat = Number(location.lat),
-        lon = Number(location.lon);
-      const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out tags geom;`;
+      const searchCenter = selectedBuildingCenter ?? { lat: Number(location.lat), lon: Number(location.lon) };
+      const lat = searchCenter.lat;
+      const lon = searchCenter.lon;
+      const query = `[out:json][timeout:25];(way(around:120,${lat},${lon})["building"];relation(around:120,${lat},${lon})["building"];);out tags geom;>;out skel qt;`;
       // Public Overpass instances occasionally throttle or go offline. Try a
       // second community endpoint before asking the estimator to trace manually.
       const endpoints = [
@@ -623,7 +637,7 @@ export function SatelliteRoofTrace({
       setError(
         e instanceof Error && e.message.includes("No nearby")
           ? "No OpenStreetMap building outline was found close to this address. Trace the roof corners manually instead."
-          : "Automatic footprint lookup is unavailable right now. You can still trace the roof manually.",
+          : "The free OpenStreetMap footprint service did not respond. Move the house target onto the building and retry, or draw the roof manually.",
       );
     } finally {
       setAutoTraceBusy(false);
@@ -694,6 +708,20 @@ export function SatelliteRoofTrace({
       {location && bounds && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1 rounded-md border border-border p-1" aria-label="Map layer">
+              <Button type="button" size="sm" variant={baseMap === "satellite" ? "secondary" : "ghost"} aria-pressed={baseMap === "satellite"} onClick={() => setBaseMap("satellite")}>
+                <Satellite className="h-4 w-4" /> Satellite
+              </Button>
+              <Button type="button" size="sm" variant={baseMap === "streets" ? "secondary" : "ghost"} aria-pressed={baseMap === "streets"} onClick={() => setBaseMap("streets")}>
+                <MapPin className="h-4 w-4" /> 2D streets
+              </Button>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setMapInteraction("draw"); setPlacingTarget((current) => !current); }} aria-pressed={placingTarget}>
+              <MapPin className="h-4 w-4" /> {placingTarget ? "Click the house…" : "Place house target"}
+            </Button>
+            <a className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground" href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${(selectedBuildingCenter ?? mapCenter ?? center!).lat},${(selectedBuildingCenter ?? mapCenter ?? center!).lon}`} target="_blank" rel="noopener noreferrer">
+              <MapPin className="h-4 w-4" /> Open Street View
+            </a>
             <Button
               type="button"
               size="sm"
@@ -840,9 +868,7 @@ export function SatelliteRoofTrace({
             <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
               <h4 className="font-semibold">Draw-It-Yourself roof measurement</h4>
               <p className="text-sm text-muted-foreground">
-                Tap the satellite image to place corners in order around one roof plane. Repeat for
-                every plane. Enter the pitch and classify each boundary edge to build a detailed
-                takeoff. Your entries remain user-drawn measurements until field verified.
+                Tap the map to trace a roof section. Give it a recognizable name (for example, Front main slope or Garage). Classify every boundary edge as Eave, Rake, Ridge, Hip, Valley, or Other. Your entries remain user-drawn measurements until field verified.
               </p>
               <label className="block text-sm">
                 Plane name
@@ -854,6 +880,11 @@ export function SatelliteRoofTrace({
                 />
               </label>
             </div>
+          )}
+          {placingTarget && (
+            <p className="rounded-md border border-primary bg-primary/5 p-2 text-sm">
+              Click the center of the correct house on the map. The map recenters on that target; the geocoded address remains a separate reference.
+            </p>
           )}
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
             <span className="mr-auto text-sm font-medium">Map interaction</span>
@@ -898,6 +929,11 @@ export function SatelliteRoofTrace({
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
               onPointerMove={(event) => {
+                if (draggingTarget.current) {
+                  const target = tracePointFromPointer(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
+                  if (target) { setSelectedBuildingCenter(target); setMapCenter(target); }
+                  return;
+                }
                 if (mapPanStart.current) {
                   const rect = event.currentTarget.getBoundingClientRect();
                   if (rect.width > 0 && rect.height > 0) {
@@ -923,6 +959,7 @@ export function SatelliteRoofTrace({
                   setPoints((current) => current.map((item, i) => (i === index ? point : item)));
               }}
               onPointerUp={() => {
+                draggingTarget.current = false;
                 mapPanStart.current = null;
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
@@ -930,6 +967,7 @@ export function SatelliteRoofTrace({
                 }
               }}
               onPointerCancel={() => {
+                draggingTarget.current = false;
                 mapPanStart.current = null;
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
@@ -1091,8 +1129,8 @@ export function SatelliteRoofTrace({
                   };
                   return (
                     <label key={index} className="flex items-center justify-between gap-2 text-sm">
-                      <span>
-                        Edge {index + 1} ({index + 1} → {next + 1})
+                      <span style={{ color: ROOF_EDGE_STYLES[edgeTypes[index] ?? "other"].color }}>
+                        Edge {index + 1} ({index + 1} → {next + 1}) · {ROOF_EDGE_STYLES[edgeTypes[index] ?? "other"].label}
                       </span>
                       <select
                         value={edgeTypes[index] ?? "other"}
@@ -1179,7 +1217,7 @@ export function SatelliteRoofTrace({
                     ...drawnPlane,
                     name:
                       drawingMode === "diy"
-                        ? planeName.trim() || `Roof plane ${Date.now()}`
+                        ? planeName.trim() || "Main roof section"
                         : drawnPlane.name,
                     edges:
                       drawingMode === "diy" && edgeTypes.length === points.length
@@ -1190,7 +1228,7 @@ export function SatelliteRoofTrace({
                   if (accepted !== false) {
                     setPoints([]);
                     setEdgeTypes([]);
-                    if (drawingMode === "diy") setPlaneName(`Roof plane ${Date.now()}`);
+                    if (drawingMode === "diy") setPlaneName("Next roof section");
                   }
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
@@ -1294,7 +1332,7 @@ export function SatelliteRoofTrace({
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Imagery: Esri World Imagery. Building footprints and address lookup: OpenStreetMap. DIY
+            Map layer: Esri {baseMap === "satellite" ? "World Imagery" : "World Street Map"}. Building footprints and address lookup: OpenStreetMap. DIY
             mode: draw each roof plane separately and classify every edge; the software calculates
             its dimensions and area from the traced geometry.
           </p>
