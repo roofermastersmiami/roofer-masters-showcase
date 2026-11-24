@@ -50,7 +50,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
         },
         {
           item: "Average panel length",
-          qty: Math.round(r.eaves_lf ? area / r.eaves_lf : 0),
+          qty: Math.round(r.eaves_lf ? r.area_sqft / r.eaves_lf : 0),
           unit: "ft",
         },
         { item: "Total panel linear footage", qty: up(area / (r.panel_width_in / 12)), unit: "ft" },

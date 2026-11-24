@@ -28,3 +28,18 @@ describe("material orders from roof report", () => {
     expect(q(materialOrder({ ...base, roof_type: "TPO" }), "Insulation")).toBe(69);
   });
 });
+
+
+describe("metal panel length and validation", () => {
+  it("does not add area waste to the average panel cut length", () => {
+    const noWaste = q(materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 0 }), "Average panel length");
+    const withWaste = q(materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 15 }), "Average panel length");
+    expect(noWaste).toBe(17);
+    expect(withWaste).toBe(noWaste);
+  });
+
+  it("rejects negative dimensions and waste above the supported limit", () => {
+    expect(() => materialOrder({ ...base, roof_type: "Metal Roof", eaves_lf: -1 })).toThrow();
+    expect(() => materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 51 })).toThrow();
+  });
+});
