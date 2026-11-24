@@ -58,15 +58,19 @@ export function RoofMeasurementsTab({
     provider: "manual" as const,
     notes: "",
   });
-  const initialRequestHandled = useRef(false);
+  const initialRequestHandled = useRef<string | null>(null);
 
   useEffect(() => {
     setActiveId(selectedReportId);
   }, [selectedReportId]);
 
   useEffect(() => {
-    if (!initialAddress || orders.isPending || initialRequestHandled.current) return;
-    initialRequestHandled.current = true;
+    if (!initialAddress) {
+      initialRequestHandled.current = null;
+      return;
+    }
+    if (orders.isPending || initialRequestHandled.current === initialAddress) return;
+    initialRequestHandled.current = initialAddress;
     const existing = orders.data?.find((item) =>
       initialPropertyId
         ? item.property_id === initialPropertyId
