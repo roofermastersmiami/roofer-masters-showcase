@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { MapPin, MousePointer2, RotateCcw, Search, Satellite } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,7 +77,7 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
     setPoints([]);
     setError("");
   }
-  function addMapPoint(event: React.MouseEvent<SVGSVGElement>) {
+  function addMapPoint(event: MouseEvent<SVGSVGElement>) {
     if (!bounds) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * MAP_WIDTH;
