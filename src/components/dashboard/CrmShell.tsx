@@ -387,7 +387,7 @@ export function CrmShell({
                           });
                           setOpenId(null);
                           setSelectedRoofReportId(null);
-                          void go("roof-reports");
+                          void go("measurements");
                         } else {
                           setOpenId(result.lead.id);
                         }
