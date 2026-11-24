@@ -14,12 +14,15 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { createRoofOrder } from "@/lib/roof-orders.functions";
+import { lookupRoofAddress } from "@/lib/roof-address.functions";
 import { roofOrderSchema } from "@/lib/roof-order-schema";
 import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
 import { Field, SectionHeading, Empty } from "./CrmControls";
+
+type LocatedAddress = { matchedAddress: string; lat: number; lon: number };
 
 export function RoofReports({
   initialAddress = "",
@@ -32,11 +35,15 @@ export function RoofReports({
     drawings = useQuery(drawingsQuery),
     qc = useQueryClient();
   const create = useServerFn(createRoofOrder);
+  const lookup = useServerFn(lookupRoofAddress);
   const [adding, setAdding] = useState(!!initialAddress),
     [selected, setSelected] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
+    [lookupBusy, setLookupBusy] = useState(false),
     [search, setSearch] = useState(""),
-    [legacy, setLegacy] = useState(false);
+    [legacy, setLegacy] = useState(false),
+    [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null),
+    [addressError, setAddressError] = useState("");
   const [form, setForm] = useState({
     address: initialAddress,
     title: "Roof measurement report",
@@ -44,8 +51,45 @@ export function RoofReports({
     notes: "",
   });
   const report = orders.data?.find((r) => r.id === selected);
+
+  async function locateAddress() {
+    const address = form.address.trim();
+    if (address.length < 8) {
+      setAddressError("Enter the complete street address, city, state and ZIP code.");
+      return;
+    }
+    setLookupBusy(true);
+    setAddressError("");
+    setLocatedAddress(null);
+    try {
+      const result = await lookup({ data: { address } });
+      if ("error" in result) {
+        setAddressError(result.error);
+        return;
+      }
+      setLocatedAddress(result);
+      setForm((current) => ({ ...current, address: result.matchedAddress }));
+      toast.success("Property address located");
+    } catch (error) {
+      setAddressError(
+        error instanceof Error
+          ? error.message
+          : "The address lookup could not complete. Please retry.",
+      );
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
   async function submit() {
-    const parsed = roofOrderSchema.safeParse(form);
+    if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
+      toast.error("Locate and confirm the property address before creating the report");
+      return;
+    }
+    const parsed = roofOrderSchema.safeParse({
+      ...form,
+      address: locatedAddress.matchedAddress,
+    });
     if (!parsed.success) {
       toast.error("Enter the complete property address");
       return;
@@ -60,12 +104,13 @@ export function RoofReports({
       setAdding(false);
       setSelected(result.id);
       toast.success("Your address-linked roof report is ready for measurement");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create roof report");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create roof report");
     } finally {
       setBusy(false);
     }
   }
+
   if (legacy)
     return (
       <div>
@@ -75,6 +120,7 @@ export function RoofReports({
         <RoofMeasurements />
       </div>
     );
+
   if (report)
     return (
       <div>
@@ -103,17 +149,31 @@ export function RoofReports({
         )}
       </div>
     );
+
   const rows = (orders.data ?? []).filter((r) =>
     `${r.address} ${r.title} ${customers.data?.find((c) => c.id === r.customer_id)?.name ?? ""}`
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+
   return (
     <div>
       <SectionHeading
         title="Roof reports"
         action={
-          <Button onClick={() => setAdding(true)}>
+          <Button
+            onClick={() => {
+              setForm({
+                address: initialAddress,
+                title: "Roof measurement report",
+                provider: "manual",
+                notes: "",
+              });
+              setLocatedAddress(null);
+              setAddressError("");
+              setAdding(true);
+            }}
+          >
             <Plus /> Create report by address
           </Button>
         }
@@ -143,26 +203,26 @@ export function RoofReports({
         <p>Loading roof reports…</p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map((r) => (
+          {rows.map((row) => (
             <article
-              key={r.id}
+              key={row.id}
               className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5"
             >
               <MapPin className="size-5 text-primary" />
-              <h3 className="mt-3 break-words text-lg font-bold">{r.address}</h3>
+              <h3 className="mt-3 break-words text-lg font-bold">{row.address}</h3>
               <p className="mt-2 text-sm">
-                {customers.data?.find((c) => c.id === r.customer_id)?.name}
+                {customers.data?.find((c) => c.id === row.customer_id)?.name}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">{r.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{row.title}</p>
               <p className="my-4 text-xs font-semibold text-muted-foreground">
-                {r.status === "reviewed"
+                {row.status === "reviewed"
                   ? "Owner-reviewed measurements"
-                  : r.drawing_id
+                  : row.drawing_id
                     ? "Drawing saved · awaiting review"
                     : "Awaiting measurements"}{" "}
-                · {new Date(r.created_at).toLocaleDateString()}
+                · {new Date(row.created_at).toLocaleDateString()}
               </p>
-              <Button variant="outline" className="mt-auto" onClick={() => setSelected(r.id)}>
+              <Button variant="outline" className="mt-auto" onClick={() => setSelected(row.id)}>
                 Open measurement report <ArrowRight />
               </Button>
             </article>
@@ -170,19 +230,29 @@ export function RoofReports({
         </div>
       )}
       {!orders.isPending && !orders.error && !rows.length && <Empty>No roof reports yet.</Empty>}
-      <Dialog open={adding} onOpenChange={setAdding}>
+      <Dialog
+        open={adding}
+        onOpenChange={(open) => {
+          setAdding(open);
+          if (!open) {
+            setLocatedAddress(null);
+            setAddressError("");
+          }
+        }}
+      >
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create roof report by address</DialogTitle>
             <DialogDescription>
-              Roofer Masters' own report. Address entry identifies the property; measurements come
-              from your roof dimensions or calibrated aerial photo, not the address alone.
+              Enter the complete property address and locate it first. This confirms the map
+              coordinates before creating the report. Roof facets and dimensions still require a
+              verified roof source or calibrated tracing.
             </DialogDescription>
           </DialogHeader>
           <form
             className="grid gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
+            onSubmit={(event) => {
+              event.preventDefault();
               void submit();
             }}
           >
@@ -192,26 +262,61 @@ export function RoofReports({
                 minLength={8}
                 maxLength={250}
                 autoComplete="street-address"
+                placeholder="123 Main Street, Miami, FL 33130"
                 value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                onChange={(event) => {
+                  setForm({ ...form, address: event.target.value });
+                  setLocatedAddress(null);
+                  setAddressError("");
+                }}
               />
             </Field>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={lookupBusy || form.address.trim().length < 8}
+              onClick={() => void locateAddress()}
+            >
+              <MapPin /> {lookupBusy ? "Locating property…" : "Locate exact address"}
+            </Button>
+            {addressError && (
+              <p role="alert" className="text-sm text-destructive">
+                {addressError}
+              </p>
+            )}
+            {locatedAddress && (
+              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                <p className="font-semibold">Address matched</p>
+                <p className="mt-1">{locatedAddress.matchedAddress}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}
+                </p>
+              </div>
+            )}
             <Field label="Report title">
               <Input
                 required
                 maxLength={180}
                 value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                onChange={(event) => setForm({ ...form, title: event.target.value })}
               />
             </Field>
             <Field label="Inspection notes">
               <Textarea
                 value={form.notes}
                 maxLength={4000}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })}
               />
             </Field>
-            <Button disabled={busy || form.address.trim().length < 8} type="submit">
+            <Button
+              disabled={
+                busy ||
+                lookupBusy ||
+                !locatedAddress ||
+                form.address.trim() !== locatedAddress.matchedAddress
+              }
+              type="submit"
+            >
               <Plus /> {busy ? "Creating…" : "Create my roof report"}
             </Button>
           </form>

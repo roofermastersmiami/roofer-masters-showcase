@@ -48,6 +48,7 @@ import {
   uploadAerialImage,
   aerialInvocationError,
   shouldAutoLoadAddressAerial,
+  addressAerialRequestKey,
 } from "@/lib/public-aerial-import";
 import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
@@ -451,19 +452,22 @@ export function RoofMeasurements({
       setFootprintBusy(false);
     }
   }
-  const autoAerialAttempted = useRef(false);
+  const autoAerialAttempted = useRef("");
   useEffect(() => {
+    const address = report?.address?.trim() || propertyRow?.address;
+    const requestKey = addressAerialRequestKey(report?.id ?? property, address);
     if (
       shouldAutoLoadAddressAerial({
-        address: report?.address?.trim() || propertyRow?.address,
+        address,
+        requestKey: report?.id ?? property,
         hasAerial: media.some((item) => item.category === "aerial"),
-        alreadyAttempted: autoAerialAttempted.current,
+        attemptedKey: autoAerialAttempted.current,
       })
     ) {
-      autoAerialAttempted.current = true;
+      autoAerialAttempted.current = requestKey;
       void loadAerial();
     }
-  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address, media, loadAerial]);
+  }, [report?.id, report?.address, property, propertyRow?.address, initialDrawing?.id, media, loadAerial]);
 
   // Automatically check the free OSM ground outline for address-linked reports.
   // This is a reference footprint only, never a roof measurement or roof plan.
