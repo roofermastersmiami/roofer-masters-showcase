@@ -1593,7 +1593,7 @@ export function RoofMeasurements({
               "Replace the current roof planes with this satellite trace? Existing planes and penetrations will be removed. You can undo immediately afterward.",
             )
           )
-            return;
+            return false;
           edit({
             ...d,
             planes: newPlanes,
