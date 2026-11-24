@@ -1,6 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getStripeEnvironment } from "@/lib/stripe";
+function configuredStripeEnvironment() {
+  try {
+    return getStripeEnvironment();
+  } catch {
+    // Expenses are environment-scoped; do not crash CRM routes when payments are not configured.
+    return null;
+  }
+}
 export const costCatalogQuery = queryOptions({
   queryKey: ["roof-cost-catalog"],
   queryFn: async () => {
@@ -20,10 +28,12 @@ export const invoiceProjectLinksQuery = queryOptions({
 export const expensesQuery = queryOptions({
   queryKey: ["crm-expenses"],
   queryFn: async () => {
+    const environment = configuredStripeEnvironment();
+    if (!environment) return [];
     const { data, error } = await supabase
       .from("crm_expenses")
       .select("*")
-      .eq("environment", getStripeEnvironment())
+      .eq("environment", environment)
       .order("incurred_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
