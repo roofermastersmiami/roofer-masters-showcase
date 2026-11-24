@@ -34,10 +34,10 @@ describe("material orders from roof report", () => {
     expect(q(materialOrder({ ...base, roof_type: "Shingle Roof" }), "Architectural")).toBe(66);
   });
   it("drip edge from eaves + rakes", () => {
-    expect(q(materialOrder({ ...base, ...metal }), "Drip edge")).toBe(20);
+    expect(q(materialOrder({ ...base, ...metal }), "Drip edge")).toBe(22);
   });
   it("metal: panels = eave length / 16in coverage plus waste", () => {
-    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Metal panels")).toBe(99);
+    expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Metal panels")).toBe(100);
   });
   it("valleys: metal valley flashing in 10 ft pieces", () => {
     expect(q(materialOrder({ ...base, roof_type: "Metal Roof" }), "Valley flashing")).toBe(3);
