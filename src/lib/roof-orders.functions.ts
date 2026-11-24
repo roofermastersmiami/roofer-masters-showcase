@@ -229,17 +229,17 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
     if (readError) throw new Error("Could not load roof report");
     if (!current) throw new Error("Roof report was already deleted or does not exist");
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (current.file_path) {
       if (!current.file_path.startsWith(`roof-report/${data.id}/`) || !/^roof-report\\/[a-f0-9-]+\\/[a-f0-9-]+\\.pdf$/.test(current.file_path)) {
         throw new Error("The report contains an unexpected file path. Contact an administrator before deleting it.");
       }
-      const { error: storageError } = await context.supabase.storage
+      const { error: storageError } = await supabaseAdmin.storage
         .from("roofing-proposals")
         .remove([current.file_path]);
       if (storageError) throw new Error("Could not remove the attached report PDF. Nothing was deleted.");
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: deleted, error } = await supabaseAdmin
       .from("roof_report_orders")
       .delete()
