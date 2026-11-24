@@ -318,19 +318,28 @@ export function RoofReports({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={!!signingReport} onOpenChange={(open) => { if (!open) setSigningReport(null); }}>
+      <Dialog
+        open={!!signingReport}
+        onOpenChange={(open) => {
+          if (!open) setSigningReport(null);
+        }}
+      >
         <DialogContent className="flex h-[94vh] w-[98vw] max-w-7xl flex-col gap-3 overflow-hidden">
           <DialogHeader>
             <DialogTitle>Fill &amp; Sign Contract</DialogTitle>
             <DialogDescription>
-              Add signatures and contract fields to a PDF for {signingReport?.address ?? "this property"}.
+              Add signatures and contract fields to a PDF for{" "}
+              {signingReport?.address ?? "this property"}.
             </DialogDescription>
           </DialogHeader>
           {signingReport && (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <PdfContractSigner
                 reportId={signingReport.id}
-                leadId={customers.data?.find((customer) => customer.id === signingReport.customer_id)?.source_lead_id ?? null}
+                leadId={
+                  customers.data?.find((customer) => customer.id === signingReport.customer_id)
+                    ?.source_lead_id ?? null
+                }
                 propertyAddress={signingReport.address}
                 sourcePdfPath={signingReport.file_path}
                 sourceBucket="roofing-proposals"
