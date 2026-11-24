@@ -209,7 +209,14 @@ export function RoofReports({
               className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5"
             >
               <MapPin className="size-5 text-primary" />
-              <button type="button" className="mt-3 break-words text-left text-lg font-bold text-primary underline-offset-4 hover:underline" onClick={() => setSelected(row.id)} aria-label={`Open 2D and 3D roof workspace for ${row.address}`}>{row.address}</button>
+              <button
+                type="button"
+                className="mt-3 break-words text-left text-lg font-bold text-primary underline-offset-4 hover:underline"
+                onClick={() => setSelected(row.id)}
+                aria-label={`Open 2D and 3D roof workspace for ${row.address}`}
+              >
+                {row.address}
+              </button>
               <p className="mt-2 text-sm">
                 {customers.data?.find((c) => c.id === row.customer_id)?.name}
               </p>

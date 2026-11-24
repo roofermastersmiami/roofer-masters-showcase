@@ -461,7 +461,9 @@ export function RoofMeasurements({
         edit({ ...d, planes: [plane], accuracy: "photo_estimate", verified: false });
         setSelected(plane.id);
         setFit((value) => value + 1);
-        toast.info("Preliminary footprint measurements added. Confirm roof outline, pitch, and overhangs before using for an estimate.");
+        toast.info(
+          "Preliminary footprint measurements added. Confirm roof outline, pitch, and overhangs before using for an estimate.",
+        );
       }
       setFootprintMessage(
         result.footprints.length

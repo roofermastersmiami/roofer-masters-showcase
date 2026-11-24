@@ -35,7 +35,13 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
   };
 }
 
-export function SatelliteRoofTrace({ onAdd, initialAddress = "" }: { onAdd: (plane: RoofPlane) => void; initialAddress?: string }) {
+export function SatelliteRoofTrace({
+  onAdd,
+  initialAddress = "",
+}: {
+  onAdd: (plane: RoofPlane) => void;
+  initialAddress?: string;
+}) {
   const [address, setAddress] = useState("");
   const [location, setLocation] = useState<GeocodeResult | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
@@ -109,10 +115,13 @@ export function SatelliteRoofTrace({ onAdd, initialAddress = "" }: { onAdd: (pla
         if (!response.ok) throw new Error("Address lookup unavailable");
         const matches = (await response.json()) as GeocodeResult[];
         if (matches[0]) selectLocation(matches[0]);
-        else setError("No map location was found for this report address. Search it manually below.");
+        else
+          setError("No map location was found for this report address. Search it manually below.");
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError"))
-          setError("Could not locate the report address on the satellite map. Search it manually below.");
+          setError(
+            "Could not locate the report address on the satellite map. Search it manually below.",
+          );
       }
     })();
     return () => controller.abort();
@@ -240,9 +249,25 @@ export function SatelliteRoofTrace({ onAdd, initialAddress = "" }: { onAdd: (pla
                   transform={`translate(${((center.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - center.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
                   pointerEvents="none"
                 >
-                  <path d="M0 24 C-4 16 -18 4 -18 -7 A18 18 0 1 1 18 -7 C18 4 4 16 0 24Z" fill="#dc2626" stroke="white" strokeWidth="3" />
+                  <path
+                    d="M0 24 C-4 16 -18 4 -18 -7 A18 18 0 1 1 18 -7 C18 4 4 16 0 24Z"
+                    fill="#dc2626"
+                    stroke="white"
+                    strokeWidth="3"
+                  />
                   <circle cx="0" cy="-7" r="5" fill="white" />
-                  <text x="24" y="-12" fill="white" stroke="#111827" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="700">Address</text>
+                  <text
+                    x="24"
+                    y="-12"
+                    fill="white"
+                    stroke="#111827"
+                    strokeWidth="4"
+                    paintOrder="stroke"
+                    fontSize="18"
+                    fontWeight="700"
+                  >
+                    Address
+                  </text>
                 </g>
               )}
               {points.length > 2 && (
