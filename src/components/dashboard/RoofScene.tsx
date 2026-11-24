@@ -190,6 +190,7 @@ function Walls({ drawing, color }: { drawing: RoofDrawing; color: string }) {
 export default function RoofScene({
   drawing,
   aerialImageUrl,
+  aerialImageCenter,
   selected,
   onSelect,
   view,
@@ -200,6 +201,7 @@ export default function RoofScene({
 }: {
   drawing: RoofDrawing;
   aerialImageUrl?: string;
+  aerialImageCenter?: [number, number, number];
   selected: string;
   onSelect: (id: string) => void;
   view: "3d" | "plan";
