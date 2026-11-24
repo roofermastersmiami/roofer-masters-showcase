@@ -679,10 +679,8 @@ export function RoofMeasurements({
     if (error) toast.error("Could not upload image");
     else {
       const uploadedPhoto: Media = { path, name: file.name, category: "aerial" };
-      setMedia((current) => {
-        setTraceIndex(current.length);
-        return [...current, uploadedPhoto];
-      });
+      setTraceIndex(media.length);
+      setMedia([...media, uploadedPhoto]);
       setDirty(true);
       toast.success("Photo uploaded and selected for manual roof tracing. Save drawing to retain it.");
     }
