@@ -556,10 +556,12 @@ export function SatelliteRoofTrace({
       // has not been established from imagery/elevation evidence.
       const selectedElement = elements.find((element) => {
         if (element.type !== "way" || !Array.isArray(element.geometry)) return false;
-        const ring = element.geometry.filter(
-          (point, index, all) =>
-            index === 0 || point.lat !== all[index - 1]?.lat || point.lon !== all[index - 1]?.lon,
-        );
+        const ring = [...element.geometry];
+        if (
+          ring.length > 3 &&
+          ring[0]?.lat === ring[ring.length - 1]?.lat &&
+          ring[0]?.lon === ring[ring.length - 1]?.lon
+        ) ring.pop();
         return (
           ring.length >= 3 &&
           ring.length === footprint.length &&
@@ -626,7 +628,7 @@ export function SatelliteRoofTrace({
       <div className="flex items-center gap-2">
         <Satellite className="h-5 w-5 text-primary" />
         <div>
-          <h3 className="font-semibold">Free satellite roof tracing</h3>
+          <h3 className="font-semibold">Satellite roof analysis</h3>
           <p className="text-xs text-muted-foreground">
             An address centers the map only. Trace the roof corners, then add the plane to update
             measurements and the 2D/3D drawing.
@@ -674,7 +676,7 @@ export function SatelliteRoofTrace({
               onClick={autoTraceBuildingFootprint}
             >
               <Satellite className="h-4 w-4" />{" "}
-              {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
+              {autoTraceBusy ? "Finding footprint…" : "Find building outline"}
             </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
