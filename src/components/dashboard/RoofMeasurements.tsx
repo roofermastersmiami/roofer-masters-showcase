@@ -464,6 +464,16 @@ export function RoofMeasurements({
     }
   }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address, media, loadAerial]);
 
+  // Automatically check the free OSM ground outline for address-linked reports.
+  // This is a reference footprint only, never a roof measurement or roof plan.
+  const autoFootprintAttempted = useRef(false);
+  useEffect(() => {
+    const address = report?.address?.trim() || propertyRow?.address;
+    if (!address || autoFootprintAttempted.current) return;
+    autoFootprintAttempted.current = true;
+    void searchFootprints();
+  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address]);
+
   async function upload(file: File) {
     if (
       !property ||
