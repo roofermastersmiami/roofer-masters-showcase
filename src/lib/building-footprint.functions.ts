@@ -25,7 +25,7 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
       format: "json",
     }).toString();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
       const geoResponse = await fetch(geocoderUrl, {
         signal: controller.signal,
@@ -34,9 +34,15 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
       if (!geoResponse.ok)
         return { error: "The free address lookup is temporarily unavailable." } as const;
       const geo = (await geoResponse.json()) as {
-        result?: { addressMatches?: Array<{ coordinates?: { x?: number; y?: number } }> };
+        result?: {
+          addressMatches?: Array<{
+            matchedAddress?: string;
+            coordinates?: { x?: number; y?: number };
+          }>;
+        };
       };
-      const coordinates = geo.result?.addressMatches?.[0]?.coordinates;
+      const addressMatch = geo.result?.addressMatches?.[0];
+      const coordinates = addressMatch?.coordinates;
       if (
         typeof coordinates?.x !== "number" ||
         typeof coordinates.y !== "number" ||
@@ -57,24 +63,32 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
         },
         body: new URLSearchParams({ data: query }),
       });
-      if (!overpass.ok)
+      if (!overpass.ok) {
+        if (overpass.status === 429 || overpass.status === 503 || overpass.status === 504) {
+          return {
+            error:
+              "OpenStreetMap is busy right now. Wait a moment and retry; you can still continue with the aerial image.",
+          } as const;
+        }
         return {
-          error: "OpenStreetMap building data is temporarily unavailable. Try again later.",
+          error: "OpenStreetMap building lookup failed (HTTP " + overpass.status + "). You can still continue with the aerial image.",
         } as const;
+      }
       const payload: unknown = await overpass.json();
       const footprints = parseBuildingFootprints(payload, {
         lat: coordinates.y,
         lon: coordinates.x,
       });
       return {
-        matchedAddress: data.address,
+        matchedAddress: addressMatch?.matchedAddress?.trim() || data.address,
         footprints,
         attribution: "© OpenStreetMap contributors",
       } as const;
     } catch {
       return {
-        error:
-          "The free building-footprint lookup timed out or could not connect. Try again later.",
+        error: controller.signal.aborted
+          ? "The free building-footprint lookup took too long. Wait a moment and retry, or continue by tracing the aerial image."
+          : "The free building-footprint lookup could not connect. Check your connection and retry, or continue by tracing the aerial image.",
       } as const;
     } finally {
       clearTimeout(timeout);
