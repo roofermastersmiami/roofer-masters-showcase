@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import SignatureCanvas from "react-signature-canvas";
-import { CalendarDays, Check, Download, FilePlus2, Lock, PenLine, Plus, Trash2, Type, Upload } from "lucide-react";
+import { CalendarDays, Check, FilePlus2, Lock, PenLine, Plus, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,6 @@ export function PdfContractSigner({
   isClientMode = false, onSaved,
 }: PdfContractSignerProps) {
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
-  const [fileName, setFileName] = useState("roof-contract.pdf");
   const [pages, setPages] = useState<PdfPage[]>([]);
   const [fields, setFields] = useState<SignField[]>([]);
   const [activePage, setActivePage] = useState(0);
@@ -82,7 +81,6 @@ export function PdfContractSigner({
         nextPages.push({ width: viewport.width, height: viewport.height });
       }
       setSourceBytes(bytes);
-      setFileName(name.toLowerCase().endsWith(".pdf") ? name : name + ".pdf");
       setPages(nextPages);
       setFields([]);
       setActivePage(0);
@@ -124,7 +122,9 @@ export function PdfContractSigner({
           const host = pageRefs.current[index];
           const canvas = canvasRefs.current[index];
           if (!host || !canvas) continue;
-          const scale = Math.min(1.6, Math.max(0.7, (host.clientWidth || 760) / pages[index].width));
+          const pageSize = pages[index];
+          if (!pageSize) continue;
+          const scale = Math.min(1.6, Math.max(0.7, (host.clientWidth || 760) / pageSize.width));
           const viewport = page.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
           canvas.width = Math.ceil(viewport.width);
           canvas.height = Math.ceil(viewport.height);
@@ -152,7 +152,7 @@ export function PdfContractSigner({
   const updateField = (id: string, patch: Partial<SignField>) =>
     setFields((current) => current.map((field) => field.id === id ? { ...field, ...patch } : field));
 
-  const beginDrag = (event: React.PointerEvent<HTMLDivElement>, field: SignField) => {
+  const beginDrag = (event: PointerEvent<HTMLDivElement>, field: SignField) => {
     if (isClientMode || (event.target as HTMLElement).closest("input,button")) return;
     const host = pageRefs.current[field.page];
     if (!host) return;
@@ -161,7 +161,7 @@ export function PdfContractSigner({
     dragRef.current = { id: field.id, pointerX: event.clientX, pointerY: event.clientY, startX: field.x, startY: field.y, rect: host.getBoundingClientRect() };
     setSelectedId(field.id);
   };
-  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+  const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || isClientMode) return;
     updateField(drag.id, {
