@@ -193,7 +193,7 @@ function RootComponent() {
           <SiteFooter />
           <MobileActionBar />
           <ChatWidget />
-          <FreeAiReceptionist />
+          <FreeAiReceptionist className="!bottom-5 !left-5 !right-auto" />
         </>
       )}
       <Toaster richColors position="top-center" />
