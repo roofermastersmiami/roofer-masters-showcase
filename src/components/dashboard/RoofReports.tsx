@@ -55,7 +55,9 @@ export function RoofReports({
   const matchingPropertyReport = initialPropertyId
     ? orders.data?.find((r) => r.property_id === initialPropertyId)
     : initialAddress
-      ? orders.data?.find((r) => r.address.trim().toLowerCase() === initialAddress.trim().toLowerCase())
+      ? orders.data?.find(
+          (r) => r.address.trim().toLowerCase() === initialAddress.trim().toLowerCase(),
+        )
       : undefined;
 
   async function locateAddress() {
@@ -134,13 +136,24 @@ export function RoofReports({
         toast.success("Property located. Opening its roof drawing workspace.");
       } catch (error) {
         setAddressError(
-          error instanceof Error ? error.message : "The property could not be opened. Please retry.",
+          error instanceof Error
+            ? error.message
+            : "The property could not be opened. Please retry.",
         );
       } finally {
         setLookupBusy(false);
       }
     })();
-  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup, create, qc, onOpenMeasurement, onRequestHandled]);
+  }, [
+    initialAddress,
+    orders.isPending,
+    matchingPropertyReport?.id,
+    lookup,
+    create,
+    qc,
+    onOpenMeasurement,
+    onRequestHandled,
+  ]);
 
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
@@ -171,8 +184,6 @@ export function RoofReports({
       setBusy(false);
     }
   }
-
-
 
   const rows = (orders.data ?? []).filter((r) =>
     `${r.address} ${r.title} ${customers.data?.find((c) => c.id === r.customer_id)?.name ?? ""}`
@@ -250,7 +261,11 @@ export function RoofReports({
                     : "Awaiting measurements"}{" "}
                 · {new Date(row.created_at).toLocaleDateString()}
               </p>
-              <Button variant="outline" className="mt-auto" onClick={() => onOpenMeasurement(row.id)}>
+              <Button
+                variant="outline"
+                className="mt-auto"
+                onClick={() => onOpenMeasurement(row.id)}
+              >
                 Open measurement report <ArrowRight />
               </Button>
             </article>

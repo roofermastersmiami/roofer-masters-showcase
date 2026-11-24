@@ -26,7 +26,7 @@ export function RoofMeasurementsTab({
 
   const report = orders.data?.find((item) => item.id === activeId);
   const drawing = report
-    ? drawings.data?.find((item) => item.id === report.drawing_id) ?? null
+    ? (drawings.data?.find((item) => item.id === report.drawing_id) ?? null)
     : null;
 
   if (activeId && report) {
@@ -39,8 +39,10 @@ export function RoofMeasurementsTab({
             </p>
             <h1 className="mt-1 break-words text-lg font-bold">{report.address}</h1>
             <p className="text-sm text-muted-foreground">
-              {customers.data?.find((customer) => customer.id === report.customer_id)?.name ?? "Customer property"}
-              {" · "}{report.title}
+              {customers.data?.find((customer) => customer.id === report.customer_id)?.name ??
+                "Customer property"}
+              {" · "}
+              {report.title}
             </p>
           </div>
           <Button
@@ -56,7 +58,9 @@ export function RoofMeasurementsTab({
         {drawings.isPending ? (
           <p>Loading saved roof drawing…</p>
         ) : drawings.error ? (
-          <p role="alert" className="text-destructive">Saved measurements could not load. Refresh before editing.</p>
+          <p role="alert" className="text-destructive">
+            Saved measurements could not load. Refresh before editing.
+          </p>
         ) : (
           <RoofMeasurements key={report.id} report={report} initialDrawing={drawing} />
         )}
@@ -71,8 +75,16 @@ export function RoofMeasurementsTab({
   if (activeId && !report) {
     return (
       <div className="grid gap-4">
-        <p role="alert" className="text-destructive">This roof report could not be found. Return to Roof reports and select it again.</p>
-        <Button variant="outline" onClick={() => { setActiveId(null); onSelectReport(null); }}>
+        <p role="alert" className="text-destructive">
+          This roof report could not be found. Return to Roof reports and select it again.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setActiveId(null);
+            onSelectReport(null);
+          }}
+        >
           <ArrowLeft /> All measurements
         </Button>
       </div>
@@ -87,7 +99,9 @@ export function RoofMeasurementsTab({
         Open a linked roof report to continue its 2D plan, 3D roof model, measurements, and takeoff.
       </p>
       {orders.error || drawings.error ? (
-        <p role="alert" className="mb-4 text-destructive">Roof measurement records could not load.</p>
+        <p role="alert" className="mb-4 text-destructive">
+          Roof measurement records could not load.
+        </p>
       ) : orders.isPending || drawings.isPending ? (
         <p>Loading roof measurement records…</p>
       ) : rows.length ? (
@@ -96,19 +110,33 @@ export function RoofMeasurementsTab({
             const customer = customers.data?.find((item) => item.id === row.customer_id);
             const savedDrawing = drawings.data?.find((item) => item.id === row.drawing_id);
             return (
-              <article key={row.id} className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5">
+              <article
+                key={row.id}
+                className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5"
+              >
                 <div className="flex items-center gap-2 text-primary">
                   <Ruler className="size-5" />
-                  <span className="text-xs font-semibold uppercase tracking-wide">Measurement workspace</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide">
+                    Measurement workspace
+                  </span>
                 </div>
                 <h2 className="mt-3 break-words font-bold">{row.address}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{customer?.name ?? "Customer property"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {customer?.name ?? "Customer property"}
+                </p>
                 <p className="mt-3 text-xs text-muted-foreground">
                   {savedDrawing ? "Saved drawing available" : "No drawing saved yet"}
                   {" · "}
                   {row.status === "reviewed" ? "Owner reviewed" : "Preliminary / awaiting review"}
                 </p>
-                <Button className="mt-5" variant="outline" onClick={() => { setActiveId(row.id); onSelectReport(row.id); }}>
+                <Button
+                  className="mt-5"
+                  variant="outline"
+                  onClick={() => {
+                    setActiveId(row.id);
+                    onSelectReport(row.id);
+                  }}
+                >
                   <MapPin /> Open 2D / 3D workspace
                 </Button>
               </article>
@@ -116,7 +144,10 @@ export function RoofMeasurementsTab({
           })}
         </div>
       ) : (
-        <Empty>No roof reports are linked yet. Create a report in the Roof reports tab, then open it here to measure the roof.</Empty>
+        <Empty>
+          No roof reports are linked yet. Create a report in the Roof reports tab, then open it here
+          to measure the roof.
+        </Empty>
       )}
     </div>
   );

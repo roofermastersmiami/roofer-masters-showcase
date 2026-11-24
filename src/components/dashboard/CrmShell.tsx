@@ -143,7 +143,11 @@ export function CrmShell({
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
     [proposalLeadId, setProposalLeadId] = useState<string | null>(null),
-    [roofReportRequest, setRoofReportRequest] = useState<{ propertyId: string; customerId: string; address: string } | null>(null),
+    [roofReportRequest, setRoofReportRequest] = useState<{
+      propertyId: string;
+      customerId: string;
+      address: string;
+    } | null>(null),
     [selectedRoofReportId, setSelectedRoofReportId] = useState<string | null>(null);
   useEffect(() => {
     setDark(localStorage.getItem("crm-theme") === "dark");
@@ -203,7 +207,13 @@ export function CrmShell({
             .includes(normalizedQuery),
         )
         .slice(0, 5)
-        .map((lead) => ({ key: `lead-${lead.id}`, kind: "lead" as const, title: lead.name, detail: lead.email || lead.phone || lead.address || "Customer record", lead }))
+        .map((lead) => ({
+          key: `lead-${lead.id}`,
+          kind: "lead" as const,
+          title: lead.name,
+          detail: lead.email || lead.phone || lead.address || "Customer record",
+          lead,
+        }))
     : [];
   const propertyResults = normalizedQuery
     ? (properties.data ?? [])
