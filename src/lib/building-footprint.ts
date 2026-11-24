@@ -69,10 +69,34 @@ export function parseBuildingFootprints(
     if (haversine(first, last) > 1) continue;
     const openRing = points.slice(0, -1);
     if (openRing.length < 3 || openRing.length > 200) continue;
-    const center = {
-      lat: openRing.reduce((sum, p) => sum + p.lat, 0) / openRing.length,
-      lon: openRing.reduce((sum, p) => sum + p.lon, 0) / openRing.length,
-    };
+    // Use the polygon centroid rather than the vertex average so irregular
+    // and concave footprints are located by their area, not vertex density.
+    const meanLat = openRing.reduce((sum, point) => sum + point.lat, 0) / openRing.length;
+    const longitudeScale = Math.cos(meanLat * Math.PI / 180);
+    const projected = openRing.map((point) => ({
+      x: point.lon * longitudeScale,
+      y: point.lat,
+    }));
+    let twiceSignedArea = 0;
+    let centroidX = 0;
+    let centroidY = 0;
+    for (let i = 0; i < projected.length; i += 1) {
+      const a = projected[i]!;
+      const b = projected[(i + 1) % projected.length]!;
+      const cross = a.x * b.y - b.x * a.y;
+      twiceSignedArea += cross;
+      centroidX += (a.x + b.x) * cross;
+      centroidY += (a.y + b.y) * cross;
+    }
+    const center = Math.abs(twiceSignedArea) > 1e-12
+      ? {
+          lat: centroidY / (3 * twiceSignedArea),
+          lon: centroidX / (3 * twiceSignedArea * longitudeScale),
+        }
+      : {
+          lat: meanLat,
+          lon: openRing.reduce((sum, point) => sum + point.lon, 0) / openRing.length,
+        };
     const distanceMeters = haversine(origin, center);
     if (distanceMeters > maxDistanceMeters) continue;
     const areaSqM = polygonArea(openRing, center.lat);
