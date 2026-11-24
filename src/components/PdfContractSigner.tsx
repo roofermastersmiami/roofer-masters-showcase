@@ -26,6 +26,7 @@ export type PdfSignField = {
   imageData?: string;
 };
 type PdfPage = { width: number; height: number };
+const EMPTY_FIELDS: PdfSignField[] = [];
 
 export interface PdfContractSignerProps {
   reportId: string;
@@ -54,7 +55,7 @@ const makeField = (kind: FieldKind, page: number): PdfSignField => ({
 
 export function PdfContractSigner({
   reportId, leadId, propertyAddress, sourcePdfPath, sourceBucket = "roofing-proposals",
-  isClientMode = false, onSaved, initialFields = [], onFieldsChange,
+  isClientMode = false, onSaved, initialFields = EMPTY_FIELDS, onFieldsChange,
 }: PdfContractSignerProps) {
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
   const [pages, setPages] = useState<PdfPage[]>([]);
@@ -135,7 +136,7 @@ export function PdfContractSigner({
           canvas.style.width = `${viewport.width / (window.devicePixelRatio || 1)}px`;
           canvas.style.height = `${viewport.height / (window.devicePixelRatio || 1)}px`;
           const context = canvas.getContext("2d");
-          if (context) await page.render({ canvas: context, canvasContext: context, viewport, canvas: canvas as HTMLCanvasElement } as never).promise;
+          if (context) await page.render({ canvas, canvasContext: context, viewport } as never).promise;
         }
       } catch (error) {
         if (!cancelled) toast.error(error instanceof Error ? error.message : "Could not render PDF pages");
