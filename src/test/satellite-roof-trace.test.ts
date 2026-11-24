@@ -105,3 +105,21 @@ describe("satellite map zoom", () => {
     expect(nextSatelliteZoom(0.5, "out")).toBe(0.5);
   });
 });
+
+
+describe("satellite trace validation", () => {
+  it("rejects traces with fewer than three corners or repeated corners", () => {
+    expect(() => satelliteTraceToPlane([origin, { lat: origin.lat, lon: origin.lon + 0.001 }], 0)).toThrow(/between 3 and 100/);
+    expect(() => satelliteTraceToPlane([origin, origin, { lat: origin.lat - 0.001, lon: origin.lon }], 0)).toThrow(/different location/);
+  });
+
+  it("rejects invalid pitch and crossed outlines before they enter the drawing", () => {
+    expect(() => satelliteTraceToPlane([origin, { lat: origin.lat, lon: origin.lon + 0.001 }, { lat: origin.lat - 0.001, lon: origin.lon }], 25)).toThrow(/pitch/);
+    expect(() => satelliteTraceToPlane([
+      origin,
+      { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon + metersToLongitudeDegrees },
+      { lat: origin.lat, lon: origin.lon + metersToLongitudeDegrees },
+      { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon },
+    ], 0)).toThrow(/edges cross/);
+  });
+});
