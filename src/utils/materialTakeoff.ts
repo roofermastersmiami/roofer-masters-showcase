@@ -73,7 +73,7 @@ const MAX_QUANTITY = 10_000_000;
 const ceilQty = (value: number, label: string): number => {
   if (!Number.isFinite(value) || value < 0 || value > MAX_QUANTITY)
     throw new Error(`${label} is outside the supported quantity range`);
-  return Math.ceil(value - 1e-9);
+  return Math.max(0, Math.ceil(value - 1e-9));
 };
 const round2 = (value: number): number => Number(value.toFixed(2));
 
