@@ -55,7 +55,7 @@ export function FreeAiReceptionist({ className }: { className?: string }) {
     window.speechSynthesis.speak(utterance);
   };
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, channel: "chat" | "browser_voice" = "chat") {
     const content = text.trim();
     if (!content || sending) return;
     const next = [...messages, { role: "user" as const, content }];
@@ -67,7 +67,7 @@ export function FreeAiReceptionist({ className }: { className?: string }) {
       if (!API_URL) throw new Error("Receptionist service is not configured yet.");
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content, history: messages.slice(-12), channel: "chat" }),
+        body: JSON.stringify({ message: content, history: messages.slice(-12), channel }),
       });
       if (!response.ok) throw new Error("The receptionist is temporarily unavailable.");
       const data = await response.json() as ApiReply;
@@ -93,7 +93,7 @@ export function FreeAiReceptionist({ className }: { className?: string }) {
       const transcript = Array.from(event.results).map((result) => result[0]?.transcript ?? "").join(" ").trim();
       if (transcript) {
         recognition.lang = isSpanish(transcript) ? "es-US" : "en-US";
-        void sendMessage(transcript);
+        void sendMessage(transcript, "browser_voice");
       }
     };
     recognition.onerror = () => setListening(false);
