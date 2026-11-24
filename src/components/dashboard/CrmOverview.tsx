@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -9,6 +9,8 @@ import {
   Clock,
   Wallet,
   CalendarDays,
+  SlidersHorizontal,
+  GripVertical,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,20 @@ export function CrmOverview() {
     estimates = useQuery(estimatesQuery),
     shares = useQuery(allSharesQuery),
     activity = useQuery(activityQuery);
+  const [customize, setCustomize] = useState(false),
+    [accent, setAccent] = useState("#2563eb"),
+    [density, setDensity] = useState<"comfortable" | "compact">("comfortable"),
+    [cardOrder, setCardOrder] = useState(["Payments received", "Outstanding balance", "Active projects", "New leads"]),
+    [draggedCard, setDraggedCard] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
+      if (typeof saved.accent === "string") setAccent(saved.accent);
+      if (saved.density === "compact" || saved.density === "comfortable") setDensity(saved.density);
+      if (Array.isArray(saved.cardOrder) && saved.cardOrder.every((item: unknown) => typeof item === "string")) setCardOrder(saved.cardOrder);
+    } catch { /* Keep defaults if saved preferences are unavailable. */ }
+  }, []);
+  useEffect(() => { localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardOrder })); }, [accent, density, cardOrder]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
@@ -119,8 +135,15 @@ export function CrmOverview() {
   const signed = new Set((shares.data ?? []).filter((s) => s.signed_at).map((s) => s.proposal_id));
   const value = (n: number) =>
     loading ? "…" : unavailable || !validRange ? "Unavailable" : money(n);
+  const metricCards = [
+    { label: "Payments received", value: value(ledger.collected), icon: Wallet, section: "invoices", note: "Selected period" },
+    { label: "Outstanding balance", value: value(ledger.outstanding), icon: Receipt, section: "invoices", note: "All issued invoices" },
+    { label: "Active projects", value: jobs.isPending ? "…" : jobs.error ? "Unavailable" : String(activeJobs.length), icon: HardHat, section: "jobs", note: `${jobs.data?.filter((j) => j.status === "completed").length ?? 0} completed` },
+    { label: "New leads", value: String(selectedLeads.length), icon: Users, section: "pipeline", note: `${selectedLeads.length ? Math.round((converted.length / selectedLeads.length) * 100) : 0}% lead conversion` },
+  ].sort((a, b) => { const ai = cardOrder.indexOf(a.label); const bi = cardOrder.indexOf(b.label); return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi); });
+  const moveCard = (from: string, to: string) => { const next = [...cardOrder]; const i = next.indexOf(from); const j = next.indexOf(to); if (i < 0 || j < 0) return; next.splice(i, 1); next.splice(j, 0, from); setCardOrder(next); };
   return (
-    <div>
+    <div style={{ "--crm-dashboard-accent": accent } as React.CSSProperties}>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
@@ -136,7 +159,9 @@ export function CrmOverview() {
             })}
           </p>
         </div>
-        <div className="w-44">
+        <div className="flex flex-wrap items-end gap-3">
+          <Button variant="outline" onClick={() => setCustomize(!customize)} aria-expanded={customize}><SlidersHorizontal className="mr-2 size-4" />Customize dashboard</Button>
+          <div className="w-44">
           <Choice
             label="Reporting period"
             value={period}
@@ -149,8 +174,16 @@ export function CrmOverview() {
               { value: "custom", label: "Custom range" },
             ]}
           />
+          </div>
         </div>
       </div>
+      {customize && <section className="mb-6 rounded-xl border border-border bg-card p-5" aria-label="Dashboard customization">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Your workspace, your way</h2><p className="text-sm text-muted-foreground">Drag summary cards to reorder them. Preferences are saved on this device.</p></div>
+          <Button size="sm" variant="ghost" onClick={() => { setAccent("#2563eb"); setDensity("comfortable"); setCardOrder(["Payments received", "Outstanding balance", "Active projects", "New leads"]); }}>Reset layout</Button></div>
+        <div className="mt-4 flex flex-wrap items-center gap-5"><div><p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p><div className="flex gap-2">
+          {["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => <button key={color} type="button" aria-label={`Set accent color ${color}`} aria-pressed={accent === color} onClick={() => setAccent(color)} className="size-8 rounded-full border-2 border-background" style={{ backgroundColor: color, outline: accent === color ? `2px solid ${color}` : "none" }} />)}
+        </div></div><div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD SPACING</p><div className="flex gap-2"><Button size="sm" variant={density === "comfortable" ? "default" : "outline"} onClick={() => setDensity("comfortable")}>Comfortable</Button><Button size="sm" variant={density === "compact" ? "default" : "outline"} onClick={() => setDensity("compact")}>Compact</Button></div></div></div>
+      </section>}
       {period === "custom" && (
         <div className="mb-5 flex flex-wrap gap-3">
           <label className="text-sm">
@@ -183,57 +216,12 @@ export function CrmOverview() {
             : "Some records could not load. Totals are unavailable until records load."}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: "Payments received",
-            value: value(ledger.collected),
-            icon: Wallet,
-            section: "invoices",
-            note: "Selected period",
-          },
-          {
-            label: "Outstanding balance",
-            value: value(ledger.outstanding),
-            icon: Receipt,
-            section: "invoices",
-            note: "All issued invoices",
-          },
-          {
-            label: "Active projects",
-            value: jobs.isPending ? "…" : jobs.error ? "Unavailable" : String(activeJobs.length),
-            icon: HardHat,
-            section: "jobs",
-            note: `${jobs.data?.filter((j) => j.status === "completed").length ?? 0} completed`,
-          },
-          {
-            label: "New leads",
-            value: String(selectedLeads.length),
-            icon: Users,
-            section: "pipeline",
-            note: `${selectedLeads.length ? Math.round((converted.length / selectedLeads.length) * 100) : 0}% lead conversion`,
-          },
-        ].map((s) => (
-          <article key={s.label} className="rounded-lg border border-border bg-card p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-muted-foreground">{s.label}</span>
-              <s.icon className="size-5 text-primary" />
-            </div>
-            <p className="mt-4 break-words text-3xl font-bold">{s.value}</p>
-            <div className="mt-4 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{s.note}</span>
-              <Button
-                size="icon"
-                variant="ghost"
-                title={`View ${s.label.toLowerCase()}`}
-                aria-label={`View ${s.label.toLowerCase()}`}
-                onClick={() => go(s.section)}
-              >
-                <ArrowUpRight className="size-4" />
-              </Button>
-            </div>
-          </article>
-        ))}
+      <div className={`grid ${density === "compact" ? "gap-2" : "gap-4"} sm:grid-cols-2 xl:grid-cols-4`}>
+        {metricCards.map((s) => <article key={s.label} draggable onDragStart={() => setDraggedCard(s.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== s.label) moveCard(draggedCard, s.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)} className={`cursor-grab rounded-lg border border-border bg-card ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === s.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
+          <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{s.label}</span><span className="flex items-center gap-2"><GripVertical className="size-4 text-muted-foreground" /><s.icon className="size-5" style={{ color: accent }} /></span></div>
+          <p className="mt-4 break-words text-3xl font-bold">{s.value}</p>
+          <div className="mt-4 flex items-center justify-between"><span className="text-xs text-muted-foreground">{s.note}</span><Button size="icon" variant="ghost" title={`View ${s.label.toLowerCase()}`} aria-label={`View ${s.label.toLowerCase()}`} onClick={() => go(s.section)}><ArrowUpRight className="size-4" /></Button></div>
+        </article>)}
       </div>
       <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
         <div className="min-w-0">
