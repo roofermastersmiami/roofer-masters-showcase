@@ -459,6 +459,23 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }
+  function useBuildingFootprint(candidate: BuildingFootprint) {
+    const hasImportedFootprint = d.planes.some((item) => item.id.startsWith("osm-footprint-"));
+    const replaceStarter = !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
+    const existingPlanes = replaceStarter
+      ? []
+      : d.planes.filter((item) => !item.id.startsWith("osm-footprint-"));
+    const plane = {
+      ...footprintToDraftPlane(candidate),
+      id: `osm-footprint-${candidate.id}-${Date.now()}`,
+    };
+    edit({ ...d, planes: [...existingPlanes, plane], accuracy: "photo_estimate", verified: false });
+    setSelected(plane.id);
+    setFit((value) => value + 1);
+    toast.info(
+      "Preliminary ground outline added. Confirm the actual roof edge, overhangs, and pitch before using quantities.",
+    );
+  }
   async function searchFootprints() {
     const address = report?.address?.trim() || propertyRow?.address;
     if (!address) return;
@@ -474,16 +491,7 @@ export function RoofMeasurements({
       setFootprints(result.footprints);
       const candidate = result.footprints[0];
       if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
-        const plane = {
-          ...footprintToDraftPlane(candidate),
-          id: `osm-footprint-${candidate.id}-${Date.now()}`,
-        };
-        edit({ ...d, planes: [plane], accuracy: "photo_estimate", verified: false });
-        setSelected(plane.id);
-        setFit((value) => value + 1);
-        toast.info(
-          "Preliminary footprint measurements added. Confirm roof outline, pitch, and overhangs before using for an estimate.",
-        );
+        useBuildingFootprint(candidate);
       }
       setFootprintMessage(
         result.footprints.length
@@ -1438,6 +1446,12 @@ export function RoofMeasurements({
           </p>
         )}
         {footprints.length > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Choose the matching building if several are listed. These mapped outlines show the
+            building footprint, not verified roof edges or roof planes.
+          </p>
+        )}
+        {footprints.length > 0 && (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {footprints.map((footprint) => (
               <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
@@ -1491,6 +1505,14 @@ export function RoofMeasurements({
                   {footprint.points.length} outline corners · OSM building type:{" "}
                   {footprint.buildingType}
                 </p>
+                <Button
+                  className="mt-3 w-full"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useBuildingFootprint(footprint)}
+                >
+                  Use this preliminary outline
+                </Button>
                 <a
                   className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
                   href={`https://www.openstreetmap.org/way/${footprint.id}`}
