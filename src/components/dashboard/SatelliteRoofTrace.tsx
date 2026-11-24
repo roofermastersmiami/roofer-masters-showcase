@@ -11,7 +11,7 @@ const MAP_WIDTH = 1024;
 const MAP_HEIGHT = 640;
 const TILE_SPAN = 0.0015;
 
-function toPlane(points: TracePoint[], pitch: number): RoofPlane {
+export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
   const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
   const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
   const cos = Math.cos((lat0 * Math.PI) / 180);
@@ -29,7 +29,7 @@ function toPlane(points: TracePoint[], pitch: number): RoofPlane {
     id: `satellite-${Date.now()}`,
     name: "Satellite traced roof plane",
     points: vertices,
-    edges: vertices.map(() => "eave"),
+    // A traced polygon does not reveal which sides are eaves, rakes, or ridges.\n    // Keep them unclassified until a user verifies each edge in the measurement editor.\n    edges: vertices.map(() => "other"),
   };
 }
 
@@ -241,7 +241,7 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(toPlane(points, Number(pitch)));
+                  onAdd(satelliteTraceToPlane(points, Number(pitch)));
                   setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
