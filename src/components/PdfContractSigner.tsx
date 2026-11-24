@@ -119,6 +119,7 @@ export function PdfContractSigner({
   const drawStartRef = useRef<{ page: number; x: number; y: number; rect: DOMRect } | null>(null);
   const resizeRef = useRef<{ id: string; pointerX: number; pointerY: number; width: number; height: number; rect: DOMRect } | null>(null);
   const [emailFiles, setEmailFiles] = useState<File[]>([]);
+  const [includeCurrentPdf, setIncludeCurrentPdf] = useState(true);
   const [savedAttachments, setSavedAttachments] = useState<Array<{ path: string; filename: string }>>([]);
   const [emailBusy, setEmailBusy] = useState(false);
   const [pages, setPages] = useState<PdfPage[]>([]);
@@ -524,19 +525,35 @@ export function PdfContractSigner({
       toast.error("Enter the customer's email address");
       return;
     }
-    if (!savedAttachments.length && !emailFiles.length) {
+    if (!savedAttachments.length && !emailFiles.length && !includeCurrentPdf) {
       toast.error("Add at least one PDF attachment");
       return;
     }
+    const selectedBytes = emailFiles.reduce((total, file) => total + file.size, includeCurrentPdf && sourceBytes ? sourceBytes.byteLength : 0);
+    if (selectedBytes > 20 * 1024 * 1024) {
+      toast.error("All PDF attachments together must be 20 MB or less");
+      return;
+    }
     setEmailBusy(true);
+    const uploadedPaths: string[] = [];
     try {
       const uploaded = [...savedAttachments];
+      if (includeCurrentPdf && sourceBytes) {
+        const safeName = sourceFileName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100) || "roof-report.pdf";
+        const path = `${leadId}/${reportId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+        const blob = new Blob([Uint8Array.from(sourceBytes)], { type: "application/pdf" });
+        const { error } = await supabase.storage.from("signed-contracts").upload(path, blob, { contentType: "application/pdf", upsert: false });
+        if (error) throw error;
+        uploadedPaths.push(path);
+        uploaded.push({ path, filename: safeName });
+      }
       for (const file of emailFiles) {
         if (file.type !== "application/pdf" || file.size > 20 * 1024 * 1024) throw new Error(`${file.name} must be a PDF under 20 MB`);
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
         const path = `${leadId}/${reportId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
         const { error } = await supabase.storage.from("signed-contracts").upload(path, file, { contentType: "application/pdf", upsert: false });
         if (error) throw error;
+        uploadedPaths.push(path);
         uploaded.push({ path, filename: safeName });
       }
       const fullMessage = [emailMessage.trim(), companySignature.trim()].filter(Boolean).join("\n\n");
@@ -547,11 +564,21 @@ export function PdfContractSigner({
       setEmailOpen(false);
       toast.success(`Email sent with ${result.attachmentCount} PDF file(s)`);
     } catch (error) {
+      if (uploadedPaths.length) await supabase.storage.from("signed-contracts").remove(uploadedPaths);
       toast.error(error instanceof Error ? error.message : "Could not send email");
     } finally {
       setEmailBusy(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!emailOpen || !leadId || emailTo.trim()) return;
+    void supabase.from("leads").select("email").eq("id", leadId).maybeSingle().then(({ data }) => {
+      if (!cancelled && data?.email) setEmailTo(data.email);
+    });
+    return () => { cancelled = true; };
+  }, [emailOpen, leadId, emailTo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -867,8 +894,10 @@ export function PdfContractSigner({
             <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
             <label className="grid gap-1 text-sm">Compose message<textarea className="min-h-28 rounded-md border bg-background p-3 text-sm" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} placeholder="Write your message to the customer…" /></label>
             <label className="grid gap-1 text-sm">Company email signature<textarea className="min-h-24 rounded-md border bg-background p-3 text-sm" value={companySignature} onChange={(event) => setCompanySignature(event.target.value)} placeholder="Your name, company, phone, website…" /></label>
-            <label className="grid gap-1 text-sm">Add multiple PDF files<input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => setEmailFiles(Array.from(event.target.files ?? []))} /></label>
-            <p className="text-xs text-muted-foreground">{savedAttachments.length + emailFiles.length} PDF attachment(s) selected. Total email size limit: 20 MB.</p>
+            {sourceBytes && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeCurrentPdf} onChange={(event) => setIncludeCurrentPdf(event.target.checked)} /> Attach current PDF ({sourceFileName})</label>}
+            <label className="grid gap-1 text-sm">Add more PDF files<input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => { const incoming = Array.from(event.target.files ?? []); setEmailFiles((current) => [...current, ...incoming.filter((file) => !current.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified))]); event.target.value = ""; }} /></label>
+            {emailFiles.length > 0 && <ul className="space-y-1 text-xs">{emailFiles.map((file, index) => <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-2 rounded border p-2"><span className="truncate">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span><Button type="button" size="sm" variant="ghost" onClick={() => setEmailFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</Button></li>)}</ul>}
+            <p className="text-xs text-muted-foreground">{savedAttachments.length + emailFiles.length + (includeCurrentPdf && sourceBytes ? 1 : 0)} PDF attachment(s) selected. Combined limit: 20 MB.</p>
             <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEmailOpen(false)}>Cancel</Button><Button onClick={() => void sendEmail()} disabled={emailBusy || !emailTo.trim()}>{emailBusy ? "Sending…" : <><Send className="mr-1 size-4" /> Send email</>}</Button></div>
           </div>
         </DialogContent>
