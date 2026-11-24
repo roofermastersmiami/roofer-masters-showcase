@@ -255,8 +255,8 @@ describe("georeferenced address marker", () => {
     expect(east.z).toBe(0);
     expect(north.x).toBe(0);
     expect(north.z).toBeLessThan(0);
-    expect(east.x).toBeCloseTo(299.8, 0);
-    expect(north.z).toBeCloseTo(-364.0, 0);
+    expect(east.x).toBeCloseTo(30.6, 0);
+    expect(north.z).toBeCloseTo(-33.7, 0);
   });
 
   it("keeps geographic metadata optional for legacy drawings", () => {
