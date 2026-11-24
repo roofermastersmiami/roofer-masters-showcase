@@ -99,8 +99,28 @@ export function RoofReports({
       return;
     }
     setAdding(true);
-    void locateAddress();
-  }, [initialAddress, orders.isPending, matchingPropertyReport?.id]);
+    const address = initialAddress.trim();
+    setLookupBusy(true);
+    setAddressError("");
+    void (async () => {
+      try {
+        const result = await lookup({ data: { address } });
+        if ("error" in result) {
+          setAddressError(result.error);
+          return;
+        }
+        setLocatedAddress(result);
+        setForm((current) => ({ ...current, address: result.matchedAddress }));
+        toast.success("Saved property address located");
+      } catch (error) {
+        setAddressError(
+          error instanceof Error ? error.message : "The saved property address could not be located.",
+        );
+      } finally {
+        setLookupBusy(false);
+      }
+    })();
+  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup]);
 
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
