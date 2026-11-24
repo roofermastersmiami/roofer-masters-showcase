@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { planeInfo, type RoofPlane, type Point } from "@/lib/roof-geometry";
+import { planeInfo, type RoofPlane, type Point, type GeoReference } from "@/lib/roof-geometry";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type PitchDirection = "north" | "south" | "east" | "west";
@@ -330,7 +330,7 @@ export function SatelliteRoofTrace({
   onAdd,
   initialAddress = "",
 }: {
-  onAdd: (planes: RoofPlane[]) => void;
+  onAdd: (planes: RoofPlane[], geoReference: GeoReference) => void;
   initialAddress?: string;
 }) {
   const [address, setAddress] = useState("");
@@ -514,7 +514,14 @@ export function SatelliteRoofTrace({
       return `${((p.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - p.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT}`;
     })
     .join(" ");
+  const traceGeoReference = (trace: TracePoint[], addressPoint: TracePoint): GeoReference => ({
+    addressLatitude: addressPoint.lat,
+    addressLongitude: addressPoint.lon,
+    originLatitude: trace.reduce((sum, point) => sum + point.lat, 0) / trace.length,
+    originLongitude: trace.reduce((sum, point) => sum + point.lon, 0) / trace.length,
+  });
   const canAdd =
+    Boolean(center) &&
     points.length >= 3 &&
     Number.isFinite(Number(pitch)) &&
     Number(pitch) >= 0 &&
@@ -844,7 +851,7 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd([satelliteTraceToPlane(points, Number(pitch), pitchDirection)]);
+                  onAdd([satelliteTraceToPlane(points, Number(pitch), pitchDirection)], traceGeoReference(points, center!));
                   setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
@@ -917,6 +924,7 @@ export function SatelliteRoofTrace({
                       ridgeOffsetPercent,
                       ridgeAngleDegrees,
                     ),
+                    traceGeoReference(points, center!),
                   );
                   setPoints([]);
                 } catch (e) {
