@@ -1012,7 +1012,9 @@ export function RoofMeasurements({
               </div>
             ))}
             {sharedEdgeSuggestions.length > 0 && (
-              <span className="text-xs font-medium text-amber-600">Thicker colored edges are geometry-based suggestions — review before applying</span>
+              <span className="text-xs font-medium text-amber-600">
+                Thicker colored edges are geometry-based suggestions — review before applying
+              </span>
             )}
           </div>
         </div>
