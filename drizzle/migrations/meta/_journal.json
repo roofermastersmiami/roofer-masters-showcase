@@ -260,6 +260,13 @@
       "when": 1795652000000,
       "tag": "0036_free_ai_receptionist_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795653000000,
+      "tag": "0037_pdf_sign_templates",
+      "breakpoints": true
     }
   ]
 }
