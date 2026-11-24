@@ -228,8 +228,12 @@ export function satelliteTraceToGablePlanes(
     const plane: RoofPlane = {
       id: `satellite-gable-${index}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       name: ridgeAxis === "north-south"
-        ? index === 0 ? "West gable facet" : "East gable facet"
-        : index === 0 ? "North gable facet" : "South gable facet",
+        ? path.reduce((sum, point) => sum + point.x, 0) / path.length < centerAxis
+          ? "West gable facet"
+          : "East gable facet"
+        : path.reduce((sum, point) => sum + point.z, 0) / path.length < centerAxis
+          ? "North gable facet"
+          : "South gable facet",
       points: vertices,
       edges: vertices.map((_, edgeIndex) =>
         edgeIndex === vertices.length - 1 ? "ridge" : "other",
