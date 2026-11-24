@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import SignatureCanvas from "react-signature-canvas";
@@ -9,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type FieldKind = "signature" | "name" | "date" | "initials" | "text";
 export type PdfSignField = {
@@ -78,6 +75,8 @@ export function PdfContractSigner({
   const loadPdf = useCallback(async (bytes: Uint8Array, name: string) => {
     setLoading(true);
     try {
+      const pdfjsLib = await import("pdfjs-dist");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
       const document = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
       const nextPages: PdfPage[] = [];
       for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
@@ -120,6 +119,8 @@ export function PdfContractSigner({
     let cancelled = false;
     const render = async () => {
       try {
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
         const doc = await pdfjsLib.getDocument({ data: sourceBytes.slice() }).promise;
         for (let index = 0; index < doc.numPages; index++) {
           if (cancelled) return;
