@@ -372,10 +372,12 @@ export function SatelliteRoofTrace({
   const [autoTraced, setAutoTraced] = useState(false);
   const [selectedBuildingCenter, setSelectedBuildingCenter] = useState<TracePoint | null>(null);
   const [placingTarget, setPlacingTarget] = useState(false);
+  const [panMode, setPanMode] = useState(false);
   const [error, setError] = useState("");
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
+  const draggingMap = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const suppressNextMapClick = useRef(false);
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
@@ -683,6 +685,23 @@ export function SatelliteRoofTrace({
             <Button
               type="button"
               size="sm"
+              variant={panMode ? "secondary" : "outline"}
+              onClick={() => setPanMode((current) => !current)}
+              aria-pressed={panMode}
+            >
+              <MousePointer2 className="h-4 w-4" /> {panMode ? "Pan mode on" : "Click + drag to move"}
+            </Button>
+            <a
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+              href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${(selectedBuildingCenter ?? mapCenter ?? center!).lat},${(selectedBuildingCenter ?? mapCenter ?? center!).lon}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <MapPin className="h-4 w-4" /> Open Street View
+            </a>
+            <Button
+              type="button"
+              size="sm"
               variant="outline"
               disabled={autoTraceBusy}
               onClick={autoTraceBuildingFootprint}
@@ -811,9 +830,29 @@ export function SatelliteRoofTrace({
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className="block aspect-[8/5] w-full cursor-crosshair touch-none"
+              className={`block aspect-[8/5] w-full touch-none ${panMode ? "cursor-grab" : "cursor-crosshair"}`}
               onClick={addMapPoint}
+              onPointerDown={(event) => {
+                if (!panMode || placingTarget || draggingPoint.current !== null) return;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                draggingMap.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+              }}
               onPointerMove={(event) => {
+                if (draggingMap.current?.pointerId === event.pointerId) {
+                  const previous = draggingMap.current;
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0 && bounds) {
+                    const deltaLon = ((event.clientX - previous.x) / rect.width) * (bounds.east - bounds.west);
+                    const deltaLat = ((event.clientY - previous.y) / rect.height) * (bounds.north - bounds.south);
+                    setMapCenter((current) => current ? {
+                      lat: Math.max(-85, Math.min(85, current.lat + deltaLat)),
+                      lon: Math.max(-180, Math.min(180, current.lon - deltaLon)),
+                    } : current);
+                  }
+                  draggingMap.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+                  suppressNextMapClick.current = true;
+                  return;
+                }
                 const index = draggingPoint.current;
                 if (index === null) return;
                 const point = tracePointFromPointer(
@@ -824,13 +863,18 @@ export function SatelliteRoofTrace({
                 if (point)
                   setPoints((current) => current.map((item, i) => (i === index ? point : item)));
               }}
-              onPointerUp={() => {
+              onPointerUp={(event) => {
+                if (draggingMap.current?.pointerId === event.pointerId) {
+                  draggingMap.current = null;
+                  suppressNextMapClick.current = true;
+                }
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
                   suppressNextMapClick.current = true;
                 }
               }}
               onPointerCancel={() => {
+                draggingMap.current = null;
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
               }}
@@ -863,7 +907,8 @@ export function SatelliteRoofTrace({
               }}
               onWheel={(event) => {
                 event.preventDefault();
-                setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
+                if (event.deltaY !== 0)
+                  setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
               }}
               onDoubleClick={(event) => {
                 event.preventDefault();
