@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   roofPreset,
   measureDrawing,
+  roofPlaneTakeoff,
   auditRoofReport,
   toMaterialReport,
   suggestSharedEdgeClassifications,
@@ -351,6 +352,33 @@ describe("per-plane roof report takeoff", () => {
   it("does not merge distinct roof planes into one aggregate row", () => {
     const drawing = roofPreset("hip", 40, 30, 6);
     const rows = roofPlaneTakeoff(drawing);
+    expect(rows.map((row) => row.name)).toEqual(["West", "East", "South", "North"]);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(4);
+  });
+});
+
+describe("per-plane roof report takeoff", () => {
+  it("retains plane areas, pitches, waste area, and classified edge lengths", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const rows = roofPlaneTakeoff(drawing);
+    const measured = measureDrawing(drawing);
+    expect(rows).toHaveLength(2);
+    expect(rows.reduce((sum, row) => sum + row.area_sqft, 0)).toBeCloseTo(measured.area, 5);
+    expect(rows.reduce((sum, row) => sum + row.area_with_waste_sqft, 0)).toBeCloseTo(measured.withWaste, 5);
+    expect(rows.every((row) => row.pitch_rise_per_12 > 0)).toBe(true);
+    for (const row of rows) {
+      const plane = drawing.planes.find((candidate) => candidate.id === row.id)!;
+      const perimeter = plane.points.reduce((sum, point, index, points) => {
+        const next = points[(index + 1) % points.length]!;
+        return sum + Math.hypot(point.x - next.x, point.y - next.y, point.z - next.z);
+      }, 0);
+      const classified = Object.values(row.edges_lf).reduce((sum, value) => sum + value, 0);
+      expect(classified).toBeCloseTo(perimeter, 5);
+    }
+  });
+
+  it("keeps distinct roof planes as separate report rows", () => {
+    const rows = roofPlaneTakeoff(roofPreset("hip", 40, 30, 6));
     expect(rows.map((row) => row.name)).toEqual(["West", "East", "South", "North"]);
     expect(new Set(rows.map((row) => row.id)).size).toBe(4);
   });
