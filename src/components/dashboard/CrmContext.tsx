@@ -9,7 +9,7 @@ export type CrmState = {
   go: (section: string) => void;
   roofReportRequest: { propertyId: string; customerId: string; address: string } | null;
   selectedRoofReportId: string | null;
-  openRoofMeasurements: (reportId: string) => void;
+  openRoofMeasurements: (reportId: string | null) => void;
 };
 export const CrmContext = createContext<CrmState | null>(null);
 export function useCrm() {
