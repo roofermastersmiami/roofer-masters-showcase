@@ -316,10 +316,42 @@ export function RoofMeasurements({
         if (currentReportError || !currentReport) throw new Error("Could not refresh the roof report before attaching its PDF");
         await attachPdfFn({ data: { id: report.id, path: roofReportPdfPath, updated_at: currentReport.updated_at } });
         await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
-        const { downloadPdf } = await import("./proposal-data");
-        downloadPdf(bytes, title);
-        toast.success("Measurement PDF saved to Roof reports and downloaded");
+        if (share) {
+  else if (share) {
+          const { data: row, error } = await supabase
+            .from("proposals")
+            .insert({
+              title,
+              category: d.roof_type,
+              lead_id: customer?.source_lead_id ?? null,
+              property_id: property,
+              drawing_id: parent,
+              scope: "Roof measurement report",
+              terms: "",
+              amount: null,
+            })
+            .select("id")
+            .single();
+          if (error || !row) throw error;
+          proposalId = row.id;
+          const { uploadProposalPdf } = await import("./proposal-data");
+          const path = await uploadProposalPdf(row.id, bytes);
+          const { error: updateError } = await supabase
+            .from("proposals")
+            .update({ file_path: path })
+            .eq("id", row.id);
+          if (updateError) throw updateError;
+          await qc.invalidateQueries({ queryKey: ["proposals"] });
+          toast.success("Report added to documents; create a private sharing link");
+          go("proposals");
+  
+        } else {
+          const { downloadPdf } = await import("./proposal-data");
+          downloadPdf(bytes, title);
+          toast.success("Measurement PDF saved to Roof reports and downloaded");
+        }
       } else if (share) {
+else if (share) {
         const { data: row, error } = await supabase
           .from("proposals")
           .insert({
@@ -346,9 +378,11 @@ export function RoofMeasurements({
         await qc.invalidateQueries({ queryKey: ["proposals"] });
         toast.success("Report added to documents; create a private sharing link");
         go("proposals");
+
       } else {
         const { downloadPdf } = await import("./proposal-data");
         downloadPdf(bytes, title);
+      }
       }
     } catch (error) {
       if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);
