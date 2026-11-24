@@ -197,7 +197,9 @@ export function RoofMeasurements({
   );
   async function save() {
     if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
-      toast.error("Add a measured roof dimension or trace the actual roof before saving this report");
+      toast.error(
+        "Add a measured roof dimension or trace the actual roof before saving this report",
+      );
       return;
     }
     if (!measurement || !property) {
