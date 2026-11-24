@@ -12,6 +12,11 @@ const MAP_HEIGHT = 640;
 const TILE_SPAN = 0.0015;
 const METERS_TO_FEET = 1 / 0.3048;
 
+export function nextSatelliteZoom(current: number, direction: "in" | "out"): number {
+  const factor = direction === "in" ? 1.5 : 1 / 1.5;
+  return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
+}
+
 export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
   const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
   const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
@@ -53,6 +58,7 @@ export function SatelliteRoofTrace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const initialLookupStarted = useRef(false);
+  const skipNextAddressSearch = useRef(false);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
   const bounds = useMemo(
     () =>
@@ -71,6 +77,11 @@ export function SatelliteRoofTrace({
     : "";
 
   useEffect(() => {
+    if (skipNextAddressSearch.current) {
+      skipNextAddressSearch.current = false;
+      setResults([]);
+      return;
+    }
     if (!address.trim()) {
       setResults([]);
       return;
@@ -96,6 +107,7 @@ export function SatelliteRoofTrace({
   }, [address]);
 
   function selectLocation(result: GeocodeResult) {
+    skipNextAddressSearch.current = true;
     setLocation(result);
     setAddress(result.display_name);
     setResults([]);
@@ -204,7 +216,7 @@ export function SatelliteRoofTrace({
                 variant="outline"
                 size="sm"
                 disabled={zoom <= 0.5}
-                onClick={() => setZoom((value) => Math.max(0.5, Number((value / 1.5).toFixed(3))))}
+                onClick={() => setZoom((value) => nextSatelliteZoom(value, "out"))}
                 aria-label="Zoom out"
               >
                 <Minus className="h-4 w-4" /> Zoom out
@@ -214,7 +226,7 @@ export function SatelliteRoofTrace({
                 variant="outline"
                 size="sm"
                 disabled={zoom >= 8}
-                onClick={() => setZoom((value) => Math.min(8, Number((value * 1.5).toFixed(3))))}
+                onClick={() => setZoom((value) => nextSatelliteZoom(value, "in"))}
                 aria-label="Zoom in"
               >
                 <Plus className="h-4 w-4" /> Zoom in
@@ -235,6 +247,14 @@ export function SatelliteRoofTrace({
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
               className="block aspect-[8/5] w-full cursor-crosshair"
               onClick={addMapPoint}
+              onWheel={(event) => {
+                event.preventDefault();
+                setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
+              }}
+              onDoubleClick={(event) => {
+                event.preventDefault();
+                setZoom((value) => nextSatelliteZoom(value, "in"));
+              }}
               role="img"
               aria-label="Satellite image. Click around the roof to trace its outline."
             >
