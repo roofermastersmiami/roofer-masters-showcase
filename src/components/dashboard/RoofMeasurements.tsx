@@ -951,7 +951,7 @@ export function RoofMeasurements({
                     />
                     <div className="min-w-0 flex-1">
                       <Choice
-                        label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label}`}
+                        label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label} · ${distance(plane.points[i]!, plane.points[(i + 1) % plane.points.length]!).toFixed(1)} ft`}
                         value={type}
                         onChange={(value) => {
                           const edge = EDGE_TYPES.find((e) => e === value);
