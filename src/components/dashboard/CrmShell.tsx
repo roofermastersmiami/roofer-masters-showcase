@@ -259,15 +259,6 @@ export function CrmShell({
     }
   }
   useEffect(() => {
-    if (sidebarPreferencesLoaded) localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
-  }, [sidebarAppearance, sidebarPreferencesLoaded]);
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("crm-theme-ocean", "crm-theme-slate", "crm-theme-emerald", "crm-theme-sunset", "crm-theme-violet");
-    root.classList.add(`crm-theme-${theme}`);
-    localStorage.setItem("crm-theme-preset", theme);
-  }, [theme]);
-  useEffect(() => {
     document.documentElement.classList.toggle("crm-dark", dark);
     document.documentElement.classList.toggle("dark", dark);
     return () => {
