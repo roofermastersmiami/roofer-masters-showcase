@@ -168,7 +168,9 @@ export function RoofReports({
       await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
       setSwipedReportId(null);
       setPendingDelete(null);
-      toast.success("Roof report deleted. Saved drawing revisions and customer property were kept.");
+      toast.success(
+        "Roof report deleted. Saved drawing revisions and customer property were kept.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete roof report");
     } finally {
@@ -245,7 +247,9 @@ export function RoofReports({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <p className="text-sm text-muted-foreground">Roofer Masters · Company-owned reports · Swipe left to delete</p>
+        <p className="text-sm text-muted-foreground">
+          Roofer Masters · Company-owned reports · Swipe left to delete
+        </p>
       </div>
       {orders.error && (
         <p role="alert" className="text-destructive">
@@ -260,7 +264,9 @@ export function RoofReports({
             <div
               key={row.id}
               className="relative min-w-0 overflow-hidden rounded-lg border border-border bg-destructive/10"
-              onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }}
+              onTouchStart={(event) => {
+                touchStartX.current = event.touches[0]?.clientX ?? null;
+              }}
               onTouchEnd={(event) => {
                 const start = touchStartX.current;
                 touchStartX.current = null;
@@ -271,7 +277,9 @@ export function RoofReports({
                 if (delta < -55) setSwipedReportId(row.id);
                 else if (delta > 55) setSwipedReportId(null);
               }}
-              onTouchCancel={() => { touchStartX.current = null; }}
+              onTouchCancel={() => {
+                touchStartX.current = null;
+              }}
             >
               <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center">
                 <Button
@@ -286,7 +294,9 @@ export function RoofReports({
               </div>
               <article
                 className="relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-5 transition-transform duration-200 ease-out"
-                style={{ transform: swipedReportId === row.id ? "translateX(-6rem)" : "translateX(0)" }}
+                style={{
+                  transform: swipedReportId === row.id ? "translateX(-6rem)" : "translateX(0)",
+                }}
               >
                 <MapPin className="size-5 text-primary" />
                 <button
@@ -322,16 +332,25 @@ export function RoofReports({
         </div>
       )}
       {!orders.isPending && !orders.error && !rows.length && <Empty>No roof reports yet.</Empty>}
-      <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}>
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete this roof report?</DialogTitle>
             <DialogDescription>
-              This permanently removes the report for {pendingDelete?.address ?? "this property"}. The customer and property record, saved roof drawing revisions, and any linked estimate records are kept. This action cannot be undone.
+              This permanently removes the report for {pendingDelete?.address ?? "this property"}.
+              The customer and property record, saved roof drawing revisions, and any linked
+              estimate records are kept. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button variant="outline" disabled={deleting} onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
             <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
               <Trash2 /> {deleting ? "Deleting…" : "Delete report"}
             </Button>
