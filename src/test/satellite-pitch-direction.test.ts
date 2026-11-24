@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  nextSatelliteZoom,
-  satelliteTraceToPlane,
-} from "@/components/dashboard/SatelliteRoofTrace";
-import { measureDrawing, planeInfo, toMaterialReport } from "@/lib/roof-geometry";
+import { satelliteTraceToPlane } from "@/components/dashboard/SatelliteRoofTrace";
+import { planeInfo } from "@/lib/roof-geometry";
 
 const origin = { lat: 25.47, lon: -80.48 };
 const metersToLatitudeDegrees = 20 / 110540;
