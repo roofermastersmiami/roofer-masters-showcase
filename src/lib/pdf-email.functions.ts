@@ -104,7 +104,7 @@ async function sendSmtpMessage(input: {
       Buffer.from(input.message, "utf8").toString("base64").match(/.{1,76}/g)?.join("\r\n") ?? "",
       ...input.attachments.flatMap((file) => [
         `--${boundary}`,
-        'Content-Type: application/pdf; name="${file.filename}"',
+        `Content-Type: application/pdf; name="${file.filename}"`,
         "Content-Transfer-Encoding: base64",
         `Content-Disposition: attachment; filename="${file.filename}"`,
         "",
