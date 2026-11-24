@@ -547,12 +547,16 @@ export function SatelliteRoofTrace({
         );
         const accepted = onAdd(preliminaryPlanes, traceGeoReference(footprint, { lat, lon }));
         if (accepted === false) {
-          setError("The existing roof layout was kept. Confirm replacement before adding this preliminary 3D roof.");
+          setError(
+            "The existing roof layout was kept. Confirm replacement before adding this preliminary 3D roof.",
+          );
         } else {
           setError("");
         }
       } catch {
-        setError("The building was identified and outlined, but its shape could not safely produce a starter gable. Adjust the ridge direction or trace the roof manually, then add planes.");
+        setError(
+          "The building was identified and outlined, but its shape could not safely produce a starter gable. Adjust the ridge direction or trace the roof manually, then add planes.",
+        );
       }
     } catch (e) {
       setError(

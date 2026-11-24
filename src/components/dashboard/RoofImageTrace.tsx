@@ -222,10 +222,39 @@ export function RoofImageTrace({
       {photo.data ? (
         <div className="relative w-full overflow-hidden rounded-md border border-border">
           <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md border bg-background/95 p-1 shadow">
-            <Button type="button" size="icon" variant="outline" aria-label="Zoom out photo" disabled={photoZoom <= 1} onClick={() => setPhotoZoom((v) => Math.max(1, Number((v / 1.25).toFixed(2))))}><ZoomOut /></Button>
-            <span className="flex min-w-12 items-center justify-center text-xs tabular-nums">{photoZoom.toFixed(1)}×</span>
-            <Button type="button" size="icon" variant="outline" aria-label="Zoom in photo" disabled={photoZoom >= 5} onClick={() => setPhotoZoom((v) => Math.min(5, Number((v * 1.25).toFixed(2))))}><ZoomIn /></Button>
-            <Button type="button" size="icon" variant="ghost" aria-label="Reset photo zoom" disabled={photoZoom === 1} onClick={() => setPhotoZoom(1)}><RotateCcw /></Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              aria-label="Zoom out photo"
+              disabled={photoZoom <= 1}
+              onClick={() => setPhotoZoom((v) => Math.max(1, Number((v / 1.25).toFixed(2))))}
+            >
+              <ZoomOut />
+            </Button>
+            <span className="flex min-w-12 items-center justify-center text-xs tabular-nums">
+              {photoZoom.toFixed(1)}×
+            </span>
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              aria-label="Zoom in photo"
+              disabled={photoZoom >= 5}
+              onClick={() => setPhotoZoom((v) => Math.min(5, Number((v * 1.25).toFixed(2))))}
+            >
+              <ZoomIn />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Reset photo zoom"
+              disabled={photoZoom === 1}
+              onClick={() => setPhotoZoom(1)}
+            >
+              <RotateCcw />
+            </Button>
           </div>
           <img
             src={photo.data}
@@ -246,13 +275,20 @@ export function RoofImageTrace({
             preserveAspectRatio="xMidYMid meet"
             aria-label="Roof tracing surface"
             onPointerMove={onMove}
-            style={{ touchAction: "none", transform: `scale(${photoZoom})`, transformOrigin: "center center" }}
+            style={{
+              touchAction: "none",
+              transform: `scale(${photoZoom})`,
+              transformOrigin: "center center",
+            }}
             onTouchStart={(event) => {
               if (event.touches.length === 2) {
                 event.preventDefault();
                 const a = event.touches[0]!;
                 const b = event.touches[1]!;
-                pinch.current = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), zoom: photoZoom };
+                pinch.current = {
+                  distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+                  zoom: photoZoom,
+                };
               }
             }}
             onTouchMove={(event) => {
@@ -261,9 +297,13 @@ export function RoofImageTrace({
               const a = event.touches[0]!;
               const b = event.touches[1]!;
               const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-              setPhotoZoom(Math.max(1, Math.min(5, pinch.current.zoom * (distance / pinch.current.distance))));
+              setPhotoZoom(
+                Math.max(1, Math.min(5, pinch.current.zoom * (distance / pinch.current.distance))),
+              );
             }}
-            onTouchEnd={(event) => { if (event.touches.length < 2) pinch.current = null; }}
+            onTouchEnd={(event) => {
+              if (event.touches.length < 2) pinch.current = null;
+            }}
             onPointerUp={() => {
               drag.current = null;
             }}

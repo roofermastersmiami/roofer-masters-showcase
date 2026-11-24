@@ -283,7 +283,9 @@ export default function RoofScene({
           />
         </Environment>
         <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
-        {aerialImageUrl && addressPin && <AerialGround url={aerialImageUrl} position={[addressPin.x, 0.05, addressPin.z]} />}
+        {aerialImageUrl && addressPin && (
+          <AerialGround url={aerialImageUrl} position={[addressPin.x, 0.05, addressPin.z]} />
+        )}
         <Walls drawing={drawing} color={colors.ground} />
         {addressPin && (
           <group
