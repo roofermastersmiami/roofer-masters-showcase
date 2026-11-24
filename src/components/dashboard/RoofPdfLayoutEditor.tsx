@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Move } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import type { RoofPdfLayout } from "@/lib/roof-drawing-pdf";
 
 const elements = [
@@ -44,7 +43,7 @@ export function RoofPdfLayoutEditor({
         </div>
         <button type="button" className="text-sm text-primary underline" onClick={() => onChange(defaultRoofPdfLayout)}>Reset layout</button>
       </div>
-      <div className="relative mx-auto aspect-[612/130] w-full max-w-2xl overflow-hidden rounded-md border border-slate-700 bg-[#102b43]">
+      <div className="relative mx-auto aspect-[612/78] w-full max-w-2xl overflow-hidden rounded-md border border-slate-700 bg-[#102b43]">
         {elements.map((item) => {
           const position = value[item.key];
           return (
