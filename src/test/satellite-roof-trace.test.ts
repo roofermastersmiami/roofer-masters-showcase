@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { satelliteTraceToPlane } from "@/components/dashboard/SatelliteRoofTrace";
+import { nextSatelliteZoom, satelliteTraceToPlane } from "@/components/dashboard/SatelliteRoofTrace";
 import { measureDrawing, planeInfo, toMaterialReport } from "@/lib/roof-geometry";
 
 const origin = { lat: 25.47, lon: -80.48 };
@@ -90,5 +90,18 @@ describe("manual satellite trace geometry units", () => {
     expect(maxY - minY).toBeGreaterThan(32);
     expect(maxY - minY).toBeLessThan(34);
     expect(planeInfo(plane).pitch).toBeCloseTo(6, 1);
+  });
+});
+
+
+describe("satellite map zoom", () => {
+  it("zooms in and out in predictable steps", () => {
+    expect(nextSatelliteZoom(1, "in")).toBe(1.5);
+    expect(nextSatelliteZoom(1.5, "out")).toBe(1);
+  });
+
+  it("keeps zoom inside supported bounds", () => {
+    expect(nextSatelliteZoom(8, "in")).toBe(8);
+    expect(nextSatelliteZoom(0.5, "out")).toBe(0.5);
   });
 });
