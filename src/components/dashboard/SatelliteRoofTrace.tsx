@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { RoofPlane, Point } from "@/lib/roof-geometry";
+import { planeInfo, type RoofPlane, type Point } from "@/lib/roof-geometry";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type TracePoint = { lat: number; lon: number };
@@ -18,6 +18,19 @@ export function nextSatelliteZoom(current: number, direction: "in" | "out"): num
 }
 
 export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
+  if (points.length < 3 || points.length > 100) {
+    throw new Error("A roof trace needs between 3 and 100 corners.");
+  }
+  if (!Number.isFinite(pitch) || pitch < 0 || pitch > 24) {
+    throw new Error("Roof pitch must be between 0:12 and 24:12.");
+  }
+  if (points.some((p) => !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180)) {
+    throw new Error("The trace contains an invalid map coordinate.");
+  }
+  const unique = new Set(points.map((p) => `${p.lat.toFixed(8)},${p.lon.toFixed(8)}`));
+  if (unique.size !== points.length) {
+    throw new Error("Each roof corner must be in a different location.");
+  }
   const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
   const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
   const cos = Math.cos((lat0 * Math.PI) / 180);
@@ -33,13 +46,16 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
     y: 10 + ((p.z - minZ) * pitch) / 12,
   }));
   return {
-    id: `satellite-${Date.now()}`,
+    id: `satellite-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
     name: "Satellite traced roof plane",
     points: vertices,
     // A traced polygon does not reveal which sides are eaves, rakes, or ridges.
     // Keep them unclassified until a user verifies each edge in the measurement editor.
     edges: vertices.map(() => "other"),
   };
+  // Reject crossed, collapsed, or otherwise non-planar outlines before they enter the drawing.
+  planeInfo(plane);
+  return plane;
 }
 
 export function SatelliteRoofTrace({
