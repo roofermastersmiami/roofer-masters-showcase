@@ -101,11 +101,23 @@ export function nextSatelliteZoom(current: number, direction: "in" | "out"): num
   return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
 }
 
-export function zoomSatelliteByPinch(startZoom: number, startDistance: number, currentDistance: number): number {
-  if (![startZoom, startDistance, currentDistance].every(Number.isFinite) || startZoom <= 0 || startDistance <= 0 || currentDistance <= 0) {
+export function zoomSatelliteByPinch(
+  startZoom: number,
+  startDistance: number,
+  currentDistance: number,
+): number {
+  if (
+    ![startZoom, startDistance, currentDistance].every(Number.isFinite) ||
+    startZoom <= 0 ||
+    startDistance <= 0 ||
+    currentDistance <= 0
+  ) {
     throw new Error("Valid pinch zoom measurements are required.");
   }
-  return Math.max(0.5, Math.min(8, Number((startZoom * (currentDistance / startDistance)).toFixed(3))));
+  return Math.max(
+    0.5,
+    Math.min(8, Number((startZoom * (currentDistance / startDistance)).toFixed(3))),
+  );
 }
 
 export function panSatelliteCenter(
@@ -741,7 +753,10 @@ export function SatelliteRoofTrace({
               onTouchStart={(event) => {
                 if (event.touches.length === 2) {
                   const [a, b] = [event.touches[0]!, event.touches[1]!];
-                  pinchStartDistance.current = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                  pinchStartDistance.current = Math.hypot(
+                    a.clientX - b.clientX,
+                    a.clientY - b.clientY,
+                  );
                   pinchStartZoom.current = zoom;
                 }
               }}
@@ -749,7 +764,13 @@ export function SatelliteRoofTrace({
                 if (event.touches.length !== 2 || pinchStartDistance.current === null) return;
                 const [a, b] = [event.touches[0]!, event.touches[1]!];
                 const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-                setZoom(zoomSatelliteByPinch(pinchStartZoom.current, pinchStartDistance.current, distance));
+                setZoom(
+                  zoomSatelliteByPinch(
+                    pinchStartZoom.current,
+                    pinchStartDistance.current,
+                    distance,
+                  ),
+                );
               }}
               onTouchEnd={(event) => {
                 if (event.touches.length < 2) pinchStartDistance.current = null;
