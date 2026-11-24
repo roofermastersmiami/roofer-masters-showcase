@@ -1132,7 +1132,6 @@ export type Database = {
       create_roof_report_request: {
         Args: {
           p_address: string;
-          p_customer_id: string;
           p_notes: string;
           p_provider: string;
           p_title: string;
