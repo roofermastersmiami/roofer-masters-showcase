@@ -113,14 +113,14 @@ function edgeKey(a: Point, b: Point) {
 export type SharedEdgeSuggestion = {
   planeId: string;
   edgeIndex: number;
-  type: "ridge" | "valley";
-  sharedWith: string;
+  type: "ridge" | "valley" | "hip" | "eave" | "rake";
+  sharedWith?: string;
 };
 
 /**
- * Suggest only unmistakable shared ridges/valleys. Both endpoints must sit
- * clearly above or below the centroid of both adjacent facets. Exterior
- * edges and ambiguous/hip-like edges are intentionally left for manual review.
+ * Suggest conservative roof-edge classifications from the existing 3D facets.
+ * Shared edges can be ridge, valley, or hip; exterior edges can be eave or rake
+ * when the facet has measurable pitch. Suggestions never mutate the drawing.
  */
 export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSuggestion[] {
   const occurrences = new Map<
@@ -140,7 +140,29 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
   }
 
   const suggestions: SharedEdgeSuggestion[] = [];
+  const toleranceFt = 0.05;
   for (const shared of occurrences.values()) {
+    if (shared.length === 1) {
+      const edge = shared[0];
+      if (!edge) continue;
+      let pitch = 0;
+      try {
+        pitch = planeInfo(edge.plane).pitch;
+      } catch {
+        continue;
+      }
+      // A level/flat facet does not provide enough evidence to distinguish an eave.
+      if (pitch < 0.25) continue;
+      const type = Math.abs(edge.a.y - edge.b.y) <= toleranceFt ? "eave" : "rake";
+      if (edge.plane.edges[edge.edgeIndex] !== type) {
+        suggestions.push({
+          planeId: edge.plane.id,
+          edgeIndex: edge.edgeIndex,
+          type,
+        });
+      }
+      continue;
+    }
     if (shared.length !== 2) continue;
     const first = shared[0];
     const second = shared[1];
@@ -152,12 +174,16 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
       second.plane.points.reduce((sum, point) => sum + point.y, 0) / second.plane.points.length;
     const edgeLow = Math.min(first.a.y, first.b.y);
     const edgeHigh = Math.max(first.a.y, first.b.y);
-    const toleranceFt = 0.05;
     const isRidge = edgeLow > firstCenter + toleranceFt && edgeLow > secondCenter + toleranceFt;
     const isValley = edgeHigh < firstCenter - toleranceFt && edgeHigh < secondCenter - toleranceFt;
-    if (!isRidge && !isValley) continue;
+    const isHip =
+      edgeLow < firstCenter - toleranceFt &&
+      edgeLow < secondCenter - toleranceFt &&
+      edgeHigh > firstCenter + toleranceFt &&
+      edgeHigh > secondCenter + toleranceFt;
+    if (!isRidge && !isValley && !isHip) continue;
 
-    const type = isRidge ? "ridge" : "valley";
+    const type = isRidge ? "ridge" : isValley ? "valley" : "hip";
     if (shared.every((occurrence) => occurrence.plane.edges[occurrence.edgeIndex] === type))
       continue;
     for (const occurrence of shared) {
