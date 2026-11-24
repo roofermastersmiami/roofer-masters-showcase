@@ -232,6 +232,13 @@
       "when": 1795232300000,
       "tag": "0032_swipe_delete_customers",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795560000000,
+      "tag": "0033_restore_roof_report_rpc",
+      "breakpoints": true
     }
   ]
 }
