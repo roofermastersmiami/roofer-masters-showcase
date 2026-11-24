@@ -96,8 +96,8 @@ function Plane({
             />
             {selected && (
               <Dimension
-                text={`${distance(p, b).toFixed(1)} ft`}
-                position={[(p.x + b.x) / 2, (p.y + b.y) / 2 + 0.4, (p.z + b.z) / 2]}
+                text={`${(plane.edges[i] ?? "other").toUpperCase()} · ${distance(p, b).toFixed(1)} ft`}
+                position={[(p.x + b.x) / 2, (p.y + b.y) / 2 + 0.55, (p.z + b.z) / 2]}
               />
             )}
           </group>
