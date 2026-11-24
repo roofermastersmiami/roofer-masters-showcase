@@ -8,6 +8,36 @@ export type Database = {
   };
   public: {
     Tables: {
+      pdf_sign_templates: {
+        Row: {
+          id: string;
+          name: string;
+          file_path: string;
+          fields: Json;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          file_path: string;
+          fields?: Json;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          file_path?: string;
+          fields?: Json;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       client_portal_links: {
         Row: {
           created_at: string;
