@@ -8,7 +8,7 @@ import {
   KanbanSquare,
   Users,
   MapPin,
-  Calculator,
+  Calculator,\n  CalendarDays,
   FileText,
   HardHat,
   Receipt,
