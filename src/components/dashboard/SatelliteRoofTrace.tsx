@@ -10,14 +10,16 @@ type TracePoint = { lat: number; lon: number };
 const MAP_WIDTH = 1024;
 const MAP_HEIGHT = 640;
 const TILE_SPAN = 0.0015;
+const METERS_TO_FEET = 1 / 0.3048;
 
 export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
   const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
   const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
   const cos = Math.cos((lat0 * Math.PI) / 180);
+  // The map projection produces meters, but the roof geometry engine stores feet.
   const local = points.map((p) => ({
-    x: (p.lon - lon0) * 111320 * cos,
-    z: (lat0 - p.lat) * 110540,
+    x: (p.lon - lon0) * 111320 * cos * METERS_TO_FEET,
+    z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
   }));
   const minZ = Math.min(...local.map((p) => p.z));
   const vertices: Point[] = local.map((p) => ({
