@@ -101,6 +101,13 @@ export function nextSatelliteZoom(current: number, direction: "in" | "out"): num
   return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
 }
 
+export function zoomSatelliteByPinch(startZoom: number, startDistance: number, currentDistance: number): number {
+  if (![startZoom, startDistance, currentDistance].every(Number.isFinite) || startZoom <= 0 || startDistance <= 0 || currentDistance <= 0) {
+    throw new Error("Valid pinch zoom measurements are required.");
+  }
+  return Math.max(0.5, Math.min(8, Number((startZoom * (currentDistance / startDistance)).toFixed(3))));
+}
+
 export function panSatelliteCenter(
   center: TracePoint,
   direction: "north" | "south" | "east" | "west",
@@ -352,6 +359,8 @@ export function SatelliteRoofTrace({
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
   const suppressNextMapClick = useRef(false);
+  const pinchStartDistance = useRef<number | null>(null);
+  const pinchStartZoom = useRef(1);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
   const bounds = useMemo(
     () =>
@@ -600,7 +609,7 @@ export function SatelliteRoofTrace({
               {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
             </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -728,6 +737,22 @@ export function SatelliteRoofTrace({
               onPointerCancel={() => {
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
+              }}
+              onTouchStart={(event) => {
+                if (event.touches.length === 2) {
+                  const [a, b] = [event.touches[0]!, event.touches[1]!];
+                  pinchStartDistance.current = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                  pinchStartZoom.current = zoom;
+                }
+              }}
+              onTouchMove={(event) => {
+                if (event.touches.length !== 2 || pinchStartDistance.current === null) return;
+                const [a, b] = [event.touches[0]!, event.touches[1]!];
+                const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                setZoom(zoomSatelliteByPinch(pinchStartZoom.current, pinchStartDistance.current, distance));
+              }}
+              onTouchEnd={(event) => {
+                if (event.touches.length < 2) pinchStartDistance.current = null;
               }}
               onWheel={(event) => {
                 event.preventDefault();
