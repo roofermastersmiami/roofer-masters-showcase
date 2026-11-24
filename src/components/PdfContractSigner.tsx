@@ -159,15 +159,37 @@ export function PdfContractSigner({
         pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
         const document = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
         const nextPages: PdfPage[] = [];
+        const detectedFields: PdfSignField[] = [];
         for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
           const page = await document.getPage(pageNumber);
           const viewport = page.getViewport({ scale: 1 });
           nextPages.push({ width: viewport.width, height: viewport.height });
+          const annotations = await page.getAnnotations();
+          for (const annotation of annotations) {
+            if (annotation.subtype !== "Widget" || !Array.isArray(annotation.rect)) continue;
+            if (annotation.fieldType !== "Tx" && annotation.fieldType !== "Sig") continue;
+            const rect = viewport.convertToViewportRectangle(annotation.rect);
+            const left = Math.max(0, Math.min(rect[0], rect[2]));
+            const top = Math.max(0, Math.min(rect[1], rect[3]));
+            const right = Math.min(viewport.width, Math.max(rect[0], rect[2]));
+            const bottom = Math.min(viewport.height, Math.max(rect[1], rect[3]));
+            const width = right - left;
+            const height = bottom - top;
+            if (width < 4 || height < 4) continue;
+            detectedFields.push({
+              ...makeField(annotation.fieldType === "Sig" ? "signature" : "text", pageNumber - 1),
+              x: left / viewport.width,
+              y: top / viewport.height,
+              width: width / viewport.width,
+              height: height / viewport.height,
+              value: annotation.fieldType === "Sig" ? "" : String(annotation.fieldValue ?? ""),
+            });
+          }
         }
         setSourceBytes(bytes);
         setSourceFileName(name);
         setPages(nextPages);
-        setFields(savedFields);
+        setFields(savedFields.length ? savedFields : detectedFields);
         setActivePage(0);
         setSelectedId(null);
       } catch (error) {
@@ -778,7 +800,7 @@ export function PdfContractSigner({
       {!sourceBytes && !loading && (
         <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
           <FilePlus2 className="mx-auto mb-2 size-8" />
-          Upload a PDF or open a report that already has a measurement PDF.
+          Upload a PDF to start editing. Existing fillable text and signature fields are detected automatically; for a flat or scanned PDF, add whiteout and text areas manually.
         </div>
       )}
       {drawFieldMode && <p className="text-xs text-blue-700">Click and drag on the PDF to create a text area. For replacing existing content, add a Whiteout / erase area first, then add replacement text above it. Select any item to move, resize, edit, or delete it.</p>}
