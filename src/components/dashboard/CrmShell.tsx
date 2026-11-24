@@ -76,7 +76,23 @@ const openSectionSchema = {
   additionalProperties: false,
 };
 const readAnnotations = { readOnlyHint: true };
-const THEME_IDS = ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"];
+const THEME_IDS = [
+  "executive-berry",
+  "modern-enterprise",
+  "canyon-corporate",
+  "midnight-teal",
+  "ocean-slate",
+  "royal-indigo",
+  "emerald-ledger",
+  "copperstone",
+  "arctic-blue",
+  "graphite-gold",
+  "crimson-executive",
+  "sage-stone",
+  "cobalt-professional",
+  "plum-luxe",
+  "monochrome-pro",
+];
 const groups = [
   {
     label: "Workspace",
@@ -174,7 +190,23 @@ export function CrmShell({
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
         if (
           fallbackTheme &&
-          ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"].includes(fallbackTheme)
+          [
+            "executive-berry",
+            "modern-enterprise",
+            "canyon-corporate",
+            "midnight-teal",
+            "ocean-slate",
+            "royal-indigo",
+            "emerald-ledger",
+            "copperstone",
+            "arctic-blue",
+            "graphite-gold",
+            "crimson-executive",
+            "sage-stone",
+            "cobalt-professional",
+            "plum-luxe",
+            "monochrome-pro",
+          ].includes(fallbackTheme)
         )
           setTheme(fallbackTheme);
         if (
@@ -200,9 +232,23 @@ export function CrmShell({
           if (loadError) throw loadError;
           if (data) {
             if (
-              ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"].includes(
-                data.theme_palette,
-              )
+              [
+                "executive-berry",
+                "modern-enterprise",
+                "canyon-corporate",
+                "midnight-teal",
+                "ocean-slate",
+                "royal-indigo",
+                "emerald-ledger",
+                "copperstone",
+                "arctic-blue",
+                "graphite-gold",
+                "crimson-executive",
+                "sage-stone",
+                "cobalt-professional",
+                "plum-luxe",
+                "monochrome-pro",
+              ].includes(data.theme_palette)
             )
               setTheme(data.theme_palette);
             if (
