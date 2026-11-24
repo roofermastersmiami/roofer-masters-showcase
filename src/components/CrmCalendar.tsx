@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { addDays, addWeeks, endOfWeek, format, isSameDay, startOfWeek, subWeeks } from "date-fns";
-import { ArrowLeft, ArrowRight, CalendarDays, ExternalLink, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,7 +76,7 @@ export function CrmCalendar({ onOpenRoofReport }: { onOpenRoofReport?: (reportId
           <Button variant="outline" size="icon" aria-label="Previous period" onClick={() => setAnchor(mode === "week" ? subWeeks(anchor, 1) : addDays(anchor, -1))}><ArrowLeft className="size-4" /></Button>
           <Button variant="outline" onClick={() => setAnchor(new Date())}>Today</Button>
           <Button variant="outline" size="icon" aria-label="Next period" onClick={() => setAnchor(mode === "week" ? addWeeks(anchor, 1) : addDays(anchor, 1))}><ArrowRight className="size-4" /></Button>
-          <Select value={mode} onValueChange={(value: "week" | "day") => setMode(value)}><SelectTrigger className="w-28"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="week">Week</SelectItem><SelectItem value="day">Day</SelectItem></SelectContent></Select>
+          <Select value={mode} onValueChange={(value) => setMode(value as "week" | "day")}><SelectTrigger className="w-28"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="week">Week</SelectItem><SelectItem value="day">Day</SelectItem></SelectContent></Select>
         </div>
       </div>
       <p className="text-sm font-medium">{format(from, "MMM d")} – {format(to, "MMM d, yyyy")}</p>
@@ -99,7 +99,7 @@ export function CrmCalendar({ onOpenRoofReport }: { onOpenRoofReport?: (reportId
                   <p className="mt-1 line-clamp-2">{appointment.service_type}</p><p className="mt-1 line-clamp-2 text-muted-foreground">{appointment.property_address}</p>
                   <p className="mt-1 text-muted-foreground">{appointment.source === "manual" ? "Manual" : "AI receptionist"} · {appointment.status}</p>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    <Select value={appointment.status} onValueChange={(value: Appointment["status"]) => void changeStatus(appointment.id, value)} disabled={busyId === appointment.id}>
+                    <Select value={appointment.status} onValueChange={(value) => void changeStatus(appointment.id, value as Appointment["status"])} disabled={busyId === appointment.id}>
                       <SelectTrigger className="h-7 w-28 bg-background text-[11px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Scheduled">Scheduled</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Cancelled">Cancelled</SelectItem></SelectContent>
                     </Select>
                     {onOpenRoofReport && <Button size="icon" variant="outline" className="size-7" title="Open roof report" onClick={() => void openReport(appointment)}><ExternalLink className="size-3" /></Button>}
