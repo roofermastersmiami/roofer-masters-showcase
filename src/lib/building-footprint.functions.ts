@@ -34,9 +34,15 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
       if (!geoResponse.ok)
         return { error: "The free address lookup is temporarily unavailable." } as const;
       const geo = (await geoResponse.json()) as {
-        result?: { addressMatches?: Array<{ coordinates?: { x?: number; y?: number } }> };
+        result?: {
+          addressMatches?: Array<{
+            matchedAddress?: string;
+            coordinates?: { x?: number; y?: number };
+          }>;
+        };
       };
-      const coordinates = geo.result?.addressMatches?.[0]?.coordinates;
+      const addressMatch = geo.result?.addressMatches?.[0];
+      const coordinates = addressMatch?.coordinates;
       if (
         typeof coordinates?.x !== "number" ||
         typeof coordinates.y !== "number" ||
@@ -74,7 +80,7 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
         lon: coordinates.x,
       });
       return {
-        matchedAddress: data.address,
+        matchedAddress: addressMatch?.matchedAddress?.trim() || data.address,
         footprints,
         attribution: "© OpenStreetMap contributors",
       } as const;
