@@ -84,6 +84,7 @@ describe("material order source tracking", () => {
   it("does not treat legacy records without provenance as drawing-verified", async () => {
     const { resolveMaterialOrderSource } = await import("@/lib/material-order");
     expect(resolveMaterialOrderSource({ report: base }).source).toBe("legacy");
+    expect(resolveMaterialOrderSource({ source: "drawing" }).source).toBe("legacy");
     expect(resolveMaterialOrderSource(null).source).toBe("manual");
   });
 });
