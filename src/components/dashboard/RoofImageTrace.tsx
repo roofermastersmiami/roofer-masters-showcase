@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hand } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,9 @@ export function RoofImageTrace({
   const [name, setName] = useState("");
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
   const [photoZoom, setPhotoZoom] = useState(1);
+  const [photoPan, setPhotoPan] = useState({ x: 0, y: 0 });
+  const [panMode, setPanMode] = useState(false);
+  const panDrag = useRef<{ x: number; y: number } | null>(null);
   const pinch = useRef<{ distance: number; zoom: number } | null>(null);
   const [replace, setReplace] = useState(true);
   const [snapCorners, setSnapCorners] = useState(true);
@@ -98,6 +101,13 @@ export function RoofImageTrace({
     }
   };
   const onMove = (e: RPointerEvent<SVGSVGElement>) => {
+    if (panDrag.current) {
+      const dx = e.clientX - panDrag.current.x;
+      const dy = e.clientY - panDrag.current.y;
+      panDrag.current = { x: e.clientX, y: e.clientY };
+      setPhotoPan((p) => ({ x: p.x + dx, y: p.y + dy }));
+      return;
+    }
     if (!drag.current) return;
     const p = toImage(e.clientX, e.clientY);
     if (!p) return;
@@ -116,6 +126,7 @@ export function RoofImageTrace({
     }
   };
   const startDrag = (kind: "ref" | "pt", i: number) => (e: RPointerEvent) => {
+    if (panMode) return;
     e.stopPropagation();
     drag.current = { kind, i };
     moved.current = false;
@@ -221,7 +232,9 @@ export function RoofImageTrace({
       </p>
       {photo.data ? (
         <div className="relative w-full overflow-hidden rounded-md border border-border">
-          <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md border bg-background/95 p-1 shadow">
+          <div className="absolute left-2 top-2 z-20 rounded-md bg-background/95 px-2 py-1 text-xs font-semibold shadow">Red pin = photo target · move with arrow controls</div>
+          <div className="absolute right-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 rounded-md border bg-background/95 p-1 shadow">
+            <Button type="button" size="icon" variant={panMode ? "secondary" : "outline"} aria-label={panMode ? "Exit photo pan mode" : "Pan photo by dragging"} title={panMode ? "Exit pan mode" : "Drag photo"} onClick={() => { setPanMode((v) => !v); panDrag.current = null; }}><Hand /></Button>
             <Button
               type="button"
               size="icon"
@@ -245,13 +258,17 @@ export function RoofImageTrace({
             >
               <ZoomIn />
             </Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo up" onClick={() => setPhotoPan((p) => ({ ...p, y: p.y - 48 }))}><ArrowUp /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo down" onClick={() => setPhotoPan((p) => ({ ...p, y: p.y + 48 }))}><ArrowDown /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo left" onClick={() => setPhotoPan((p) => ({ ...p, x: p.x - 48 }))}><ArrowLeft /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo right" onClick={() => setPhotoPan((p) => ({ ...p, x: p.x + 48 }))}><ArrowRight /></Button>
             <Button
               type="button"
               size="icon"
               variant="ghost"
               aria-label="Reset photo zoom"
-              disabled={photoZoom === 1}
-              onClick={() => setPhotoZoom(1)}
+              disabled={photoZoom === 1 && photoPan.x === 0 && photoPan.y === 0}
+              onClick={() => { setPhotoZoom(1); setPhotoPan({ x: 0, y: 0 }); setPanMode(false); panDrag.current = null; }}
             >
               <RotateCcw />
             </Button>
@@ -260,7 +277,7 @@ export function RoofImageTrace({
             src={photo.data}
             alt="Roof photo used for measuring"
             className="block max-h-[640px] w-full select-none object-contain"
-            style={{ transform: `scale(${photoZoom})`, transformOrigin: "center center" }}
+            style={{ transform: `translate(${photoPan.x}px, ${photoPan.y}px) scale(${photoZoom})`, transformOrigin: "center center" }}
             draggable={false}
             onLoad={(e) => {
               const width = e.currentTarget.naturalWidth,
@@ -274,10 +291,17 @@ export function RoofImageTrace({
             viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
             preserveAspectRatio="xMidYMid meet"
             aria-label="Roof tracing surface"
+            onPointerDown={(event) => {
+              if (!panMode) return;
+              event.preventDefault();
+              panDrag.current = { x: event.clientX, y: event.clientY };
+              svg.current?.setPointerCapture(event.pointerId);
+            }}
             onPointerMove={onMove}
             style={{
               touchAction: "none",
-              transform: `scale(${photoZoom})`,
+              cursor: panMode ? "grab" : "crosshair",
+              transform: `translate(${photoPan.x}px, ${photoPan.y}px) scale(${photoZoom})`,
               transformOrigin: "center center",
             }}
             onTouchStart={(event) => {
@@ -306,8 +330,10 @@ export function RoofImageTrace({
             }}
             onPointerUp={() => {
               drag.current = null;
+              panDrag.current = null;
             }}
             onClick={(e) => {
+              if (panMode) return;
               if (moved.current) {
                 moved.current = false;
                 return;
@@ -316,6 +342,7 @@ export function RoofImageTrace({
               if (p) addPoint(p);
             }}
           >
+            {<g pointerEvents="none"><circle cx={w / 2} cy={dimensions.height / 2} r={Math.max(18, w / 45)} fill="#dc2626" fillOpacity="0.16" stroke="#dc2626" strokeWidth={w / 300} /><circle cx={w / 2} cy={dimensions.height / 2} r={Math.max(7, w / 120)} fill="#dc2626" stroke="white" strokeWidth={w / 300} /><text x={w / 2 + w / 35} y={dimensions.height / 2 - w / 45} fontSize={w / 45} fontWeight="700" fill="white" stroke="#111827" strokeWidth="4" paintOrder="stroke">PHOTO TARGET</text></g>}
             {traced.map((t) => (
               <g key={t.id} className="text-muted-foreground">
                 <polygon
