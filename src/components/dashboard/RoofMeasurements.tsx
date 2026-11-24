@@ -1445,10 +1445,15 @@ export function RoofMeasurements({
       </section>
       <section className="border-t border-border py-6">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Private report photos</h3>
+          <div>
+            <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Upload your own overhead roof photo or aerial image, then use the calibrated photo tracer below to draw each roof plane, set its scale and pitch, and classify its edges. You can also load free public aerial imagery in the next section.
+            </p>
+          </div>
           <Button variant="outline" asChild disabled={busy || !property}>
             <label>
-              <Upload /> Add image
+              <Upload /> Upload photo to trace
               <input
                 type="file"
                 className="sr-only"
@@ -1692,7 +1697,7 @@ export function RoofMeasurements({
           setFit((f) => f + 1);
         }}
       />
-      {media[traceIndex] && (
+      {media[traceIndex] ? (
         <RoofImageTrace
           key={media[traceIndex].path}
           path={media[traceIndex].path}
@@ -1703,6 +1708,13 @@ export function RoofMeasurements({
             setFit((f) => f + 1);
           }}
         />
+      ) : (
+        <section className="rounded-lg border border-dashed border-primary/40 bg-muted/30 p-4">
+          <h3 className="font-semibold">Trace a roof from your own photo</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upload an overhead or elevated roof image above. The photo tracing workspace will appear here so you can calibrate a known distance and draw the roof planes yourself.
+          </p>
+        </section>
       )}
       <section className="flex flex-wrap items-end gap-3 border-t border-border pt-5">
         <Button
