@@ -59,13 +59,30 @@ export function CrmOverview() {
       if (typeof saved.accent === "string" && /^#[0-9a-f]{6}$/i.test(saved.accent)) setAccent(saved.accent);
       if (saved.density === "compact" || saved.density === "comfortable") setDensity(saved.density);
       if (saved.cardStyle === "outlined" || saved.cardStyle === "soft" || saved.cardStyle === "elevated") setCardStyle(saved.cardStyle);
-      if (Array.isArray(saved.cardOrder) && saved.cardOrder.every((item: unknown) => typeof item === "string")) setCardOrder(saved.cardOrder);
-      if (Array.isArray(saved.hiddenCards) && saved.hiddenCards.every((item: unknown) => typeof item === "string")) setHiddenCards(saved.hiddenCards);
+      const allowedCards = ["Payments received", "Outstanding balance", "Active projects", "New leads"];
+      if (Array.isArray(saved.cardOrder)) {
+        const restored = saved.cardOrder.filter(
+          (item: unknown): item is string => typeof item === "string" && allowedCards.includes(item),
+        );
+        const unique = restored.filter((item: string, index: number) => restored.indexOf(item) === index);
+        setCardOrder([...unique, ...allowedCards.filter((item) => !unique.includes(item))]);
+      }
+      if (Array.isArray(saved.hiddenCards)) {
+        setHiddenCards(saved.hiddenCards.filter(
+          (item: unknown): item is string => typeof item === "string" && allowedCards.includes(item),
+        ));
+      }
     } catch { /* Keep defaults if saved preferences are unavailable. */ }
     setPreferencesLoaded(true);
   }, []);
   useEffect(() => {
-    if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards }));
+    if (preferencesLoaded) {
+      try {
+        localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards }));
+      } catch {
+        // Storage can be disabled or full; dashboard customization still works for this session.
+      }
+    }
   }, [accent, density, cardStyle, cardOrder, hiddenCards, preferencesLoaded]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
