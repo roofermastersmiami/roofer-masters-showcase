@@ -378,7 +378,7 @@ export function SatelliteRoofTrace({
     setResults([]);
     setZoom(1);
     setError("");
-    skipNextAddressSearch.current = true;
+    skipNextAddressSearch.current = Boolean(query);
     setAddress(query);
     if (!query) return;
 
