@@ -59,7 +59,7 @@ function containsPoint(point: FootprintPoint, polygon: FootprintPoint[]): boolea
     const a = polygon[j]!;
     const b = polygon[i]!;
     if (onSegment(a, b, point)) return true;
-    const crossesLatitude = (a.lat > point.lat) !== (b.lat > point.lat);
+    const crossesLatitude = a.lat > point.lat !== b.lat > point.lat;
     if (
       crossesLatitude &&
       point.lon < ((b.lon - a.lon) * (point.lat - a.lat)) / (b.lat - a.lat) + a.lon
@@ -228,7 +228,11 @@ export function parseBuildingFootprints(
     });
   }
   return results
-    .sort((a, b) => Number(b.containsAddress) - Number(a.containsAddress) || a.distanceMeters - b.distanceMeters)
+    .sort(
+      (a, b) =>
+        Number(b.containsAddress) - Number(a.containsAddress) ||
+        a.distanceMeters - b.distanceMeters,
+    )
     .slice(0, 8);
 }
 
