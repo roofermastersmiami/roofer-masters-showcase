@@ -447,10 +447,20 @@ export async function roofDrawingPdf(
       if (!context) throw new Error("Logo canvas unavailable");
       context.drawImage(bitmap, 0, 0);
       bitmap.close();
-      const logoBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Logo conversion failed")), "image/png"));
+      const logoBlob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error("Logo conversion failed"))),
+          "image/png",
+        ),
+      );
       const logo = await pdf.embedPng(new Uint8Array(await logoBlob.arrayBuffer()));
       const fit = logo.scaleToFit(150, 48);
-      firstPage.drawImage(logo, { x: PAGE_W - MARGIN - fit.width, y: 24, width: fit.width, height: fit.height });
+      firstPage.drawImage(logo, {
+        x: PAGE_W - MARGIN - fit.width,
+        y: 24,
+        width: fit.width,
+        height: fit.height,
+      });
       logoEmbedded = true;
     } catch (error) {
       console.warn("Roof report logo could not be embedded; using text fallback.", error);
@@ -458,7 +468,13 @@ export async function roofDrawingPdf(
   }
   if (!logoEmbedded) {
     firstPage.drawText("ROOFER MASTERS", { x: 390, y: 42, size: 12, font: bold, color: NAVY });
-    firstPage.drawText("YOUR ROOF, OUR MASTERPIECE", { x: 390, y: 29, size: 6.5, font, color: MUTED });
+    firstPage.drawText("YOUR ROOF, OUR MASTERPIECE", {
+      x: 390,
+      y: 29,
+      size: 6.5,
+      font,
+      color: MUTED,
+    });
   }
   firstPage.drawText("PRELIMINARY REPORT - VERIFY FIELD CONDITIONS", {
     x: MARGIN,
