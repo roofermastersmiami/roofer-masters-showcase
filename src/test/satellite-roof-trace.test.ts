@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  nextSatelliteZoom,\n  panSatelliteCenter,
+  nextSatelliteZoom,
+  panSatelliteCenter,
   satelliteTraceToPlane,
   satelliteTraceToGablePlanes,
   nearestBuildingFootprint,
