@@ -145,6 +145,21 @@ describe("guided satellite gable facet splitting", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("moves the ridge off center to create unequal gable facets", () => {
+    const centered = satelliteTraceToGablePlanes(rectangle, 6, "north-south");
+    const offset = satelliteTraceToGablePlanes(rectangle, 6, "north-south", 20);
+    expect(offset).toHaveLength(2);
+    expect(planeInfo(offset[0]!).pitch).toBeCloseTo(6, 1);
+    expect(planeInfo(offset[1]!).pitch).toBeCloseTo(6, 1);
+    expect(planeInfo(offset[0]!).area).not.toBeCloseTo(planeInfo(offset[1]!).area, 0);
+    expect(planeInfo(centered[0]!).area).toBeCloseTo(planeInfo(centered[1]!).area, 0);
+  });
+
+  it("rejects ridge offsets outside the safe range", () => {
+    expect(() => satelliteTraceToGablePlanes(rectangle, 6, "north-south", 41)).toThrow(/offset/);
+    expect(() => satelliteTraceToGablePlanes(rectangle, 6, "north-south", -41)).toThrow(/offset/);
+  });
+
   it("rejects ambiguous ridge cuts, zero pitch, and outlines with too few corners", () => {
     expect(() => satelliteTraceToGablePlanes(rectangle, 0, "north-south")).toThrow(/pitch/);
     expect(() => satelliteTraceToGablePlanes(rectangle.slice(0, 3), 6, "north-south")).toThrow(
