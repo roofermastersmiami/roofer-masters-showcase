@@ -53,10 +53,19 @@ export function CrmCalendar({ onOpenRoofReport }: { onOpenRoofReport?: (reportId
   };
   const openReport = async (appointment: Appointment) => {
     if (!onOpenRoofReport) return;
+    const customerResult = await supabase.from("crm_customers").select("id")
+      .eq("source_lead_id", appointment.lead_id).maybeSingle();
+    if (customerResult.error || !customerResult.data) {
+      toast.error("No customer record is linked to this appointment");
+      return;
+    }
     const { data, error } = await supabase.from("roof_report_orders").select("id")
-      .eq("customer_id", (await supabase.from("crm_customers").select("id").eq("source_lead_id", appointment.lead_id).maybeSingle()).data?.id ?? "")
+      .eq("customer_id", customerResult.data.id)
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (error || !data) { toast.error("No roof measurement report is linked to this customer yet"); return; }
+    if (error || !data) {
+      toast.error("No roof measurement report is linked to this customer yet");
+      return;
+    }
     onOpenRoofReport(data.id);
   };
   return (
