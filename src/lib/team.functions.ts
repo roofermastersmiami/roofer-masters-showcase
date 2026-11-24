@@ -16,10 +16,7 @@ async function listAuthUsers(supabaseAdmin: SupabaseClient) {
   }
 }
 
-async function gate(
-  context: { supabase: SupabaseClient; userId: string },
-  roles: string[],
-) {
+async function gate(context: { supabase: SupabaseClient; userId: string }, roles: string[]) {
   const { data, error } = await context.supabase.rpc("has_any_role", {
     _user_id: context.userId,
     _roles: roles,
