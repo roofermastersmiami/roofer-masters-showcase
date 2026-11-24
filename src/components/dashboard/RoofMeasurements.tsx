@@ -157,6 +157,16 @@ export function RoofMeasurements({
           : [],
       );
     });
+  const [aerialImageUrl, setAerialImageUrl] = useState("");
+  useEffect(() => {
+    const aerial = media.find((item) => item.category === "aerial");
+    if (!aerial) { setAerialImageUrl(""); return; }
+    let active = true;
+    void supabase.storage.from("roof-job-photos").createSignedUrl(aerial.path, 300).then(({ data, error }) => {
+      if (active) setAerialImageUrl(error ? "" : data?.signedUrl ?? "");
+    });
+    return () => { active = false; };
+  }, [media]);
   function edit(next: RoofDrawing) {
     userEditedDrawing.current = true;
     setHistory((h) => [...h.slice(-29), d]);
@@ -926,6 +936,7 @@ export function RoofMeasurements({
               >
                 <Scene
                   drawing={d}
+                  aerialImageUrl={aerialImageUrl}
                   selected={selected}
                   onSelect={setSelected}
                   view={view}
