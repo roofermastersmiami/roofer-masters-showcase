@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Line, Environment, Lightformer } from "@react-three/drei";
 import {
@@ -178,6 +178,8 @@ export default function RoofScene({
   view,
   fitKey,
   autoRotate,
+  zoomDirection,
+  zoomKey,
 }: {
   drawing: RoofDrawing;
   selected: string;
@@ -185,8 +187,21 @@ export default function RoofScene({
   view: "3d" | "plan";
   fitKey: number;
   autoRotate: boolean;
+  zoomDirection: "in" | "out";
+  zoomKey: number;
 }) {
   const [ready, setReady] = useState(false);
+  const controls = useRef<{
+    dollyIn: (scale?: number) => void;
+    dollyOut: (scale?: number) => void;
+    update: () => void;
+  } | null>(null);
+  useEffect(() => {
+    if (zoomKey === 0 || !controls.current) return;
+    if (zoomDirection === "in") controls.current.dollyIn(1.25);
+    else controls.current.dollyOut(1.25);
+    controls.current.update();
+  }, [zoomDirection, zoomKey]);
   const [colors, setColors] = useState({ roof: "", selected: "", edge: "", ground: "" });
   useEffect(() => {
     const c = getComputedStyle(document.documentElement);
@@ -288,6 +303,7 @@ export default function RoofScene({
           );
         })}
         <OrbitControls
+          ref={controls}
           makeDefault
           target={[0, 10, 0]}
           enableRotate={view === "3d"}
