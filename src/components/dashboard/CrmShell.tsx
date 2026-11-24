@@ -143,6 +143,7 @@ export function CrmShell({
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
     [theme, setTheme] = useState("ocean"),
+    [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [query, setQuery] = useState(""),
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
@@ -157,7 +158,12 @@ export function CrmShell({
     setDark(localStorage.getItem("crm-theme") === "dark");
     const savedTheme = localStorage.getItem("crm-theme-preset");
     if (savedTheme && ["ocean", "slate", "emerald", "sunset", "violet"].includes(savedTheme)) setTheme(savedTheme);
+    const savedSidebar = localStorage.getItem("crm-sidebar-appearance");
+    if (savedSidebar && ["navy", "light", "accent"].includes(savedSidebar)) setSidebarAppearance(savedSidebar);
   }, []);
+  useEffect(() => {
+    localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
+  }, [sidebarAppearance]);
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("crm-theme-ocean", "crm-theme-slate", "crm-theme-emerald", "crm-theme-sunset", "crm-theme-violet");
@@ -249,7 +255,7 @@ export function CrmShell({
   function navigation(compact: boolean) {
     return (
       <div className="flex h-full flex-col">
-        <div className="flex h-24 shrink-0 items-center gap-3 border-b border-navy-foreground/15 px-5">
+        <div className={cn("flex h-24 shrink-0 items-center gap-3 border-b px-5", sidebarAppearance === "light" ? "border-border" : "border-primary-foreground/15")}>
           <LogoMark
             className={compact ? "h-7 max-w-10 object-cover object-left" : "h-8 max-w-32"}
           />
@@ -277,9 +283,10 @@ export function CrmShell({
                     asChild
                     title={item.label}
                     className={cn(
-                      "h-10 justify-start rounded-md text-navy-foreground/80 hover:bg-navy-foreground/10 hover:text-navy-foreground",
+                      "h-10 justify-start rounded-md",
+                      sidebarAppearance === "light" ? "text-foreground/80 hover:bg-muted hover:text-foreground" : "text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground",
                       compact && "justify-center px-0",
-                      section === item.id && "bg-navy-foreground/15 text-navy-foreground",
+                      section === item.id && (sidebarAppearance === "light" ? "bg-accent text-accent-foreground" : "bg-primary-foreground/15 text-primary-foreground"),
                     )}
                   >
                     <Link
@@ -299,10 +306,10 @@ export function CrmShell({
             </div>
           ))}
         </nav>
-        <div className="border-t border-navy-foreground/15 p-3">
+        <div className={cn("border-t p-3", sidebarAppearance === "light" ? "border-border" : "border-primary-foreground/15")}>
           <Button
             variant="ghost"
-            className="w-full justify-start text-navy-foreground/80 hover:bg-navy-foreground/10 hover:text-navy-foreground"
+            className={cn("w-full justify-start", sidebarAppearance === "light" ? "text-foreground/80 hover:bg-muted hover:text-foreground" : "text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground")}
             asChild
             title="View website"
           >
@@ -343,7 +350,8 @@ export function CrmShell({
       <div className="flex min-h-dvh bg-background text-foreground">
         <aside
           className={cn(
-            "sticky top-0 hidden h-dvh shrink-0 bg-navy text-navy-foreground lg:block",
+            "sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block",
+            sidebarAppearance === "light" ? "border-border bg-card text-foreground" : sidebarAppearance === "accent" ? "border-transparent bg-primary text-primary-foreground" : "border-transparent bg-navy text-navy-foreground",
             collapsed ? "w-20" : "w-60",
           )}
         >
@@ -423,6 +431,12 @@ export function CrmShell({
               <span className="sr-only">CRM color theme</span>
               <select aria-label="CRM color theme" value={theme} onChange={(event) => setTheme(event.target.value)} className="h-8 max-w-24 bg-transparent text-xs outline-none">
                 <option value="ocean">Ocean</option><option value="slate">Slate</option><option value="emerald">Emerald</option><option value="sunset">Sunset</option><option value="violet">Violet</option>
+              </select>
+            </label>
+            <label className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 xl:flex" title="Choose sidebar appearance">
+              <span className="text-[11px] text-muted-foreground">Sidebar</span>
+              <select aria-label="Sidebar appearance" value={sidebarAppearance} onChange={(event) => setSidebarAppearance(event.target.value)} className="h-8 max-w-20 bg-transparent text-xs outline-none">
+                <option value="navy">Navy</option><option value="light">Light</option><option value="accent">Accent</option>
               </select>
             </label>
             <Button
