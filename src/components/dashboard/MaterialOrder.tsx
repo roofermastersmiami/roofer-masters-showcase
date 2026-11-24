@@ -12,6 +12,8 @@ import { ROOF_TYPES } from "@/lib/instant-estimate-schema";
 import {
   materialOrder,
   materialOrderWarnings,
+  resolveMaterialOrderSource,
+  type MaterialOrderSource,
   escapeMaterialOrderHtml,
   reportSchema,
   type RoofReport,
@@ -56,6 +58,9 @@ export function MaterialOrder({
           pipes: 0,
         },
   );
+  const initialSource = resolveMaterialOrderSource(saved);
+  const [source, setSource] = useState<MaterialOrderSource>(initialSource.source);
+  const [drawingId, setDrawingId] = useState<string | undefined>(initialSource.drawingId);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
   const [aiNote, setAiNote] = useState("");
@@ -97,6 +102,8 @@ export function MaterialOrder({
         if (v !== null) next[k] = Math.round(v * 10) / 10;
       });
       setR(next);
+      setSource("uploaded_report");
+      setDrawingId(undefined);
       setAiNote([x.pitch ? `Pitch: ${x.pitch}` : "", x.notes].filter(Boolean).join(" — "));
       toast.success("Measurements filled in — please double-check them");
     } catch {
@@ -111,7 +118,9 @@ export function MaterialOrder({
     [valid.success, r],
   );
   const warnings = valid.success ? materialOrderWarnings(valid.data) : [];
+  const sourceLabel = resolveMaterialOrderSource({ source, ...(source === "drawing" && drawingId ? { drawing_id: drawingId } : {}) }).label;
   const text = `Material order – ${title}
+Source: ${sourceLabel}
 ${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
 ${warnings.length ? `\nREVIEW REQUIRED:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : ""}
 ${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}
@@ -126,6 +135,8 @@ Roofer Masters · 305-942-3093`;
         material_order: {
           report: valid.data,
           lines,
+          source,
+          ...(source === "drawing" && drawingId ? { drawing_id: drawingId } : {}),
           updated_at: new Date().toISOString(),
         } as unknown as Json,
       })
@@ -155,6 +166,7 @@ Roofer Masters · 305-942-3093`;
         Enter the roof size and measurements from the roof report — materials are calculated
         automatically.
       </p>
+      <p className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs" role="status">Estimate source: <strong>{sourceLabel}</strong>{source === "drawing" ? " · Review drawing revision before ordering." : ""}</p>
       <div className="mb-4 rounded-md border border-dashed border-border p-4">
         <Button asChild variant="secondary" disabled={reading}>
           <label className="cursor-pointer">
@@ -182,7 +194,7 @@ Roofer Masters · 305-942-3093`;
         <Choice
           label="Roof type"
           value={r.roof_type}
-          onChange={(v) => setR({ ...r, roof_type: v as RoofReport["roof_type"] })}
+          onChange={(v) => { setR({ ...r, roof_type: v as RoofReport["roof_type"] }); setSource("manual"); setDrawingId(undefined); }}
           options={ROOF_TYPES.map((t) => ({ value: t, label: t }))}
         />
         {fields
@@ -194,7 +206,7 @@ Roofer Masters · 305-942-3093`;
                 min={0}
                 inputMode="decimal"
                 value={(r[k] as number | undefined) ?? (k === "panel_width_in" ? 16 : 0)}
-                onChange={(e) => setR({ ...r, [k]: Number(e.target.value) || 0 })}
+                onChange={(e) => { setR({ ...r, [k]: Number(e.target.value) || 0 }); setSource("manual"); setDrawingId(undefined); }}
               />
             </Field>
           ))}
