@@ -31,14 +31,22 @@ export function FinancialAnalytics() {
     // Keep the ledger input valid so missing payment configuration cannot crash the page.
     env = "unavailable";
   }
-  const ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
+  let ledger: ReturnType<typeof dashboardLedger>;
+  let ledgerError = false;
+  try {
+    ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
+  } catch {
+    // A malformed/stale query result must render an error state, never crash the CRM route.
+    ledgerError = true;
+    ledger = { collected: 0, sales: 0, outstanding: 0, received: [] };
+  }
   const costs = (expenses.data ?? []).filter(
     (e) =>
       (project === "all" || e.job_id === project) && e.incurred_at >= from && e.incurred_at <= to,
   );
   const profit = actualProfit(ledger.collected, costs);
   const failed =
-    !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
+    ledgerError || !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     start > end;
