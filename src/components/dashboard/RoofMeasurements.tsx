@@ -1319,7 +1319,17 @@ export function RoofMeasurements({
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         initialAddress={report?.address?.trim() || propertyRow?.address || ""}
         onAdd={(p) => {
-          edit({ ...d, planes: [...d.planes, p] });
+          // A new drawing starts with a sample gable so the workspace is never empty.
+          // Replace that sample (or an auto-imported ground footprint) with the first
+          // real roof trace; otherwise the sample overlaps the trace and blocks reports.
+          const hasImportedFootprint = d.planes.some((item) =>
+            item.id.startsWith("osm-footprint-"),
+          );
+          const replaceStarter = !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
+          const existingPlanes = replaceStarter
+            ? []
+            : d.planes.filter((item) => !item.id.startsWith("osm-footprint-"));
+          edit({ ...d, planes: [...existingPlanes, p] });
           setSelected(p.id);
           setFit((f) => f + 1);
         }}
