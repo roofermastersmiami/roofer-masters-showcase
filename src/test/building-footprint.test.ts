@@ -50,6 +50,13 @@ describe("OpenStreetMap building footprint parsing", () => {
         { type: "way", id: 2, geometry: square.map((p) => ({ ...p, lat: p.lat + 1 })) },
         { type: "way", id: 3, geometry: [{ lat: 25.47, lon: -80.48 }] },
         { type: "way", id: 4, geometry: [square[0], { lat: Number.NaN, lon: -80.48 }, ...square.slice(2)] },
+        { type: "way", id: 5, geometry: [
+          { lat: origin.lat, lon: origin.lon },
+          { lat: origin.lat + 0.0002, lon: origin.lon + 0.0002 },
+          { lat: origin.lat, lon: origin.lon + 0.0002 },
+          { lat: origin.lat + 0.0002, lon: origin.lon },
+          { lat: origin.lat, lon: origin.lon },
+        ] },
       ],
     }, origin);
     expect(result).toEqual([]);
