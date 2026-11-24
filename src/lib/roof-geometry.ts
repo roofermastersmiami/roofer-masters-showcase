@@ -384,6 +384,37 @@ export function roofPreset(shape: RoofShape, width = 40, length = 30, pitch = 6)
     verified: false,
   };
 }
+/** Per-plane quantities retain the geometry source instead of collapsing the roof to one total. */
+export function roofPlaneTakeoff(raw: RoofDrawing) {
+  const drawing = drawingSchema.parse(raw);
+  return drawing.planes.map((plane) => {
+    const info = planeInfo(plane);
+    const edges: Record<EdgeType, number> = {
+      eave: 0,
+      rake: 0,
+      ridge: 0,
+      hip: 0,
+      valley: 0,
+      other: 0,
+    };
+    for (let index = 0; index < plane.points.length; index++) {
+      const start = plane.points[index];
+      const end = plane.points[(index + 1) % plane.points.length];
+      const type = plane.edges[index];
+      if (start && end && type) edges[type] += distance(start, end);
+    }
+    return {
+      id: plane.id,
+      name: plane.name,
+      area_sqft: info.area,
+      squares: info.area / 100,
+      area_with_waste_sqft: info.area * (1 + drawing.waste / 100),
+      pitch_rise_per_12: info.pitch,
+      edges_lf: edges,
+    };
+  });
+}
+
 export function toMaterialReport(d: RoofDrawing) {
   const m = measureDrawing(d);
   return {
