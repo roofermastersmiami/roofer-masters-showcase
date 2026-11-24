@@ -1385,7 +1385,7 @@ export function RoofMeasurements({
       <SatelliteRoofTrace
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         initialAddress={report?.address?.trim() || propertyRow?.address || ""}
-        onAdd={(p) => {
+        onAdd={(newPlanes) => {
           // A new drawing starts with a sample gable so the workspace is never empty.
           // Replace that sample (or an auto-imported ground footprint) with the first
           // real roof trace; otherwise the sample overlaps the trace and blocks reports.
@@ -1397,8 +1397,8 @@ export function RoofMeasurements({
           const existingPlanes = replaceStarter
             ? []
             : d.planes.filter((item) => !item.id.startsWith("osm-footprint-"));
-          edit({ ...d, planes: [...existingPlanes, p] });
-          setSelected(p.id);
+          edit({ ...d, planes: [...existingPlanes, ...newPlanes] });
+          setSelected(newPlanes[0]?.id ?? "");
           setFit((f) => f + 1);
         }}
       />
