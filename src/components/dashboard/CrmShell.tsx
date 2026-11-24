@@ -288,7 +288,7 @@ export function CrmShell({
           {visibleGroups.map((g) => (
             <div key={g.label} className="mb-6">
               {!compact && (
-                <p className="mb-2 px-3 text-[10px] font-bold uppercase text-navy-foreground/55">
+                <p className={cn("mb-2 px-3 text-[10px] font-bold uppercase", sidebarIsLight ? "text-muted-foreground" : "text-white/55")}>
                   {g.label}
                 </p>
               )}
@@ -326,7 +326,7 @@ export function CrmShell({
         <div className={cn("border-t p-3", sidebarAppearance === "light" ? "border-border" : "border-primary-foreground/15")}>
           <Button
             variant="ghost"
-            className={cn("w-full justify-start", sidebarAppearance === "light" ? "text-foreground/80 hover:bg-muted hover:text-foreground" : "text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground")}
+            className={cn("w-full justify-start", sidebarMutedText, sidebarHover)}
             asChild
             title="View website"
           >
@@ -336,7 +336,7 @@ export function CrmShell({
             </Link>
           </Button>
           {!compact && (
-            <p className="px-3 pt-3 text-[10px] text-navy-foreground/50">Miami-Dade & Broward</p>
+            <p className={cn("px-3 pt-3 text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/50")}>Miami-Dade & Broward</p>
           )}
         </div>
       </div>
