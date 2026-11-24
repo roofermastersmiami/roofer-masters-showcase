@@ -37,6 +37,7 @@ import {
 } from "@/lib/roof-geometry";
 import { calculateRoofSummary } from "@/lib/roof-calculations";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
+import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { jobsQuery } from "./operations-data";
@@ -102,6 +103,7 @@ export function RoofMeasurements({
     jobs = useQuery(jobsQuery),
     qc = useQueryClient();
   const saveFn = useServerFn(saveRoofDrawing);
+  const attachPdfFn = useServerFn(attachRoofOrderPdf);
   const aerialFn = useServerFn(loadPublicAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
@@ -243,12 +245,17 @@ export function RoofMeasurements({
       return;
     }
     if (!measurement) return;
+    if (report && (!parent || dirty)) {
+      toast.error("Save the current roof drawing revision before generating its report PDF");
+      return;
+    }
     if (share && (!parent || dirty || !customer?.source_lead_id)) {
       toast.error("Save this drawing and link its customer first");
       return;
     }
     setBusy(true);
     let proposalId: string | null = null;
+    let roofReportPdfPath: string | null = null;
     try {
       const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
       const photos = [];
@@ -293,7 +300,26 @@ export function RoofMeasurements({
         propertyRow?.address ?? "",
         photos,
       );
-      if (share) {
+      if (report) {
+        roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;
+        const { error: uploadError } = await supabase.storage
+          .from("roofing-proposals")
+          .upload(roofReportPdfPath, new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }), {
+            contentType: "application/pdf",
+          });
+        if (uploadError) throw uploadError;
+        const { data: currentReport, error: currentReportError } = await supabase
+          .from("roof_report_orders")
+          .select("updated_at")
+          .eq("id", report.id)
+          .maybeSingle();
+        if (currentReportError || !currentReport) throw new Error("Could not refresh the roof report before attaching its PDF");
+        await attachPdfFn({ data: { id: report.id, path: roofReportPdfPath, updated_at: currentReport.updated_at } });
+        await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
+        const { downloadPdf } = await import("./proposal-data");
+        downloadPdf(bytes, title);
+        toast.success("Measurement PDF saved to Roof reports and downloaded");
+      } else if (share) {
         const { data: row, error } = await supabase
           .from("proposals")
           .insert({
@@ -324,9 +350,10 @@ export function RoofMeasurements({
         const { downloadPdf } = await import("./proposal-data");
         downloadPdf(bytes, title);
       }
-    } catch {
+    } catch (error) {
       if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);
-      toast.error("Could not generate report");
+      if (roofReportPdfPath) await supabase.storage.from("roofing-proposals").remove([roofReportPdfPath]);
+      toast.error(error instanceof Error ? error.message : "Could not generate report");
     } finally {
       setBusy(false);
     }
