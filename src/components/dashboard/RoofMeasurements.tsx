@@ -285,7 +285,7 @@ export function RoofMeasurements({
       return;
     }
     if (!measurement) return;
-    if (report && ((!parent || dirty) && !savedSnapshot)) {
+    if (report && (!parent || dirty) && !savedSnapshot) {
       toast.error("Save the current roof drawing revision before generating its report PDF");
       return;
     }
@@ -715,26 +715,53 @@ export function RoofMeasurements({
           </div>
         }
       />
-      <div className="mb-4 rounded-lg border border-border bg-muted/20 p-4" role="status" aria-live="polite">
+      <div
+        className="mb-4 rounded-lg border border-border bg-muted/20 p-4"
+        role="status"
+        aria-live="polite"
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-semibold">Automated report quality check</h2>
             <p className="text-xs text-muted-foreground">
-              {reportAudit.planeCount} roof plane(s) · {reportAudit.unclassifiedEdges} unclassified edge(s)
+              {reportAudit.planeCount} roof plane(s) · {reportAudit.unclassifiedEdges} unclassified
+              edge(s)
             </p>
           </div>
-          <span className={reportAudit.status === "ready" ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800" : reportAudit.status === "blocked" ? "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800" : "rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"}>
-            {reportAudit.status === "ready" ? "Ready for review" : reportAudit.status === "blocked" ? "Report blocked" : "Review required"}
+          <span
+            className={
+              reportAudit.status === "ready"
+                ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800"
+                : reportAudit.status === "blocked"
+                  ? "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800"
+                  : "rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
+            }
+          >
+            {reportAudit.status === "ready"
+              ? "Ready for review"
+              : reportAudit.status === "blocked"
+                ? "Report blocked"
+                : "Review required"}
           </span>
         </div>
         {(reportAudit.blockers.length > 0 || reportAudit.warnings.length > 0) && (
           <ul className="mt-3 grid gap-1 text-sm">
-            {reportAudit.blockers.map((item) => <li key={item} className="text-destructive">Blocker: {item}</li>)}
-            {reportAudit.warnings.map((item) => <li key={item} className="text-muted-foreground">Review: {item}</li>)}
+            {reportAudit.blockers.map((item) => (
+              <li key={item} className="text-destructive">
+                Blocker: {item}
+              </li>
+            ))}
+            {reportAudit.warnings.map((item) => (
+              <li key={item} className="text-muted-foreground">
+                Review: {item}
+              </li>
+            ))}
           </ul>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          Saving a linked property report automatically refreshes its PDF. Quality checks validate drawing consistency and disclosures; they do not independently certify roof dimensions or pitch.
+          Saving a linked property report automatically refreshes its PDF. Quality checks validate
+          drawing consistency and disclosures; they do not independently certify roof dimensions or
+          pitch.
         </p>
       </div>
       <RoofPdfLayoutEditor value={pdfLayout} onChange={setPdfLayout} />
