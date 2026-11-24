@@ -47,7 +47,7 @@ afterEach(() => {
 });
 
 describe("Census-to-USGS aerial server integration", () => {
-  it("geocodes the entered address, requests the matching map area, and returns coordinates with ground scale", async () => {
+  it("geocodes the entered address and requests matching imagery without claiming ground resolution", async () => {
     const fetcher = successfulFetch();
     const result = await fetchPublicAerial(ADDRESS, SPAN_METERS, fetcher);
 
@@ -57,7 +57,7 @@ describe("Census-to-USGS aerial server integration", () => {
     expect(result.lat).toBe(LAT);
     expect(result.lon).toBe(LON);
     expect(result.matchedAddress).toContain("HOMESTEAD");
-    expect(result.feetPerPixel).toBeCloseTo((SPAN_METERS * 3.28084) / PIXELS, 10);
+    expect(result).not.toHaveProperty("feetPerPixel");
 
     const censusCall = fetcher.mock.calls[0];
     const imageryCall = fetcher.mock.calls[1];
