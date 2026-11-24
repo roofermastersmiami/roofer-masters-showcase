@@ -6,11 +6,15 @@ import {
   CalendarDays,
   Check,
   FilePlus2,
+  FileStack,
   Lock,
+  Mail,
   PenLine,
   Plus,
   Trash2,
   Type,
+  Save,
+  Send,
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { emailRoofReportPdfs } from "@/lib/pdf-email.functions";
 
 type FieldKind = "signature" | "name" | "date" | "initials" | "text";
 export type PdfSignField = {
@@ -101,6 +106,17 @@ export function PdfContractSigner({
   onFieldsChange,
 }: PdfContractSignerProps) {
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
+  const [sourceFileName, setSourceFileName] = useState("document.pdf");
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; file_path: string; fields: PdfSignField[] }>>([]);
+  const [templateName, setTemplateName] = useState("");
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSubject, setEmailSubject] = useState("Roofing documents from Roofer Masters");
+  const [emailMessage, setEmailMessage] = useState("Hello,\n\nPlease find the attached roofing documents.\n\nThank you,\nRoofer Masters");
+  const [emailFiles, setEmailFiles] = useState<File[]>([]);
+  const [savedAttachments, setSavedAttachments] = useState<Array<{ path: string; filename: string }>>([]);
+  const [emailBusy, setEmailBusy] = useState(false);
   const [pages, setPages] = useState<PdfPage[]>([]);
   const [fields, setFields] = useState<PdfSignField[]>(initialFields);
   const [clientFieldOpen, setClientFieldOpen] = useState(false);
@@ -128,7 +144,7 @@ export function PdfContractSigner({
   }, [fields, onFieldsChange]);
 
   const loadPdf = useCallback(
-    async (bytes: Uint8Array, name: string) => {
+    async (bytes: Uint8Array, name: string, savedFields: PdfSignField[] = initialFields) => {
       setLoading(true);
       try {
         const pdfjsLib = await import("pdfjs-dist");
@@ -141,8 +157,9 @@ export function PdfContractSigner({
           nextPages.push({ width: viewport.width, height: viewport.height });
         }
         setSourceBytes(bytes);
+        setSourceFileName(name);
         setPages(nextPages);
-        setFields(initialFields);
+        setFields(savedFields);
         setActivePage(0);
         setSelectedId(null);
       } catch (error) {
@@ -372,6 +389,7 @@ export function PdfContractSigner({
         .from("signed-contracts")
         .upload(path, blob, { contentType: "application/pdf", upsert: false });
       if (error) throw error;
+      setSavedAttachments((current) => [...current, { path, filename: `${safeAddress}-signed.pdf` }]);
       const downloadUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = downloadUrl;
@@ -386,6 +404,98 @@ export function PdfContractSigner({
       setSaving(false);
     }
   };
+
+  const saveAsTemplate = async () => {
+    if (!sourceBytes || !leadId) {
+      toast.error("Load a PDF and select a customer roof report before saving a template");
+      return;
+    }
+    const name = templateName.trim();
+    if (name.length < 2) {
+      toast.error("Enter a template name");
+      return;
+    }
+    setTemplateBusy(true);
+    try {
+      const { data: userResult, error: userError } = await supabase.auth.getUser();
+      if (userError || !userResult.user) throw new Error("Sign in again to save a template");
+      const id = crypto.randomUUID();
+      const path = `pdf-templates/${id}/${Date.now()}-${sourceFileName.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+      const { error: uploadError } = await supabase.storage.from("roofing-proposals").upload(path, new Blob([Uint8Array.from(sourceBytes)], { type: "application/pdf" }), { contentType: "application/pdf" });
+      if (uploadError) throw uploadError;
+      const templateFields = fields.map((field) => ({ ...field, id: crypto.randomUUID(), value: "", imageData: undefined }));
+      const { error: insertError } = await supabase.from("pdf_sign_templates").insert({ id, name, file_path: path, fields: templateFields, created_by: userResult.user.id });
+      if (insertError) {
+        await supabase.storage.from("roofing-proposals").remove([path]);
+        throw insertError;
+      }
+      setTemplates((current) => [{ id, name, file_path: path, fields: templateFields }, ...current]);
+      setTemplateName("");
+      toast.success("PDF template saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save template");
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+
+  const loadTemplate = async (id: string) => {
+    const template = templates.find((item) => item.id === id);
+    if (!template) return;
+    setTemplateBusy(true);
+    try {
+      const { data, error } = await supabase.storage.from("roofing-proposals").download(template.file_path);
+      if (error || !data) throw error ?? new Error("Template PDF not found");
+      const fieldsForUse = template.fields.map((field) => ({ ...field, id: crypto.randomUUID(), value: field.kind === "date" ? today() : "", imageData: undefined }));
+      await loadPdf(new Uint8Array(await data.arrayBuffer()), template.name + ".pdf", fieldsForUse);
+      toast.success(`Loaded template: ${template.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load template");
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+
+  const sendEmail = async () => {
+    if (!leadId || !reportId || !emailTo.trim()) {
+      toast.error("Enter the customer's email address");
+      return;
+    }
+    if (!savedAttachments.length && !emailFiles.length) {
+      toast.error("Add at least one PDF attachment");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const uploaded = [...savedAttachments];
+      for (const file of emailFiles) {
+        if (file.type !== "application/pdf" || file.size > 20 * 1024 * 1024) throw new Error(`${file.name} must be a PDF under 20 MB`);
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
+        const path = `${leadId}/${reportId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+        const { error } = await supabase.storage.from("signed-contracts").upload(path, file, { contentType: "application/pdf", upsert: false });
+        if (error) throw error;
+        uploaded.push({ path, filename: safeName });
+      }
+      const result = await emailRoofReportPdfs({ data: { leadId, reportId, to: emailTo.trim(), subject: emailSubject.trim(), message: emailMessage, attachments: uploaded } });
+      if (!result.sent) throw new Error("Email was not sent");
+      setSavedAttachments(uploaded);
+      setEmailFiles([]);
+      setEmailOpen(false);
+      toast.success(`Email sent with ${result.attachmentCount} PDF file(s)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send email");
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void supabase.from("pdf_sign_templates").select("id,name,file_path,fields").order("updated_at", { ascending: false }).then(({ data, error }) => {
+      if (!cancelled && !error && data) setTemplates(data as typeof templates);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const uploadFile = async (file?: File) => {
     if (!file) return;
@@ -430,7 +540,8 @@ export function PdfContractSigner({
           />
         </label>
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
+      <div className="sticky top-0 z-30 flex flex-col gap-2 rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <div className="flex flex-wrap items-center gap-2">
         {fieldTools.map(({ kind, label, icon: Icon }) => (
           <Button
             key={kind}
@@ -458,6 +569,21 @@ export function PdfContractSigner({
           <Check className="mr-1 size-4" />
           {saving ? "Saving…" : "Save & Download Signed PDF"}
         </Button>
+        <Button size="sm" variant="outline" disabled={!sourceBytes || templateBusy} onClick={() => void saveAsTemplate()}>
+          <Save className="mr-1 size-4" /> Save template
+        </Button>
+        <Button size="sm" variant="outline" disabled={!leadId || !reportId} onClick={() => setEmailOpen(true)}>
+          <Mail className="mr-1 size-4" /> Email PDFs
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input className="w-44" placeholder="New template name" value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
+        <select aria-label="Load saved PDF template" className="h-9 max-w-64 rounded-md border bg-background px-3 text-sm" value="" onChange={(event) => { if (event.target.value) void loadTemplate(event.target.value); }}>
+          <option value="">Load a saved template…</option>
+          {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+        </select>
+        <span className="text-xs text-muted-foreground">Templates keep your PDF and field positions for reuse.</span>
+      </div>
       </div>
       {selected && !isClientMode && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
@@ -555,7 +681,7 @@ export function PdfContractSigner({
         </div>
       )}
       {sourceBytes && (
-        <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-muted/60 p-3">
+        <div className="h-[min(68dvh,760px)] min-h-[320px] overflow-y-auto overscroll-contain rounded-lg bg-muted/60 p-3">
           <div className="mx-auto flex max-w-5xl flex-col items-center gap-5">
             {pages.map((page, index) => (
               <div key={index} className="w-full">
@@ -640,6 +766,22 @@ export function PdfContractSigner({
           </div>
         </div>
       )}
+      <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Email multiple PDF files</DialogTitle>
+            <DialogDescription>Send the signed document and any additional PDFs to the customer. Attachments are sent privately from the CRM server.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">To<Input type="email" value={emailTo} onChange={(event) => setEmailTo(event.target.value)} placeholder="customer@example.com" /></label>
+            <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
+            <label className="grid gap-1 text-sm">Message<textarea className="min-h-28 rounded-md border bg-background p-3 text-sm" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} /></label>
+            <label className="grid gap-1 text-sm">Add multiple PDF files<input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => setEmailFiles(Array.from(event.target.files ?? []))} /></label>
+            <p className="text-xs text-muted-foreground">{savedAttachments.length + emailFiles.length} PDF attachment(s) selected. Total email size limit: 20 MB.</p>
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEmailOpen(false)}>Cancel</Button><Button onClick={() => void sendEmail()} disabled={emailBusy || !emailTo.trim()}>{emailBusy ? "Sending…" : <><Send className="mr-1 size-4" /> Send email</>}</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={clientFieldOpen} onOpenChange={setClientFieldOpen}>
         <DialogContent>
           <DialogHeader>
