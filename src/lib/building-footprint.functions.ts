@@ -71,7 +71,10 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
           } as const;
         }
         return {
-          error: "OpenStreetMap building lookup failed (HTTP " + overpass.status + "). You can still continue with the aerial image.",
+          error:
+            "OpenStreetMap building lookup failed (HTTP " +
+            overpass.status +
+            "). You can still continue with the aerial image.",
         } as const;
       }
       const payload: unknown = await overpass.json();
