@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type FieldKind = "signature" | "name" | "date" | "initials" | "text";
-type SignField = {
+export type PdfSignField = {
   id: string;
   kind: FieldKind;
   page: number;
@@ -35,6 +35,8 @@ export interface PdfContractSignerProps {
   sourceBucket?: string;
   isClientMode?: boolean;
   onSaved?: (path: string) => void;
+  initialFields?: PdfSignField[];
+  onFieldsChange?: (fields: PdfSignField[]) => void;
 }
 
 const today = () => {
@@ -44,7 +46,7 @@ const today = () => {
 const fieldLabel: Record<FieldKind, string> = {
   signature: "Signature", name: "Full name", date: "Date signed", initials: "Initials", text: "Custom text",
 };
-const makeField = (kind: FieldKind, page: number): SignField => ({
+const makeField = (kind: FieldKind, page: number): PdfSignField => ({
   id: crypto.randomUUID(), kind, page, x: 0.12, y: 0.72, width: kind === "signature" ? 0.3 : 0.25,
   height: kind === "signature" ? 0.09 : 0.045, fontSize: kind === "signature" ? 22 : 12,
   value: kind === "date" ? today() : kind === "name" ? "" : kind === "initials" ? "" : kind === "text" ? "" : "",
@@ -52,11 +54,12 @@ const makeField = (kind: FieldKind, page: number): SignField => ({
 
 export function PdfContractSigner({
   reportId, leadId, propertyAddress, sourcePdfPath, sourceBucket = "roofing-proposals",
-  isClientMode = false, onSaved,
+  isClientMode = false, onSaved, initialFields = [], onFieldsChange,
 }: PdfContractSignerProps) {
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
   const [pages, setPages] = useState<PdfPage[]>([]);
-  const [fields, setFields] = useState<SignField[]>([]);
+  const [fields, setFields] = useState<PdfSignField[]>(initialFields);
+  const [clientFieldOpen, setClientFieldOpen] = useState(false);
   const [activePage, setActivePage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,6 +72,7 @@ export function PdfContractSigner({
   const canvasRefs = useRef<Array<HTMLCanvasElement | null>>([]);
   const dragRef = useRef<{ id: string; pointerX: number; pointerY: number; startX: number; startY: number; rect: DOMRect } | null>(null);
   const selected = fields.find((field) => field.id === selectedId) ?? null;
+  useEffect(() => { onFieldsChange?.(fields); }, [fields, onFieldsChange]);
 
   const loadPdf = useCallback(async (bytes: Uint8Array, name: string) => {
     setLoading(true);
@@ -82,7 +86,7 @@ export function PdfContractSigner({
       }
       setSourceBytes(bytes);
       setPages(nextPages);
-      setFields([]);
+      setFields(initialFields);
       setActivePage(0);
       setSelectedId(null);
     } catch (error) {
@@ -90,7 +94,7 @@ export function PdfContractSigner({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialFields]);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,10 +153,10 @@ export function PdfContractSigner({
     if (kind === "signature") setSignatureOpen(true);
   };
 
-  const updateField = (id: string, patch: Partial<SignField>) =>
+  const updateField = (id: string, patch: Partial<PdfSignField>) =>
     setFields((current) => current.map((field) => field.id === id ? { ...field, ...patch } : field));
 
-  const beginDrag = (event: PointerEvent<HTMLDivElement>, field: SignField) => {
+  const beginDrag = (event: PointerEvent<HTMLDivElement>, field: PdfSignField) => {
     if (isClientMode || (event.target as HTMLElement).closest("input,button")) return;
     const host = pageRefs.current[field.page];
     if (!host) return;
@@ -277,7 +281,7 @@ export function PdfContractSigner({
             <div ref={(el) => { pageRefs.current[index] = el; }} className="relative mx-auto w-full overflow-hidden bg-white shadow-md" style={{ aspectRatio: `${page.width} / ${page.height}`, maxWidth: "850px" }}>
               <canvas ref={(el) => { canvasRefs.current[index] = el; }} className="block h-auto w-full" />
               <div className="absolute inset-0" onPointerMove={moveDrag} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }}>
-                {fields.filter((field) => field.page === index).map((field) => <div key={field.id} role="button" tabIndex={0} aria-label={`${fieldLabel[field.kind]} field`} onClick={() => { setSelectedId(field.id); if (field.kind === "signature" && !field.imageData) setSignatureOpen(true); }} onPointerDown={(event) => beginDrag(event, field)} className={`absolute flex cursor-move items-center overflow-hidden border-2 px-1 ${selectedId === field.id ? "border-blue-600 bg-blue-100/60" : "border-blue-400/70 bg-blue-50/40"}`} style={{ left: `${field.x * 100}%`, top: `${field.y * 100}%`, width: `${field.width * 100}%`, height: `${field.height * 100}%`, fontSize: `${field.fontSize}px` }}>
+                {fields.filter((field) => field.page === index).map((field) => <div key={field.id} role="button" tabIndex={0} aria-label={`${fieldLabel[field.kind]} field`} onClick={() => { setSelectedId(field.id); if (field.kind === "signature" && !field.imageData) setSignatureOpen(true); else if (isClientMode && field.kind === "date") updateField(field.id, { value: today() }); else if (isClientMode) setClientFieldOpen(true); }} onPointerDown={(event) => beginDrag(event, field)} className={`absolute flex cursor-move items-center overflow-hidden border-2 px-1 ${selectedId === field.id ? "border-blue-600 bg-blue-100/60" : "border-blue-400/70 bg-blue-50/40"}`} style={{ left: `${field.x * 100}%`, top: `${field.y * 100}%`, width: `${field.width * 100}%`, height: `${field.height * 100}%`, fontSize: `${field.fontSize}px` }}>
                   {field.imageData ? <img src={field.imageData} alt="Signature preview" className="h-full max-w-full object-contain" /> : <span className="truncate text-blue-900">{field.value || fieldLabel[field.kind]}</span>}
                 </div>)}
               </div>
@@ -285,6 +289,13 @@ export function PdfContractSigner({
           </div>)}
         </div>
       </div>}
+      <Dialog open={clientFieldOpen} onOpenChange={setClientFieldOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{selected ? fieldLabel[selected.kind] : "Complete field"}</DialogTitle><DialogDescription>Enter the information requested on the contract.</DialogDescription></DialogHeader>
+          {selected && <Input autoFocus value={selected.value} onChange={(event) => updateField(selected.id, { value: event.target.value })} placeholder={selected ? fieldLabel[selected.kind] : "Enter text"} /> }
+          <div className="flex justify-end"><Button onClick={() => setClientFieldOpen(false)}>Apply</Button></div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={signatureOpen} onOpenChange={setSignatureOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Add signature</DialogTitle><DialogDescription>Draw your signature or type your name in a cursive style. It will be embedded into the exported PDF.</DialogDescription></DialogHeader>
