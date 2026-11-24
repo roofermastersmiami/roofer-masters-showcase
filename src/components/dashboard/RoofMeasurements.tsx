@@ -326,6 +326,8 @@ export function RoofMeasurements({
           },
         });
         roofReportPdfPath = null;
+        if (report.file_path)
+          await supabase.storage.from("roofing-proposals").remove([report.file_path]);
         await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
       }
 
