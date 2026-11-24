@@ -85,7 +85,8 @@ const groups = [
   {
     label: "Sales & production",
     items: [
-      { id: "measurements", label: "Roof reports & 3D", icon: MapPin },
+      { id: "roof-reports", label: "Roof reports", icon: FileText },
+      { id: "measurements", label: "Roof measurements", icon: MapPin },
       { id: "estimates", label: "Quick estimator", icon: Calculator },
       { id: "detailed-estimator", label: "Detailed estimator", icon: Calculator },
       { id: "prices", label: "Material & labor prices", icon: Settings },
@@ -142,7 +143,8 @@ export function CrmShell({
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
     [proposalLeadId, setProposalLeadId] = useState<string | null>(null),
-    [roofReportRequest, setRoofReportRequest] = useState<{ propertyId: string; customerId: string; address: string } | null>(null);
+    [roofReportRequest, setRoofReportRequest] = useState<{ propertyId: string; customerId: string; address: string } | null>(null),
+    [selectedRoofReportId, setSelectedRoofReportId] = useState<string | null>(null);
   useEffect(() => {
     setDark(localStorage.getItem("crm-theme") === "dark");
   }, []);
@@ -299,6 +301,11 @@ export function CrmShell({
       value={{
         leads,
         roofReportRequest,
+        selectedRoofReportId,
+        openRoofMeasurements: (reportId) => {
+          setSelectedRoofReportId(reportId);
+          void go("measurements");
+        },
         onOpen: (l) => setOpenId(l.id),
         openProposals: (id) => {
           setProposalLeadId(id ?? null);
@@ -368,7 +375,8 @@ export function CrmShell({
                             address: result.property.address,
                           });
                           setOpenId(null);
-                          void go("measurements");
+                          setSelectedRoofReportId(null);
+                          void go("roof-reports");
                         } else {
                           setOpenId(result.lead.id);
                         }
