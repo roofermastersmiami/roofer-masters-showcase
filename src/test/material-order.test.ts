@@ -49,7 +49,6 @@ describe("metal panel length and validation", () => {
   });
 });
 
-
 describe("material order print escaping", () => {
   it("escapes HTML metacharacters in customer-controlled print text", () => {
     expect(escapeMaterialOrderHtml(`Roof <script>alert("x")</script> & 'metal'`)).toBe(
