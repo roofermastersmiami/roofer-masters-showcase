@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, MessageCircle, Mic, MicOff, Send, Volume2, X } from "lucide-react";
+import { CalendarDays, MessageCircle, Mic, MicOff, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -86,7 +86,7 @@ export function FreeAiReceptionist({ className }: { className?: string }) {
     const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!Recognition) return;
     const recognition = new Recognition();
-    recognition.lang = "en-US";
+    recognition.lang = navigator.language.toLowerCase().startsWith("es") ? "es-US" : "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onresult = (event) => {
