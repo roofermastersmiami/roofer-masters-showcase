@@ -134,9 +134,12 @@ export function parseBuildingFootprints(
     // and concave footprints are located by their area, not vertex density.
     const meanLat = openRing.reduce((sum, point) => sum + point.lat, 0) / openRing.length;
     const longitudeScale = Math.cos(meanLat * Math.PI / 180);
+    // Translate coordinates near zero before applying the shoelace formula.
+    // Using absolute longitude/latitude causes catastrophic cancellation.
+    const reference = openRing[0]!;
     const projected = openRing.map((point) => ({
-      x: point.lon * longitudeScale,
-      y: point.lat,
+      x: (point.lon - reference.lon) * longitudeScale,
+      y: point.lat - reference.lat,
     }));
     let twiceSignedArea = 0;
     let centroidX = 0;
@@ -151,8 +154,8 @@ export function parseBuildingFootprints(
     }
     const center = Math.abs(twiceSignedArea) > 1e-12
       ? {
-          lat: centroidY / (3 * twiceSignedArea),
-          lon: centroidX / (3 * twiceSignedArea * longitudeScale),
+          lat: reference.lat + centroidY / (3 * twiceSignedArea),
+          lon: reference.lon + centroidX / (3 * twiceSignedArea * longitudeScale),
         }
       : {
           lat: meanLat,
