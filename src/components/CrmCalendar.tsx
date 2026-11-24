@@ -31,7 +31,8 @@ export function CrmCalendar({ onOpenRoofReport }: { onOpenRoofReport?: (reportId
   const qc = useQueryClient();
   const from = mode === "week" ? startOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
   const to = mode === "week" ? endOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
-  const db = supabase as any;\n  const { data: appointments = [], isLoading, error } = useQuery({
+  const db = supabase as any;
+  const { data: appointments = [], isLoading, error } = useQuery({
     queryKey: ["crm-appointments", format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd")],
     queryFn: async () => {
       const { data, error } = await db.from("appointments").select("*")
