@@ -186,3 +186,14 @@ describe("roof preset dimension validation", () => {
     expect(() => roofPreset("gable", width, length, pitch)).toThrow();
   });
 });
+
+
+describe("roof edge topology validation", () => {
+  it("rejects zero-length roof edges", () => {
+    const drawing = roofPreset("flat", 40, 30);
+    const plane = drawing.planes[0];
+    if (!plane) throw new Error("Missing roof plane");
+    plane.points[3] = { ...plane.points[0]! };
+    expect(() => measureDrawing(drawing)).toThrow("at least 0.01 feet long");
+  });
+});
