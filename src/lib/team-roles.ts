@@ -25,6 +25,7 @@ export const SECTION_ROLES: Record<string, readonly R[]> = {
   customers: ["office", "sales", "production_manager", "accounting"],
   properties: ["office", "sales", "production_manager", "accounting"],
   followups: ["office", "sales", "production_manager"],
+  "roof-reports": ["office", "sales", "production_manager"],
   measurements: ["office", "sales", "production_manager"],
   estimates: ["office", "sales"],
   proposals: ["office", "sales"],
