@@ -334,7 +334,7 @@ export function RoofReports({
                 propertyAddress={signingReport.address}
                 sourcePdfPath={signingReport.file_path}
                 sourceBucket="roofing-proposals"
-                onSaved={() => toast.success("The signed contract is stored in the linked customer lead.")}
+                onSaved={() => setSigningReport(null)}
               />
             </div>
           )}
