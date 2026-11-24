@@ -1118,9 +1118,7 @@ export function RoofMeasurements({
                     <td className="py-2 pr-3 text-right tabular-nums">
                       {facet.pitch.toFixed(2)}:12
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums">
-                      {facet.area.toFixed(1)}
-                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{facet.area.toFixed(1)}</td>
                     <td className="py-2 text-right tabular-nums">
                       {(facet.area / 100).toFixed(2)}
                     </td>
@@ -1134,9 +1132,7 @@ export function RoofMeasurements({
                   <td className="py-2 pr-3 text-right tabular-nums">
                     {measurement.area.toFixed(1)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">
-                    {measurement.squares.toFixed(2)}
-                  </td>
+                  <td className="py-2 text-right tabular-nums">{measurement.squares.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
