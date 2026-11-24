@@ -191,7 +191,7 @@ export function MaterialOrder({
             </Field>
           ))}
       </div>
-      {lines.length ? (
+      {warnings.length > 0 && (\n        <div role="note" className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">\n          <p className="mb-1 font-semibold">Metal panel takeoff — review required</p>\n          <ul className="list-disc space-y-1 pl-5">\n            {warnings.map((warning) => (\n              <li key={warning}>{warning}</li>\n            ))}\n          </ul>\n        </div>\n      )}\n      {lines.length ? (
         <table className="mt-4 w-full text-sm">
           <tbody>
             {lines.map((l) => (
