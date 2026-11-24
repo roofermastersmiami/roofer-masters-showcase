@@ -28,3 +28,18 @@ describe("material orders from roof report", () => {
     expect(q(materialOrder({ ...base, roof_type: "TPO" }), "Insulation")).toBe(69);
   });
 });
+
+
+import { materialOrderWarnings } from "@/lib/material-order";
+
+describe("material takeoff review warnings", () => {
+  it("flags aggregate metal panel quantities as preliminary", () => {
+    const warnings = materialOrderWarnings({ ...base, roof_type: "Metal Roof" });
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join(" ")).toContain("not a panel cut list");
+  });
+
+  it("does not show metal panel warnings for other roof systems", () => {
+    expect(materialOrderWarnings({ ...base, roof_type: "Shingle Roof" })).toEqual([]);
+  });
+});
