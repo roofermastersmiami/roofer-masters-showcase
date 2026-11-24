@@ -20,7 +20,18 @@ export const createRoofOrder = createServerFn({ method: "POST" })
       p_provider: data.provider,
       p_notes: data.notes,
     });
-    if (error || !id) throw new Error("Could not save the customer report request");
+    if (error) {
+      // Preserve actionable Postgres/PostgREST diagnostics for the CRM toast.
+      // Supabase error messages do not include the submitted customer address.
+      if (error.message.includes("Access denied")) {
+        throw new Error("Your account does not have permission to create roof report requests. Ask the CRM owner to check your team role.");
+      }
+      if (error.message.includes("Invalid report request")) {
+        throw new Error("The report details were rejected. Check the address, report title, provider, and notes.");
+      }
+      throw new Error(`Could not save the customer report request: ${error.message} (${error.code ?? "database error"})`);
+    }
+    if (!id) throw new Error("Could not save the customer report request: the database did not return a report ID.");
     return { id };
   });
 
