@@ -275,6 +275,15 @@ export function RoofImageTrace({
             preserveAspectRatio="xMidYMid meet"
             aria-label="Roof tracing surface"
             onPointerMove={onMove}
+            onWheelCapture={(event) => {
+              event.preventDefault();
+              if (Math.abs(event.deltaY) < 1) return;
+              setPhotoZoom((value) =>
+                event.deltaY < 0
+                  ? Math.min(5, Number((value * 1.15).toFixed(2)))
+                  : Math.max(1, Number((value / 1.15).toFixed(2))),
+              );
+            }}
             style={{
               touchAction: "none",
               transform: `scale(${photoZoom})`,
