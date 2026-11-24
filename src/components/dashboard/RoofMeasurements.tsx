@@ -58,7 +58,7 @@ import {
   addressAerialRequestKey,
 } from "@/lib/public-aerial-import";
 import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
-import { ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
+import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
@@ -939,9 +939,15 @@ export function RoofMeasurements({
               )}
               <div className="mt-4 grid gap-2">
                 {plane.edges.map((type, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="mb-2 h-1.5 w-7 shrink-0 rounded-full"
+                      style={{ backgroundColor: ROOF_EDGE_STYLES[type].color }}
+                    />
+                    <div className="min-w-0 flex-1">
                   <Choice
-                    key={i}
-                    label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2}`}
+                    label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label}`}
                     value={type}
                     onChange={(value) => {
                       const edge = EDGE_TYPES.find((e) => e === value);
@@ -955,8 +961,10 @@ export function RoofMeasurements({
                           ),
                         });
                     }}
-                    options={EDGE_TYPES.map((e) => ({ value: e, label: e }))}
+                    options={EDGE_TYPES.map((e) => ({ value: e, label: ROOF_EDGE_STYLES[e].label }))}
                   />
+                    </div>
+                  </div>
                 ))}
               </div>
               <Button
@@ -1086,7 +1094,15 @@ export function RoofMeasurements({
         <div>
           <h3 className="mb-4 text-lg font-bold">Penetrations</h3>
           {d.penetrations.map((p) => (
-            <div key={p.id} className="mb-3 grid grid-cols-3 gap-2">
+            <div key={p.id} className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3">
+              <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: PENETRATION_COLORS[p.kind] }}
+                />
+                {p.kind === "pipe" ? "Pipe identification" : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
+              </div>
               <Choice
                 label="Type"
                 value={p.kind}
