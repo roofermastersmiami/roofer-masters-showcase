@@ -61,14 +61,9 @@ export function nearestBuildingFootprint(
       const dy = by - ay;
       const lengthSquared = dx * dx + dy * dy;
       const t =
-        lengthSquared === 0
-          ? 0
-          : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared));
-      minimumEdgeDistance = Math.min(
-        minimumEdgeDistance,
-        Math.hypot(ax + t * dx, ay + t * dy),
-      );
-      const crossesLatitude = (a.lat > center.lat) !== (b.lat > center.lat);
+        lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared));
+      minimumEdgeDistance = Math.min(minimumEdgeDistance, Math.hypot(ax + t * dx, ay + t * dy));
+      const crossesLatitude = a.lat > center.lat !== b.lat > center.lat;
       if (
         crossesLatitude &&
         center.lon < ((b.lon - a.lon) * (center.lat - a.lat)) / (b.lat - a.lat) + a.lon
