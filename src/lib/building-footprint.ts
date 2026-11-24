@@ -59,7 +59,7 @@ export function parseBuildingFootprints(
   const elements = (raw as { elements: OverpassElement[] }).elements;
   const results: BuildingFootprint[] = [];
   for (const element of elements) {
-    if (element.type !== "way" || typeof element.id !== "number" ||
+    if (!element || typeof element !== "object" || element.type !== "way" || typeof element.id !== "number" ||
         !Number.isSafeInteger(element.id) || !Array.isArray(element.geometry)) continue;
     const points = element.geometry.filter(validPoint);
     if (points.length < 4) continue;
