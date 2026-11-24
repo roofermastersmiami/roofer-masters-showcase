@@ -84,6 +84,7 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
       });
       return {
         matchedAddress: addressMatch?.matchedAddress?.trim() || data.address,
+        addressPoint: { lat: coordinates.y, lon: coordinates.x },
         footprints,
         attribution: "© OpenStreetMap contributors",
       } as const;

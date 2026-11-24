@@ -261,3 +261,8 @@ export function footprintToDraftPlane(footprint: BuildingFootprint) {
     edges: footprint.points.map(() => "other" as const),
   };
 }
+
+/** Georeference a preliminary OSM outline so the report address pin shares its local coordinate frame. */
+export function footprintGeoReference(footprint: BuildingFootprint, addressPoint: FootprintPoint) {
+  return { addressLatitude: addressPoint.lat, addressLongitude: addressPoint.lon, originLatitude: footprint.center.lat, originLongitude: footprint.center.lon };
+}
