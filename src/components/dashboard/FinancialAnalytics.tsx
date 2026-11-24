@@ -46,18 +46,25 @@ export function FinancialAnalytics() {
       (project === "all" || e.job_id === project) && e.incurred_at >= from && e.incurred_at <= to,
   );
   const profit = actualProfit(ledger.collected, costs);
+  // The financial ledger depends on invoices, payments, and expenses only.
+  // Job names and invoice allocations are supporting data and must not hide the report.
   const failed =
     ledgerError ||
-    !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
+    !!(expenses.error || invoices.error || payments.error) ||
+    (project !== "all" && !!links.error) ||
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     start > end;
-  const loading =
-    expenses.isPending ||
-    payments.isPending ||
-    invoices.isPending ||
-    jobs.isPending ||
-    links.isPending;
+  const loading = expenses.isPending || payments.isPending || invoices.isPending;
+  const sourceErrors = [
+    expenses.error && `Expenses: ${expenses.error.message}`,
+    invoices.error && `Invoices: ${invoices.error.message}`,
+    payments.error && `Payments: ${payments.error.message}`,
+    jobs.error && `Project list: ${jobs.error.message}`,
+    links.error && `Project allocations: ${links.error.message}`,
+    ledgerError && "Financial records contain unexpected or invalid values.",
+    start > end && "The start date must be on or before the end date.",
+  ].filter(Boolean);
   const rows = [
     ["Payments received", ledger.collected],
     ["Issued invoice sales", ledger.sales],
@@ -176,6 +183,16 @@ export function FinancialAnalytics() {
             : "Live recorded transactions"}{" "}
         · Cash basis
       </p>
+      {jobs.error && !failed && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Project names could not be loaded. Financial totals are still available for all projects.
+        </p>
+      )}
+      {links.error && project === "all" && !failed && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Project allocations could not be loaded. Overall financial totals are still available.
+        </p>
+      )}
       {paymentSetupMissing && !failed && (
         <p className="mb-4 text-sm text-muted-foreground">
           Online payments are not configured. This report still shows saved live invoices, payments, and expenses.
@@ -183,9 +200,9 @@ export function FinancialAnalytics() {
       )}
       {failed ? (
         <p role="alert" className="text-destructive">
-          {env === "unavailable"
-            ? "Payment environment is not configured. Financial totals are hidden until the payment environment can be verified."
-            : "Records or date range unavailable. Do not rely on these totals."}
+          {sourceErrors.length
+            ? sourceErrors.join(" · ")
+            : "Financial records or date range unavailable. Do not rely on these totals."}
         </p>
       ) : loading ? (
         <p>Loading recorded transactions…</p>
