@@ -963,14 +963,14 @@ export function RoofMeasurements({
                 variant={view === "3d" ? "secondary" : "ghost"}
                 onClick={() => setView("3d")}
               >
-                3D
+                3D House
               </Button>
               <Button
                 size="sm"
                 variant={view === "plan" ? "secondary" : "ghost"}
                 onClick={() => setView("plan")}
               >
-                Plan
+                2D Plan
               </Button>
               <Button
                 size="icon"
@@ -1025,6 +1025,7 @@ export function RoofMeasurements({
               <RotateCcw />
             </Button>
           </div>
+          <p className="px-3 py-2 text-xs text-muted-foreground">3D House shows a simplified building mass beneath the measured roof. 2D Plan shows the roof from directly above. The building shape is generated from traced roof geometry, not a photorealistic model of the actual home.</p>
           <div className="h-[440px] min-w-0 bg-muted sm:h-[560px]">
             <DrawingErrorBoundary>
               <Suspense
