@@ -144,6 +144,7 @@ export function CrmShell({
     [dark, setDark] = useState(false),
     [theme, setTheme] = useState("ocean"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
+    [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
     [query, setQuery] = useState(""),
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
@@ -159,11 +160,12 @@ export function CrmShell({
     const savedTheme = localStorage.getItem("crm-theme-preset");
     if (savedTheme && ["ocean", "slate", "emerald", "sunset", "violet"].includes(savedTheme)) setTheme(savedTheme);
     const savedSidebar = localStorage.getItem("crm-sidebar-appearance");
-    if (savedSidebar && ["navy", "light", "accent"].includes(savedSidebar)) setSidebarAppearance(savedSidebar);
+    if (savedSidebar && ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(savedSidebar)) setSidebarAppearance(savedSidebar);
+    setSidebarPreferencesLoaded(true);
   }, []);
   useEffect(() => {
-    localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
-  }, [sidebarAppearance]);
+    if (sidebarPreferencesLoaded) localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
+  }, [sidebarAppearance, sidebarPreferencesLoaded]);
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("crm-theme-ocean", "crm-theme-slate", "crm-theme-emerald", "crm-theme-sunset", "crm-theme-violet");
@@ -252,10 +254,25 @@ export function CrmShell({
     : [];
   const results = [...propertyResults, ...leadResults].slice(0, 10);
   const current = groups.flatMap((g) => g.items).find((i) => i.id === section);
+  const sidebarIsLight = sidebarAppearance === "light" || sidebarAppearance === "steel";
+  const sidebarSurface = sidebarAppearance === "light"
+    ? "border-border bg-card text-foreground"
+    : sidebarAppearance === "accent"
+      ? "border-transparent bg-primary text-primary-foreground"
+      : sidebarAppearance === "charcoal"
+        ? "border-transparent bg-slate-900 text-slate-100"
+        : sidebarAppearance === "gradient"
+          ? "border-transparent bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 text-white"
+          : sidebarAppearance === "steel"
+            ? "border-border bg-slate-100 text-slate-800"
+            : "border-transparent bg-navy text-navy-foreground";
+  const sidebarMutedText = sidebarIsLight ? "text-foreground/80" : "text-white/80";
+  const sidebarHover = sidebarIsLight ? "hover:bg-muted hover:text-foreground" : "hover:bg-white/10 hover:text-white";
+  const sidebarActive = sidebarIsLight ? "bg-accent text-accent-foreground" : "bg-white/15 text-white";
   function navigation(compact: boolean) {
     return (
       <div className="flex h-full flex-col">
-        <div className={cn("flex h-24 shrink-0 items-center gap-3 border-b px-5", sidebarAppearance === "light" ? "border-border" : "border-primary-foreground/15")}>
+        <div className={cn("flex h-24 shrink-0 items-center gap-3 border-b px-5", sidebarIsLight ? "border-border" : "border-white/15")}>
           <LogoMark
             className={compact ? "h-7 max-w-10 object-cover object-left" : "h-8 max-w-32"}
           />
@@ -284,9 +301,9 @@ export function CrmShell({
                     title={item.label}
                     className={cn(
                       "h-10 justify-start rounded-md",
-                      sidebarAppearance === "light" ? "text-foreground/80 hover:bg-muted hover:text-foreground" : "text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground",
+                      `${sidebarMutedText} ${sidebarHover}`,
                       compact && "justify-center px-0",
-                      section === item.id && (sidebarAppearance === "light" ? "bg-accent text-accent-foreground" : "bg-primary-foreground/15 text-primary-foreground"),
+                      section === item.id && sidebarActive,
                     )}
                   >
                     <Link
@@ -349,11 +366,7 @@ export function CrmShell({
     >
       <div className="flex min-h-dvh bg-background text-foreground">
         <aside
-          className={cn(
-            "sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block",
-            sidebarAppearance === "light" ? "border-border bg-card text-foreground" : sidebarAppearance === "accent" ? "border-transparent bg-primary text-primary-foreground" : "border-transparent bg-navy text-navy-foreground",
-            collapsed ? "w-20" : "w-60",
-          )}
+          className={cn("sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block", sidebarSurface, collapsed ? "w-20" : "w-60") }
         >
           {navigation(collapsed)}
         </aside>
@@ -436,7 +449,7 @@ export function CrmShell({
             <label className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 xl:flex" title="Choose sidebar appearance">
               <span className="text-[11px] text-muted-foreground">Sidebar</span>
               <select aria-label="Sidebar appearance" value={sidebarAppearance} onChange={(event) => setSidebarAppearance(event.target.value)} className="h-8 max-w-20 bg-transparent text-xs outline-none">
-                <option value="navy">Navy</option><option value="light">Light</option><option value="accent">Accent</option>
+                <option value="navy">Navy</option><option value="light">Light</option><option value="accent">Accent</option><option value="charcoal">Charcoal</option><option value="gradient">Midnight gradient</option><option value="steel">Steel</option>
               </select>
             </label>
             <Button
@@ -488,7 +501,7 @@ export function CrmShell({
         </div>
       </div>
       <Sheet open={mobile} onOpenChange={setMobile}>
-        <SheetContent side="left" className="w-72 border-0 bg-navy p-0 text-navy-foreground">
+        <SheetContent side="left" className={cn("w-72 border-0 p-0", sidebarSurface)}>
           <SheetHeader className="sr-only">
             <SheetTitle>Roofer Masters navigation</SheetTitle>
             <SheetDescription>Business workspace</SheetDescription>
