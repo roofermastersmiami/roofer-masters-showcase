@@ -60,7 +60,7 @@ BEGIN
   END IF;
 
   INSERT INTO public.roof_report_orders(customer_id, property_id, address, title, provider, notes)
-  VALUES (customer_uuid, property_uuid, trim(p_title), p_provider, p_notes)
+  VALUES (customer_uuid, property_uuid, trim(p_address), trim(p_title), p_provider, p_notes)
   RETURNING id INTO request_uuid;
 
   RETURN request_uuid;
