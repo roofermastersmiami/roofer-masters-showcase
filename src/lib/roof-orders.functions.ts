@@ -208,3 +208,44 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
     if (error || !estimate) throw new Error("Could not create the measurement-linked estimate");
     return estimate;
   });
+
+/** Permanently remove one company-owned roof report while preserving the property and drawing history. */
+export const deleteRoofOrder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: allowed, error: roleError } = await context.supabase.rpc("has_any_role", {
+      _user_id: context.userId,
+      _roles: ["office", "sales", "production_manager"],
+    });
+    if (roleError) throw new Error("Could not verify report permissions");
+    if (!allowed) throw new Error("You do not have access to delete roof reports");
+
+    const { data: current, error: readError } = await context.supabase
+      .from("roof_report_orders")
+      .select("id,file_path")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (readError) throw new Error("Could not load roof report");
+    if (!current) throw new Error("Roof report was already deleted or does not exist");
+
+    if (current.file_path) {
+      if (!current.file_path.startsWith(`roof-report/${data.id}/`) || !/^roof-report\\/[a-f0-9-]+\\/[a-f0-9-]+\\.pdf$/.test(current.file_path)) {
+        throw new Error("The report contains an unexpected file path. Contact an administrator before deleting it.");
+      }
+      const { error: storageError } = await context.supabase.storage
+        .from("roofing-proposals")
+        .remove([current.file_path]);
+      if (storageError) throw new Error("Could not remove the attached report PDF. Nothing was deleted.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: deleted, error } = await supabaseAdmin
+      .from("roof_report_orders")
+      .delete()
+      .eq("id", data.id)
+      .select("id")
+      .maybeSingle();
+    if (error || !deleted) throw new Error("Could not delete the roof report. Refresh and try again.");
+    return { id: deleted.id };
+  });
