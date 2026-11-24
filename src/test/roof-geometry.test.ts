@@ -196,3 +196,27 @@ describe("roof edge topology validation", () => {
     expect(() => measureDrawing(drawing)).toThrow("at least 0.01 feet long");
   });
 });
+
+
+describe("roof penetration dimension validation", () => {
+  it("accepts valid penetration dimensions and coordinates", () => {
+    const drawing = roofPreset("flat");
+    drawing.penetrations = [
+      { id: "pipe-1", kind: "pipe", x: -10000, z: 10000, width: 0.1, length: 2000 },
+    ];
+    expect(() => measureDrawing(drawing)).not.toThrow();
+  });
+
+  it.each([
+    { x: Number.NaN, z: 0, width: 1, length: 1 },
+    { x: 10000.01, z: 0, width: 1, length: 1 },
+    { x: 0, z: Number.POSITIVE_INFINITY, width: 1, length: 1 },
+    { x: 0, z: 0, width: 0, length: 1 },
+    { x: 0, z: 0, width: 2000.01, length: 1 },
+    { x: 0, z: 0, width: 1, length: -1 },
+  ])("rejects invalid penetration data: %o", (penetration) => {
+    const drawing = roofPreset("flat");
+    drawing.penetrations = [{ id: "invalid", kind: "vent", ...penetration }];
+    expect(() => measureDrawing(drawing)).toThrow();
+  });
+});
