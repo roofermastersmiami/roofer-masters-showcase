@@ -168,8 +168,13 @@ describe("guided satellite gable facet splitting", () => {
     expect(planeInfo(planes[0]!).pitch).toBeCloseTo(6, 1);
     expect(planeInfo(planes[1]!).pitch).toBeCloseTo(6, 1);
     const report = measureDrawing({
-      planes, penetrations: [], waste: 10, roof_type: "Metal Roof",
-      notes: "", condition: "", verified: false,
+      planes,
+      penetrations: [],
+      waste: 10,
+      roof_type: "Metal Roof",
+      notes: "",
+      condition: "",
+      verified: false,
     });
     expect(report.area).toBeGreaterThan(0);
     expect(report.edges.ridge).toBeGreaterThan(0);

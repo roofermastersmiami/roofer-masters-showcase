@@ -191,9 +191,11 @@ export function satelliteTraceToGablePlanes(
   const projectionMin = Math.min(...projections);
   const projectionMax = Math.max(...projections);
   const projectionSpan = projectionMax - projectionMin;
-  if (projectionSpan <= 0.001) throw new Error("The traced outline is too narrow for this ridge direction.");
+  if (projectionSpan <= 0.001)
+    throw new Error("The traced outline is too narrow for this ridge direction.");
   // Bounding midpoint is stable when users add extra trace points along one edge.
-  const centerAxis = (projectionMin + projectionMax) / 2 + (projectionSpan * ridgeOffsetPercent) / 100;
+  const centerAxis =
+    (projectionMin + projectionMax) / 2 + (projectionSpan * ridgeOffsetPercent) / 100;
   const tolerance = 0.00001;
   const expanded: { x: number; z: number }[] = [];
   for (let i = 0; i < local.length; i++) {
