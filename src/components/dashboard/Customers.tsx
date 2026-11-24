@@ -207,9 +207,12 @@ export function Customers({ leads, onOpen }: { leads: Lead[]; onOpen: (lead: Lea
         })}
       </div>
       {!customers.isLoading && !visible.length && <Empty>No matching customers.</Empty>}
-      <Dialog open={!!pendingDelete} onOpenChange={(open) => {
-        if (!open && !deleting) setPendingDelete(null);
-      }}>
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete this customer?</DialogTitle>

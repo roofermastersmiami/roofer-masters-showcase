@@ -356,16 +356,20 @@ export function RoofMeasurements({
           .eq("id", row.id);
         if (updateError) throw updateError;
         await qc.invalidateQueries({ queryKey: ["proposals"] });
-        toast.success(report
-          ? "Measurement PDF saved to Roof reports and customer documents"
-          : "Report added to documents; create a private sharing link");
+        toast.success(
+          report
+            ? "Measurement PDF saved to Roof reports and customer documents"
+            : "Report added to documents; create a private sharing link",
+        );
         go("proposals");
       } else {
         const { downloadPdf } = await import("./proposal-data");
         downloadPdf(bytes, title);
-        toast.success(report
-          ? "Measurement PDF saved to Roof reports and downloaded"
-          : "Roof measurement PDF downloaded");
+        toast.success(
+          report
+            ? "Measurement PDF saved to Roof reports and downloaded"
+            : "Roof measurement PDF downloaded",
+        );
       }
     } catch (error) {
       if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);

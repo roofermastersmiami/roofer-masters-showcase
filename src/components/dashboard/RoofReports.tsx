@@ -37,7 +37,9 @@ export function RoofReports({
   async function downloadReport(row: RoofOrder) {
     if (!row.file_path) return;
     try {
-      const { data, error } = await supabase.storage.from("roofing-proposals").download(row.file_path);
+      const { data, error } = await supabase.storage
+        .from("roofing-proposals")
+        .download(row.file_path);
       if (error || !data) throw error ?? new Error("PDF file not found");
       downloadPdf(new Uint8Array(await data.arrayBuffer()), row.title || "Roof measurement report");
     } catch (error) {
@@ -53,7 +55,9 @@ export function RoofReports({
       await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
       setSwipedReportId(null);
       setPendingDelete(null);
-      toast.success("Roof report deleted. Saved drawing revisions and customer property were kept.");
+      toast.success(
+        "Roof report deleted. Saved drawing revisions and customer property were kept.",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete roof report");
     } finally {
@@ -63,7 +67,8 @@ export function RoofReports({
 
   const query = search.trim().toLocaleLowerCase();
   const rows = (orders.data ?? []).filter((row) => {
-    const customerName = customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "";
+    const customerName =
+      customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "";
     return `${customerName} ${row.address} ${row.title}`.toLocaleLowerCase().includes(query);
   });
 
@@ -85,16 +90,26 @@ export function RoofReports({
           Completed measurement PDFs · Roofer Masters · Swipe left to delete
         </p>
       </div>
-      {orders.error && <p role="alert" className="text-destructive">Roof reports could not load.</p>}
-      {orders.isPending ? <p>Loading roof reports…</p> : (
+      {orders.error && (
+        <p role="alert" className="text-destructive">
+          Roof reports could not load.
+        </p>
+      )}
+      {orders.isPending ? (
+        <p>Loading roof reports…</p>
+      ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => {
-            const customerName = customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "Customer property";
+            const customerName =
+              customers.data?.find((customer) => customer.id === row.customer_id)?.name ??
+              "Customer property";
             return (
               <div
                 key={row.id}
                 className="relative min-w-0 overflow-hidden rounded-lg border border-border bg-destructive/10"
-                onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }}
+                onTouchStart={(event) => {
+                  touchStartX.current = event.touches[0]?.clientX ?? null;
+                }}
                 onTouchEnd={(event) => {
                   const start = touchStartX.current;
                   touchStartX.current = null;
@@ -105,7 +120,9 @@ export function RoofReports({
                   if (delta < -55) setSwipedReportId(row.id);
                   else if (delta > 55) setSwipedReportId(null);
                 }}
-                onTouchCancel={() => { touchStartX.current = null; }}
+                onTouchCancel={() => {
+                  touchStartX.current = null;
+                }}
               >
                 <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center">
                   <Button
@@ -120,10 +137,16 @@ export function RoofReports({
                 </div>
                 <article
                   className="relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-5 transition-transform duration-200 ease-out"
-                  style={{ transform: swipedReportId === row.id ? "translateX(-6rem)" : "translateX(0)" }}
+                  style={{
+                    transform: swipedReportId === row.id ? "translateX(-6rem)" : "translateX(0)",
+                  }}
                 >
                   <div className="flex items-center gap-2 text-primary">
-                    {row.file_path ? <FileText className="size-5" /> : <MapPin className="size-5" />}
+                    {row.file_path ? (
+                      <FileText className="size-5" />
+                    ) : (
+                      <MapPin className="size-5" />
+                    )}
                     <span className="text-xs font-semibold uppercase tracking-wide">
                       {row.file_path ? "Measurement PDF" : "Measurement in progress"}
                     </span>
@@ -131,9 +154,13 @@ export function RoofReports({
                   <h2 className="mt-3 break-words font-bold">{customerName}</h2>
                   <p className="mt-1 break-words text-sm text-muted-foreground">{row.address}</p>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    {row.file_path ? "PDF generated from the saved roof measurement drawing" :
-                      row.drawing_id ? "Drawing saved · PDF not generated yet" : "Awaiting roof measurements"}
-                    {" · "}{new Date(row.created_at).toLocaleDateString()}
+                    {row.file_path
+                      ? "PDF generated from the saved roof measurement drawing"
+                      : row.drawing_id
+                        ? "Drawing saved · PDF not generated yet"
+                        : "Awaiting roof measurements"}
+                    {" · "}
+                    {new Date(row.created_at).toLocaleDateString()}
                   </p>
                   <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     {row.file_path && (
@@ -152,11 +179,17 @@ export function RoofReports({
         </div>
       )}
       {!orders.isPending && !orders.error && !rows.length && (
-        <Empty>{query ? "No roof reports match that customer name or address." : "No roof measurement reports yet. Create one in Roof measurements."}</Empty>
+        <Empty>
+          {query
+            ? "No roof reports match that customer name or address."
+            : "No roof measurement reports yet. Create one in Roof measurements."}
+        </Empty>
       )}
       <Dialog
         open={!!pendingDelete}
-        onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
       >
         <DialogContent>
           <DialogHeader>

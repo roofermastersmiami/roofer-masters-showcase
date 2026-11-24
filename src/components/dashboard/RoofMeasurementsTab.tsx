@@ -86,7 +86,14 @@ export function RoofMeasurementsTab({
     setOriginalCrmAddress(initialAddress);
     setAdding(true);
     onRequestHandled();
-  }, [initialAddress, initialPropertyId, orders.data, orders.isPending, onSelectReport, onRequestHandled]);
+  }, [
+    initialAddress,
+    initialPropertyId,
+    orders.data,
+    orders.isPending,
+    onSelectReport,
+    onRequestHandled,
+  ]);
 
   const report = orders.data?.find((item) => item.id === activeId);
   const drawing = report
@@ -112,7 +119,9 @@ export function RoofMeasurementsTab({
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
     } catch (error) {
-      setAddressError(error instanceof Error ? error.message : "Address lookup could not complete.");
+      setAddressError(
+        error instanceof Error ? error.message : "Address lookup could not complete.",
+      );
     } finally {
       setLookupBusy(false);
     }
@@ -171,7 +180,12 @@ export function RoofMeasurementsTab({
               onClick={() => {
                 setActiveId(null);
                 onSelectReport(null);
-                setForm({ address: "", title: "Roof measurement report", provider: "manual", notes: "" });
+                setForm({
+                  address: "",
+                  title: "Roof measurement report",
+                  provider: "manual",
+                  notes: "",
+                });
                 setOriginalCrmAddress("");
                 setLocatedAddress(null);
                 setAddressError("");
@@ -214,7 +228,13 @@ export function RoofMeasurementsTab({
         <p role="alert" className="text-destructive">
           This roof report could not be found. Return to Roof reports and select it again.
         </p>
-        <Button variant="outline" onClick={() => { setActiveId(null); onSelectReport(null); }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setActiveId(null);
+            onSelectReport(null);
+          }}
+        >
           <ArrowLeft /> All measurements
         </Button>
       </div>
@@ -227,23 +247,32 @@ export function RoofMeasurementsTab({
       <SectionHeading
         title="Roof measurements"
         action={
-          <Button onClick={() => {
-            setForm({ address: "", title: "Roof measurement report", provider: "manual", notes: "" });
-            setOriginalCrmAddress("");
-            setLocatedAddress(null);
-            setAddressError("");
-            setAdding(true);
-          }}>
+          <Button
+            onClick={() => {
+              setForm({
+                address: "",
+                title: "Roof measurement report",
+                provider: "manual",
+                notes: "",
+              });
+              setOriginalCrmAddress("");
+              setLocatedAddress(null);
+              setAddressError("");
+              setAdding(true);
+            }}
+          >
             <Plus /> Create report by address
           </Button>
         }
       />
       <p className="mb-5 text-sm text-muted-foreground">
-        Start with a property address, then trace or enter roof dimensions in the linked 2D and 3D workspace.
-        The completed measurement PDF is saved back to Roof reports.
+        Start with a property address, then trace or enter roof dimensions in the linked 2D and 3D
+        workspace. The completed measurement PDF is saved back to Roof reports.
       </p>
       {orders.error || drawings.error ? (
-        <p role="alert" className="mb-4 text-destructive">Roof measurement records could not load.</p>
+        <p role="alert" className="mb-4 text-destructive">
+          Roof measurement records could not load.
+        </p>
       ) : orders.isPending || drawings.isPending ? (
         <p>Loading roof measurement records…</p>
       ) : rows.length ? (
@@ -252,20 +281,32 @@ export function RoofMeasurementsTab({
             const customer = customers.data?.find((item) => item.id === row.customer_id);
             const savedDrawing = drawings.data?.find((item) => item.id === row.drawing_id);
             return (
-              <article key={row.id} className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5">
+              <article
+                key={row.id}
+                className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5"
+              >
                 <div className="flex items-center gap-2 text-primary">
                   <Ruler className="size-5" />
-                  <span className="text-xs font-semibold uppercase tracking-wide">Measurement workspace</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide">
+                    Measurement workspace
+                  </span>
                 </div>
                 <h2 className="mt-3 break-words font-bold">{row.address}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{customer?.name ?? "Customer property"}</p>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {savedDrawing ? "Saved drawing available" : "No drawing saved yet"} · {row.file_path ? "PDF generated" : "PDF not generated"}
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {customer?.name ?? "Customer property"}
                 </p>
-                <Button className="mt-5" variant="outline" onClick={() => {
-                  setActiveId(row.id);
-                  onSelectReport(row.id);
-                }}>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {savedDrawing ? "Saved drawing available" : "No drawing saved yet"} ·{" "}
+                  {row.file_path ? "PDF generated" : "PDF not generated"}
+                </p>
+                <Button
+                  className="mt-5"
+                  variant="outline"
+                  onClick={() => {
+                    setActiveId(row.id);
+                    onSelectReport(row.id);
+                  }}
+                >
                   <MapPin /> Open 2D / 3D workspace
                 </Button>
               </article>
@@ -275,10 +316,16 @@ export function RoofMeasurementsTab({
       ) : (
         <Empty>No roof measurement reports yet. Create one by entering the property address.</Empty>
       )}
-      <Dialog open={adding} onOpenChange={(open) => {
-        setAdding(open);
-        if (!open) { setLocatedAddress(null); setAddressError(""); }
-      }}>
+      <Dialog
+        open={adding}
+        onOpenChange={(open) => {
+          setAdding(open);
+          if (!open) {
+            setLocatedAddress(null);
+            setAddressError("");
+          }
+        }}
+      >
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create roof report by address</DialogTitle>
@@ -287,20 +334,46 @@ export function RoofMeasurementsTab({
                 ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
                 : ""}
               Locate the complete property address before opening its roof measurement workspace.
-              Address lookup places the map pin; roof dimensions still require tracing or field measurement.
+              Address lookup places the map pin; roof dimensions still require tracing or field
+              measurement.
             </DialogDescription>
           </DialogHeader>
-          <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void createReport(); }}>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void createReport();
+            }}
+          >
             <Field label="Customer property address">
-              <Input required minLength={8} maxLength={250} autoComplete="street-address"
-                placeholder="123 Main Street, Miami, FL 33130" value={form.address}
-                onChange={(event) => { setForm({ ...form, address: event.target.value }); setOriginalCrmAddress(""); setLocatedAddress(null); setAddressError(""); }} />
+              <Input
+                required
+                minLength={8}
+                maxLength={250}
+                autoComplete="street-address"
+                placeholder="123 Main Street, Miami, FL 33130"
+                value={form.address}
+                onChange={(event) => {
+                  setForm({ ...form, address: event.target.value });
+                  setOriginalCrmAddress("");
+                  setLocatedAddress(null);
+                  setAddressError("");
+                }}
+              />
             </Field>
-            <Button type="button" variant="outline" disabled={lookupBusy || form.address.trim().length < 8}
-              onClick={() => void locateAddress()}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={lookupBusy || form.address.trim().length < 8}
+              onClick={() => void locateAddress()}
+            >
               <MapPin /> {lookupBusy ? "Locating property…" : "Locate exact address"}
             </Button>
-            {addressError && <p role="alert" className="text-sm text-destructive">{addressError}</p>}
+            {addressError && (
+              <p role="alert" className="text-sm text-destructive">
+                {addressError}
+              </p>
+            )}
             {locatedAddress && (
               <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
                 <p className="font-semibold">Address matched</p>
@@ -311,14 +384,29 @@ export function RoofMeasurementsTab({
               </div>
             )}
             <Field label="Report title">
-              <Input required maxLength={180} value={form.title}
-                onChange={(event) => setForm({ ...form, title: event.target.value })} />
+              <Input
+                required
+                maxLength={180}
+                value={form.title}
+                onChange={(event) => setForm({ ...form, title: event.target.value })}
+              />
             </Field>
             <Field label="Inspection notes">
-              <Textarea value={form.notes} maxLength={4000}
-                onChange={(event) => setForm({ ...form, notes: event.target.value })} />
+              <Textarea
+                value={form.notes}
+                maxLength={4000}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+              />
             </Field>
-            <Button disabled={busy || lookupBusy || !locatedAddress || form.address.trim() !== locatedAddress.matchedAddress} type="submit">
+            <Button
+              disabled={
+                busy ||
+                lookupBusy ||
+                !locatedAddress ||
+                form.address.trim() !== locatedAddress.matchedAddress
+              }
+              type="submit"
+            >
               <Plus /> {busy ? "Creating…" : "Create and measure roof"}
             </Button>
           </form>

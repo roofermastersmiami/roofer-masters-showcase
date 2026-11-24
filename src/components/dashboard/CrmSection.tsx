@@ -80,9 +80,7 @@ export function CrmSection({ section }: { section: string }) {
     case "financials":
       return <FinancialAnalytics />;
     case "roof-reports":
-      return (
-        <RoofReports onOpenMeasurement={openRoofMeasurements} />
-      );
+      return <RoofReports onOpenMeasurement={openRoofMeasurements} />;
     case "measurements":
       return (
         <RoofMeasurementsTab
