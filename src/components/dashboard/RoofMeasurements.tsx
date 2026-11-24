@@ -44,7 +44,11 @@ import { RoofImageTrace } from "./RoofImageTrace";
 import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
-import { footprintToDraftPlane, shouldAutoSearchFootprint, type BuildingFootprint } from "@/lib/building-footprint";
+import {
+  footprintToDraftPlane,
+  shouldAutoSearchFootprint,
+  type BuildingFootprint,
+} from "@/lib/building-footprint";
 import {
   uploadAerialImage,
   aerialInvocationError,

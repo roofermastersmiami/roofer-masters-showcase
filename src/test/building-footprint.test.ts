@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { footprintToDraftPlane, parseBuildingFootprints, shouldAutoSearchFootprint } from "@/lib/building-footprint";
+import {
+  footprintToDraftPlane,
+  parseBuildingFootprints,
+  shouldAutoSearchFootprint,
+} from "@/lib/building-footprint";
 
 const origin = { lat: 25.47, lon: -80.48 };
 const square = [
@@ -113,7 +117,6 @@ describe("automatic building footprint lookup guard", () => {
   });
 });
 
-
 describe("building footprint draft units", () => {
   it("converts mapped meter coordinates into the feet used by roof calculations", () => {
     const footprint = parseBuildingFootprints(
@@ -121,8 +124,12 @@ describe("building footprint draft units", () => {
       origin,
     )[0]!;
     const plane = footprintToDraftPlane(footprint);
-    const widthFt = Math.max(...plane.points.map((point) => point.x)) - Math.min(...plane.points.map((point) => point.x));
-    const heightFt = Math.max(...plane.points.map((point) => point.z)) - Math.min(...plane.points.map((point) => point.z));
+    const widthFt =
+      Math.max(...plane.points.map((point) => point.x)) -
+      Math.min(...plane.points.map((point) => point.x));
+    const heightFt =
+      Math.max(...plane.points.map((point) => point.z)) -
+      Math.min(...plane.points.map((point) => point.z));
     expect(widthFt).toBeGreaterThan(60);
     expect(widthFt).toBeLessThan(80);
     expect(heightFt).toBeGreaterThan(60);

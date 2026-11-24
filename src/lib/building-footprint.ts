@@ -219,7 +219,6 @@ export function shouldAutoSearchFootprint(
   return Boolean(address?.trim() && requestKey && requestKey !== attemptedKey);
 }
 
-
 const METERS_TO_FEET = 1 / 0.3048;
 
 /** Convert a mapped ground footprint into the CRM's feet-based draft geometry. */
