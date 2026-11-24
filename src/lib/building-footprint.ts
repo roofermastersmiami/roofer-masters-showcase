@@ -38,6 +38,36 @@ function polygonArea(points: FootprintPoint[], originLat: number): number {
   }
   return Math.abs(twiceArea) / 2;
 }
+function orientation(a: FootprintPoint, b: FootprintPoint, c: FootprintPoint): number {
+  return (b.lon - a.lon) * (c.lat - a.lat) - (b.lat - a.lat) * (c.lon - a.lon);
+}
+function segmentsIntersect(
+  a: FootprintPoint,
+  b: FootprintPoint,
+  c: FootprintPoint,
+  d: FootprintPoint,
+): boolean {
+  const abC = orientation(a, b, c);
+  const abD = orientation(a, b, d);
+  const cdA = orientation(c, d, a);
+  const cdB = orientation(c, d, b);
+  return ((abC > 1e-12 && abD < -1e-12) || (abC < -1e-12 && abD > 1e-12)) &&
+    ((cdA > 1e-12 && cdB < -1e-12) || (cdA < -1e-12 && cdB > 1e-12));
+}
+function hasSelfIntersection(points: FootprintPoint[]): boolean {
+  for (let i = 0; i < points.length; i += 1) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    for (let j = i + 1; j < points.length; j += 1) {
+      // Adjacent edges and the first/last edge pair share an endpoint by design.
+      if (j === i || j === (i + 1) % points.length || (j + 1) % points.length === i) continue;
+      const c = points[j]!;
+      const d = points[(j + 1) % points.length]!;
+      if (segmentsIntersect(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
 function haversine(a: FootprintPoint, b: FootprintPoint): number {
   const radians = Math.PI / 180;
   const dLat = (b.lat - a.lat) * radians;
@@ -69,6 +99,8 @@ export function parseBuildingFootprints(
     if (haversine(first, last) > 1) continue;
     const openRing = points.slice(0, -1);
     if (openRing.length < 3 || openRing.length > 200) continue;
+    const uniqueVertices = new Set(openRing.map((point) => `${point.lat.toFixed(8)},${point.lon.toFixed(8)}`));
+    if (uniqueVertices.size < 3 || hasSelfIntersection(openRing)) continue;
     // Use the polygon centroid rather than the vertex average so irregular
     // and concave footprints are located by their area, not vertex density.
     const meanLat = openRing.reduce((sum, point) => sum + point.lat, 0) / openRing.length;
