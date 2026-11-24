@@ -41,6 +41,7 @@ import { useCrm } from "./CrmContext";
 import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
+import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
 import { shouldAutoSearchFootprint, type BuildingFootprint } from "@/lib/building-footprint";
@@ -1295,6 +1296,7 @@ export function RoofMeasurements({
           </div>
         )}
       </section>
+      <SatelliteRoofTrace onAdd={(p) => { edit({ ...d, planes: [...d.planes, p] }); setSelected(p.id); setFit((f) => f + 1); }} />
       {media[traceIndex] && (
         <RoofImageTrace
           key={media[traceIndex].path}
