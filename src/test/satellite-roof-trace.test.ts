@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { satelliteTraceToPlane } from "@/components/dashboard/SatelliteRoofTrace";
-import { planeInfo } from "@/lib/roof-geometry";
+import { measureDrawing, planeInfo, toMaterialReport } from "@/lib/roof-geometry";
 
 const origin = { lat: 25.47, lon: -80.48 };
 const metersToLatitudeDegrees = 20 / 110540;
@@ -36,6 +36,39 @@ describe("manual satellite trace geometry units", () => {
     expect(planeInfo(plane).area).toBeGreaterThan(4100);
     expect(planeInfo(plane).area).toBeLessThan(4500);
     expect(plane.edges).toEqual(["other", "other", "other", "other"]);
+  });
+
+  it("feeds the traced plane into live drawing and material-report calculations", () => {
+    const plane = satelliteTraceToPlane(
+      [
+        origin,
+        { lat: origin.lat, lon: origin.lon + metersToLongitudeDegrees },
+        {
+          lat: origin.lat - metersToLatitudeDegrees,
+          lon: origin.lon + metersToLongitudeDegrees,
+        },
+        { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon },
+      ],
+      0,
+    );
+    const drawing = {
+      planes: [plane],
+      penetrations: [],
+      waste: 10,
+      roof_type: "Metal Roof" as const,
+      notes: "",
+      condition: "",
+      verified: false,
+    };
+
+    const measured = measureDrawing(drawing);
+    const report = toMaterialReport(drawing);
+
+    expect(measured.area).toBeCloseTo(planeInfo(plane).area, 4);
+    expect(report.area_sqft).toBeCloseTo(measured.area, 4);
+    expect(report.waste_pct).toBe(10);
+    expect(measured.area).toBeGreaterThan(4100);
+    expect(measured.area).toBeLessThan(4500);
   });
 
   it("calculates pitch rise using feet-based horizontal coordinates", () => {
