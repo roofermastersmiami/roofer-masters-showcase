@@ -312,7 +312,8 @@ export function SatelliteRoofTrace({
   initialAddress?: string;
 }) {
   const [address, setAddress] = useState("");
-  const [location, setLocation] = useState<GeocodeResult | null>(null);\n  const [mapCenter, setMapCenter] = useState<TracePoint | null>(null);
+  const [location, setLocation] = useState<GeocodeResult | null>(null);
+  const [mapCenter, setMapCenter] = useState<TracePoint | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
