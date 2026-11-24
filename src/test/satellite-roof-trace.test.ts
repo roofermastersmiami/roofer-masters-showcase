@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   nextSatelliteZoom,
   satelliteTraceToPlane,
+  satelliteTraceToGablePlanes,
   nearestBuildingFootprint,
 } from "@/components/dashboard/SatelliteRoofTrace";
 import { measureDrawing, planeInfo, toMaterialReport } from "@/lib/roof-geometry";
@@ -93,6 +94,61 @@ describe("manual satellite trace geometry units", () => {
     expect(maxY - minY).toBeGreaterThan(32);
     expect(maxY - minY).toBeLessThan(34);
     expect(planeInfo(plane).pitch).toBeCloseTo(6, 1);
+  });
+});
+
+describe("guided satellite gable facet splitting", () => {
+  const rectangle = [
+    { lat: origin.lat, lon: origin.lon },
+    { lat: origin.lat, lon: origin.lon + metersToLongitudeDegrees },
+    { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon + metersToLongitudeDegrees },
+    { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon },
+  ];
+
+  it("splits a rectangular footprint into two north-south gable facets with a shared ridge", () => {
+    const planes = satelliteTraceToGablePlanes(rectangle, 6, "north-south");
+    expect(planes).toHaveLength(2);
+    expect(planes[0]?.name).toBe("West gable facet");
+    expect(planes[1]?.name).toBe("East gable facet");
+    expect(planeInfo(planes[0]!).pitch).toBeCloseTo(6, 1);
+    expect(planeInfo(planes[1]!).pitch).toBeCloseTo(6, 1);
+    expect(planes[0]?.edges.at(-1)).toBe("ridge");
+    expect(planes[1]?.edges.at(-1)).toBe("ridge");
+    const drawing = {
+      planes,
+      penetrations: [],
+      waste: 10,
+      roof_type: "Metal Roof" as const,
+      notes: "",
+      condition: "",
+      verified: false,
+    };
+    expect(measureDrawing(drawing).planes).toHaveLength(2);
+    expect(measureDrawing(drawing).edges.ridge).toBeGreaterThan(60);
+  });
+
+  it("splits a rectangular footprint along an east-west ridge", () => {
+    const planes = satelliteTraceToGablePlanes(rectangle, 6, "east-west");
+    expect(planes).toHaveLength(2);
+    expect(planeInfo(planes[0]!).pitch).toBeCloseTo(6, 1);
+    expect(planeInfo(planes[1]!).pitch).toBeCloseTo(6, 1);
+    expect(measureDrawing({
+      planes, penetrations: [], waste: 0, roof_type: "Metal Roof",
+      notes: "", condition: "", verified: false,
+    }).area).toBeGreaterThan(0);
+  });
+
+  it("rejects ambiguous ridge cuts, zero pitch, and outlines with too few corners", () => {
+    expect(() => satelliteTraceToGablePlanes(rectangle, 0, "north-south")).toThrow(/pitch/);
+    expect(() => satelliteTraceToGablePlanes(rectangle.slice(0, 3), 6, "north-south")).toThrow(/four/);
+    const concave = [
+      rectangle[0]!,
+      rectangle[1]!,
+      { lat: rectangle[1]!.lat - metersToLatitudeDegrees / 2, lon: rectangle[1]!.lon },
+      rectangle[2]!,
+      rectangle[3]!,
+    ];
+    expect(() => satelliteTraceToGablePlanes(concave, 6, "north-south")).toThrow(/exactly two/);
   });
 });
 
