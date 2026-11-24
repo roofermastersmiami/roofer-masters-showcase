@@ -1530,23 +1530,28 @@ export function RoofMeasurements({
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         initialAddress={report?.address?.trim() || propertyRow?.address || ""}
         onAdd={(newPlanes, geoReference) => {
-          // A new drawing starts with a sample gable so the workspace is never empty.
-          // Replace that sample (or an auto-imported ground footprint) with the first
-          // real roof trace; otherwise the sample overlaps the trace and blocks reports.
-          const hasImportedFootprint = d.planes.some((item) =>
-            item.id.startsWith("osm-footprint-"),
-          );
-          const replaceStarter =
-            !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
-          const existingPlanes = replaceStarter
-            ? []
-            : d.planes.filter((item) => !item.id.startsWith("osm-footprint-"));
+          // Satellite vertices are converted into a local feet coordinate frame
+          // whose origin is derived from this trace. Mixing them with older planes
+          // from another origin would make the drawing, address pin, and quantities
+          // disagree. Treat an accepted satellite trace as the new roof layout.
+          const hasExistingWork =
+            Boolean(initialDrawing) ||
+            userEditedDrawing.current ||
+            d.planes.some((item) => item.id.startsWith("osm-footprint-"));
+          if (
+            hasExistingWork &&
+            !confirm(
+              "Replace the current roof planes with this satellite trace? Existing planes and penetrations will be removed. You can undo immediately afterward.",
+            )
+          )
+            return;
           edit({
             ...d,
-            planes: [...existingPlanes, ...newPlanes],
-            // Only attach a geographic transform when this trace establishes
-            // the drawing's local coordinate origin. Preserve existing anchors.
-            ...(replaceStarter ? { geo_reference: geoReference } : {}),
+            planes: newPlanes,
+            penetrations: [],
+            geo_reference: geoReference,
+            accuracy: "photo_estimate",
+            verified: false,
           });
           setSelected(newPlanes[0]?.id ?? "");
           setFit((f) => f + 1);
