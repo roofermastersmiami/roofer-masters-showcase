@@ -15,8 +15,9 @@ describe("public aerial request bounds", () => {
   });
 });
 
-it("rejects invalid coordinates and dimensions instead of producing invalid map bounds", () => {
-  expect(() => aerialBox(90, -80, 70, 2000)).toThrow("Latitude");
-  expect(() => aerialBox(25, 181, 70, 2000)).toThrow("Longitude");
-  expect(() => aerialBox(25, -80, 0, 2000)).toThrow("Map span");
+it("rejects invalid coordinates and map spans instead of producing invalid map bounds", () => {
+  expect(() => aerialBox(90, -80, 70)).toThrow("Latitude");
+  expect(() => aerialBox(25, 181, 70)).toThrow("Longitude");
+  expect(() => aerialBox(25, -80, 0)).toThrow("Map span");
+  expect(() => aerialBox(25, -80, 5001)).toThrow("Map span");
 });
