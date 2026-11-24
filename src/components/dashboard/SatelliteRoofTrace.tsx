@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  MapPin,
+  Minus,
+  MousePointer2,
+  Plus,
+  RotateCcw,
+  Search,
+  Satellite,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { planeInfo, type RoofPlane, type Point } from "@/lib/roof-geometry";
@@ -103,11 +115,21 @@ export function panSatelliteCenter(
     Math.abs(center.lon) > 180
   )
     throw new Error("A valid map center and zoom are required.");
-  const step = TILE_SPAN / zoom * 0.4;
+  const step = (TILE_SPAN / zoom) * 0.4;
   const latitudeStep = step * 0.7;
   return {
-    lat: Math.max(-85, Math.min(85, center.lat + (direction === "north" ? latitudeStep : direction === "south" ? -latitudeStep : 0))),
-    lon: Math.max(-180, Math.min(180, center.lon + (direction === "east" ? step : direction === "west" ? -step : 0))),
+    lat: Math.max(
+      -85,
+      Math.min(
+        85,
+        center.lat +
+          (direction === "north" ? latitudeStep : direction === "south" ? -latitudeStep : 0),
+      ),
+    ),
+    lon: Math.max(
+      -180,
+      Math.min(180, center.lon + (direction === "east" ? step : direction === "west" ? -step : 0)),
+    ),
   };
 }
 
@@ -584,10 +606,58 @@ export function SatelliteRoofTrace({
                 Reset zoom
               </Button>
               <div className="flex items-center gap-1" aria-label="Pan satellite map">
-                <Button type="button" size="icon" variant="outline" aria-label="Pan map north" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "north", zoom) : current)}><ArrowUp className="h-4 w-4" /></Button>
-                <Button type="button" size="icon" variant="outline" aria-label="Pan map south" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "south", zoom) : current)}><ArrowDown className="h-4 w-4" /></Button>
-                <Button type="button" size="icon" variant="outline" aria-label="Pan map west" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "west", zoom) : current)}><ArrowLeft className="h-4 w-4" /></Button>
-                <Button type="button" size="icon" variant="outline" aria-label="Pan map east" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "east", zoom) : current)}><ArrowRight className="h-4 w-4" /></Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  aria-label="Pan map north"
+                  onClick={() =>
+                    setMapCenter((current) =>
+                      current ? panSatelliteCenter(current, "north", zoom) : current,
+                    )
+                  }
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  aria-label="Pan map south"
+                  onClick={() =>
+                    setMapCenter((current) =>
+                      current ? panSatelliteCenter(current, "south", zoom) : current,
+                    )
+                  }
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  aria-label="Pan map west"
+                  onClick={() =>
+                    setMapCenter((current) =>
+                      current ? panSatelliteCenter(current, "west", zoom) : current,
+                    )
+                  }
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  aria-label="Pan map east"
+                  onClick={() =>
+                    setMapCenter((current) =>
+                      current ? panSatelliteCenter(current, "east", zoom) : current,
+                    )
+                  }
+                >
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
