@@ -246,6 +246,13 @@
       "when": 1795650000000,
       "tag": "0034_roof_report_client_contact",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795651000000,
+      "tag": "0035_signed_contract_storage",
+      "breakpoints": true
     }
   ]
 }
