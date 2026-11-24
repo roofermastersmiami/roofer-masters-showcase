@@ -609,7 +609,11 @@ export function SatelliteRoofTrace({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={!center || !mapCenter || (center.lat === mapCenter.lat && center.lon === mapCenter.lon)}
+                disabled={
+                  !center ||
+                  !mapCenter ||
+                  (center.lat === mapCenter.lat && center.lon === mapCenter.lon)
+                }
                 onClick={() => {
                   if (!center) return;
                   setMapCenter(center);
