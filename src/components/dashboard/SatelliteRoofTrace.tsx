@@ -605,6 +605,19 @@ export function SatelliteRoofTrace({
               >
                 Reset zoom
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!center || !mapCenter || (center.lat === mapCenter.lat && center.lon === mapCenter.lon)}
+                onClick={() => {
+                  if (!center) return;
+                  setMapCenter(center);
+                  setZoom(1);
+                }}
+              >
+                <MapPin className="h-4 w-4" /> Center address
+              </Button>
               <div className="flex items-center gap-1" aria-label="Pan satellite map">
                 <Button
                   type="button"
