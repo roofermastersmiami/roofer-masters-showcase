@@ -37,3 +37,11 @@ def test_ransac_recovers_candidate_plane_pitch_and_area():
     assert facets[0]["area_sqft"] > 0
     assert facets[0]["point_count"] >= 80
     assert 0 <= facets[0]["azimuth_degrees"] < 360
+
+    
+def test_ransac_skips_degenerate_collinear_facet_hulls():
+    x = np.linspace(0, 20, 200)
+    y = np.zeros_like(x)
+    z = 0.5 * x + 12.0
+    points = np.column_stack((x, y, z))
+    assert _fit_facets(points) == []
