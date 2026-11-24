@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, MapPin, Plus, Search } from "lucide-react";
+import { ArrowRight, MapPin, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { createRoofOrder } from "@/lib/roof-orders.functions";
+import { createRoofOrder, deleteRoofOrder } from "@/lib/roof-orders.functions";
 import { lookupRoofAddress } from "@/lib/roof-address.functions";
 import { roofOrderSchema } from "@/lib/roof-order-schema";
 import { customersQuery } from "./foundation-data";
@@ -39,13 +39,18 @@ export function RoofReports({
     orders = useQuery(roofOrdersQuery),
     qc = useQueryClient();
   const create = useServerFn(createRoofOrder);
+  const remove = useServerFn(deleteRoofOrder);
   const lookup = useServerFn(lookupRoofAddress);
   const [adding, setAdding] = useState(!!initialAddress),
     [busy, setBusy] = useState(false),
     [lookupBusy, setLookupBusy] = useState(false),
     [search, setSearch] = useState(""),
     [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null),
-    [addressError, setAddressError] = useState("");
+    [addressError, setAddressError] = useState(""),
+    [swipedReportId, setSwipedReportId] = useState<string | null>(null),
+    [pendingDelete, setPendingDelete] = useState<{ id: string; address: string } | null>(null),
+    [deleting, setDeleting] = useState(false);
+  const touchStartX = useRef<number | null>(null);
   const [form, setForm] = useState({
     address: initialAddress,
     title: "Roof measurement report",
@@ -155,6 +160,22 @@ export function RoofReports({
     onRequestHandled,
   ]);
 
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await remove({ data: { id: pendingDelete.id } });
+      await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
+      setSwipedReportId(null);
+      setPendingDelete(null);
+      toast.success("Roof report deleted. Saved drawing revisions and customer property were kept.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete roof report");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
       toast.error("Locate and confirm the property address before creating the report");
@@ -224,7 +245,7 @@ export function RoofReports({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <p className="text-sm text-muted-foreground">Roofer Masters · Company-owned reports</p>
+        <p className="text-sm text-muted-foreground">Roofer Masters · Company-owned reports · Swipe left to delete</p>
       </div>
       {orders.error && (
         <p role="alert" className="text-destructive">
@@ -236,43 +257,87 @@ export function RoofReports({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => (
-            <article
+            <div
               key={row.id}
-              className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5"
+              className="relative min-w-0 overflow-hidden rounded-lg border border-border bg-destructive/10"
+              onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }}
+              onTouchEnd={(event) => {
+                const start = touchStartX.current;
+                touchStartX.current = null;
+                if (start === null) return;
+                const end = event.changedTouches[0]?.clientX;
+                if (end === undefined) return;
+                const delta = end - start;
+                if (delta < -55) setSwipedReportId(row.id);
+                else if (delta > 55) setSwipedReportId(null);
+              }}
+              onTouchCancel={() => { touchStartX.current = null; }}
             >
-              <MapPin className="size-5 text-primary" />
-              <button
-                type="button"
-                className="mt-3 break-words text-left text-lg font-bold text-primary underline-offset-4 hover:underline"
-                onClick={() => onOpenMeasurement(row.id)}
-                aria-label={`Open 2D and 3D roof workspace for ${row.address}`}
+              <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center">
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  aria-label={`Delete roof report for ${row.address}`}
+                  title="Delete roof report"
+                  onClick={() => setPendingDelete(row)}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+              <article
+                className="relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-5 transition-transform duration-200 ease-out"
+                style={{ transform: swipedReportId === row.id ? "translateX(-6rem)" : "translateX(0)" }}
               >
-                {row.address}
-              </button>
-              <p className="mt-2 text-sm">
-                {customers.data?.find((c) => c.id === row.customer_id)?.name}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{row.title}</p>
-              <p className="my-4 text-xs font-semibold text-muted-foreground">
-                {row.status === "reviewed"
-                  ? "Owner-reviewed measurements"
-                  : row.drawing_id
-                    ? "Drawing saved · awaiting review"
-                    : "Awaiting measurements"}{" "}
-                · {new Date(row.created_at).toLocaleDateString()}
-              </p>
-              <Button
-                variant="outline"
-                className="mt-auto"
-                onClick={() => onOpenMeasurement(row.id)}
-              >
-                Open measurement report <ArrowRight />
-              </Button>
-            </article>
+                <MapPin className="size-5 text-primary" />
+                <button
+                  type="button"
+                  className="mt-3 break-words text-left text-lg font-bold text-primary underline-offset-4 hover:underline"
+                  onClick={() => onOpenMeasurement(row.id)}
+                  aria-label={`Open 2D and 3D roof workspace for ${row.address}`}
+                >
+                  {row.address}
+                </button>
+                <p className="mt-2 text-sm">
+                  {customers.data?.find((c) => c.id === row.customer_id)?.name}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{row.title}</p>
+                <p className="my-4 text-xs font-semibold text-muted-foreground">
+                  {row.status === "reviewed"
+                    ? "Owner-reviewed measurements"
+                    : row.drawing_id
+                      ? "Drawing saved · awaiting review"
+                      : "Awaiting measurements"}{" "}
+                  · {new Date(row.created_at).toLocaleDateString()}
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-auto"
+                  onClick={() => onOpenMeasurement(row.id)}
+                >
+                  Open measurement report <ArrowRight />
+                </Button>
+              </article>
+            </div>
           ))}
         </div>
       )}
       {!orders.isPending && !orders.error && !rows.length && <Empty>No roof reports yet.</Empty>}
+      <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this roof report?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the report for {pendingDelete?.address ?? "this property"}. The customer and property record, saved roof drawing revisions, and any linked estimate records are kept. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
+              <Trash2 /> {deleting ? "Deleting…" : "Delete report"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={adding}
         onOpenChange={(open) => {
