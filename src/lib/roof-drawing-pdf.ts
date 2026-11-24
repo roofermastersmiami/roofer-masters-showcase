@@ -133,13 +133,16 @@ export async function roofDrawingPdf(
       font,
       color: MUTED,
     });
-    p.drawText(`${safe(address).slice(0, 66) || "Property address not provided"}  |  PRELIMINARY - FIELD VERIFY`, {
-      x: MARGIN,
-      y: 11,
-      size: 6,
-      font,
-      color: MUTED,
-    });
+    p.drawText(
+      `${safe(address).slice(0, 66) || "Property address not provided"}  |  PRELIMINARY - FIELD VERIFY`,
+      {
+        x: MARGIN,
+        y: 11,
+        size: 6,
+        font,
+        color: MUTED,
+      },
+    );
     const label = `Page ${number} of ${total}`;
     p.drawText(label, {
       x: PAGE_W - MARGIN - font.widthOfTextAtSize(label, 7),
@@ -586,7 +589,8 @@ export async function roofDrawingPdf(
   row("Area including selected waste", `${m.withWaste.toFixed(2)} sq ft`, true);
   row("Total perimeter", `${m.perimeter.toFixed(2)} ft`);
   const shingleWasteEligible = d.roof_type === "Shingle Roof" && m.area > 0;
-  const suggestedExtraSqFt = m.area * 0.05 + m.edges.valley * 2.3 + m.edges.hip * 0.7 + m.edges.rake * 0.25;
+  const suggestedExtraSqFt =
+    m.area * 0.05 + m.edges.valley * 2.3 + m.edges.hip * 0.7 + m.edges.rake * 0.25;
   const suggestedWastePct = shingleWasteEligible ? (suggestedExtraSqFt / m.area) * 100 : null;
   section("WASTE COMPARISON");
   paragraph(
@@ -614,13 +618,20 @@ export async function roofDrawingPdf(
   const wasteRow = wasteValues.map((area) =>
     area === null ? "Manual review" : `${area.toFixed(0)} SF`,
   );
-  if (suggestedWastePct !== null) wasteRow[3] = `${suggestedWastePct.toFixed(1)}% / ${(m.area + suggestedExtraSqFt).toFixed(0)} SF`;
+  if (suggestedWastePct !== null)
+    wasteRow[3] = `${suggestedWastePct.toFixed(1)}% / ${(m.area + suggestedExtraSqFt).toFixed(0)} SF`;
   page.drawRectangle({ x: MARGIN, y: y - 5, width: PAGE_W - MARGIN * 2, height: 20, color: LIGHT });
   wasteRow.forEach((value, index) => {
     let output = value;
     while (font.widthOfTextAtSize(output, 7) > wasteWidths[index]! && output.length > 5)
       output = output.slice(0, -4) + "...";
-    page.drawText(output, { x: wasteXs[index], y, size: 7, font: index === 0 ? bold : font, color: INK });
+    page.drawText(output, {
+      x: wasteXs[index],
+      y,
+      size: 7,
+      font: index === 0 ? bold : font,
+      color: INK,
+    });
   });
   y -= 24;
   paragraph(
