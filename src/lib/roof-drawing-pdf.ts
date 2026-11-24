@@ -130,6 +130,13 @@ export async function roofDrawingPdf(
       font,
       color: MUTED,
     });
+    p.drawText(`${safe(address).slice(0, 66) || "Property address not provided"}  |  PRELIMINARY - FIELD VERIFY`, {
+      x: MARGIN,
+      y: 11,
+      size: 6,
+      font,
+      color: MUTED,
+    });
     const label = `Page ${number} of ${total}`;
     p.drawText(label, {
       x: PAGE_W - MARGIN - font.widthOfTextAtSize(label, 7),
