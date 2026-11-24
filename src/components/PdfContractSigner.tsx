@@ -865,7 +865,6 @@ export function PdfContractSigner({
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">To<Input type="email" value={emailTo} onChange={(event) => setEmailTo(event.target.value)} placeholder="customer@example.com" /></label>
             <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
-            <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
             <label className="grid gap-1 text-sm">Compose message<textarea className="min-h-28 rounded-md border bg-background p-3 text-sm" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} placeholder="Write your message to the customer…" /></label>
             <label className="grid gap-1 text-sm">Company email signature<textarea className="min-h-24 rounded-md border bg-background p-3 text-sm" value={companySignature} onChange={(event) => setCompanySignature(event.target.value)} placeholder="Your name, company, phone, website…" /></label>
             <label className="grid gap-1 text-sm">Add multiple PDF files<input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => setEmailFiles(Array.from(event.target.files ?? []))} /></label>
