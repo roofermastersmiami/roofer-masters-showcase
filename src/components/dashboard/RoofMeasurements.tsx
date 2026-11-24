@@ -15,6 +15,8 @@ import {
   FileText,
   Upload,
   MapPin,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -117,6 +119,8 @@ export function RoofMeasurements({
     [view, setView] = useState<"3d" | "plan">("3d"),
     [autoRotate, setAutoRotate] = useState(true),
     [fit, setFit] = useState(0),
+    [zoomDirection, setZoomDirection] = useState<"in" | "out">("in"),
+    [zoomKey, setZoomKey] = useState(0),
     [shape, setShape] = useState<RoofShape>("gable"),
     [width, setWidth] = useState(startWidth),
     [length, setLength] = useState(startLength),
@@ -781,6 +785,30 @@ export function RoofMeasurements({
               >
                 Plan
               </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                title="Zoom in"
+                aria-label="Zoom in on roof drawing"
+                onClick={() => {
+                  setZoomDirection("in");
+                  setZoomKey((key) => key + 1);
+                }}
+              >
+                <ZoomIn />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                title="Zoom out"
+                aria-label="Zoom out on roof drawing"
+                onClick={() => {
+                  setZoomDirection("out");
+                  setZoomKey((key) => key + 1);
+                }}
+              >
+                <ZoomOut />
+              </Button>
             </div>
             {view === "3d" && (
               <Button
@@ -822,6 +850,8 @@ export function RoofMeasurements({
                   view={view}
                   fitKey={fit}
                   autoRotate={autoRotate}
+                  zoomDirection={zoomDirection}
+                  zoomKey={zoomKey}
                 />
               </Suspense>
             </DrawingErrorBoundary>
