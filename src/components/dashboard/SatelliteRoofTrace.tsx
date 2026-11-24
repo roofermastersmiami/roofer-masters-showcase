@@ -9,17 +9,39 @@ type PitchDirection = "north" | "south" | "east" | "west";
 type TracePoint = { lat: number; lon: number };
 type OSMBuildingWay = { type?: string; geometry?: Array<{ lat: number; lon: number }> };
 
-export function nearestBuildingFootprint(elements: OSMBuildingWay[], center: TracePoint): TracePoint[] | null {
+export function nearestBuildingFootprint(
+  elements: OSMBuildingWay[],
+  center: TracePoint,
+): TracePoint[] | null {
   const metersPerLatDegree = 110540;
   const metersPerLonDegree = 111320 * Math.cos((center.lat * Math.PI) / 180);
   const candidates = elements.flatMap((element) => {
     if (element.type !== "way" || !Array.isArray(element.geometry)) return [];
     const ring = element.geometry.map(({ lat, lon }) => ({ lat, lon }));
-    if (ring.length > 3 && ring[0]?.lat === ring[ring.length - 1]?.lat && ring[0]?.lon === ring[ring.length - 1]?.lon) ring.pop();
-    if (ring.length < 3 || ring.some((point) => !Number.isFinite(point.lat) || !Number.isFinite(point.lon))) return [];
-    if (new Set(ring.map((point) => `${point.lat.toFixed(7)},${point.lon.toFixed(7)}`)).size < 3) return [];
-    const centroid = ring.reduce((sum, point) => ({ lat: sum.lat + point.lat / ring.length, lon: sum.lon + point.lon / ring.length }), { lat: 0, lon: 0 });
-    const distance = Math.hypot((centroid.lat - center.lat) * metersPerLatDegree, (centroid.lon - center.lon) * metersPerLonDegree);
+    if (
+      ring.length > 3 &&
+      ring[0]?.lat === ring[ring.length - 1]?.lat &&
+      ring[0]?.lon === ring[ring.length - 1]?.lon
+    )
+      ring.pop();
+    if (
+      ring.length < 3 ||
+      ring.some((point) => !Number.isFinite(point.lat) || !Number.isFinite(point.lon))
+    )
+      return [];
+    if (new Set(ring.map((point) => `${point.lat.toFixed(7)},${point.lon.toFixed(7)}`)).size < 3)
+      return [];
+    const centroid = ring.reduce(
+      (sum, point) => ({
+        lat: sum.lat + point.lat / ring.length,
+        lon: sum.lon + point.lon / ring.length,
+      }),
+      { lat: 0, lon: 0 },
+    );
+    const distance = Math.hypot(
+      (centroid.lat - center.lat) * metersPerLatDegree,
+      (centroid.lon - center.lon) * metersPerLonDegree,
+    );
     return distance <= 50 ? [{ ring, distance }] : [];
   });
   candidates.sort((a, b) => a.distance - b.distance);
@@ -218,16 +240,23 @@ export function SatelliteRoofTrace({
       event.clientY,
       event.currentTarget.getBoundingClientRect(),
     );
-    if (point) { setAutoTraced(false); setPoints((current) => [...current, point]); }
+    if (point) {
+      setAutoTraced(false);
+      setPoints((current) => [...current, point]);
+    }
   }
   async function autoTraceBuildingFootprint() {
     if (!location) return;
     setAutoTraceBusy(true);
     setError("");
     try {
-      const lat = Number(location.lat), lon = Number(location.lon);
+      const lat = Number(location.lat),
+        lon = Number(location.lon);
       const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out geom;`;
-      const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`, { headers: { Accept: "application/json" } });
+      const response = await fetch(
+        `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
+        { headers: { Accept: "application/json" } },
+      );
       if (!response.ok) throw new Error("OpenStreetMap building lookup failed");
       const data = (await response.json()) as { elements?: OSMBuildingWay[] };
       const footprint = nearestBuildingFootprint(data.elements ?? [], { lat, lon });
@@ -236,10 +265,14 @@ export function SatelliteRoofTrace({
       setAutoTraced(true);
       setZoom((value) => Math.max(value, 1.5));
     } catch (e) {
-      setError(e instanceof Error && e.message.includes("No nearby")
-        ? "No OpenStreetMap building outline was found close to this address. Trace the roof corners manually instead."
-        : "Automatic footprint lookup is unavailable right now. You can still trace the roof manually.");
-    } finally { setAutoTraceBusy(false); }
+      setError(
+        e instanceof Error && e.message.includes("No nearby")
+          ? "No OpenStreetMap building outline was found close to this address. Trace the roof corners manually instead."
+          : "Automatic footprint lookup is unavailable right now. You can still trace the roof manually.",
+      );
+    } finally {
+      setAutoTraceBusy(false);
+    }
   }
 
   const polygon = points
@@ -298,8 +331,15 @@ export function SatelliteRoofTrace({
       {location && bounds && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button type="button" size="sm" variant="outline" disabled={autoTraceBusy} onClick={autoTraceBuildingFootprint}>
-              <Satellite className="h-4 w-4" /> {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={autoTraceBusy}
+              onClick={autoTraceBuildingFootprint}
+            >
+              <Satellite className="h-4 w-4" />{" "}
+              {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
             </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
             <div className="flex items-center gap-2">
@@ -475,7 +515,10 @@ export function SatelliteRoofTrace({
             <Button
               type="button"
               variant="outline"
-              onClick={() => { setAutoTraced(false); setPoints((current) => current.slice(0, -1)); }}
+              onClick={() => {
+                setAutoTraced(false);
+                setPoints((current) => current.slice(0, -1));
+              }}
               disabled={!points.length}
             >
               <RotateCcw className="h-4 w-4" /> Undo point
@@ -483,7 +526,10 @@ export function SatelliteRoofTrace({
             <Button
               type="button"
               variant="outline"
-              onClick={() => { setAutoTraced(false); setPoints([]); }}
+              onClick={() => {
+                setAutoTraced(false);
+                setPoints([]);
+              }}
               disabled={!points.length}
             >
               Clear trace
@@ -506,10 +552,16 @@ export function SatelliteRoofTrace({
               <MapPin className="h-4 w-4" /> Add traced plane
             </Button>
           </div>
-          {autoTraced && <p className="text-xs text-amber-700 dark:text-amber-400">Auto-traced OpenStreetMap building footprint loaded. This is a building outline, not a verified roof edge; adjust for roof overhangs and confirm every plane before using quantities.</p>}
+          {autoTraced && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Auto-traced OpenStreetMap building footprint loaded. This is a building outline, not a
+              verified roof edge; adjust for roof overhangs and confirm every plane before using
+              quantities.
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
-            Imagery: Esri World Imagery. Building footprints and address lookup: OpenStreetMap. Click corners in
-            order around one roof plane.
+            Imagery: Esri World Imagery. Building footprints and address lookup: OpenStreetMap.
+            Click corners in order around one roof plane.
           </p>
         </>
       )}

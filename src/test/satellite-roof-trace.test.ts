@@ -146,27 +146,50 @@ describe("satellite trace validation", () => {
 describe("automatic OpenStreetMap building footprint selection", () => {
   const center = { lat: 25.47, lon: -80.48 };
   it("selects the closest valid building way and removes its repeated closing point", () => {
-    const footprint = nearestBuildingFootprint([
-      { type: "way", geometry: [
-        { lat: 25.4701, lon: -80.4801 }, { lat: 25.4701, lon: -80.4799 },
-        { lat: 25.4699, lon: -80.4799 }, { lat: 25.4699, lon: -80.4801 },
-        { lat: 25.4701, lon: -80.4801 },
-      ]},
-      { type: "way", geometry: [
-        { lat: 25.472, lon: -80.482 }, { lat: 25.472, lon: -80.4818 },
-        { lat: 25.4718, lon: -80.4818 }, { lat: 25.4718, lon: -80.482 },
-      ]},
-    ], center);
+    const footprint = nearestBuildingFootprint(
+      [
+        {
+          type: "way",
+          geometry: [
+            { lat: 25.4701, lon: -80.4801 },
+            { lat: 25.4701, lon: -80.4799 },
+            { lat: 25.4699, lon: -80.4799 },
+            { lat: 25.4699, lon: -80.4801 },
+            { lat: 25.4701, lon: -80.4801 },
+          ],
+        },
+        {
+          type: "way",
+          geometry: [
+            { lat: 25.472, lon: -80.482 },
+            { lat: 25.472, lon: -80.4818 },
+            { lat: 25.4718, lon: -80.4818 },
+            { lat: 25.4718, lon: -80.482 },
+          ],
+        },
+      ],
+      center,
+    );
     expect(footprint).toHaveLength(4);
     expect(footprint?.[0]).toEqual({ lat: 25.4701, lon: -80.4801 });
   });
   it("ignores malformed, non-way, and distant building geometry", () => {
-    expect(nearestBuildingFootprint([
-      { type: "relation", geometry: [{ lat: 25.47, lon: -80.48 }] },
-      { type: "way", geometry: [{ lat: 25.47, lon: -80.48 }] },
-      { type: "way", geometry: [
-        { lat: 25.48, lon: -80.49 }, { lat: 25.48, lon: -80.489 }, { lat: 25.479, lon: -80.489 },
-      ]},
-    ], center)).toBeNull();
+    expect(
+      nearestBuildingFootprint(
+        [
+          { type: "relation", geometry: [{ lat: 25.47, lon: -80.48 }] },
+          { type: "way", geometry: [{ lat: 25.47, lon: -80.48 }] },
+          {
+            type: "way",
+            geometry: [
+              { lat: 25.48, lon: -80.49 },
+              { lat: 25.48, lon: -80.489 },
+              { lat: 25.479, lon: -80.489 },
+            ],
+          },
+        ],
+        center,
+      ),
+    ).toBeNull();
   });
 });
