@@ -369,7 +369,7 @@ export function SatelliteRoofTrace({
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
   const [drawingMode, setDrawingMode] = useState<"outline" | "diy">("outline");
-  const [planeName, setPlaneName] = useState("Roof plane 1");
+  const [planeName, setPlaneName] = useState("Main roof section");
   const [edgeTypes, setEdgeTypes] = useState<EdgeType[]>([]);
   const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
@@ -389,11 +389,12 @@ export function SatelliteRoofTrace({
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
+  const draggingTarget = useRef(false);
   const suppressNextMapClick = useRef(false);
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
-  const imageryZoom = Math.min(zoom, 5);
+  const imageryZoom = zoom;
   const bounds = useMemo(
     () =>
       mapCenter
@@ -551,9 +552,10 @@ export function SatelliteRoofTrace({
     setAutoTraceBusy(true);
     setError("");
     try {
-      const lat = Number(location.lat),
-        lon = Number(location.lon);
-      const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out tags geom;`;
+      const searchCenter = selectedBuildingCenter ?? { lat: Number(location.lat), lon: Number(location.lon) };
+      const lat = searchCenter.lat;
+      const lon = searchCenter.lon;
+      const query = `[out:json][timeout:25];(way(around:120,${lat},${lon})["building"];relation(around:120,${lat},${lon})["building"];);out tags geom;>;out skel qt;`;
       // Public Overpass instances occasionally throttle or go offline. Try a
       // second community endpoint before asking the estimator to trace manually.
       const endpoints = [
@@ -634,7 +636,7 @@ export function SatelliteRoofTrace({
       setError(
         e instanceof Error && e.message.includes("No nearby")
           ? "No OpenStreetMap building outline was found close to this address. Trace the roof corners manually instead."
-          : "Automatic footprint lookup is unavailable right now. You can still trace the roof manually.",
+          : "The free OpenStreetMap footprint service did not respond. Move the house target onto the building and retry, or draw the roof manually.",
       );
     } finally {
       setAutoTraceBusy(false);
@@ -865,9 +867,7 @@ export function SatelliteRoofTrace({
             <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 space-y-2">
               <h4 className="font-semibold">Draw-It-Yourself roof measurement</h4>
               <p className="text-sm text-muted-foreground">
-                Tap the satellite image to place corners in order around one roof plane. Repeat for
-                every plane. Enter the pitch and classify each boundary edge to build a detailed
-                takeoff. Your entries remain user-drawn measurements until field verified.
+                Tap the map to trace a roof section. Give it a recognizable name (for example, Front main slope or Garage). Classify every boundary edge as Eave, Rake, Ridge, Hip, Valley, or Other. Your entries remain user-drawn measurements until field verified.
               </p>
               <label className="block text-sm">
                 Plane name
@@ -928,6 +928,11 @@ export function SatelliteRoofTrace({
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
               onPointerMove={(event) => {
+                if (draggingTarget.current) {
+                  const target = tracePointFromPointer(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
+                  if (target) { setSelectedBuildingCenter(target); setMapCenter(target); }
+                  return;
+                }
                 if (mapPanStart.current) {
                   const rect = event.currentTarget.getBoundingClientRect();
                   if (rect.width > 0 && rect.height > 0) {
@@ -953,6 +958,7 @@ export function SatelliteRoofTrace({
                   setPoints((current) => current.map((item, i) => (i === index ? point : item)));
               }}
               onPointerUp={() => {
+                draggingTarget.current = false;
                 mapPanStart.current = null;
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
@@ -960,6 +966,7 @@ export function SatelliteRoofTrace({
                 }
               }}
               onPointerCancel={() => {
+                draggingTarget.current = false;
                 mapPanStart.current = null;
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
