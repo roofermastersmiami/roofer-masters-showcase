@@ -331,3 +331,27 @@ describe("automated roof report readiness audit", () => {
     expect(audit.blockers.length).toBeGreaterThan(0);
   });
 });
+
+describe("per-plane roof report takeoff", () => {
+  it("retains plane areas, pitches, and edge lengths for traceable quantities", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const rows = roofPlaneTakeoff(drawing);
+    const measured = measureDrawing(drawing);
+    expect(rows).toHaveLength(2);
+    expect(rows.reduce((sum, row) => sum + row.area_sqft, 0)).toBeCloseTo(measured.area, 5);
+    expect(rows.reduce((sum, row) => sum + row.area_with_waste_sqft, 0)).toBeCloseTo(
+      measured.withWaste,
+      5,
+    );
+    expect(rows.every((row) => row.pitch_rise_per_12 > 0)).toBe(true);
+    expect(rows.every((row) => row.edges_lf.ridge > 0)).toBe(true);
+    expect(rows.every((row) => row.edges_lf.eave > 0)).toBe(true);
+  });
+
+  it("does not merge distinct roof planes into one aggregate row", () => {
+    const drawing = roofPreset("hip", 40, 30, 6);
+    const rows = roofPlaneTakeoff(drawing);
+    expect(rows.map((row) => row.name)).toEqual(["West", "East", "South", "North"]);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(4);
+  });
+});
