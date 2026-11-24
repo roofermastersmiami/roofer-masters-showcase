@@ -449,6 +449,10 @@ export function RoofMeasurements({
   const [footprintBusy, setFootprintBusy] = useState(false);
   const [footprintMessage, setFootprintMessage] = useState("");
   const [footprints, setFootprints] = useState<BuildingFootprint[]>([]);
+  const [footprintAddressCoordinates, setFootprintAddressCoordinates] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   async function loadAerial() {
     const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
@@ -502,7 +506,10 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }
-  function useBuildingFootprint(candidate: BuildingFootprint) {
+  function useBuildingFootprint(
+    candidate: BuildingFootprint,
+    addressCoordinates = footprintAddressCoordinates,
+  ) {
     const hasImportedFootprint = d.planes.some((item) => item.id.startsWith("osm-footprint-"));
     const replaceStarter = !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
     const existingPlanes = replaceStarter
@@ -512,7 +519,22 @@ export function RoofMeasurements({
       ...footprintToDraftPlane(candidate),
       id: `osm-footprint-${candidate.id}-${Date.now()}`,
     };
-    edit({ ...d, planes: [...existingPlanes, plane], accuracy: "photo_estimate", verified: false });
+    edit({
+      ...d,
+      planes: [...existingPlanes, plane],
+      ...(addressCoordinates
+        ? {
+            geo_reference: {
+              addressLatitude: addressCoordinates.latitude,
+              addressLongitude: addressCoordinates.longitude,
+              originLatitude: candidate.center.lat,
+              originLongitude: candidate.center.lon,
+            },
+          }
+        : {}),
+      accuracy: "photo_estimate",
+      verified: false,
+    });
     setSelected(plane.id);
     setFit((value) => value + 1);
     toast.info(
@@ -532,9 +554,10 @@ export function RoofMeasurements({
         return;
       }
       setFootprints(result.footprints);
+      setFootprintAddressCoordinates(result.addressCoordinates);
       const candidate = result.footprints[0];
       if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
-        useBuildingFootprint(candidate);
+        useBuildingFootprint(candidate, result.addressCoordinates);
       }
       setFootprintMessage(
         result.footprints.length
