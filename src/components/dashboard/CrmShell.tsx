@@ -9,6 +9,7 @@ import {
   Users,
   MapPin,
   Calculator,
+  CalendarDays,
   FileText,
   HardHat,
   Receipt,
@@ -93,6 +94,7 @@ const groups = [
       { id: "proposals", label: "Estimates & proposals", icon: FileText },
       { id: "jobs", label: "Projects & production", icon: HardHat },
       { id: "followups", label: "Tasks & follow-ups", icon: Clock },
+      { id: "appointments", label: "Appointment calendar", icon: CalendarDays },
     ],
   },
   {

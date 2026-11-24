@@ -253,6 +253,13 @@
       "when": 1795651000000,
       "tag": "0035_signed_contract_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795652000000,
+      "tag": "0036_free_ai_receptionist_calendar",
+      "breakpoints": true
     }
   ]
 }

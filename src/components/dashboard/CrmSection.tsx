@@ -3,6 +3,7 @@ import { canOpen } from "@/lib/team-roles";
 import { TeamAccess } from "./TeamAccess";
 import { CrewJobs } from "./CrewJobs";
 import { RoofReports } from "./RoofReports";
+import { CrmCalendar } from "@/components/CrmCalendar";
 import { RoofMeasurementsTab } from "./RoofMeasurementsTab";
 import { AdvancedEstimator } from "./AdvancedEstimator";
 import { CostCatalog } from "./CostCatalog";
@@ -29,6 +30,7 @@ export const CRM_SECTIONS = [
   "expenses",
   "financials",
   "roof-reports",
+  "appointments",
   "measurements",
   "pipeline",
   "submissions",
@@ -81,6 +83,8 @@ export function CrmSection({ section }: { section: string }) {
       return <FinancialAnalytics />;
     case "roof-reports":
       return <RoofReports onOpenMeasurement={openRoofMeasurements} />;
+    case "appointments":
+      return <CrmCalendar onOpenRoofReport={openRoofMeasurements} />;
     case "measurements":
       return (
         <RoofMeasurementsTab

@@ -17,6 +17,7 @@ import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { MobileActionBar } from "@/components/site/MobileActionBar";
 import { ChatWidget } from "@/components/site/ChatWidget";
+import { FreeAiReceptionist } from "@/components/FreeAiReceptionist";
 import { IntroLoader } from "@/components/site/IntroLoader";
 import { siteContentQuery } from "@/lib/content.functions";
 
@@ -192,6 +193,7 @@ function RootComponent() {
           <SiteFooter />
           <MobileActionBar />
           <ChatWidget />
+          <FreeAiReceptionist className="!bottom-5 !left-5 !right-auto" />
         </>
       )}
       <Toaster richColors position="top-center" />
