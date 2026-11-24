@@ -54,7 +54,9 @@ export function RoofMeasurementsTab({
   const [addressError, setAddressError] = useState("");
   const [form, setForm] = useState({
     address: initialAddress,
-    title: "Roof measurement report",
+    title: "",
+    customer_phone: "",
+    customer_email: "",
     provider: "manual" as const,
     notes: "",
   });
@@ -182,7 +184,9 @@ export function RoofMeasurementsTab({
                 onSelectReport(null);
                 setForm({
                   address: "",
-                  title: "Roof measurement report",
+                  title: "",
+                  customer_phone: "",
+                  customer_email: "",
                   provider: "manual",
                   notes: "",
                 });
@@ -251,7 +255,9 @@ export function RoofMeasurementsTab({
             onClick={() => {
               setForm({
                 address: "",
-                title: "Roof measurement report",
+                title: "",
+                customer_phone: "",
+                customer_email: "",
                 provider: "manual",
                 notes: "",
               });
@@ -383,12 +389,32 @@ export function RoofMeasurementsTab({
                 </p>
               </div>
             )}
-            <Field label="Report title">
+            <Field label="Client name">
               <Input
                 required
                 maxLength={180}
                 value={form.title}
                 onChange={(event) => setForm({ ...form, title: event.target.value })}
+              />
+            </Field>
+            <Field label="Client phone number">
+              <Input
+                type="tel"
+                autoComplete="tel"
+                maxLength={30}
+                placeholder="(305) 555-0123"
+                value={form.customer_phone}
+                onChange={(event) => setForm({ ...form, customer_phone: event.target.value })}
+              />
+            </Field>
+            <Field label="Client email address">
+              <Input
+                type="email"
+                autoComplete="email"
+                maxLength={255}
+                placeholder="client@example.com"
+                value={form.customer_email}
+                onChange={(event) => setForm({ ...form, customer_email: event.target.value })}
               />
             </Field>
             <Field label="Inspection notes">
