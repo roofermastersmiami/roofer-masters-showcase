@@ -705,14 +705,24 @@ export async function roofDrawingPdf(
   d.planes.forEach((plane, index) => {
     ensureSpace(30);
     const pts = plane.points.map((point) => mapPoint(point));
-    pts.forEach((point, i) => {
-      const next = pts[(i + 1) % pts.length];
-      if (next) page.drawLine({ start: point, end: next, thickness: 1.8, color: BLUE });
-    });
     const center = pts.reduce(
       (acc, point) => ({ x: acc.x + point.x / pts.length, y: acc.y + point.y / pts.length }),
       { x: 0, y: 0 },
     );
+    const localPath =
+      pts.map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"} ${(point.x - center.x).toFixed(2)} ${(point.y - center.y).toFixed(2)}`).join(" ") + " Z";
+    page.drawSvgPath(localPath, {
+      x: center.x,
+      y: center.y,
+      color: rgb(0.82, 0.9, 0.97),
+      borderColor: BLUE,
+      borderWidth: 1.2,
+      opacity: 0.72,
+    });
+    pts.forEach((point, pointIndex) => {
+      const next = pts[(pointIndex + 1) % pts.length];
+      if (next) page.drawLine({ start: point, end: next, thickness: 1.8, color: BLUE });
+    });
     const area = m.planes.find((item) => item.id === plane.id)?.area ?? 0;
     page.drawText(`${plane.name}  |  ${area.toFixed(1)} SF  |  ${(area / 100).toFixed(2)} SQ`, {
       x: center.x - 34,
