@@ -167,11 +167,15 @@ export function CrmShell({
   useEffect(() => {
     let cancelled = false;
     const loadBranding = async () => {
-      setDark(localStorage.getItem("crm-theme") === "dark");
-      const fallbackTheme = localStorage.getItem("crm-theme-preset");
-      const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-      if (fallbackTheme && ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(fallbackTheme)) setTheme(fallbackTheme);
-      if (fallbackSidebar && ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)) setSidebarAppearance(fallbackSidebar);
+      try {
+        setDark(localStorage.getItem("crm-theme") === "dark");
+        const fallbackTheme = localStorage.getItem("crm-theme-preset");
+        const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
+        if (fallbackTheme && ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(fallbackTheme)) setTheme(fallbackTheme);
+        if (fallbackSidebar && ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)) setSidebarAppearance(fallbackSidebar);
+      } catch {
+        // Browser storage may be disabled; use the in-memory defaults.
+      }
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (cancelled) return;
@@ -204,7 +208,11 @@ export function CrmShell({
   }, []);
   useEffect(() => {
     if (!sidebarPreferencesLoaded) return;
-    localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
+    try {
+      localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
+    } catch {
+      // Keep the selected appearance for this session when storage is unavailable.
+    }
   }, [sidebarAppearance, sidebarPreferencesLoaded]);
   useEffect(() => {
     const root = document.documentElement;
@@ -213,7 +221,11 @@ export function CrmShell({
       "crm-theme-executive-berry", "crm-theme-modern-enterprise", "crm-theme-canyon-corporate",
     );
     root.classList.add(`crm-theme-${theme}`);
-    localStorage.setItem("crm-theme-preset", theme);
+    try {
+      localStorage.setItem("crm-theme-preset", theme);
+    } catch {
+      // The active theme remains applied to the current session.
+    }
   }, [theme]);
   useEffect(() => {
     if (!brandingLoaded || !brandingUserId) return;
@@ -564,7 +576,11 @@ export function CrmShell({
               aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
               onClick={() => {
                 setDark(!dark);
-                localStorage.setItem("crm-theme", !dark ? "dark" : "light");
+                try {
+                  localStorage.setItem("crm-theme", !dark ? "dark" : "light");
+                } catch {
+                  // Dark mode still changes for the current session.
+                }
               }}
             >
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
