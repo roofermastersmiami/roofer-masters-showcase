@@ -1,6 +1,7 @@
 # Roofer Masters Free AI Receptionist
 
 ## Run locally (no paid AI key)
+
 1. Install Ollama from https://ollama.com and run `ollama pull qwen2.5:7b-instruct`.
 2. Create a Python 3.11+ environment, then `pip install -r requirements.txt`.
 3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server only.
@@ -16,6 +17,7 @@ Optional email worker: set `EMAIL_IMAP_HOST`, `EMAIL_USER`, `EMAIL_APP_PASSWORD`
 Optional Hugging Face inference: set `HF_ENDPOINT` and `HF_TOKEN`; free-tier quotas and model availability are controlled by Hugging Face and may change. Ollama is the no-account/no-token route.
 
 ## Notes
+
 - Supabase service-role key never belongs in the browser.
 - The calendar is Eastern time and books only future Monday-Saturday slots, 8 AM-6 PM, one hour each.
 - PostgreSQL transaction locking is the final double-booking guard.
