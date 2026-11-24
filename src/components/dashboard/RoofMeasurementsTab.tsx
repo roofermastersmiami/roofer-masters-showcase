@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, MapPin, Plus, Ruler, Search } from "lucide-react";
+import { ArrowLeft, MapPin, Plus, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,7 @@ export function RoofMeasurementsTab({
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
+  const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
   const [addressError, setAddressError] = useState("");
   const [form, setForm] = useState({
     address: initialAddress,
@@ -78,6 +79,7 @@ export function RoofMeasurementsTab({
       return;
     }
     setForm((current) => ({ ...current, address: initialAddress }));
+    setOriginalCrmAddress(initialAddress);
     setAdding(true);
     onRequestHandled();
   }, [initialAddress, initialPropertyId, orders.data, orders.isPending, onSelectReport, onRequestHandled]);
@@ -117,7 +119,11 @@ export function RoofMeasurementsTab({
       toast.error("Locate and confirm the property address before creating the report");
       return;
     }
-    const parsed = roofOrderSchema.safeParse({ ...form, address: locatedAddress.matchedAddress });
+    const parsed = roofOrderSchema.safeParse({
+      ...form,
+      // Preserve the exact saved CRM address so the server reuses its property record.
+      address: originalCrmAddress || locatedAddress.matchedAddress,
+    });
     if (!parsed.success) {
       toast.error("Enter the complete property address");
       return;
@@ -204,6 +210,7 @@ export function RoofMeasurementsTab({
         action={
           <Button onClick={() => {
             setForm({ address: "", title: "Roof measurement report", provider: "manual", notes: "" });
+            setOriginalCrmAddress("");
             setLocatedAddress(null);
             setAddressError("");
             setAdding(true);
@@ -268,7 +275,7 @@ export function RoofMeasurementsTab({
             <Field label="Customer property address">
               <Input required minLength={8} maxLength={250} autoComplete="street-address"
                 placeholder="123 Main Street, Miami, FL 33130" value={form.address}
-                onChange={(event) => { setForm({ ...form, address: event.target.value }); setLocatedAddress(null); setAddressError(""); }} />
+                onChange={(event) => { setForm({ ...form, address: event.target.value }); setOriginalCrmAddress(""); setLocatedAddress(null); setAddressError(""); }} />
             </Field>
             <Button type="button" variant="outline" disabled={lookupBusy || form.address.trim().length < 8}
               onClick={() => void locateAddress()}>
