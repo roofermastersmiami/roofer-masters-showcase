@@ -231,6 +231,7 @@ export function RoofImageTrace({
             src={photo.data}
             alt="Roof photo used for measuring"
             className="block max-h-[640px] w-full select-none object-contain"
+            style={{ transform: `scale(${photoZoom})`, transformOrigin: "center center" }}
             draggable={false}
             onLoad={(e) => {
               const width = e.currentTarget.naturalWidth,
@@ -241,11 +242,11 @@ export function RoofImageTrace({
           <svg
             ref={svg}
             className="absolute inset-0 h-full w-full touch-none text-primary"
-            viewBox={(dimensions.width * (1 - 1 / photoZoom)) / 2 + " " + (dimensions.height * (1 - 1 / photoZoom)) / 2 + " " + dimensions.width / photoZoom + " " + dimensions.height / photoZoom}
+            viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
             preserveAspectRatio="xMidYMid meet"
             aria-label="Roof tracing surface"
             onPointerMove={onMove}
-            style={{ touchAction: "none" }}
+            style={{ touchAction: "none", transform: `scale(${photoZoom})`, transformOrigin: "center center" }}
             onTouchStart={(event) => {
               if (event.touches.length === 2) {
                 event.preventDefault();
