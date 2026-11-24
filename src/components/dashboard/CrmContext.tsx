@@ -8,6 +8,7 @@ export type CrmState = {
   clearProposalLead: () => void;
   go: (section: string) => void;
   roofReportRequest: { propertyId: string; customerId: string; address: string } | null;
+  clearRoofReportRequest: () => void;
   selectedRoofReportId: string | null;
   openRoofMeasurements: (reportId: string | null) => void;
 };
