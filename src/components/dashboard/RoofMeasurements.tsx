@@ -1296,7 +1296,13 @@ export function RoofMeasurements({
           </div>
         )}
       </section>
-      <SatelliteRoofTrace onAdd={(p) => { edit({ ...d, planes: [...d.planes, p] }); setSelected(p.id); setFit((f) => f + 1); }} />
+      <SatelliteRoofTrace
+        onAdd={(p) => {
+          edit({ ...d, planes: [...d.planes, p] });
+          setSelected(p.id);
+          setFit((f) => f + 1);
+        }}
+      />
       {media[traceIndex] && (
         <RoofImageTrace
           key={media[traceIndex].path}
