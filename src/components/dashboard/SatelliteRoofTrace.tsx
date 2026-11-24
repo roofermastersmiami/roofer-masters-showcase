@@ -376,6 +376,8 @@ export function SatelliteRoofTrace({
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [baseMap, setBaseMap] = useState<"satellite" | "streets">("satellite");
+  const [placingTarget, setPlacingTarget] = useState(false);
   const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
   const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
   const [mapViewportElement, setMapViewportElement] = useState<HTMLDivElement | null>(null);
@@ -391,17 +393,18 @@ export function SatelliteRoofTrace({
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
+  const imageryZoom = Math.min(zoom, 5);
   const bounds = useMemo(
     () =>
       mapCenter
         ? {
-            west: mapCenter.lon - TILE_SPAN / zoom,
-            east: mapCenter.lon + TILE_SPAN / zoom,
-            south: mapCenter.lat - (TILE_SPAN * 0.7) / zoom,
-            north: mapCenter.lat + (TILE_SPAN * 0.7) / zoom,
+            west: mapCenter.lon - TILE_SPAN / imageryZoom,
+            east: mapCenter.lon + TILE_SPAN / imageryZoom,
+            south: mapCenter.lat - (TILE_SPAN * 0.7) / imageryZoom,
+            north: mapCenter.lat + (TILE_SPAN * 0.7) / imageryZoom,
           }
         : null,
-    [mapCenter, zoom],
+    [mapCenter, imageryZoom],
   );
   useEffect(() => {
     const viewport = mapViewportElement;
@@ -419,7 +422,7 @@ export function SatelliteRoofTrace({
   }, [mapViewportElement]);
 
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/${baseMap === "satellite" ? "World_Imagery" : "World_Street_Map"}/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
     : "";
 
   useEffect(() => {
@@ -524,16 +527,24 @@ export function SatelliteRoofTrace({
       suppressNextMapClick.current = false;
       return;
     }
+    if (mapInteraction === "pan") return;
     const point = tracePointFromPointer(
       event.clientX,
       event.clientY,
       event.currentTarget.getBoundingClientRect(),
     );
-    if (point) {
+    if (!point) return;
+    if (placingTarget) {
+      setSelectedBuildingCenter(point);
+      setMapCenter(point);
+      setPlacingTarget(false);
       setAutoTraced(false);
-      setPoints((current) => [...current, point]);
-      setEdgeTypes((current) => [...current, "other"]);
+      setError("");
+      return;
     }
+    setAutoTraced(false);
+    setPoints((current) => [...current, point]);
+    setEdgeTypes((current) => [...current, "other"]);
   }
   async function autoTraceBuildingFootprint() {
     if (!location) return;
