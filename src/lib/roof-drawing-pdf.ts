@@ -389,53 +389,7 @@ export async function roofDrawingPdf(
     "Report date",
     new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
   );
-  coverY -= 3;
-  firstPage.drawText("AREA & WASTE CALCULATION", {
-    x: MARGIN,
-    y: coverY,
-    size: 10,
-    font: bold,
-    color: NAVY,
-  });
-  coverY -= 17;
-  const wasteCols = [MARGIN, 190, 325, 455];
-  ["WASTE", "AREA (SQ FT)", "SQUARES", "INCL. WASTE"].forEach((label, i) =>
-    firstPage.drawText(label, { x: wasteCols[i], y: coverY, size: 7, font: bold, color: BLUE }),
-  );
-  coverY -= 14;
-  [0, 5, 10, 15, 20].forEach((waste, i) => {
-    if (i % 2 === 0)
-      firstPage.drawRectangle({
-        x: MARGIN,
-        y: coverY - 4,
-        width: PAGE_W - MARGIN * 2,
-        height: 15,
-        color: LIGHT,
-      });
-    const area = m.area * (1 + waste / 100);
-    const values = [
-      `${waste}%`,
-      m.area.toFixed(2),
-      m.squares.toFixed(2),
-      `${area.toFixed(2)} SF  |  ${(area / 100).toFixed(2)} sq`,
-    ];
-    values.forEach((value, j) =>
-      firstPage.drawText(value, {
-        x: wasteCols[j],
-        y: coverY,
-        size: 8,
-        font: j === 0 ? bold : font,
-        color: INK,
-      }),
-    );
-    coverY -= 16;
-  });
-  coverY -= 4;
-  firstPage.drawText(
-    `SELECTED WASTE: ${d.waste}%  ·  AREA WITH WASTE: ${m.withWaste.toFixed(2)} SF  ·  ${m.withWaste / 100} SQUARES`,
-    { x: MARGIN, y: coverY, size: 7.5, font: bold, color: NAVY },
-  );
-  coverY -= 15;
+  // Keep the cover focused on the property and client details.
   let logoEmbedded = false;
   if (typeof document !== "undefined" && typeof createImageBitmap === "function") {
     try {
@@ -602,9 +556,50 @@ export async function roofDrawingPdf(
   row("Selected waste allowance", `${d.waste}%`);
   row("Area including selected waste", `${m.withWaste.toFixed(2)} sq ft`, true);
   row("Total perimeter", `${m.perimeter.toFixed(2)} ft`);
+  const shingleWasteEligible = d.roof_type === "Shingle Roof" && m.area > 0;
+  const suggestedExtraSqFt = m.area * 0.05 + m.edges.valley * 2.3 + m.edges.hip * 0.7 + m.edges.rake * 0.25;
+  const suggestedWastePct = shingleWasteEligible ? (suggestedExtraSqFt / m.area) * 100 : null;
+  section("WASTE COMPARISON");
   paragraph(
-    "SUGGESTED WASTE: This is a planning allowance. The sample waste method applies only to standard architectural shingles with a closed, single-cut valley system. Ridge cap, hip cap, and starter bundles are separate quantities. Confirm the correct allowance for the selected roofing system and actual roof layout.",
+    "Coverage scenarios are calculated from modeled roof area. Suggested waste is shown only for shingle roofs and is a planning estimate; verify the roof layout, valley method, and supplier recommendations.",
     7.5,
+    false,
+    MUTED,
+  );
+  const wasteHeaders = ["ACTUAL", "+5%", "+10%", "SUGGESTED", "+15%", "+20%"];
+  const wasteXs = [MARGIN + 5, 137, 222, 307, 402, 487];
+  const wasteWidths = [72, 72, 72, 84, 72, 72];
+  page.drawRectangle({ x: MARGIN, y: y - 6, width: PAGE_W - MARGIN * 2, height: 24, color: NAVY });
+  wasteHeaders.forEach((label, index) =>
+    page.drawText(label, { x: wasteXs[index], y, size: 7, font: bold, color: WHITE }),
+  );
+  y -= 28;
+  const wasteValues = [
+    m.area,
+    m.area * 1.05,
+    m.area * 1.1,
+    suggestedWastePct === null ? null : m.area + suggestedExtraSqFt,
+    m.area * 1.15,
+    m.area * 1.2,
+  ];
+  if (suggestedWastePct === null) {
+    wasteValues[3] = null;
+  }
+  const wasteRow = wasteValues.map((area) =>
+    area === null ? "Manual review" : `${area.toFixed(0)} SF`,
+  );
+  if (suggestedWastePct !== null) wasteRow[3] = `${suggestedWastePct.toFixed(1)}% / ${wasteValues[3]!.toFixed(0)} SF`;
+  page.drawRectangle({ x: MARGIN, y: y - 5, width: PAGE_W - MARGIN * 2, height: 20, color: LIGHT });
+  wasteRow.forEach((value, index) => {
+    let output = value;
+    while (font.widthOfTextAtSize(output, 7) > wasteWidths[index]! && output.length > 5)
+      output = output.slice(0, -4) + "...";
+    page.drawText(output, { x: wasteXs[index], y, size: 7, font: index === 0 ? bold : font, color: INK });
+  });
+  y -= 24;
+  paragraph(
+    "Shingle suggested-waste estimate = 5% handling allowance + 2.3 SF/LF valley + 0.7 SF/LF hip + 0.25 SF/LF rake. This method is not applied to metal, tile, TPO, or flat roofs.",
+    7,
     false,
     MUTED,
   );
