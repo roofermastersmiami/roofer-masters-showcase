@@ -29,13 +29,17 @@ export const emailRoofReportPdfs = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: report, error: reportError } = await supabaseAdmin
       .from("roof_report_orders")
-      .select("id, customer_id, crm_customers!inner(source_lead_id)")
+      .select("id, customer_id")
       .eq("id", data.reportId)
       .maybeSingle();
-    if (reportError || !report || report.customer_id == null)
+    if (reportError || !report?.customer_id)
       throw new Error("Could not verify the roof report customer");
-    const customer = report.crm_customers as unknown as { source_lead_id: string | null };
-    if (customer.source_lead_id !== data.leadId)
+    const { data: customer, error: customerError } = await supabaseAdmin
+      .from("crm_customers")
+      .select("source_lead_id")
+      .eq("id", report.customer_id)
+      .maybeSingle();
+    if (customerError || customer?.source_lead_id !== data.leadId)
       throw new Error("The selected roof report does not belong to this customer");
 
     const maxBytes = 20 * 1024 * 1024;
