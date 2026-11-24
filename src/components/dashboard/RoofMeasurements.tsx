@@ -42,6 +42,8 @@ import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
+import { findBuildingFootprints } from "@/lib/building-footprint.functions";
+import type { BuildingFootprint } from "@/lib/building-footprint";
 import {
   uploadAerialImage,
   aerialInvocationError,
@@ -86,6 +88,7 @@ export function RoofMeasurements({
     qc = useQueryClient();
   const saveFn = useServerFn(saveRoofDrawing);
   const aerialFn = useServerFn(loadPublicAerial);
+  const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
@@ -374,6 +377,9 @@ export function RoofMeasurements({
   }
   const [aerialError, setAerialError] = useState("");
   const [aerialStatus, setAerialStatus] = useState("");
+  const [footprintBusy, setFootprintBusy] = useState(false);
+  const [footprintMessage, setFootprintMessage] = useState("");
+  const [footprints, setFootprints] = useState<BuildingFootprint[]>([]);
   async function loadAerial() {
     const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
@@ -425,6 +431,30 @@ export function RoofMeasurements({
       toast.error(message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function searchFootprints() {
+    const address = report?.address?.trim() || propertyRow?.address;
+    if (!address) return;
+    setFootprintBusy(true);
+    setFootprintMessage("Checking free OpenStreetMap building data near this address…");
+    setFootprints([]);
+    try {
+      const result = await footprintFn({ data: { address } });
+      if ("error" in result) {
+        setFootprintMessage(result.error);
+        return;
+      }
+      setFootprints(result.footprints);
+      setFootprintMessage(
+        result.footprints.length
+          ? `Found ${result.footprints.length} nearby mapped building footprint(s). ${result.attribution}. These are ground outlines only.`
+          : `No mapped building outline was found within 100 meters. ${result.attribution}. You can still trace the aerial manually.`,
+      );
+    } catch {
+      setFootprintMessage("The free footprint lookup could not complete. Try again later.");
+    } finally {
+      setFootprintBusy(false);
     }
   }
   const autoAerialAttempted = useRef(false);
@@ -1112,9 +1142,10 @@ export function RoofMeasurements({
           </p>
         )}
         <p className="mb-3 text-sm text-muted-foreground">
-          Looks up the address with the free US Census service and loads a free public-domain USGS
-          aerial photo with scale pre-set. Public photos are coarse (often 0.5–1 m detail); results
-          are estimates, never survey-grade. No paid provider is used.
+          Looks up the address with the free US Census service and loads public USGS aerial
+          imagery when coverage is available. Image dimensions do not establish ground scale:
+          calibrate against a known measured distance before tracing. Results are estimates, never
+          survey-grade. No paid provider is used.
         </p>
         {aerialStatus && (
           <p
@@ -1148,6 +1179,9 @@ export function RoofMeasurements({
               options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({ value, label }))}
             />
           </div>
+          <Button variant="outline" disabled={footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)} onClick={() => void searchFootprints()}>
+            {footprintBusy ? "Searching footprints…" : "Find mapped building outline"}
+          </Button>
           {media.length > 1 && (
             <div className="w-56">
               <Choice
@@ -1162,6 +1196,59 @@ export function RoofMeasurements({
             </div>
           )}
         </div>
+        {footprintMessage && (
+          <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm" role="status">
+            {footprintMessage}{" "}
+            <a className="underline underline-offset-4" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+              OpenStreetMap attribution and license
+            </a>
+          </p>
+        )}
+        {footprints.length > 0 && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {footprints.map((footprint) => (
+              <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
+                <p className="font-medium">Mapped building #{footprint.id}</p>
+                <svg viewBox="0 0 160 100" role="img" aria-label={`Approximate mapped ground outline for building ${footprint.id}`} className="my-2 h-24 w-full rounded bg-muted/40">
+                  {(() => {
+                    const cos = Math.cos(footprint.center.lat * Math.PI / 180);
+                    const xy = footprint.points.map((point) => ({
+                      x: point.lon * cos,
+                      y: -point.lat,
+                    }));
+                    const minX = Math.min(...xy.map((point) => point.x));
+                    const maxX = Math.max(...xy.map((point) => point.x));
+                    const minY = Math.min(...xy.map((point) => point.y));
+                    const maxY = Math.max(...xy.map((point) => point.y));
+                    const width = Math.max(maxX - minX, 1e-9);
+                    const height = Math.max(maxY - minY, 1e-9);
+                    const scale = Math.min(140 / width, 80 / height);
+                    const offsetX = (160 - width * scale) / 2;
+                    const offsetY = (100 - height * scale) / 2;
+                    const points = xy.map((point) =>
+                      `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
+                    ).join(" ");
+                    return <polygon points={points} fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
+                  })()}
+                </svg>
+                <p className="text-muted-foreground">
+                  Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft · {footprint.distanceMeters} m from address point
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {footprint.points.length} outline corners · OSM building type: {footprint.buildingType}
+                </p>
+                <a
+                  className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
+                  href={`https://www.openstreetmap.org/way/${footprint.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Inspect source outline on OpenStreetMap
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
       {media[traceIndex] && (
         <RoofImageTrace
