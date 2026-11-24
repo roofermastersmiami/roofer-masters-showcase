@@ -349,7 +349,7 @@ export function SatelliteRoofTrace({
   onAdd,
   initialAddress = "",
 }: {
-  onAdd: (planes: RoofPlane[], geoReference: GeoReference) => void;
+  onAdd: (planes: RoofPlane[], geoReference: GeoReference) => boolean | void;
   initialAddress?: string;
 }) {
   const [address, setAddress] = useState("");
@@ -915,11 +915,11 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(
+                  const accepted = onAdd(
                     [satelliteTraceToPlane(points, Number(pitch), pitchDirection)],
                     traceGeoReference(points, center!),
                   );
-                  setPoints([]);
+                  if (accepted !== false) setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
                 } finally {
@@ -983,7 +983,7 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(
+                  const accepted = onAdd(
                     satelliteTraceToGablePlanes(
                       points,
                       Number(pitch),
@@ -993,7 +993,7 @@ export function SatelliteRoofTrace({
                     ),
                     traceGeoReference(points, center!),
                   );
-                  setPoints([]);
+                  if (accepted !== false) setPoints([]);
                 } catch (e) {
                   setError(
                     e instanceof Error
