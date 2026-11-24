@@ -58,6 +58,7 @@ import {
   addressAerialRequestKey,
 } from "@/lib/public-aerial-import";
 import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
+import { ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
@@ -778,6 +779,18 @@ export function RoofMeasurements({
                 />
               </Suspense>
             </DrawingErrorBoundary>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border bg-background px-3 py-3" aria-label="Roof feature color legend">
+            {ROOF_FEATURE_LEGEND.map((feature) => (
+              <div key={feature.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-1 w-6 rounded-full"
+                  style={{ backgroundColor: feature.color }}
+                />
+                <span>{feature.label}</span>
+              </div>
+            ))}
           </div>
         </div>
         <aside className="min-w-0 border-t border-border py-5 xl:border-l xl:border-t-0 xl:pl-5">
