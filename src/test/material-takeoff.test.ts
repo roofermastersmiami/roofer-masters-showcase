@@ -31,20 +31,30 @@ describe("South Florida material takeoff", () => {
   });
 
   it("uses 10 percent default waste for modified bitumen", () => {
-    const result = calculateRoofTakeoff({ ...base, flatInstallationMethod: "torch" }, "flat_modbit");
+    const result = calculateRoofTakeoff(
+      { ...base, flatInstallationMethod: "torch" },
+      "flat_modbit",
+    );
     expect(result.wastePct).toBe(10);
     expect(result.lineItems.find((item) => item.code === "MOD-CAP")?.name).toContain("Torch");
   });
 
   it("distinguishes torch and self-adhered cap sheet descriptions", () => {
     const torch = calculateRoofTakeoff({ ...base, flatInstallationMethod: "torch" }, "flat_modbit");
-    const adhered = calculateRoofTakeoff({ ...base, flatInstallationMethod: "peel_and_stick" }, "flat_modbit");
+    const adhered = calculateRoofTakeoff(
+      { ...base, flatInstallationMethod: "peel_and_stick" },
+      "flat_modbit",
+    );
     expect(torch.lineItems.find((item) => item.code === "MOD-CAP")?.name).toContain("Torch");
-    expect(adhered.lineItems.find((item) => item.code === "MOD-CAP")?.name).toContain("Self-Adhered");
+    expect(adhered.lineItems.find((item) => item.code === "MOD-CAP")?.name).toContain(
+      "Self-Adhered",
+    );
   });
 
   it("honors a validated custom waste override and the steep-pitch threshold", () => {
-    expect(calculateRoofTakeoff({ ...base, dominantPitch: 6.99 }, "shingle", 8).steepSlopeMultiplier).toBe(1);
+    expect(
+      calculateRoofTakeoff({ ...base, dominantPitch: 6.99 }, "shingle", 8).steepSlopeMultiplier,
+    ).toBe(1);
     const result = calculateRoofTakeoff({ ...base, dominantPitch: 7 }, "shingle", 8);
     expect(result.wastePct).toBe(8);
     expect(result.steepSlopeMultiplier).toBe(1.15);
@@ -58,12 +68,24 @@ describe("South Florida material takeoff", () => {
   });
 
   it("rounds every purchasable unit up and handles zero optional edges", () => {
-    const result = calculateRoofTakeoff({
-      ...base, ridgesFt: 0, hipsFt: 0, valleysFt: 0, eavesFt: 0, rakesFt: 0, penetrationsCount: 0,
-    }, "shingle", 0);
+    const result = calculateRoofTakeoff(
+      {
+        ...base,
+        ridgesFt: 0,
+        hipsFt: 0,
+        valleysFt: 0,
+        eavesFt: 0,
+        rakesFt: 0,
+        penetrationsCount: 0,
+      },
+      "shingle",
+      0,
+    );
     expect(result.lineItems.find((item) => item.code === "MTL-DRIP-3X3")?.quantity).toBe(0);
     expect(result.lineItems.find((item) => item.code === "SHG-RIDGE")?.quantity).toBe(0);
-    expect(result.lineItems.every((item) => Number.isSafeInteger(item.quantity) && item.quantity >= 0)).toBe(true);
+    expect(
+      result.lineItems.every((item) => Number.isSafeInteger(item.quantity) && item.quantity >= 0),
+    ).toBe(true);
   });
 
   it("calculates tile quantities with the supplied package assumptions", () => {
@@ -74,18 +96,26 @@ describe("South Florida material takeoff", () => {
   });
 
   it("requires measured plane runs and product-specific coverage for architectural metal", () => {
-    expect(() => calculateRoofTakeoff(base, "architectural_metal")).toThrow("requires measured plane runs");
-    const result = calculateRoofTakeoff({
-      ...base,
-      metalPlaneRuns: [{ eaveLengthFt: 40, panelRunFt: 18 }, { eaveLengthFt: 40, panelRunFt: 18 }],
-      metalConfig: {
-        panelCoverageIn: 16,
-        underlaymentCoverageSqFtPerRoll: 200,
-        fastenersPerPanel: 20,
-        fastenersPerBox: 250,
-        trimStickLengthFt: 10,
+    expect(() => calculateRoofTakeoff(base, "architectural_metal")).toThrow(
+      "requires measured plane runs",
+    );
+    const result = calculateRoofTakeoff(
+      {
+        ...base,
+        metalPlaneRuns: [
+          { eaveLengthFt: 40, panelRunFt: 18 },
+          { eaveLengthFt: 40, panelRunFt: 18 },
+        ],
+        metalConfig: {
+          panelCoverageIn: 16,
+          underlaymentCoverageSqFtPerRoll: 200,
+          fastenersPerPanel: 20,
+          fastenersPerBox: 250,
+          trimStickLengthFt: 10,
+        },
       },
-    }, "architectural_metal");
+      "architectural_metal",
+    );
     expect(result.lineItems.find((item) => item.code === "MTL-PANEL-CUSTOM")?.quantity).toBe(68);
     expect(result.lineItems.find((item) => item.code === "MTL-FASTENER-CUSTOM")?.quantity).toBe(6);
   });
@@ -100,7 +130,9 @@ describe("South Florida material takeoff", () => {
 
   it("never returns prices or fabricated quote totals", () => {
     const result = calculateRoofTakeoff(base, "shingle");
-    expect(result.lineItems.every((item) => !("unitPrice" in item) && !("lineTotal" in item))).toBe(true);
+    expect(result.lineItems.every((item) => !("unitPrice" in item) && !("lineTotal" in item))).toBe(
+      true,
+    );
     expect(result).not.toHaveProperty("total");
     expect(result.planningNote).toContain("manufacturer");
   });

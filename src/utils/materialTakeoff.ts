@@ -84,25 +84,40 @@ function validateMeasurements(m: RoofMeasurements, customWastePct?: number): voi
   if (!Number.isFinite(m.dominantPitch) || m.dominantPitch < 0 || m.dominantPitch > 24)
     throw new Error("Dominant pitch must be between 0:12 and 24:12");
   for (const [label, value] of [
-    ["Ridges", m.ridgesFt], ["Hips", m.hipsFt], ["Valleys", m.valleysFt],
-    ["Eaves", m.eavesFt], ["Rakes", m.rakesFt],
+    ["Ridges", m.ridgesFt],
+    ["Hips", m.hipsFt],
+    ["Valleys", m.valleysFt],
+    ["Eaves", m.eavesFt],
+    ["Rakes", m.rakesFt],
   ] as const) {
     if (!Number.isFinite(value) || value < 0 || value > MAX_DIMENSION)
       throw new Error(`${label} length must be a finite non-negative number`);
   }
-  if (m.penetrationsCount !== undefined &&
-      (!Number.isSafeInteger(m.penetrationsCount) || m.penetrationsCount < 0 || m.penetrationsCount > 5000))
+  if (
+    m.penetrationsCount !== undefined &&
+    (!Number.isSafeInteger(m.penetrationsCount) ||
+      m.penetrationsCount < 0 ||
+      m.penetrationsCount > 5000)
+  )
     throw new Error("Penetration count must be a whole number between 0 and 5,000");
-  if (customWastePct !== undefined &&
-      (!Number.isFinite(customWastePct) || customWastePct < 0 || customWastePct > 50))
+  if (
+    customWastePct !== undefined &&
+    (!Number.isFinite(customWastePct) || customWastePct < 0 || customWastePct > 50)
+  )
     throw new Error("Custom waste must be between 0% and 50%");
 }
 
-function metalItems(m: RoofMeasurements, squaresWithWaste: number, wastePct: number): TakeoffLineItem[] {
+function metalItems(
+  m: RoofMeasurements,
+  squaresWithWaste: number,
+  wastePct: number,
+): TakeoffLineItem[] {
   const config = m.metalConfig;
   const planes = m.metalPlaneRuns;
   if (!config || !planes?.length)
-    throw new Error("Architectural metal takeoff requires measured plane runs and product coverage settings");
+    throw new Error(
+      "Architectural metal takeoff requires measured plane runs and product coverage settings",
+    );
   for (const [label, value] of [
     ["Panel coverage", config.panelCoverageIn],
     ["Underlayment roll coverage", config.underlaymentCoverageSqFtPerRoll],
@@ -116,22 +131,64 @@ function metalItems(m: RoofMeasurements, squaresWithWaste: number, wastePct: num
   let panels = 0;
   let panelLinearFt = 0;
   for (const [index, plane] of planes.entries()) {
-    if (!Number.isFinite(plane.eaveLengthFt) || plane.eaveLengthFt <= 0 ||
-        !Number.isFinite(plane.panelRunFt) || plane.panelRunFt <= 0 ||
-        plane.eaveLengthFt > MAX_DIMENSION || plane.panelRunFt > MAX_DIMENSION)
+    if (
+      !Number.isFinite(plane.eaveLengthFt) ||
+      plane.eaveLengthFt <= 0 ||
+      !Number.isFinite(plane.panelRunFt) ||
+      plane.panelRunFt <= 0 ||
+      plane.eaveLengthFt > MAX_DIMENSION ||
+      plane.panelRunFt > MAX_DIMENSION
+    )
       throw new Error(`Metal plane ${index + 1} needs positive measured eave length and panel run`);
-    const planePanels = ceilQty((plane.eaveLengthFt * 12 / config.panelCoverageIn) * (1 + wastePct / 100), "Metal panel count");
+    const planePanels = ceilQty(
+      ((plane.eaveLengthFt * 12) / config.panelCoverageIn) * (1 + wastePct / 100),
+      "Metal panel count",
+    );
     panels += planePanels;
     panelLinearFt += planePanels * plane.panelRunFt;
   }
   const trimFt = m.eavesFt + m.rakesFt + m.ridgesFt + m.hipsFt + m.valleysFt;
   const trimSticks = ceilQty(trimFt / config.trimStickLengthFt, "Metal trim sticks");
-  const fastenerBoxes = ceilQty((panels * config.fastenersPerPanel) / config.fastenersPerBox, "Metal fastener boxes");
+  const fastenerBoxes = ceilQty(
+    (panels * config.fastenersPerPanel) / config.fastenersPerBox,
+    "Metal fastener boxes",
+  );
   return [
-    { code: "MTL-PANEL-CUSTOM", name: "Architectural metal roof panels (measured plane cut list)", category: "Primary", quantity: panels, unit: "panels", notes: `${round2(panelLinearFt)} total panel linear ft; per-plane runs required; ${wastePct}% panel allowance` },
-    { code: "MTL-UNDERLAYMENT", name: "Metal-roof approved underlayment", category: "Underlayment", quantity: ceilQty((squaresWithWaste * 100) / config.underlaymentCoverageSqFtPerRoll, "Metal underlayment rolls"), unit: "rolls", notes: "Roll coverage supplied from the selected product data" },
-    { code: "MTL-TRIM-CUSTOM", name: "Metal roof perimeter and transition trim", category: "Metal & Flashing", quantity: trimSticks, unit: "sticks", notes: `${round2(trimFt)} measured linear ft; ${config.trimStickLengthFt}-ft stock length` },
-    { code: "MTL-FASTENER-CUSTOM", name: "Manufacturer-approved panel fasteners", category: "Fasteners & Sealants", quantity: fastenerBoxes, unit: "boxes", notes: `${config.fastenersPerPanel} fasteners per panel; ${config.fastenersPerBox} per box` },
+    {
+      code: "MTL-PANEL-CUSTOM",
+      name: "Architectural metal roof panels (measured plane cut list)",
+      category: "Primary",
+      quantity: panels,
+      unit: "panels",
+      notes: `${round2(panelLinearFt)} total panel linear ft; per-plane runs required; ${wastePct}% panel allowance`,
+    },
+    {
+      code: "MTL-UNDERLAYMENT",
+      name: "Metal-roof approved underlayment",
+      category: "Underlayment",
+      quantity: ceilQty(
+        (squaresWithWaste * 100) / config.underlaymentCoverageSqFtPerRoll,
+        "Metal underlayment rolls",
+      ),
+      unit: "rolls",
+      notes: "Roll coverage supplied from the selected product data",
+    },
+    {
+      code: "MTL-TRIM-CUSTOM",
+      name: "Metal roof perimeter and transition trim",
+      category: "Metal & Flashing",
+      quantity: trimSticks,
+      unit: "sticks",
+      notes: `${round2(trimFt)} measured linear ft; ${config.trimStickLengthFt}-ft stock length`,
+    },
+    {
+      code: "MTL-FASTENER-CUSTOM",
+      name: "Manufacturer-approved panel fasteners",
+      category: "Fasteners & Sealants",
+      quantity: fastenerBoxes,
+      unit: "boxes",
+      notes: `${config.fastenersPerPanel} fasteners per panel; ${config.fastenersPerBox} per box`,
+    },
   ];
 }
 
@@ -148,7 +205,11 @@ export function calculateRoofTakeoff(
   validateMeasurements(m, customWastePct);
   if (!["architectural_metal", "shingle", "tile", "flat_modbit"].includes(system))
     throw new Error("Unsupported roof system");
-  if (system === "flat_modbit" && m.flatInstallationMethod !== "torch" && m.flatInstallationMethod !== "peel_and_stick")
+  if (
+    system === "flat_modbit" &&
+    m.flatInstallationMethod !== "torch" &&
+    m.flatInstallationMethod !== "peel_and_stick"
+  )
     throw new Error("Select Torch or Peel-and-Stick for modified bitumen");
   const complexityRatio = (m.hipsFt + m.valleysFt) / Math.max(m.totalAreaSqFt / 100, 1);
   const defaultWaste = system === "flat_modbit" ? 10 : complexityRatio > 12 ? 15 : 12;
@@ -161,49 +222,167 @@ export function calculateRoofTakeoff(
   const items: TakeoffLineItem[] = [
     {
       code: "MTL-DRIP-3X3",
-      name: system === "tile" ? "26ga Galvalume Tile Drip Edge (10ft)" : '26ga 3"x3" HVHZ Drip Edge (10ft)',
+      name:
+        system === "tile"
+          ? "26ga Galvalume Tile Drip Edge (10ft)"
+          : '26ga 3"x3" HVHZ Drip Edge (10ft)',
       category: "Metal & Flashing",
       quantity: ceilQty((perimeterFt * 1.08) / 10, "Drip edge sticks"),
       unit: "sticks",
     },
   ];
-  if (m.valleysFt > 0) items.push({
-    code: "MTL-VALLEY-16", name: '16" W-Valley Metal Flashing (10ft)',
-    category: "Metal & Flashing", quantity: ceilQty((m.valleysFt * 1.1) / 10, "Valley sticks"), unit: "sticks",
-  });
+  if (m.valleysFt > 0)
+    items.push({
+      code: "MTL-VALLEY-16",
+      name: '16" W-Valley Metal Flashing (10ft)',
+      category: "Metal & Flashing",
+      quantity: ceilQty((m.valleysFt * 1.1) / 10, "Valley sticks"),
+      unit: "sticks",
+    });
   if (system === "architectural_metal") {
     items.push(...metalItems(m, squaresWithWaste, wastePct));
   } else if (system === "shingle") {
     items.push(
-      { code: "SHG-ARCH", name: "Architectural Shingles (HVHZ Rated)", category: "Primary", quantity: ceilQty(squaresWithWaste * 3, "Shingle bundles"), unit: "bundles" },
-      { code: "SHG-START", name: "Starter Strip Shingles", category: "Primary", quantity: ceilQty((perimeterFt * 1.05) / 100, "Starter bundles"), unit: "bundles" },
-      { code: "SHG-RIDGE", name: "Hip & Ridge Cap Shingles", category: "Primary", quantity: ceilQty((ridgeAndHipFt * 1.05) / 25, "Ridge bundles"), unit: "bundles" },
-      { code: "UND-PSA", name: "Self-Adhered Peel & Stick Underlayment (2 Sq)", category: "Underlayment", quantity: ceilQty((squaresNet * 1.1) / 2, "Peel-and-stick rolls"), unit: "rolls", notes: "HVHZ Secondary Water Barrier" },
-      { code: "FST-COIL-125", name: '1-1/4" Galvanized Ring-Shank Coil Nails (7.2k)', category: "Fasteners & Sealants", quantity: ceilQty(squaresWithWaste / 15, "Coil nail boxes"), unit: "boxes" },
-      { code: "FST-TINCAP", name: "1-5/8\" Tin Caps + Ring Shank Nails", category: "Fasteners & Sealants", quantity: ceilQty(squaresNet / 15, "Tin-cap boxes"), unit: "boxes" },
+      {
+        code: "SHG-ARCH",
+        name: "Architectural Shingles (HVHZ Rated)",
+        category: "Primary",
+        quantity: ceilQty(squaresWithWaste * 3, "Shingle bundles"),
+        unit: "bundles",
+      },
+      {
+        code: "SHG-START",
+        name: "Starter Strip Shingles",
+        category: "Primary",
+        quantity: ceilQty((perimeterFt * 1.05) / 100, "Starter bundles"),
+        unit: "bundles",
+      },
+      {
+        code: "SHG-RIDGE",
+        name: "Hip & Ridge Cap Shingles",
+        category: "Primary",
+        quantity: ceilQty((ridgeAndHipFt * 1.05) / 25, "Ridge bundles"),
+        unit: "bundles",
+      },
+      {
+        code: "UND-PSA",
+        name: "Self-Adhered Peel & Stick Underlayment (2 Sq)",
+        category: "Underlayment",
+        quantity: ceilQty((squaresNet * 1.1) / 2, "Peel-and-stick rolls"),
+        unit: "rolls",
+        notes: "HVHZ Secondary Water Barrier",
+      },
+      {
+        code: "FST-COIL-125",
+        name: '1-1/4" Galvanized Ring-Shank Coil Nails (7.2k)',
+        category: "Fasteners & Sealants",
+        quantity: ceilQty(squaresWithWaste / 15, "Coil nail boxes"),
+        unit: "boxes",
+      },
+      {
+        code: "FST-TINCAP",
+        name: '1-5/8" Tin Caps + Ring Shank Nails',
+        category: "Fasteners & Sealants",
+        quantity: ceilQty(squaresNet / 15, "Tin-cap boxes"),
+        unit: "boxes",
+      },
     );
   } else if (system === "tile") {
     items.push(
-      { code: "TIL-FIELD", name: "Concrete Roof Field Tiles", category: "Primary", quantity: ceilQty(squaresWithWaste * 92, "Field tiles"), unit: "pieces" },
-      { code: "TIL-RIDGE", name: "Barrel / Rake Ridge Tiles", category: "Primary", quantity: ceilQty((ridgeAndHipFt * 1.05) / 1.15, "Ridge tiles"), unit: "pieces" },
-      { code: "UND-BASE30", name: "ASTM #30 / Anchor Base Sheet (2 Sq)", category: "Underlayment", quantity: ceilQty((squaresNet * 1.1) / 2, "Base-sheet rolls"), unit: "rolls" },
-      { code: "UND-TILECAP", name: "HVHZ Tile Cap Sheet Underlayment (1 Sq)", category: "Underlayment", quantity: ceilQty(squaresNet * 1.12, "Tile cap-sheet rolls"), unit: "rolls" },
-      { code: "ADH-FOAM", name: "2-Component Polyurethane Tile Adhesive Kit", category: "Fasteners & Sealants", quantity: ceilQty(squaresWithWaste / 3.5, "Foam kits"), unit: "kits" },
-      { code: "MRT-OXIDE", name: "Color-Matched Roof Tile Mortar (50lb)", category: "Fasteners & Sealants", quantity: ceilQty(ridgeAndHipFt / 25, "Mortar bags"), unit: "bags" },
+      {
+        code: "TIL-FIELD",
+        name: "Concrete Roof Field Tiles",
+        category: "Primary",
+        quantity: ceilQty(squaresWithWaste * 92, "Field tiles"),
+        unit: "pieces",
+      },
+      {
+        code: "TIL-RIDGE",
+        name: "Barrel / Rake Ridge Tiles",
+        category: "Primary",
+        quantity: ceilQty((ridgeAndHipFt * 1.05) / 1.15, "Ridge tiles"),
+        unit: "pieces",
+      },
+      {
+        code: "UND-BASE30",
+        name: "ASTM #30 / Anchor Base Sheet (2 Sq)",
+        category: "Underlayment",
+        quantity: ceilQty((squaresNet * 1.1) / 2, "Base-sheet rolls"),
+        unit: "rolls",
+      },
+      {
+        code: "UND-TILECAP",
+        name: "HVHZ Tile Cap Sheet Underlayment (1 Sq)",
+        category: "Underlayment",
+        quantity: ceilQty(squaresNet * 1.12, "Tile cap-sheet rolls"),
+        unit: "rolls",
+      },
+      {
+        code: "ADH-FOAM",
+        name: "2-Component Polyurethane Tile Adhesive Kit",
+        category: "Fasteners & Sealants",
+        quantity: ceilQty(squaresWithWaste / 3.5, "Foam kits"),
+        unit: "kits",
+      },
+      {
+        code: "MRT-OXIDE",
+        name: "Color-Matched Roof Tile Mortar (50lb)",
+        category: "Fasteners & Sealants",
+        quantity: ceilQty(ridgeAndHipFt / 25, "Mortar bags"),
+        unit: "bags",
+      },
     );
   } else {
     const torch = m.flatInstallationMethod === "torch";
     items.push(
-      { code: "MOD-BASE", name: "SBS Smooth / Fiberglass Base Sheet (1.5 Sq)", category: "Underlayment", quantity: ceilQty((squaresNet * 1.12) / 1.5, "Modified base rolls"), unit: "rolls" },
-      { code: "MOD-CAP", name: torch ? "SBS Granulated Torch Cap Sheet (1 Sq)" : "SBS Granulated Self-Adhered Cap Sheet (1 Sq)", category: "Primary", quantity: ceilQty(squaresNet * 1.15, "Modified cap rolls"), unit: "rolls" },
-      { code: "SEAL-CEM", name: "Modified Bitumen Flashing Cement (5 Gal)", category: "Fasteners & Sealants", quantity: ceilQty(squaresNet / 10, "Flashing cement pails"), unit: "pails" },
-      { code: "FST-TINCAP", name: '1-5/8" Tin Caps & 1-1/4" Ring Shank Nails', category: "Fasteners & Sealants", quantity: ceilQty(squaresNet / 12, "Tin-cap boxes"), unit: "boxes" },
+      {
+        code: "MOD-BASE",
+        name: "SBS Smooth / Fiberglass Base Sheet (1.5 Sq)",
+        category: "Underlayment",
+        quantity: ceilQty((squaresNet * 1.12) / 1.5, "Modified base rolls"),
+        unit: "rolls",
+      },
+      {
+        code: "MOD-CAP",
+        name: torch
+          ? "SBS Granulated Torch Cap Sheet (1 Sq)"
+          : "SBS Granulated Self-Adhered Cap Sheet (1 Sq)",
+        category: "Primary",
+        quantity: ceilQty(squaresNet * 1.15, "Modified cap rolls"),
+        unit: "rolls",
+      },
+      {
+        code: "SEAL-CEM",
+        name: "Modified Bitumen Flashing Cement (5 Gal)",
+        category: "Fasteners & Sealants",
+        quantity: ceilQty(squaresNet / 10, "Flashing cement pails"),
+        unit: "pails",
+      },
+      {
+        code: "FST-TINCAP",
+        name: '1-5/8" Tin Caps & 1-1/4" Ring Shank Nails',
+        category: "Fasteners & Sealants",
+        quantity: ceilQty(squaresNet / 12, "Tin-cap boxes"),
+        unit: "boxes",
+      },
     );
   }
   const penetrations = m.penetrationsCount ?? Math.max(3, Math.round(squaresNet / 8));
   items.push(
-    { code: "FLS-BOOT", name: "Lead / Bullet Pipe Flashing Boots", category: "Metal & Flashing", quantity: penetrations, unit: "each" },
-    { code: "SEAL-NP1", name: "Polyurethane Roof Sealant Tubes", category: "Fasteners & Sealants", quantity: ceilQty(perimeterFt / 50, "Sealant tubes"), unit: "tubes" },
+    {
+      code: "FLS-BOOT",
+      name: "Lead / Bullet Pipe Flashing Boots",
+      category: "Metal & Flashing",
+      quantity: penetrations,
+      unit: "each",
+    },
+    {
+      code: "SEAL-NP1",
+      name: "Polyurethane Roof Sealant Tubes",
+      category: "Fasteners & Sealants",
+      quantity: ceilQty(perimeterFt / 50, "Sealant tubes"),
+      unit: "tubes",
+    },
   );
   return {
     squaresNet,
@@ -213,6 +392,7 @@ export function calculateRoofTakeoff(
     lineItems: items,
     system,
     ...(system === "flat_modbit" ? { flatInstallationMethod: m.flatInstallationMethod } : {}),
-    planningNote: "Planning estimate only. Confirm actual product coverage, Florida Building Code/HVHZ approvals, fastening schedules, roof-plane details, and field conditions with the installer and manufacturer before ordering.",
+    planningNote:
+      "Planning estimate only. Confirm actual product coverage, Florida Building Code/HVHZ approvals, fastening schedules, roof-plane details, and field conditions with the installer and manufacturer before ordering.",
   };
 }

@@ -575,7 +575,9 @@ export function AdvancedEstimator() {
               ].map(([label, value]) => (
                 <div key={label}>
                   <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="mt-1 text-xl font-bold">{value === null ? "UNPRICED" : money(Number(value))}</p>
+                  <p className="mt-1 text-xl font-bold">
+                    {value === null ? "UNPRICED" : money(Number(value))}
+                  </p>
                 </div>
               ))}
             </div>
@@ -586,7 +588,14 @@ export function AdvancedEstimator() {
           )}
           <div className="mt-5 flex gap-3">
             <Button
-              disabled={busy || dirty || !savedId || !totals || totals.total <= 0 || unpricedItems.length > 0}
+              disabled={
+                busy ||
+                dirty ||
+                !savedId ||
+                !totals ||
+                totals.total <= 0 ||
+                unpricedItems.length > 0
+              }
               onClick={() => void proposal()}
             >
               <FileText /> Customer proposal

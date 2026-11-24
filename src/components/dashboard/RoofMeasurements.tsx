@@ -1022,7 +1022,11 @@ export function RoofMeasurements({
               <RotateCcw />
             </Button>
           </div>
-          <p className="px-3 py-2 text-xs text-muted-foreground">3D House shows a simplified building mass beneath the measured roof. 2D Plan shows the roof from directly above. The building shape is generated from traced roof geometry, not a photorealistic model of the actual home.</p>
+          <p className="px-3 py-2 text-xs text-muted-foreground">
+            3D House shows a simplified building mass beneath the measured roof. 2D Plan shows the
+            roof from directly above. The building shape is generated from traced roof geometry, not
+            a photorealistic model of the actual home.
+          </p>
           <div className="h-[440px] min-w-0 bg-muted sm:h-[560px]">
             <DrawingErrorBoundary>
               <Suspense

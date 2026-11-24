@@ -17,7 +17,13 @@ export const reportSchema = z.object({
   flat_installation_method: z.enum(["torch", "peel_and_stick"]).default("torch"),
 });
 export type RoofReport = z.input<typeof reportSchema>;
-export type MaterialLine = { item: string; qty: number; unit: string; code?: string; category?: string };
+export type MaterialLine = {
+  item: string;
+  qty: number;
+  unit: string;
+  code?: string;
+  category?: string;
+};
 const up = (n: number) => Math.max(0, Math.ceil(n - 1e-9));
 /** Material takeoff from a roof measurement report. 1 square = 100 sq ft. */
 export function materialOrder(input: RoofReport): MaterialLine[] {
@@ -30,18 +36,27 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
   const caps = r.ridge_lf + r.hips_lf;
   const drip = { item: "Drip edge / edge metal (10 ft)", qty: up(edges / 10), unit: "pcs" };
   if (["Shingle Roof", "Tile Roof", "Flat Roof"].includes(r.roof_type)) {
-    const system = r.roof_type === "Shingle Roof" ? "shingle" : r.roof_type === "Tile Roof" ? "tile" : "flat_modbit";
-    const takeoff = calculateRoofTakeoff({
-      totalAreaSqFt: r.area_sqft,
-      dominantPitch: r.dominant_pitch ?? 0,
-      ridgesFt: r.ridge_lf,
-      hipsFt: r.hips_lf,
-      valleysFt: r.valleys_lf,
-      eavesFt: r.eaves_lf,
-      rakesFt: r.rakes_lf,
-      penetrationsCount: r.pipes,
-      ...(system === "flat_modbit" ? { flatInstallationMethod: r.flat_installation_method } : {}),
-    }, system, r.waste_pct);
+    const system =
+      r.roof_type === "Shingle Roof"
+        ? "shingle"
+        : r.roof_type === "Tile Roof"
+          ? "tile"
+          : "flat_modbit";
+    const takeoff = calculateRoofTakeoff(
+      {
+        totalAreaSqFt: r.area_sqft,
+        dominantPitch: r.dominant_pitch ?? 0,
+        ridgesFt: r.ridge_lf,
+        hipsFt: r.hips_lf,
+        valleysFt: r.valleys_lf,
+        eavesFt: r.eaves_lf,
+        rakesFt: r.rakes_lf,
+        penetrationsCount: r.pipes,
+        ...(system === "flat_modbit" ? { flatInstallationMethod: r.flat_installation_method } : {}),
+      },
+      system,
+      r.waste_pct,
+    );
     return takeoff.lineItems.map((line) => ({
       item: line.name,
       qty: line.quantity,
