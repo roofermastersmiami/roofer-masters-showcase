@@ -118,19 +118,46 @@ export function actualProfit(
   collected: number,
   expenses: { category: string; amount_cents: number }[],
 ) {
+  if (!Number.isSafeInteger(collected) || collected < 0 || !Array.isArray(expenses)) {
+    throw new Error("Financial totals require valid non-negative integer cents");
+  }
+  for (const expense of expenses) {
+    if (
+      !expense ||
+      typeof expense.category !== "string" ||
+      !Number.isSafeInteger(expense.amount_cents) ||
+      expense.amount_cents <= 0
+    ) {
+      throw new Error("Financial expenses contain an invalid amount or category");
+    }
+  }
   const overheadCategories = new Set(["insurance", "advertising", "office", "overhead"]);
   const direct = expenses
     .filter((e) => !overheadCategories.has(e.category))
-    .reduce((s, e) => s + e.amount_cents, 0);
+    .reduce((sum, e) => {
+      const next = sum + e.amount_cents;
+      if (!Number.isSafeInteger(next)) throw new Error("Direct expenses exceed the supported amount");
+      return next;
+    }, 0);
   const overhead = expenses
     .filter((e) => overheadCategories.has(e.category))
-    .reduce((s, e) => s + e.amount_cents, 0);
+    .reduce((sum, e) => {
+      const next = sum + e.amount_cents;
+      if (!Number.isSafeInteger(next)) throw new Error("Business overhead exceeds the supported amount");
+      return next;
+    }, 0);
+  const totalExpenses = direct + overhead;
+  const gross = collected - direct;
+  const net = gross - overhead;
+  if (![totalExpenses, gross, net].every(Number.isSafeInteger)) {
+    throw new Error("Financial totals exceed the supported amount");
+  }
   return {
     direct,
     overhead,
-    expenses: direct + overhead,
-    gross: collected - direct,
-    net: collected - direct - overhead,
-    margin: collected > 0 ? ((collected - direct - overhead) / collected) * 100 : null,
+    expenses: totalExpenses,
+    gross,
+    net,
+    margin: collected > 0 ? (net / collected) * 100 : null,
   };
 }

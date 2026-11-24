@@ -24,24 +24,47 @@ export function FinancialAnalytics() {
   const filteredInvoices = projectInvoices(invoices.data ?? [], links.data ?? [], project);
   const start = Date.parse(`${from}T00:00:00`),
     end = Date.parse(`${to}T23:59:59.999`);
-  let env = "";
+  let env = "sandbox";
+  let paymentSetupMissing = false;
   try {
     env = getStripeEnvironment();
   } catch {
-    // Show an empty environment label when Stripe configuration is unavailable.
+    // Database defaults existing financial records to sandbox when payment setup is absent.
+    paymentSetupMissing = true;
   }
-  const ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
+  let ledger: ReturnType<typeof dashboardLedger>;
+  let ledgerError = false;
+  try {
+    ledger = dashboardLedger(filteredInvoices, payments.data ?? [], env, start, end);
+  } catch {
+    // A malformed/stale query result must render an error state, never crash the CRM route.
+    ledgerError = true;
+    ledger = { collected: 0, sales: 0, outstanding: 0, received: [] };
+  }
   const costs = (expenses.data ?? []).filter(
     (e) =>
       (project === "all" || e.job_id === project) && e.incurred_at >= from && e.incurred_at <= to,
   );
   const profit = actualProfit(ledger.collected, costs);
+  // The financial ledger depends on invoices, payments, and expenses only.
+  // Job names and invoice allocations are supporting data and must not hide the report.
   const failed =
-    !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
+    ledgerError ||
+    !!(expenses.error || invoices.error || payments.error) ||
+    (project !== "all" && !!links.error) ||
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     start > end;
-  const loading = expenses.isPending || payments.isPending || invoices.isPending || links.isPending;
+  const loading = expenses.isPending || payments.isPending || invoices.isPending;
+  const sourceErrors = [
+    expenses.error && `Expenses: ${expenses.error.message}`,
+    invoices.error && `Invoices: ${invoices.error.message}`,
+    payments.error && `Payments: ${payments.error.message}`,
+    jobs.error && `Project list: ${jobs.error.message}`,
+    links.error && `Project allocations: ${links.error.message}`,
+    ledgerError && "Financial records contain unexpected or invalid values.",
+    start > end && "The start date must be on or before the end date.",
+  ].filter(Boolean);
   const rows = [
     ["Payments received", ledger.collected],
     ["Issued invoice sales", ledger.sales],
@@ -153,14 +176,33 @@ export function FinancialAnalytics() {
         />
       </div>
       <p className="mb-5 text-xs font-semibold uppercase text-muted-foreground">
-        {env === "sandbox"
-          ? "Test environment — not live business revenue"
-          : "Live recorded transactions"}{" "}
+        {env === "live"
+          ? "Live invoices and payments — expenses are reported independently"
+          : env === "sandbox"
+            ? "Sandbox invoices and payments — expenses are reported independently"
+            : "Payment environment unavailable — totals cannot be verified"}{" "}
         · Cash basis
       </p>
+      {jobs.error && !failed && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Project names could not be loaded. Financial totals are still available for all projects.
+        </p>
+      )}
+      {links.error && project === "all" && !failed && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Project allocations could not be loaded. Overall financial totals are still available.
+        </p>
+      )}
+      {paymentSetupMissing && !failed && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          Online payments are not configured. Invoice and payment totals use the sandbox environment; recorded business expenses are included independently.
+        </p>
+      )}
       {failed ? (
         <p role="alert" className="text-destructive">
-          Records or date range unavailable. Do not rely on these totals.
+          {sourceErrors.length
+            ? sourceErrors.join(" · ")
+            : "Financial records or date range unavailable. Do not rely on these totals."}
         </p>
       ) : loading ? (
         <p>Loading recorded transactions…</p>

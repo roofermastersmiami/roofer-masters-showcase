@@ -4,6 +4,14 @@ import type { Database } from "@/integrations/supabase/types";
 import { getStripeEnvironment } from "@/lib/stripe";
 export type Invoice = Database["public"]["Tables"]["crm_invoices"]["Row"];
 export type Job = Database["public"]["Tables"]["roof_jobs"]["Row"];
+function configuredStripeEnvironment() {
+  try {
+    return getStripeEnvironment();
+  } catch {
+    // Payment configuration is optional for CRM access; callers render a clear unavailable state.
+    return "sandbox";
+  }
+}
 export const tasksQuery = queryOptions({
   queryKey: ["crm-tasks"],
   queryFn: async () => {
@@ -37,10 +45,12 @@ export const jobsQuery = queryOptions({
 export const invoicesQuery = queryOptions({
   queryKey: ["crm-invoices"],
   queryFn: async () => {
+    const environment = configuredStripeEnvironment();
+    if (!environment) return [];
     const { data, error } = await supabase
       .from("crm_invoices")
       .select("*")
-      .eq("environment", getStripeEnvironment())
+      .eq("environment", environment)
       .order("created_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -50,10 +60,12 @@ export const invoicesQuery = queryOptions({
 export const paymentsQuery = queryOptions({
   queryKey: ["invoice-payments"],
   queryFn: async () => {
+    const environment = configuredStripeEnvironment();
+    if (!environment) return [];
     const { data, error } = await supabase
       .from("invoice_payments")
       .select("*")
-      .eq("environment", getStripeEnvironment())
+      .eq("environment", environment)
       .order("received_at", { ascending: false });
     if (error) throw error;
     return data ?? [];

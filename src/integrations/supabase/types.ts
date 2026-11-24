@@ -8,6 +8,48 @@ export type Database = {
   };
   public: {
     Tables: {
+      crm_companies: {
+        Row: { id: string; name: string; created_by: string; created_at: string; updated_at: string };
+        Insert: { id?: string; name: string; created_by: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; name?: string; created_by?: string; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      crm_company_memberships: {
+        Row: { id: string; company_id: string; user_id: string; role: Database["public"]["Enums"]["crm_company_role"]; created_at: string };
+        Insert: { id?: string; company_id: string; user_id: string; role?: Database["public"]["Enums"]["crm_company_role"]; created_at?: string };
+        Update: { id?: string; company_id?: string; user_id?: string; role?: Database["public"]["Enums"]["crm_company_role"]; created_at?: string };
+        Relationships: [];
+      };
+      crm_company_branding: {
+        Row: {
+          owner_user_id: string;
+          company_name: string | null;
+          logo_path: string | null;
+          theme_palette: string;
+          sidebar_appearance: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          owner_user_id: string;
+          company_name?: string | null;
+          logo_path?: string | null;
+          theme_palette?: string;
+          sidebar_appearance?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          owner_user_id?: string;
+          company_name?: string | null;
+          logo_path?: string | null;
+          theme_palette?: string;
+          sidebar_appearance?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       pdf_sign_templates: {
         Row: {
           id: string;
@@ -1156,6 +1198,9 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      create_crm_company: { Args: { p_name: string }; Returns: string };
+      is_crm_company_admin: { Args: { _company_id: string }; Returns: boolean };
+      is_crm_company_member: { Args: { _company_id: string }; Returns: boolean };
       capture_instant_roof_lead: {
         Args: {
           p_category: string;
@@ -1223,6 +1268,7 @@ export type Database = {
       };
     };
     Enums: {
+      crm_company_role: "owner" | "admin" | "office" | "sales" | "production_manager" | "crew" | "accounting";
       app_role:
         | "admin"
         | "user"
@@ -1358,6 +1404,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      crm_company_role: ["owner", "admin", "office", "sales", "production_manager", "crew", "accounting"],
       app_role: ["admin", "user", "office", "sales", "production_manager", "crew", "accounting"],
       lead_source: ["callback", "contact", "quote", "chat"],
       lead_status: ["new", "contacted", "estimate_sent", "won", "lost"],

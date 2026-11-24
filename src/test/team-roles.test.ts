@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { canOpen, seesMoney } from "@/lib/team-roles";
+import { canOpen, seesMoney, SECTION_ROLES, CRM_SECTION_IDS } from "@/lib/team-roles";
 const money = ["invoices", "expenses", "financials", "sales", "prices", "detailed-estimator"];
 describe("team roles", () => {
+  it("defines an authorization policy for every CRM route and sidebar section", () => {
+    for (const section of CRM_SECTION_IDS) {
+      expect(Object.hasOwn(SECTION_ROLES, section), `missing policy for ${section}`).toBe(true);
+    }
+  });
   it("owner opens every section except the crew view", () => {
     expect(canOpen(["admin"], "financials")).toBe(true);
     expect(canOpen(["admin"], "team")).toBe(true);
@@ -33,5 +38,16 @@ describe("team roles", () => {
   it("team management and website settings are owner only", () => {
     for (const r of ["office", "sales", "production_manager", "crew", "accounting"])
       for (const s of ["team", "content", "instant"]) expect(canOpen([r], s)).toBe(false);
+  });
+  it("fails closed for unknown navigation sections for every role, including owners", () => {
+    for (const roles of [["admin"], ["office"], ["crew"], ["admin", "accounting"]]) {
+      expect(canOpen(roles, "company-settings")).toBe(false);
+      expect(canOpen(roles, "billing")).toBe(false);
+    }
+  });
+  it("does not combine unrelated roles into owner privileges", () => {
+    expect(canOpen(["office", "crew"], "financials")).toBe(false);
+    expect(seesMoney(["office", "crew"])).toBe(false);
+    expect(canOpen(["sales", "accounting"], "invoices")).toBe(true);
   });
 });

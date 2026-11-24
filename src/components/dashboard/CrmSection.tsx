@@ -1,5 +1,5 @@
 import { useRoles } from "./RolesContext";
-import { canOpen } from "@/lib/team-roles";
+import { canOpen, CRM_SECTION_IDS } from "@/lib/team-roles";
 import { TeamAccess } from "./TeamAccess";
 import { CrewJobs } from "./CrewJobs";
 import { RoofReports } from "./RoofReports";
@@ -24,30 +24,7 @@ import { ContentEditor } from "./ContentEditor";
 import { InstantEstimateSettings } from "./InstantEstimateSettings";
 import { useCrm } from "./CrmContext";
 import { useState } from "react";
-export const CRM_SECTIONS = [
-  "detailed-estimator",
-  "prices",
-  "expenses",
-  "financials",
-  "roof-reports",
-  "appointments",
-  "measurements",
-  "pipeline",
-  "submissions",
-  "customers",
-  "properties",
-  "chat",
-  "proposals",
-  "estimates",
-  "jobs",
-  "invoices",
-  "followups",
-  "sales",
-  "content",
-  "instant",
-  "team",
-  "my-jobs",
-] as const;
+export const CRM_SECTIONS = CRM_SECTION_IDS;
 export function CrmSection({ section }: { section: string }) {
   const {
     leads,
