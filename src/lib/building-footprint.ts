@@ -61,7 +61,8 @@ export function parseBuildingFootprints(
   for (const element of elements) {
     if (!element || typeof element !== "object" || element.type !== "way" || typeof element.id !== "number" ||
         !Number.isSafeInteger(element.id) || !Array.isArray(element.geometry)) continue;
-    const points = element.geometry.filter(validPoint);
+    if (!element.geometry.every(validPoint)) continue;
+    const points = element.geometry as FootprintPoint[];
     if (points.length < 4) continue;
     const first = points[0]!;
     const last = points[points.length - 1]!;
