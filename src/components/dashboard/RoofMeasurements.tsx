@@ -1093,6 +1093,60 @@ export function RoofMeasurements({
           </div>
         </section>
       )}
+      {measurement && (
+        <section className="my-5 rounded-lg border border-border p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-lg font-bold">Live roof plane measurements</h3>
+            <span className="text-xs text-muted-foreground">
+              Updates automatically as the drawing changes
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Roof plane</th>
+                  <th className="py-2 pr-3 text-right font-medium">Pitch</th>
+                  <th className="py-2 pr-3 text-right font-medium">Area (sq ft)</th>
+                  <th className="py-2 text-right font-medium">Squares</th>
+                </tr>
+              </thead>
+              <tbody>
+                {measurement.planes.map((facet) => (
+                  <tr key={facet.id} className="border-b border-border/60">
+                    <td className="py-2 pr-3 font-medium">{facet.name}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {facet.pitch.toFixed(2)}:12
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {facet.area.toFixed(1)}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">
+                      {(facet.area / 100).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td className="py-2 pr-3">Total</td>
+                  <td className="py-2 pr-3 text-right">—</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {measurement.area.toFixed(1)}
+                  </td>
+                  <td className="py-2 text-right tabular-nums">
+                    {measurement.squares.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Preliminary geometry-based quantities only. Confirm roof dimensions, pitch, and
+            classifications with field measurements before ordering materials or pricing work.
+          </p>
+        </section>
+      )}
       <section className="grid gap-6 py-6 lg:grid-cols-2">
         <div>
           <h3 className="mb-4 text-lg font-bold">Report details</h3>
