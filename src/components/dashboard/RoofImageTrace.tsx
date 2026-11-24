@@ -56,6 +56,7 @@ export function RoofImageTrace({
   const [name, setName] = useState("");
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
   const [photoZoom, setPhotoZoom] = useState(1);
+  const pinch = useRef<{ distance: number; zoom: number } | null>(null);
   const [replace, setReplace] = useState(true);
   const [snapCorners, setSnapCorners] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
@@ -244,6 +245,24 @@ export function RoofImageTrace({
             preserveAspectRatio="xMidYMid meet"
             aria-label="Roof tracing surface"
             onPointerMove={onMove}
+            style={{ touchAction: "none" }}
+            onTouchStart={(event) => {
+              if (event.touches.length === 2) {
+                event.preventDefault();
+                const a = event.touches[0]!;
+                const b = event.touches[1]!;
+                pinch.current = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), zoom: photoZoom };
+              }
+            }}
+            onTouchMove={(event) => {
+              if (event.touches.length !== 2 || !pinch.current) return;
+              event.preventDefault();
+              const a = event.touches[0]!;
+              const b = event.touches[1]!;
+              const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+              setPhotoZoom(Math.max(1, Math.min(5, pinch.current.zoom * (distance / pinch.current.distance))));
+            }}
+            onTouchEnd={(event) => { if (event.touches.length < 2) pinch.current = null; }}
             onPointerUp={() => {
               drag.current = null;
             }}
