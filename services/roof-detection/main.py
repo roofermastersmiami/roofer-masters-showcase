@@ -218,8 +218,13 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             roof_point_count += len(coords)
             used_items += 1
             for facet in _fit_facets(coords):
+                model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
                 facet["boundary_latlon"] = [
-                    [round(to_ll.transform(xy[0], xy[1])[1], 7), round(to_ll.transform(xy[0], xy[1])[0], 7)]
+                    [
+                        round(to_ll.transform(xy[0], xy[1])[1], 7),
+                        round(to_ll.transform(xy[0], xy[1])[0], 7),
+                        round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
+                    ]
                     for xy in facet.pop("boundary_xy")
                 ]
                 all_facets.append(facet)
