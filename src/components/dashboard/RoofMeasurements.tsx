@@ -1287,9 +1287,6 @@ export function RoofMeasurements({
         <RoofImageTrace
           key={media[traceIndex].path}
           path={media[traceIndex].path}
-          {...(media[traceIndex].feet_per_pixel
-            ? { feetPerPixel: media[traceIndex].feet_per_pixel }
-            : {})}
           onAdd={(p, replace) => {
             if (replace && !confirm("Replace the current roof with this traced plane?")) return;
             edit({ ...d, planes: replace ? [p] : [...d.planes, p] });
