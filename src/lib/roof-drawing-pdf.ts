@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
-import { measureDrawing, type RoofDrawing, toMaterialReport } from "./roof-geometry";
+import { addressPinPosition, measureDrawing, type RoofDrawing, toMaterialReport } from "./roof-geometry";
 import { materialOrder } from "./material-order";
 
 const PAGE_W = 612;
@@ -307,16 +307,24 @@ export async function roofDrawingPdf(
   row("Waste allowance", `${d.waste}%`);
   row("Area including waste", `${m.withWaste.toFixed(2)} sq ft`, true);
   row("Total perimeter", `${m.perimeter.toFixed(2)} ft`);
+  if (d.geo_reference) {
+    row(
+      "Geocoded address point",
+      `${d.geo_reference.addressLatitude.toFixed(6)}, ${d.geo_reference.addressLongitude.toFixed(6)}`,
+    );
+  }
 
   // Roof diagram
   section("ROOF PLAN DIAGRAM");
 
   const pts = d.planes.flatMap((p) => p.points);
   if (pts.length) {
-    const minX = Math.min(...pts.map((p) => p.x));
-    const maxX = Math.max(...pts.map((p) => p.x));
-    const minZ = Math.min(...pts.map((p) => p.z));
-    const maxZ = Math.max(...pts.map((p) => p.z));
+    const addressPin = d.geo_reference ? addressPinPosition(d.geo_reference) : null;
+    const bounds = addressPin ? [...pts, addressPin] : pts;
+    const minX = Math.min(...bounds.map((p) => p.x));
+    const maxX = Math.max(...bounds.map((p) => p.x));
+    const minZ = Math.min(...bounds.map((p) => p.z));
+    const maxZ = Math.max(...bounds.map((p) => p.z));
 
     const availableW = PAGE_W - MARGIN * 2 - 40;
     const availableH = Math.min(185, Math.max(90, y - 85));
@@ -364,6 +372,26 @@ export async function roofDrawingPdf(
           color: NAVY,
         });
       }
+    }
+
+    if (addressPin) {
+      const pinX = originX + (addressPin.x - minX) * scale;
+      const pinY = top - (addressPin.z - minZ) * scale;
+      page.drawCircle({
+        x: pinX,
+        y: pinY,
+        size: 4,
+        color: rgb(0.86, 0.12, 0.15),
+        borderColor: WHITE,
+        borderWidth: 1.2,
+      });
+      page.drawText("ADDRESS", {
+        x: pinX + 6,
+        y: pinY + 4,
+        size: 7,
+        font: bold,
+        color: rgb(0.72, 0.08, 0.12),
+      });
     }
 
     y = top - drawingH - 20;
