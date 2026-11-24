@@ -407,7 +407,7 @@ export function RoofMeasurements({
   const [footprintBusy, setFootprintBusy] = useState(false);
   const [footprintMessage, setFootprintMessage] = useState("");
   const [footprints, setFootprints] = useState<BuildingFootprint[]>([]);
-  const [footprintAddressPoint, setFootprintAddressPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [footprintAddressCoordinates, setFootprintAddressCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   async function loadAerial() {
     const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
@@ -491,7 +491,7 @@ export function RoofMeasurements({
         return;
       }
       setFootprints(result.footprints);
-      setFootprintAddressPoint(result.addressPoint);
+      setFootprintAddressCoordinates({ latitude: result.addressPoint.lat, longitude: result.addressPoint.lon });
       const candidate = result.footprints[0];
       if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
         useBuildingFootprint(candidate, result.addressPoint);
@@ -1512,7 +1512,7 @@ export function RoofMeasurements({
                   className="mt-3 w-full"
                   size="sm"
                   variant="outline"
-                  onClick={() => useBuildingFootprint(footprint, footprintAddressPoint ?? undefined)}
+                  onClick={() => useBuildingFootprint(footprint, footprintAddressCoordinates ? { lat: footprintAddressCoordinates.latitude, lon: footprintAddressCoordinates.longitude } : undefined)}
                 >
                   Use this preliminary outline
                 </Button>
