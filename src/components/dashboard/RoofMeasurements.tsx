@@ -780,9 +780,15 @@ export function RoofMeasurements({
               </Suspense>
             </DrawingErrorBoundary>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border bg-background px-3 py-3" aria-label="Roof feature color legend">
+          <div
+            className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border bg-background px-3 py-3"
+            aria-label="Roof feature color legend"
+          >
             {ROOF_FEATURE_LEGEND.map((feature) => (
-              <div key={feature.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div
+                key={feature.id}
+                className="flex items-center gap-2 text-xs text-muted-foreground"
+              >
                 <span
                   aria-hidden="true"
                   className="inline-block h-1 w-6 rounded-full"
