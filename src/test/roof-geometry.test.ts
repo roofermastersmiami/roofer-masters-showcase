@@ -167,3 +167,14 @@ describe("reviewable shared roof-edge suggestions", () => {
     expect(suggestSharedEdgeClassifications(roofPreset("gable", 40, 30, 6))).toEqual([]);
   });
 });
+
+
+describe("roof edge topology validation", () => {
+  it("rejects zero-length roof edges", () => {
+    const drawing = roofPreset("flat", 40, 30);
+    const plane = drawing.planes[0];
+    if (!plane) throw new Error("Missing roof plane");
+    plane.points[1] = { ...plane.points[0]! };
+    expect(() => measureDrawing(drawing)).toThrow("at least 0.01 feet long");
+  });
+});
