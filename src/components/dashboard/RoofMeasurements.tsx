@@ -58,7 +58,11 @@ import {
   addressAerialRequestKey,
 } from "@/lib/public-aerial-import";
 import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
-import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
+import {
+  PENETRATION_COLORS,
+  ROOF_EDGE_STYLES,
+  ROOF_FEATURE_LEGEND,
+} from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
@@ -946,23 +950,26 @@ export function RoofMeasurements({
                       style={{ backgroundColor: ROOF_EDGE_STYLES[type].color }}
                     />
                     <div className="min-w-0 flex-1">
-                  <Choice
-                    label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label}`}
-                    value={type}
-                    onChange={(value) => {
-                      const edge = EDGE_TYPES.find((e) => e === value);
-                      if (edge)
-                        edit({
-                          ...d,
-                          planes: d.planes.map((p) =>
-                            p.id === selected
-                              ? { ...p, edges: p.edges.map((v, n) => (n === i ? edge : v)) }
-                              : p,
-                          ),
-                        });
-                    }}
-                    options={EDGE_TYPES.map((e) => ({ value: e, label: ROOF_EDGE_STYLES[e].label }))}
-                  />
+                      <Choice
+                        label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label}`}
+                        value={type}
+                        onChange={(value) => {
+                          const edge = EDGE_TYPES.find((e) => e === value);
+                          if (edge)
+                            edit({
+                              ...d,
+                              planes: d.planes.map((p) =>
+                                p.id === selected
+                                  ? { ...p, edges: p.edges.map((v, n) => (n === i ? edge : v)) }
+                                  : p,
+                              ),
+                            });
+                        }}
+                        options={EDGE_TYPES.map((e) => ({
+                          value: e,
+                          label: ROOF_EDGE_STYLES[e].label,
+                        }))}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1094,14 +1101,19 @@ export function RoofMeasurements({
         <div>
           <h3 className="mb-4 text-lg font-bold">Penetrations</h3>
           {d.penetrations.map((p) => (
-            <div key={p.id} className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3">
+            <div
+              key={p.id}
+              className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3"
+            >
               <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
                 <span
                   aria-hidden="true"
                   className="h-2.5 w-2.5 rounded-full"
                   style={{ backgroundColor: PENETRATION_COLORS[p.kind] }}
                 />
-                {p.kind === "pipe" ? "Pipe identification" : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
+                {p.kind === "pipe"
+                  ? "Pipe identification"
+                  : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
               </div>
               <Choice
                 label="Type"
