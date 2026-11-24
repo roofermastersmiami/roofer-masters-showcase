@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ROOF_TYPES } from "./instant-estimate-schema";
-import { calculateRoofTakeoff } from "@/utils/materialTakeoff";
+import { calculateRoofTakeoff, type MetalPlaneRun, type MetalTakeoffConfig } from "@/utils/materialTakeoff";
 
 export const reportSchema = z.object({
   roof_type: z.enum(ROOF_TYPES),
@@ -15,6 +15,17 @@ export const reportSchema = z.object({
   pipes: z.number().int().min(0).max(500).default(0),
   dominant_pitch: z.number().finite().min(0).max(24).default(0),
   flat_installation_method: z.enum(["torch", "peel_and_stick"]).default("torch"),
+  metal_plane_runs: z.array(z.object({
+    eaveLengthFt: z.number().positive().max(100000),
+    panelRunFt: z.number().positive().max(100000),
+  })).min(1).max(100).optional(),
+  metal_config: z.object({
+    panelCoverageIn: z.number().positive().max(48),
+    underlaymentCoverageSqFtPerRoll: z.number().positive().max(100000),
+    fastenersPerPanel: z.number().positive().max(1000),
+    fastenersPerBox: z.number().positive().max(100000),
+    trimStickLengthFt: z.number().positive().max(100),
+  }).optional(),
 });
 export type RoofReport = z.input<typeof reportSchema>;
 export type MaterialLine = {
@@ -82,35 +93,36 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
         { item: "Roof cement / sealant", qty: up(sq / 10), unit: "tubes" },
         boots,
       ];
-    case "Metal Roof":
-      return [
+    case "Metal Roof": {
+      if (!r.metal_plane_runs?.length || !r.metal_config) {
+        throw new Error(
+          "Architectural metal takeoff needs measured eave-to-ridge runs for every roof plane and product-specific panel coverage, underlayment roll coverage, fasteners, and trim length. Add those values before generating the cut list.",
+        );
+      }
+      const takeoff = calculateRoofTakeoff(
         {
-          item: `Metal panels (${r.panel_width_in}" coverage)`,
-          qty: up(((r.eaves_lf * 12) / r.panel_width_in) * (1 + wastePct / 100)),
-          unit: "panels",
+          totalAreaSqFt: r.area_sqft,
+          dominantPitch: r.dominant_pitch,
+          ridgesFt: r.ridge_lf,
+          hipsFt: r.hips_lf,
+          valleysFt: r.valleys_lf,
+          eavesFt: r.eaves_lf,
+          rakesFt: r.rakes_lf,
+          penetrationsCount: r.pipes,
+          metalPlaneRuns: r.metal_plane_runs as MetalPlaneRun[],
+          metalConfig: r.metal_config as MetalTakeoffConfig,
         },
-        {
-          item: "Average panel length",
-          qty: Math.round(r.eaves_lf ? r.area_sqft / r.eaves_lf : 0),
-          unit: "ft",
-        },
-        { item: "Total panel linear footage", qty: up(area / (r.panel_width_in / 12)), unit: "ft" },
-        { item: "Eave trim (10 ft)", qty: up(r.eaves_lf / 10), unit: "pcs" },
-        { item: "Gable / rake trim (10 ft)", qty: up(r.rakes_lf / 10), unit: "pcs" },
-        {
-          item: "Foam closures (3 ft)",
-          qty: up((r.eaves_lf + caps * 2 + r.valleys_lf * 2) / 3),
-          unit: "pcs",
-        },
-        { item: "Butyl tape (50 ft)", qty: up((caps + r.valleys_lf + edges) / 50), unit: "rolls" },
-        { item: "Sealant tubes", qty: up(sq / 3), unit: "tubes" },
-        boots,
-        { item: "Ridge / hip cap (10 ft)", qty: up(caps / 10), unit: "pcs" },
-        { item: "Valley flashing (10 ft)", qty: up(r.valleys_lf / 10), unit: "pcs" },
-        { item: "High-temp underlayment (2 sq roll)", qty: up(sq / 2), unit: "rolls" },
-        drip,
-        { item: "Panel clips & screws", qty: up(sq / 2), unit: "boxes" },
-      ];
+        "architectural_metal",
+        r.waste_pct,
+      );
+      return takeoff.lineItems.map((line) => ({
+        item: line.name,
+        qty: line.quantity,
+        unit: line.unit,
+        code: line.code,
+        category: line.category,
+      }));
+    }
     case "Tile Roof":
       return [
         { item: "Roof tiles", qty: up(sq * 90), unit: "tiles" },
@@ -159,9 +171,13 @@ export function escapeMaterialOrderHtml(value: string): string {
 export function materialOrderWarnings(input: RoofReport): string[] {
   const parsed = reportSchema.parse(input);
   if (parsed.roof_type !== "Metal Roof") return [];
+  if (!parsed.metal_plane_runs?.length || !parsed.metal_config) {
+    return [
+      "Architectural metal quantities are not order-ready until every roof plane has a measured eave-to-ridge run and the selected panel, underlayment, fastener, and trim specifications are entered.",
+    ];
+  }
   return [
-    "Metal panel count is a preliminary estimate based on combined eave length and panel coverage.",
-    "Average panel length is only an area-to-eave estimate; it is not a panel cut list. Verify each roof plane's eave-to-ridge run, overhang, and trim details before ordering.",
+    "Verify every measured panel run, overhang, panel coverage, fastening schedule, and trim detail against the selected manufacturer's approved system before ordering.",
   ];
 }
 
