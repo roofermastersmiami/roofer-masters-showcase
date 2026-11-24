@@ -14,6 +14,7 @@ import {
   ArrowRight,
   FileText,
   Upload,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -189,6 +190,7 @@ export function RoofMeasurements({
     : null;
   const propertyRow = properties.data?.find((p) => p.id === property),
     customer = customers.data?.find((c) => c.id === propertyRow?.customer_id);
+  const workspaceAddress = report?.address?.trim() || propertyRow?.address?.trim() || "";
   const matchingJobs = (jobs.data ?? []).filter(
     (j) =>
       customer &&
@@ -573,6 +575,27 @@ export function RoofMeasurements({
           </div>
         }
       />
+      {workspaceAddress && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Active property · roof workspace
+              </p>
+              <p className="break-words text-sm font-semibold">{workspaceAddress}</p>
+            </div>
+          </div>
+          <a
+            className="shrink-0 text-sm font-medium text-primary underline underline-offset-4"
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workspaceAddress)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Verify map location
+          </a>
+        </div>
+      )}
       {report && !initialDrawing && (
         <p className="mb-5 border-l-2 border-primary pl-3 text-sm text-muted-foreground">
           Starter geometry only — add measured dimensions or trace the actual roof outline and set
