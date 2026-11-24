@@ -67,7 +67,8 @@ import {
   ROOF_EDGE_STYLES,
   ROOF_FEATURE_LEGEND,
 } from "@/lib/roof-feature-styles";
-import { DrawingErrorBoundary } from "./DrawingErrorBoundary";\nimport { RoofPdfLayoutEditor, defaultRoofPdfLayout } from "./RoofPdfLayoutEditor";
+import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
+import { RoofPdfLayoutEditor, defaultRoofPdfLayout } from "./RoofPdfLayoutEditor";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
 type Media = {
@@ -106,7 +107,8 @@ export function RoofMeasurements({
   const attachPdfFn = useServerFn(attachRoofOrderPdf);
   const aerialFn = useServerFn(loadPublicAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
-  const [traceIndex, setTraceIndex] = useState(0);\n  const [pdfLayout, setPdfLayout] = useState(defaultRoofPdfLayout);
+  const [traceIndex, setTraceIndex] = useState(0);
+  const [pdfLayout, setPdfLayout] = useState(defaultRoofPdfLayout);
   const userEditedDrawing = useRef(false);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
