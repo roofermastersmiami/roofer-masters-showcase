@@ -46,7 +46,9 @@ export function FinancialAnalytics() {
   );
   const profit = actualProfit(ledger.collected, costs);
   const failed =
-    ledgerError || !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
+    env === "unavailable" ||
+    ledgerError ||
+    !!(expenses.error || invoices.error || payments.error || jobs.error || links.error) ||
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     start > end;
@@ -176,7 +178,9 @@ export function FinancialAnalytics() {
       </p>
       {failed ? (
         <p role="alert" className="text-destructive">
-          Records or date range unavailable. Do not rely on these totals.
+          {env === "unavailable"
+            ? "Payment environment is not configured. Financial totals are hidden until the payment environment can be verified."
+            : "Records or date range unavailable. Do not rely on these totals."}
         </p>
       ) : loading ? (
         <p>Loading recorded transactions…</p>
