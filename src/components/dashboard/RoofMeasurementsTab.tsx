@@ -376,12 +376,32 @@ export function RoofMeasurementsTab({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="font-semibold">Confirm building location</h3>
-                    <p className="text-xs text-muted-foreground">Red pin marks the matched address · zoom to verify the correct structure</p>
+                    <p className="text-xs text-muted-foreground">
+                      Red pin marks the matched address · zoom to verify the correct structure
+                    </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button type="button" size="icon" variant="outline" aria-label="Zoom map in" onClick={() => setMapZoom((z) => Math.min(8, z * 1.7))}>+</Button>
-                    <Button type="button" size="icon" variant="outline" aria-label="Zoom map out" onClick={() => setMapZoom((z) => Math.max(0.5, z / 1.7))}>−</Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setMapZoom(1)}>Reset</Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="Zoom map in"
+                      onClick={() => setMapZoom((z) => Math.min(8, z * 1.7))}
+                    >
+                      +
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label="Zoom map out"
+                      onClick={() => setMapZoom((z) => Math.max(0.5, z / 1.7))}
+                    >
+                      −
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setMapZoom(1)}>
+                      Reset
+                    </Button>
                   </div>
                 </div>
                 <div className="relative h-[min(58vh,520px)] min-h-[300px] overflow-hidden rounded-md border border-border bg-muted">
@@ -397,16 +417,24 @@ export function RoofMeasurementsTab({
                     <strong className="block">Address pin</strong>
                     {locatedAddress.matchedAddress}
                   </div>
-                  <div className="absolute right-3 top-3 rounded bg-background/95 px-2 py-1 text-[11px] font-medium shadow">Satellite imagery · Esri</div>
+                  <div className="absolute right-3 top-3 rounded bg-background/95 px-2 py-1 text-[11px] font-medium shadow">
+                    Satellite imagery · Esri
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}. The pin is the geocoded address point, not a roof outline or verified measurement.</p>
+                <p className="text-xs text-muted-foreground">
+                  Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}. The
+                  pin is the geocoded address point, not a roof outline or verified measurement.
+                </p>
               </section>
             ) : (
               <div className="grid min-h-[230px] place-items-center rounded-md border border-dashed border-border bg-muted/40 p-6 text-center">
                 <div className="max-w-sm">
                   <MapPin className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
                   <p className="font-semibold">Property map</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Search an address and select “Locate exact address” to load satellite imagery and place the property pin.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Search an address and select “Locate exact address” to load satellite imagery
+                    and place the property pin.
+                  </p>
                 </div>
               </div>
             )}
