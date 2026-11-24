@@ -372,6 +372,7 @@ export function SatelliteRoofTrace({
   const [zoom, setZoom] = useState(1);
   const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
   const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
+  const mapViewportRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
@@ -396,6 +397,21 @@ export function SatelliteRoofTrace({
         : null,
     [mapCenter, zoom],
   );
+  useEffect(() => {
+    const viewport = mapViewportRef.current;
+    if (!viewport) return;
+    // Native non-passive listener is required: browsers may otherwise scroll
+    // the document instead of allowing the map to consume the wheel gesture.
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (Math.abs(event.deltaY) < 1) return;
+      setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
+    };
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", handleWheel);
+  }, []);
+
   const imageryUrl = bounds
     ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
     : "";
@@ -813,7 +829,7 @@ export function SatelliteRoofTrace({
             </Button>
             <span className="text-xs text-muted-foreground">{mapInteraction === "pan" ? "Drag the map to move around; use wheel or pinch to zoom." : "Click roof corners to add tracing points."}</span>
           </div>
-          <div className="overflow-hidden rounded-lg border border-border bg-muted">
+          <div ref={mapViewportRef} className="overflow-hidden rounded-lg border border-border bg-muted overscroll-contain" style={{ touchAction: "none" }}>
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
               className={`block aspect-[8/5] w-full touch-none ${mapInteraction === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
@@ -890,11 +906,6 @@ export function SatelliteRoofTrace({
               }}
               onTouchEnd={(event) => {
                 if (event.touches.length < 2) pinchStartDistance.current = null;
-              }}
-              onWheelCapture={(event) => {
-                event.preventDefault();
-                if (Math.abs(event.deltaY) < 1) return;
-                setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
               }}
               onDoubleClick={(event) => {
                 event.preventDefault();
