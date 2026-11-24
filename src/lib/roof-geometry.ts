@@ -25,8 +25,9 @@ export const geoReferenceSchema = z.object({
 });
 export type GeoReference = z.infer<typeof geoReferenceSchema>;
 export function addressPinPosition(reference: GeoReference) {
-  const latitudeScale = 110540 * 0.3048;
-  const longitudeScale = 111320 * Math.cos((reference.originLatitude * Math.PI) / 180) * 0.3048;
+  const latitudeScale = 110540 / 0.3048;
+  const longitudeScale =
+    (111320 * Math.cos((reference.originLatitude * Math.PI) / 180)) / 0.3048;
   return {
     x: (reference.addressLongitude - reference.originLongitude) * longitudeScale,
     z: (reference.originLatitude - reference.addressLatitude) * latitudeScale,
