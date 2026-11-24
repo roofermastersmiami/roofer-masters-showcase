@@ -155,6 +155,7 @@ export function satelliteTraceToGablePlanes(
   points: TracePoint[],
   pitch: number,
   ridgeAxis: RidgeAxis,
+  ridgeOffsetPercent = 0,
 ): RoofPlane[] {
   if (points.length < 4 || points.length > 100) {
     throw new Error("A gable trace needs at least four boundary corners.");
@@ -172,7 +173,16 @@ export function satelliteTraceToGablePlanes(
     z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
   }));
   const axisValue = (p: { x: number; z: number }) => (ridgeAxis === "north-south" ? p.x : p.z);
-  const centerAxis = local.reduce((sum, p) => sum + axisValue(p), 0) / local.length;
+  if (!Number.isFinite(ridgeOffsetPercent) || ridgeOffsetPercent < -40 || ridgeOffsetPercent > 40) {
+    throw new Error("Ridge offset must be between -40% and 40%.");
+  }
+  const axisValues = local.map(axisValue);
+  const axisSpan = Math.max(...axisValues) - Math.min(...axisValues);
+  if (axisSpan <= 0.001) throw new Error("The traced outline is too narrow for this ridge direction.");
+  // Offset the center ridge across the traced footprint without changing its orientation.
+  const centerAxis =
+    local.reduce((sum, p) => sum + axisValue(p), 0) / local.length +
+    (axisSpan * ridgeOffsetPercent) / 100;
   const tolerance = 0.00001;
   const expanded: { x: number; z: number }[] = [];
   for (let i = 0; i < local.length; i++) {
@@ -271,6 +281,7 @@ export function SatelliteRoofTrace({
   const [pitch, setPitch] = useState("6");
   const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
+  const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
@@ -711,6 +722,21 @@ export function SatelliteRoofTrace({
                 <option value="east-west">East–West</option>
               </select>
             </label>
+            <label className="min-w-48 flex-1 text-sm">
+              Ridge position: {ridgeOffsetPercent > 0 ? "+" : ""}
+              {ridgeOffsetPercent}%
+              <input
+                type="range"
+                min={-40}
+                max={40}
+                step={1}
+                value={ridgeOffsetPercent}
+                onChange={(e) => setRidgeOffsetPercent(Number(e.target.value))}
+                className="mt-2 block w-full accent-primary"
+                aria-label="Ridge position offset"
+              />
+              <span className="text-xs text-muted-foreground">Move the ridge across the traced width</span>
+            </label>
             <Button
               type="button"
               variant="outline"
@@ -718,7 +744,9 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(satelliteTraceToGablePlanes(points, Number(pitch), ridgeAxis));
+                  onAdd(
+                    satelliteTraceToGablePlanes(points, Number(pitch), ridgeAxis, ridgeOffsetPercent),
+                  );
                   setPoints([]);
                 } catch (e) {
                   setError(
@@ -734,9 +762,9 @@ export function SatelliteRoofTrace({
               Split into 2 gable planes
             </Button>
             <p className="basis-full text-xs text-muted-foreground">
-              Creates two preliminary facets along a center ridge. Choose the ridge direction that
-              matches the roof; confirm the ridge, eaves, overhangs, and pitch before using
-              quantities. Irregular outlines that cannot be split cleanly are rejected.
+              Creates two preliminary facets along the selected ridge direction. Adjust the
+              ridge position for an off-center roof; confirm the ridge, eaves, overhangs, and pitch
+              before using quantities. Irregular outlines that cannot be split cleanly are rejected.
             </p>
           </div>
           {autoTraced && (
