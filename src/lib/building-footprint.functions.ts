@@ -54,30 +54,51 @@ export const findBuildingFootprints = createServerFn({ method: "POST" })
         } as const;
       }
       const query = `[out:json][timeout:15];way(around:100,${coordinates.y},${coordinates.x})["building"];out tags geom;`;
-      const overpass = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-          Accept: "application/json",
-        },
-        body: new URLSearchParams({ data: query }),
-      });
-      if (!overpass.ok) {
-        if (overpass.status === 429 || overpass.status === 503 || overpass.status === 504) {
+      // Public Overpass instances are community-run and can be throttled.
+      // Try a second free endpoint before reporting that the lookup failed.
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+      ];
+      let payload: unknown = null;
+      let lastStatus: number | null = null;
+      for (const endpoint of endpoints) {
+        try {
+          const overpass = await fetch(endpoint, {
+            method: "POST",
+            signal: controller.signal,
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+              Accept: "application/json",
+            },
+            body: new URLSearchParams({ data: query }),
+          });
+          if (!overpass.ok) {
+            lastStatus = overpass.status;
+            continue;
+          }
+          payload = await overpass.json();
+          break;
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          // Try the next public instance when one endpoint is unreachable.
+        }
+      }
+      if (payload === null) {
+        if (lastStatus === 429 || lastStatus === 503 || lastStatus === 504) {
           return {
             error:
               "OpenStreetMap is busy right now. Wait a moment and retry; you can still continue with the aerial image.",
           } as const;
         }
         return {
-          error:
-            "OpenStreetMap building lookup failed (HTTP " +
-            overpass.status +
-            "). You can still continue with the aerial image.",
+          error: lastStatus
+            ? "OpenStreetMap building lookup failed (HTTP " +
+              lastStatus +
+              "). You can still continue with the aerial image."
+            : "Free OpenStreetMap lookup services could not connect. You can still continue with the aerial image.",
         } as const;
       }
-      const payload: unknown = await overpass.json();
       const footprints = parseBuildingFootprints(payload, {
         lat: coordinates.y,
         lon: coordinates.x,
