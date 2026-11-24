@@ -30,6 +30,7 @@ const fields: [keyof RoofReport, string][] = [
   ["rakes_lf", "Rakes (ft)"],
   ["pipes", "Pipes / vents"],
   ["panel_width_in", "Metal panel width (in)"],
+  ["dominant_pitch", "Dominant roof pitch (rise per 12 in)"],
 ];
 export function MaterialOrder({
   jobId,
@@ -56,6 +57,8 @@ export function MaterialOrder({
           rakes_lf: 0,
           panel_width_in: 16,
           pipes: 0,
+          dominant_pitch: 0,
+          flat_installation_method: "torch",
         },
   );
   const initialSource = resolveMaterialOrderSource(saved);
@@ -210,6 +213,21 @@ Roofer Masters · 305-942-3093`;
           }}
           options={ROOF_TYPES.map((t) => ({ value: t, label: t }))}
         />
+        {r.roof_type === "Flat Roof" && (
+          <Choice
+            label="Modified bitumen application"
+            value={r.flat_installation_method ?? "torch"}
+            onChange={(v) => {
+              setR({ ...r, flat_installation_method: v as "torch" | "peel_and_stick" });
+              setSource("manual");
+              setDrawingId(undefined);
+            }}
+            options={[
+              { value: "torch", label: "Torch-applied" },
+              { value: "peel_and_stick", label: "Peel-and-stick" },
+            ]}
+          />
+        )}
         {fields
           .filter(([k]) => k !== "panel_width_in" || r.roof_type === "Metal Roof")
           .map(([k, label]) => (
