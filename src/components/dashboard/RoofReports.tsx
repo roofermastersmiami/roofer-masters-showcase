@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ArrowRight, MapPin, Plus, Search } from "lucide-react";
+import { ArrowRight, MapPin, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,31 +17,33 @@ import { createRoofOrder } from "@/lib/roof-orders.functions";
 import { lookupRoofAddress } from "@/lib/roof-address.functions";
 import { roofOrderSchema } from "@/lib/roof-order-schema";
 import { customersQuery } from "./foundation-data";
-import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
-import { RoofMeasurements } from "./RoofMeasurements";
 import { Field, SectionHeading, Empty } from "./CrmControls";
 
 type LocatedAddress = { matchedAddress: string; lat: number; lon: number };
 
 export function RoofReports({
+  initialCustomer,
+  initialPropertyId,
   initialAddress = "",
+  onOpenMeasurement,
+  onRequestHandled,
 }: {
   initialCustomer?: string;
+  initialPropertyId?: string;
   initialAddress?: string;
+  onOpenMeasurement: (reportId: string) => void;
+  onRequestHandled: () => void;
 }) {
   const customers = useQuery(customersQuery),
     orders = useQuery(roofOrdersQuery),
-    drawings = useQuery(drawingsQuery),
     qc = useQueryClient();
   const create = useServerFn(createRoofOrder);
   const lookup = useServerFn(lookupRoofAddress);
   const [adding, setAdding] = useState(!!initialAddress),
-    [selected, setSelected] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [lookupBusy, setLookupBusy] = useState(false),
     [search, setSearch] = useState(""),
-    [legacy, setLegacy] = useState(false),
     [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null),
     [addressError, setAddressError] = useState("");
   const [form, setForm] = useState({
@@ -50,7 +52,11 @@ export function RoofReports({
     provider: "manual" as const,
     notes: "",
   });
-  const report = orders.data?.find((r) => r.id === selected);
+  const matchingPropertyReport = initialPropertyId
+    ? orders.data?.find((r) => r.property_id === initialPropertyId)
+    : initialAddress
+      ? orders.data?.find((r) => r.address.trim().toLowerCase() === initialAddress.trim().toLowerCase())
+      : undefined;
 
   async function locateAddress() {
     const address = form.address.trim();
@@ -81,6 +87,61 @@ export function RoofReports({
     }
   }
 
+  const initialLookupStarted = useRef(false);
+  useEffect(() => {
+    if (!initialAddress || orders.isPending || initialLookupStarted.current) return;
+    initialLookupStarted.current = true;
+    if (matchingPropertyReport) {
+      setAdding(false);
+      onRequestHandled();
+      onOpenMeasurement(matchingPropertyReport.id);
+      return;
+    }
+    setAdding(true);
+    const address = initialAddress.trim();
+    setLookupBusy(true);
+    setAddressError("");
+    void (async () => {
+      try {
+        const result = await lookup({ data: { address } });
+        if ("error" in result) {
+          setAddressError(result.error);
+          return;
+        }
+        setLocatedAddress(result);
+        setForm((current) => ({ ...current, address: result.matchedAddress }));
+        // The property was explicitly selected from CRM search. Once its
+        // address is confirmed, create the report request and enter its
+        // drawing workspace without making the estimator repeat the action.
+        const created = await create({
+          data: {
+            // Keep the exact saved CRM address so the server can reuse this
+            // property's existing customer/property records instead of creating
+            // a duplicate from the geocoder's normalized display address.
+            address,
+            title: "Roof measurement report",
+            provider: "manual",
+            notes: "",
+          },
+        });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
+          qc.invalidateQueries({ queryKey: ["crm-properties"] }),
+        ]);
+        setAdding(false);
+        onRequestHandled();
+        onOpenMeasurement(created.id);
+        toast.success("Property located. Opening its roof drawing workspace.");
+      } catch (error) {
+        setAddressError(
+          error instanceof Error ? error.message : "The property could not be opened. Please retry.",
+        );
+      } finally {
+        setLookupBusy(false);
+      }
+    })();
+  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup, create, qc, onOpenMeasurement, onRequestHandled]);
+
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
       toast.error("Locate and confirm the property address before creating the report");
@@ -102,7 +163,7 @@ export function RoofReports({
         qc.invalidateQueries({ queryKey: ["crm-properties"] }),
       ]);
       setAdding(false);
-      setSelected(result.id);
+      onOpenMeasurement(result.id);
       toast.success("Your address-linked roof report is ready for measurement");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create roof report");
@@ -111,44 +172,7 @@ export function RoofReports({
     }
   }
 
-  if (legacy)
-    return (
-      <div>
-        <Button className="mb-5" variant="outline" onClick={() => setLegacy(false)}>
-          <ArrowLeft /> All roof reports
-        </Button>
-        <RoofMeasurements />
-      </div>
-    );
 
-  if (report)
-    return (
-      <div>
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <Button variant="outline" onClick={() => setSelected(null)}>
-            <ArrowLeft /> All roof reports
-          </Button>
-          <div className="min-w-0">
-            <p className="break-words font-semibold">{report.address}</p>
-            <p className="text-xs text-muted-foreground">
-              {customers.data?.find((c) => c.id === report.customer_id)?.name} · Roofer Masters
-              measurement report
-            </p>
-          </div>
-        </div>
-        {drawings.isPending ? (
-          <p>Loading saved measurements…</p>
-        ) : drawings.error ? (
-          <p role="alert">Saved measurements could not load. Refresh before editing.</p>
-        ) : (
-          <RoofMeasurements
-            key={report.id}
-            report={report}
-            initialDrawing={drawings.data?.find((d) => d.id === report.drawing_id) ?? null}
-          />
-        )}
-      </div>
-    );
 
   const rows = (orders.data ?? []).filter((r) =>
     `${r.address} ${r.title} ${customers.data?.find((c) => c.id === r.customer_id)?.name ?? ""}`
@@ -189,9 +213,6 @@ export function RoofReports({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button variant="outline" onClick={() => setLegacy(true)}>
-          Existing drawings workspace
-        </Button>
         <p className="text-sm text-muted-foreground">Roofer Masters · Company-owned reports</p>
       </div>
       {orders.error && (
@@ -212,7 +233,7 @@ export function RoofReports({
               <button
                 type="button"
                 className="mt-3 break-words text-left text-lg font-bold text-primary underline-offset-4 hover:underline"
-                onClick={() => setSelected(row.id)}
+                onClick={() => onOpenMeasurement(row.id)}
                 aria-label={`Open 2D and 3D roof workspace for ${row.address}`}
               >
                 {row.address}
@@ -229,7 +250,7 @@ export function RoofReports({
                     : "Awaiting measurements"}{" "}
                 · {new Date(row.created_at).toLocaleDateString()}
               </p>
-              <Button variant="outline" className="mt-auto" onClick={() => setSelected(row.id)}>
+              <Button variant="outline" className="mt-auto" onClick={() => onOpenMeasurement(row.id)}>
                 Open measurement report <ArrowRight />
               </Button>
             </article>
@@ -251,6 +272,9 @@ export function RoofReports({
           <DialogHeader>
             <DialogTitle>Create roof report by address</DialogTitle>
             <DialogDescription>
+              {initialCustomer
+                ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
+                : ""}
               Enter the complete property address and locate it first. This confirms the map
               coordinates before creating the report. Roof facets and dimensions still require a
               verified roof source or calibrated tracing.

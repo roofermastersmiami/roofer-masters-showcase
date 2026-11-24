@@ -3,6 +3,7 @@ import { canOpen } from "@/lib/team-roles";
 import { TeamAccess } from "./TeamAccess";
 import { CrewJobs } from "./CrewJobs";
 import { RoofReports } from "./RoofReports";
+import { RoofMeasurementsTab } from "./RoofMeasurementsTab";
 import { AdvancedEstimator } from "./AdvancedEstimator";
 import { CostCatalog } from "./CostCatalog";
 import { Expenses } from "./Expenses";
@@ -27,6 +28,7 @@ export const CRM_SECTIONS = [
   "prices",
   "expenses",
   "financials",
+  "roof-reports",
   "measurements",
   "pipeline",
   "submissions",
@@ -45,7 +47,7 @@ export const CRM_SECTIONS = [
   "my-jobs",
 ] as const;
 export function CrmSection({ section }: { section: string }) {
-  const { leads, onOpen, openProposals, proposalLeadId, clearProposalLead } = useCrm();
+  const { leads, onOpen, openProposals, proposalLeadId, clearProposalLead, roofReportRequest, clearRoofReportRequest, selectedRoofReportId, openRoofMeasurements } = useCrm();
   const [chatId, setChatId] = useState<string | null>(null);
   const roles = useRoles();
   if (!canOpen(roles, section))
@@ -67,8 +69,19 @@ export function CrmSection({ section }: { section: string }) {
       return <Expenses />;
     case "financials":
       return <FinancialAnalytics />;
+    case "roof-reports":
+      return (
+        <RoofReports
+          key={roofReportRequest?.propertyId ?? "all-roof-reports"}
+          initialCustomer={roofReportRequest?.customerId}
+          initialPropertyId={roofReportRequest?.propertyId}
+          initialAddress={roofReportRequest?.address ?? ""}
+          onOpenMeasurement={openRoofMeasurements}
+          onRequestHandled={clearRoofReportRequest}
+        />
+      );
     case "measurements":
-      return <RoofReports />;
+      return <RoofMeasurementsTab selectedReportId={selectedRoofReportId} onSelectReport={openRoofMeasurements} />;
     case "pipeline":
       return <Pipeline leads={leads} onOpen={onOpen} />;
     case "submissions":
