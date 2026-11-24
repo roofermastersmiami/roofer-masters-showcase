@@ -368,6 +368,9 @@ export function SatelliteRoofTrace({
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [baseMap, setBaseMap] = useState<"satellite" | "streets">("satellite");
+  const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
+  const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
+  const [mapViewportElement, setMapViewportElement] = useState<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
