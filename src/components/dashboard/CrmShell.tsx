@@ -49,6 +49,7 @@ import { CrmContext } from "./CrmContext";
 import { LeadSheet } from "./LeadSheet";
 import { leadsQuery, formatWhen } from "./data";
 import { tasksQuery } from "./operations-data";
+import { customersQuery, propertiesQuery } from "./foundation-data";
 import { cn } from "@/lib/utils";
 import { useWebMCP } from "use-webmcp-tool";
 import { runWebMCPTool } from "@/lib/webmcp-telemetry";
@@ -129,6 +130,8 @@ export function CrmShell({
     .filter((g) => g.items.length);
   const { data: leads = [], isPending, error } = useQuery(leadsQuery);
   const tasks = useQuery(tasksQuery);
+  const customers = useQuery(customersQuery);
+  const properties = useQuery(propertiesQuery);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const section = pathname.split("/")[2] ?? "";
@@ -138,7 +141,8 @@ export function CrmShell({
     [query, setQuery] = useState(""),
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
-    [proposalLeadId, setProposalLeadId] = useState<string | null>(null);
+    [proposalLeadId, setProposalLeadId] = useState<string | null>(null),
+    [roofReportRequest, setRoofReportRequest] = useState<{ propertyId: string; customerId: string; address: string } | null>(null);
   useEffect(() => {
     setDark(localStorage.getItem("crm-theme") === "dark");
   }, []);
@@ -188,15 +192,35 @@ export function CrmShell({
   const due = (tasks.data ?? []).filter(
     (t) => !t.completed_at && Date.parse(t.due_at) <= Date.now() + 86400000,
   );
-  const results = query.trim()
+  const normalizedQuery = query.trim().toLowerCase();
+  const leadResults = normalizedQuery
     ? leads
         .filter((l) =>
           `${l.name} ${l.phone ?? ""} ${l.email ?? ""} ${l.address ?? ""}`
             .toLowerCase()
-            .includes(query.toLowerCase()),
+            .includes(normalizedQuery),
         )
-        .slice(0, 8)
+        .slice(0, 5)
+        .map((lead) => ({ key: `lead-${lead.id}`, kind: "lead" as const, title: lead.name, detail: lead.email || lead.phone || lead.address || "Customer record", lead }))
     : [];
+  const propertyResults = normalizedQuery
+    ? (properties.data ?? [])
+        .filter((property) => {
+          const customer = customers.data?.find((item) => item.id === property.customer_id);
+          return `${property.label} ${property.address} ${customer?.name ?? ""}`
+            .toLowerCase()
+            .includes(normalizedQuery);
+        })
+        .slice(0, 8)
+        .map((property) => ({
+          key: `property-${property.id}`,
+          kind: "property" as const,
+          title: property.address,
+          detail: `${customers.data?.find((item) => item.id === property.customer_id)?.name ?? "Customer"} · Open roof tracing`,
+          property,
+        }))
+    : [];
+  const results = [...propertyResults, ...leadResults].slice(0, 10);
   const current = groups.flatMap((g) => g.items).find((i) => i.id === section);
   function navigation(compact: boolean) {
     return (
@@ -274,6 +298,7 @@ export function CrmShell({
     <CrmContext.Provider
       value={{
         leads,
+        roofReportRequest,
         onOpen: (l) => setOpenId(l.id),
         openProposals: (id) => {
           setProposalLeadId(id ?? null);
@@ -330,21 +355,29 @@ export function CrmShell({
               />
               {query && (
                 <div className="absolute inset-x-0 top-11 z-40 max-h-80 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-card">
-                  {results.map((l) => (
+                  {results.map((result) => (
                     <Button
-                      key={l.id}
+                      key={result.key}
                       variant="ghost"
                       className="h-auto w-full justify-start py-3 text-left"
                       onClick={() => {
-                        setOpenId(l.id);
+                        if (result.kind === "property") {
+                          setRoofReportRequest({
+                            propertyId: result.property.id,
+                            customerId: result.property.customer_id,
+                            address: result.property.address,
+                          });
+                          setOpenId(null);
+                          void go("measurements");
+                        } else {
+                          setOpenId(result.lead.id);
+                        }
                         setQuery("");
                       }}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{l.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {l.email || l.phone}
-                        </p>
+                        <p className="truncate text-sm font-semibold">{result.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{result.detail}</p>
                       </div>
                     </Button>
                   ))}
