@@ -45,7 +45,7 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
     z: p.z,
     y: 10 + ((p.z - minZ) * pitch) / 12,
   }));
-  return {
+  const plane: RoofPlane = {
     id: `satellite-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
     name: "Satellite traced roof plane",
     points: vertices,
