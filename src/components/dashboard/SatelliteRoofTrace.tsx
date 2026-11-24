@@ -1203,7 +1203,7 @@ export function SatelliteRoofTrace({
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Map layer: Esri ${baseMap === "satellite" ? "World Imagery" : "World Street Map"}. Building footprints and address lookup: OpenStreetMap.
+            Map layer: Esri {baseMap === "satellite" ? "World Imagery" : "World Street Map"}. Building footprints and address lookup: OpenStreetMap.
             Click corners in order around one roof plane.
           </p>
         </>
