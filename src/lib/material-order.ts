@@ -5,7 +5,7 @@ import { calculateRoofTakeoff } from "@/utils/materialTakeoff";
 export const reportSchema = z.object({
   roof_type: z.enum(ROOF_TYPES),
   area_sqft: z.number().positive().max(1000000),
-  waste_pct: z.number().min(0).max(50),
+  waste_pct: z.number().min(0).max(50).optional(),
   ridge_lf: z.number().min(0).max(100000),
   hips_lf: z.number().min(0).max(100000),
   valleys_lf: z.number().min(0).max(100000),
@@ -23,7 +23,8 @@ const up = (n: number) => Math.max(0, Math.ceil(n - 1e-9));
 export function materialOrder(input: RoofReport): MaterialLine[] {
   const r = reportSchema.parse(input);
   const boots = { item: "Pipe boots / flashings", qty: r.pipes, unit: "pcs" };
-  const area = r.area_sqft * (1 + r.waste_pct / 100);
+  const wastePct = r.waste_pct ?? (r.roof_type === "Flat Roof" ? 10 : 12);
+  const area = r.area_sqft * (1 + wastePct / 100);
   const sq = area / 100;
   const edges = r.eaves_lf + r.rakes_lf;
   const caps = r.ridge_lf + r.hips_lf;
@@ -70,7 +71,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
       return [
         {
           item: `Metal panels (${r.panel_width_in}" coverage)`,
-          qty: up(((r.eaves_lf * 12) / r.panel_width_in) * (1 + r.waste_pct / 100)),
+          qty: up(((r.eaves_lf * 12) / r.panel_width_in) * (1 + wastePct / 100)),
           unit: "panels",
         },
         {
