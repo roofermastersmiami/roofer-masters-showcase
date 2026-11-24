@@ -55,11 +55,27 @@ export function aerialInvocationError(error: unknown) {
   );
 }
 
-/** Automatically fetch free imagery for any address-linked report or drawing without an aerial, once per mounted workspace. */
 export function shouldAutoLoadAddressAerial(input: {
   address: string | null | undefined;
+  requestKey: string;
   hasAerial: boolean;
-  alreadyAttempted: boolean;
+  attemptedKey: string;
 }) {
-  return Boolean(input.address?.trim() && !input.hasAerial && !input.alreadyAttempted);
+  const address = input.address?.trim().toLowerCase();
+  const requestKey = input.requestKey.trim();
+  return Boolean(
+    address &&
+      requestKey &&
+      !input.hasAerial &&
+      input.attemptedKey !== `${requestKey}:${address}`,
+  );
+}
+
+export function addressAerialRequestKey(
+  requestKey: string | null | undefined,
+  address: string | null | undefined,
+) {
+  const id = requestKey?.trim();
+  const normalizedAddress = address?.trim().toLowerCase();
+  return id && normalizedAddress ? `${id}:${normalizedAddress}` : "";
 }
