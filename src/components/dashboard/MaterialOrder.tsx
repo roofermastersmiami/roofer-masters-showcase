@@ -27,7 +27,16 @@ const fields: [keyof RoofReport, string][] = [
   ["pipes", "Pipes / vents"],
   ["panel_width_in", "Metal panel width (in)"],
 ];
-/** Escape untrusted job titles and report text before inserting it into a print document. */\nexport function escapeMaterialOrderHtml(value: string): string {\n  return value\n    .replace(/&/g, "&amp;")\n    .replace(/</g, "&lt;")\n    .replace(/>/g, "&gt;")\n    .replace(/"/g, "&quot;")\n    .replace(/\\\\\\\\/g, "&#39;");\n}\nexport function MaterialOrder({
+/** Escape untrusted job titles and report text before inserting it into a print document. */\nexport function escapeMaterialOrderHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .split("'")
+    .join("&#39;");
+}
+export function MaterialOrder({
   jobId,
   title,
   saved,
