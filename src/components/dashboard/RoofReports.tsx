@@ -19,10 +19,9 @@ import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
-import { Choice, Field, SectionHeading, Empty } from "./CrmControls";
+import { Field, SectionHeading, Empty } from "./CrmControls";
 
 export function RoofReports({
-  initialCustomer = "",
   initialAddress = "",
 }: {
   initialCustomer?: string;
