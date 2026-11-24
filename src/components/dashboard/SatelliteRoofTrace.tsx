@@ -600,7 +600,7 @@ export function SatelliteRoofTrace({
               {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
             </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
