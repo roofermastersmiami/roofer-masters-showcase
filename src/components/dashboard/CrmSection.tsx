@@ -45,7 +45,7 @@ export const CRM_SECTIONS = [
   "my-jobs",
 ] as const;
 export function CrmSection({ section }: { section: string }) {
-  const { leads, onOpen, openProposals, proposalLeadId, clearProposalLead } = useCrm();
+  const { leads, onOpen, openProposals, proposalLeadId, clearProposalLead, roofReportRequest } = useCrm();
   const [chatId, setChatId] = useState<string | null>(null);
   const roles = useRoles();
   if (!canOpen(roles, section))
@@ -68,7 +68,14 @@ export function CrmSection({ section }: { section: string }) {
     case "financials":
       return <FinancialAnalytics />;
     case "measurements":
-      return <RoofReports />;
+      return (
+        <RoofReports
+          key={roofReportRequest?.propertyId ?? "all-roof-reports"}
+          initialCustomer={roofReportRequest?.customerId}
+          initialPropertyId={roofReportRequest?.propertyId}
+          initialAddress={roofReportRequest?.address ?? ""}
+        />
+      );
     case "pipeline":
       return <Pipeline leads={leads} onOpen={onOpen} />;
     case "submissions":
