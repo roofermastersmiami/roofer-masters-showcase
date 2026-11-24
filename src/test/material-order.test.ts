@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { materialOrder } from "@/lib/material-order";
+import { materialOrder } from "@/lib/material-order";\nimport { escapeMaterialOrderHtml } from "@/components/dashboard/MaterialOrder";
 const base = {
   area_sqft: 2000,
   waste_pct: 10,
@@ -46,5 +46,14 @@ describe("metal panel length and validation", () => {
   it("rejects negative dimensions and waste above the supported limit", () => {
     expect(() => materialOrder({ ...base, roof_type: "Metal Roof", eaves_lf: -1 })).toThrow();
     expect(() => materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 51 })).toThrow();
+  });
+});
+
+
+describe("material order print escaping", () => {
+  it("escapes HTML metacharacters in customer-controlled print text", () => {
+    expect(escapeMaterialOrderHtml(`Roof <script>alert("x")</script> & 'metal'`)).toBe(
+      "Roof &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;metal&#39;",
+    );
   });
 });
