@@ -43,7 +43,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
-import type { BuildingFootprint } from "@/lib/building-footprint";
+import { shouldAutoSearchFootprint, type BuildingFootprint } from "@/lib/building-footprint";
 import {
   uploadAerialImage,
   aerialInvocationError,
@@ -466,13 +466,14 @@ export function RoofMeasurements({
 
   // Automatically check the free OSM ground outline for address-linked reports.
   // This is a reference footprint only, never a roof measurement or roof plan.
-  const autoFootprintAttempted = useRef(false);
+  const autoFootprintAttempted = useRef("");
   useEffect(() => {
     const address = report?.address?.trim() || propertyRow?.address;
-    if (!address || autoFootprintAttempted.current) return;
-    autoFootprintAttempted.current = true;
+    const requestKey = report?.id ?? property ?? "";
+    if (!shouldAutoSearchFootprint(address, requestKey, autoFootprintAttempted.current)) return;
+    autoFootprintAttempted.current = requestKey;
     void searchFootprints();
-  }, [report?.id, report?.address, initialDrawing?.id, propertyRow?.address]);
+  }, [report?.id, report?.address, property, propertyRow?.address, initialDrawing?.id]);
 
   async function upload(file: File) {
     if (
