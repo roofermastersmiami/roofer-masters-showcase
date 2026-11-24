@@ -27,7 +27,8 @@ const fields: [keyof RoofReport, string][] = [
   ["pipes", "Pipes / vents"],
   ["panel_width_in", "Metal panel width (in)"],
 ];
-/** Escape untrusted job titles and report text before inserting it into a print document. */\nexport function escapeMaterialOrderHtml(value: string): string {
+/** Escape untrusted job titles and report text before inserting it into a print document. */
+export function escapeMaterialOrderHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -117,7 +118,13 @@ export function MaterialOrder({
     () => (valid.success ? materialOrder(valid.data) : []),
     [valid.success, r],
   );
-  const text = `Material order – ${title}\n${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)\n\n${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}\n\nRoofer Masters · 305-942-3093`;
+  const text = `Material order – ${title}
+${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
+
+${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("
+")}
+
+Roofer Masters · 305-942-3093`;
   async function save() {
     if (!valid.success) return;
     setBusy(true);
