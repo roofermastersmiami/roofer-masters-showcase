@@ -16,7 +16,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { MobileActionBar } from "@/components/site/MobileActionBar";
-import { ChatWidget } from "@/components/site/ChatWidget";\nimport { FreeAiReceptionist } from "@/components/FreeAiReceptionist";
+import { ChatWidget } from "@/components/site/ChatWidget";
+import { FreeAiReceptionist } from "@/components/FreeAiReceptionist";
 import { IntroLoader } from "@/components/site/IntroLoader";
 import { siteContentQuery } from "@/lib/content.functions";
 
@@ -191,7 +192,8 @@ function RootComponent() {
           </main>
           <SiteFooter />
           <MobileActionBar />
-          <ChatWidget />\n          <FreeAiReceptionist />
+          <ChatWidget />
+          <FreeAiReceptionist />
         </>
       )}
       <Toaster richColors position="top-center" />
