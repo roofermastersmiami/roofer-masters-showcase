@@ -34,9 +34,11 @@ describe("team roles", () => {
     for (const r of ["office", "sales", "production_manager", "crew", "accounting"])
       for (const s of ["team", "content", "instant"]) expect(canOpen([r], s)).toBe(false);
   });
-  it("fails closed for unknown navigation sections", () => {
-    expect(canOpen(["office"], "company-settings")).toBe(false);
-    expect(canOpen(["crew"], "billing")).toBe(false);
+  it("fails closed for unknown navigation sections for every role, including owners", () => {
+    for (const roles of [["admin"], ["office"], ["crew"], ["admin", "accounting"]]) {
+      expect(canOpen(roles, "company-settings")).toBe(false);
+      expect(canOpen(roles, "billing")).toBe(false);
+    }
   });
   it("does not combine unrelated roles into owner privileges", () => {
     expect(canOpen(["office", "crew"], "financials")).toBe(false);
