@@ -301,6 +301,7 @@ export function CrmShell({
       value={{
         leads,
         roofReportRequest,
+        clearRoofReportRequest: () => setRoofReportRequest(null),
         selectedRoofReportId,
         openRoofMeasurements: (reportId) => {
           setSelectedRoofReportId(reportId);
