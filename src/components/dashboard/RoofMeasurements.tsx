@@ -51,6 +51,7 @@ import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
 import {
   footprintToDraftPlane,
+  footprintGeoReference,
   shouldAutoSearchFootprint,
   type BuildingFootprint,
 } from "@/lib/building-footprint";
@@ -406,6 +407,7 @@ export function RoofMeasurements({
   const [footprintBusy, setFootprintBusy] = useState(false);
   const [footprintMessage, setFootprintMessage] = useState("");
   const [footprints, setFootprints] = useState<BuildingFootprint[]>([]);
+  const [footprintAddressPoint, setFootprintAddressPoint] = useState<{ lat: number; lon: number } | null>(null);
   async function loadAerial() {
     const address = report?.address?.trim() || propertyRow?.address;
     if (!property || !address) return;
@@ -459,7 +461,7 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }
-  function useBuildingFootprint(candidate: BuildingFootprint) {
+  function useBuildingFootprint(candidate: BuildingFootprint, addressPoint?: { lat: number; lon: number }) {
     const hasImportedFootprint = d.planes.some((item) => item.id.startsWith("osm-footprint-"));
     const replaceStarter = !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
     const existingPlanes = replaceStarter
@@ -469,7 +471,7 @@ export function RoofMeasurements({
       ...footprintToDraftPlane(candidate),
       id: `osm-footprint-${candidate.id}-${Date.now()}`,
     };
-    edit({ ...d, planes: [...existingPlanes, plane], accuracy: "photo_estimate", verified: false });
+    edit({ ...d, planes: [...existingPlanes, plane], accuracy: "photo_estimate", ...(addressPoint ? { geo_reference: footprintGeoReference(candidate, addressPoint) } : {}), verified: false });
     setSelected(plane.id);
     setFit((value) => value + 1);
     toast.info(
@@ -489,9 +491,10 @@ export function RoofMeasurements({
         return;
       }
       setFootprints(result.footprints);
+      setFootprintAddressPoint(result.addressPoint);
       const candidate = result.footprints[0];
       if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
-        useBuildingFootprint(candidate);
+        useBuildingFootprint(candidate, result.addressPoint);
       }
       setFootprintMessage(
         result.footprints.length
@@ -1509,7 +1512,7 @@ export function RoofMeasurements({
                   className="mt-3 w-full"
                   size="sm"
                   variant="outline"
-                  onClick={() => useBuildingFootprint(footprint)}
+                  onClick={() => useBuildingFootprint(footprint, footprintAddressPoint ?? undefined)}
                 >
                   Use this preliminary outline
                 </Button>
