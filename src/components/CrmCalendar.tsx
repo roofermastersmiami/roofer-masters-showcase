@@ -119,6 +119,7 @@ export function CrmCalendar({
       return;
     }
     toast.success(`Appointment marked ${status.toLowerCase()}`);
+    setSelectedAppointment((current) => current?.id === id ? { ...current, status } : current);
     await qc.invalidateQueries({ queryKey: ["crm-appointments"] });
   };
   const openReport = async (appointment: Appointment) => {
