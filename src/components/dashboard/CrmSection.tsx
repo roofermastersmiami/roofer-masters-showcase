@@ -2,7 +2,7 @@ import { useRoles } from "./RolesContext";
 import { canOpen } from "@/lib/team-roles";
 import { TeamAccess } from "./TeamAccess";
 import { CrewJobs } from "./CrewJobs";
-import { RoofReports } from "./RoofReports";
+import { RoofReports } from "./RoofReports";\nimport { CrmCalendar } from "@/components/CrmCalendar";
 import { RoofMeasurementsTab } from "./RoofMeasurementsTab";
 import { AdvancedEstimator } from "./AdvancedEstimator";
 import { CostCatalog } from "./CostCatalog";
@@ -28,7 +28,7 @@ export const CRM_SECTIONS = [
   "prices",
   "expenses",
   "financials",
-  "roof-reports",
+  "roof-reports",\n  "appointments",
   "measurements",
   "pipeline",
   "submissions",
