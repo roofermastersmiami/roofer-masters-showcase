@@ -49,3 +49,19 @@ The following tables are present in the generated Supabase database types. Every
 ## Release gate
 
 A release is blocked until the two-company isolation suite passes against a migrated database and a manual review confirms all security-definer functions and storage policies enforce the same company boundary.
+
+## Application-layer context primitive (preparatory; not a release gate)
+
+`src/lib/company-context.ts` now contains a pure resolver that accepts a trusted
+server-side membership result and the authenticated user's ID. It resolves only
+when exactly one row belongs to that user; unauthenticated, no-membership,
+multiple-membership, and malformed-row cases fail closed. Tests cover each case
+and confirm rows for other users do not influence the result.
+
+This helper is intentionally **not wired into operational authorization yet**.
+The live database was previously observed without the company/membership tables,
+and the current global-role RLS and SECURITY DEFINER routines remain in place.
+A pure helper cannot secure those paths. Do not treat this increment as tenant
+isolation, and do not use it to enable company switching, onboarding, or invites.
+The next required step remains a Lovable-managed schema reconciliation and
+server-side integration after exact user UUIDs and migration history are verified.
