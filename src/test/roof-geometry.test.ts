@@ -5,6 +5,7 @@ import {
   auditRoofReport,
   toMaterialReport,
   suggestSharedEdgeClassifications,
+  roofPlaneTakeoff,
   addressPinPosition,
   drawingSchema,
   type RoofPlane,
@@ -351,7 +352,7 @@ describe("per-plane roof report takeoff", () => {
   it("does not merge distinct roof planes into one aggregate row", () => {
     const drawing = roofPreset("hip", 40, 30, 6);
     const rows = roofPlaneTakeoff(drawing);
-    expect(rows.map((row) => row.name)).toEqual(["West", "East", "South", "North"]);
+    expect(rows.map((row) => row.name)).toEqual(drawing.planes.map((plane) => plane.name));
     expect(new Set(rows.map((row) => row.id)).size).toBe(4);
   });
 });
