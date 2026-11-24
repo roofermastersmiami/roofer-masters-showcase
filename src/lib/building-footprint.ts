@@ -28,6 +28,24 @@ function localXY(point: FootprintPoint, originLat: number): [number, number] {
     EARTH_RADIUS_M * point.lat * radians,
   ];
 }
+function distanceToPolygonMeters(point: FootprintPoint, polygon: FootprintPoint[]): number {
+  const originLat = point.lat;
+  const [px, py] = localXY(point, originLat);
+  const xy = polygon.map((vertex) => localXY(vertex, originLat));
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < xy.length; i += 1) {
+    const a = xy[i]!;
+    const b = xy[(i + 1) % xy.length]!;
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const lengthSquared = dx * dx + dy * dy;
+    const t = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / lengthSquared));
+    minimum = Math.min(minimum, Math.hypot(px - (a[0] + t * dx), py - (a[1] + t * dy)));
+  }
+  return minimum;
+}
 function polygonArea(points: FootprintPoint[], originLat: number): number {
   const xy = points.map((point) => localXY(point, originLat));
   let twiceArea = 0;
@@ -140,7 +158,10 @@ export function parseBuildingFootprints(
           lat: meanLat,
           lon: openRing.reduce((sum, point) => sum + point.lon, 0) / openRing.length,
         };
-    const distanceMeters = haversine(origin, center);
+    // The area centroid of a concave footprint can be farther from the
+    // address than its nearest wall. Match the search radius to the polygon,
+    // not to its centroid, so irregular nearby buildings are not discarded.
+    const distanceMeters = distanceToPolygonMeters(origin, openRing);
     if (distanceMeters > maxDistanceMeters) continue;
     const areaSqM = polygonArea(openRing, center.lat);
     if (!Number.isFinite(areaSqM) || areaSqM < 20 || areaSqM > 5000) continue;
