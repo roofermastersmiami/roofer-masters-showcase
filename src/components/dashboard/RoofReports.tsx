@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ArrowRight, MapPin, Plus, Search } from "lucide-react";
+import { ArrowRight, MapPin, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ import { createRoofOrder } from "@/lib/roof-orders.functions";
 import { lookupRoofAddress } from "@/lib/roof-address.functions";
 import { roofOrderSchema } from "@/lib/roof-order-schema";
 import { customersQuery } from "./foundation-data";
-import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { Field, SectionHeading, Empty } from "./CrmControls";
 
@@ -36,7 +35,6 @@ export function RoofReports({
 }) {
   const customers = useQuery(customersQuery),
     orders = useQuery(roofOrdersQuery),
-    drawings = useQuery(drawingsQuery),
     qc = useQueryClient();
   const create = useServerFn(createRoofOrder);
   const lookup = useServerFn(lookupRoofAddress);
@@ -161,7 +159,7 @@ export function RoofReports({
         qc.invalidateQueries({ queryKey: ["crm-properties"] }),
       ]);
       setAdding(false);
-      setSelected(result.id);
+      onOpenMeasurement(result.id);
       toast.success("Your address-linked roof report is ready for measurement");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create roof report");
