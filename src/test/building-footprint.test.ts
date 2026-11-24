@@ -57,6 +57,14 @@ describe("OpenStreetMap building footprint parsing", () => {
           { lat: origin.lat + 0.0002, lon: origin.lon },
           { lat: origin.lat, lon: origin.lon },
         ] },
+        { type: "way", id: 6, geometry: [
+          { lat: origin.lat, lon: origin.lon },
+          { lat: origin.lat, lon: origin.lon + 0.0002 },
+          { lat: origin.lat + 0.0002, lon: origin.lon + 0.0002 },
+          { lat: origin.lat + 0.0002, lon: origin.lon },
+          { lat: origin.lat + 0.0001, lon: origin.lon + 0.0001 },
+          { lat: origin.lat, lon: origin.lon },
+        ] },
       ],
     }, origin);
     expect(result).toEqual([]);
