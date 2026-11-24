@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Ruler, Plus, Undo2, Trash2 } from "lucide-react";
+import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,8 @@ export function RoofImageTrace({
   const [uphill, setUphill] = useState<Uphill>("up");
   const [name, setName] = useState("");
   const [dimensions, setDimensions] = useState({ width: 1000, height: 700 });
+  const [photoZoom, setPhotoZoom] = useState(1);
+  const pinch = useRef<{ distance: number; zoom: number } | null>(null);
   const [replace, setReplace] = useState(true);
   const [snapCorners, setSnapCorners] = useState(true);
   const [traced, setTraced] = useState<Traced[]>([]);
@@ -219,10 +221,17 @@ export function RoofImageTrace({
       </p>
       {photo.data ? (
         <div className="relative w-full overflow-hidden rounded-md border border-border">
+          <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md border bg-background/95 p-1 shadow">
+            <Button type="button" size="icon" variant="outline" aria-label="Zoom out photo" disabled={photoZoom <= 1} onClick={() => setPhotoZoom((v) => Math.max(1, Number((v / 1.25).toFixed(2))))}><ZoomOut /></Button>
+            <span className="flex min-w-12 items-center justify-center text-xs tabular-nums">{photoZoom.toFixed(1)}×</span>
+            <Button type="button" size="icon" variant="outline" aria-label="Zoom in photo" disabled={photoZoom >= 5} onClick={() => setPhotoZoom((v) => Math.min(5, Number((v * 1.25).toFixed(2))))}><ZoomIn /></Button>
+            <Button type="button" size="icon" variant="ghost" aria-label="Reset photo zoom" disabled={photoZoom === 1} onClick={() => setPhotoZoom(1)}><RotateCcw /></Button>
+          </div>
           <img
             src={photo.data}
             alt="Roof photo used for measuring"
             className="block max-h-[640px] w-full select-none object-contain"
+            style={{ transform: `scale(${photoZoom})`, transformOrigin: "center center" }}
             draggable={false}
             onLoad={(e) => {
               const width = e.currentTarget.naturalWidth,
@@ -237,6 +246,24 @@ export function RoofImageTrace({
             preserveAspectRatio="xMidYMid meet"
             aria-label="Roof tracing surface"
             onPointerMove={onMove}
+            style={{ touchAction: "none", transform: `scale(${photoZoom})`, transformOrigin: "center center" }}
+            onTouchStart={(event) => {
+              if (event.touches.length === 2) {
+                event.preventDefault();
+                const a = event.touches[0]!;
+                const b = event.touches[1]!;
+                pinch.current = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), zoom: photoZoom };
+              }
+            }}
+            onTouchMove={(event) => {
+              if (event.touches.length !== 2 || !pinch.current) return;
+              event.preventDefault();
+              const a = event.touches[0]!;
+              const b = event.touches[1]!;
+              const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+              setPhotoZoom(Math.max(1, Math.min(5, pinch.current.zoom * (distance / pinch.current.distance))));
+            }}
+            onTouchEnd={(event) => { if (event.touches.length < 2) pinch.current = null; }}
             onPointerUp={() => {
               drag.current = null;
             }}

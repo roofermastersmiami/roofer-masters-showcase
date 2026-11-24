@@ -534,7 +534,26 @@ export function SatelliteRoofTrace({
       if (!footprint) throw new Error("No nearby mapped building outline was found");
       setPoints(footprint);
       setAutoTraced(true);
-      setZoom((value) => Math.max(value, 1.5));
+      setZoom((value) => Math.max(value, 2));
+      // OSM provides a ground outline, not roof facets. Create an explicitly
+      // unverified starter gable so the estimator immediately sees a 3D model.
+      try {
+        const preliminaryPlanes = satelliteTraceToGablePlanes(
+          footprint,
+          Math.max(1, Math.min(24, Number(pitch) || 6)),
+          ridgeAxis,
+          ridgeOffsetPercent,
+          ridgeAngleDegrees,
+        );
+        const accepted = onAdd(preliminaryPlanes, traceGeoReference(footprint, { lat, lon }));
+        if (accepted === false) {
+          setError("The existing roof layout was kept. Confirm replacement before adding this preliminary 3D roof.");
+        } else {
+          setError("");
+        }
+      } catch {
+        setError("The building was identified and outlined, but its shape could not safely produce a starter gable. Adjust the ridge direction or trace the roof manually, then add planes.");
+      }
     } catch (e) {
       setError(
         e instanceof Error && e.message.includes("No nearby")
@@ -752,6 +771,7 @@ export function SatelliteRoofTrace({
               }}
               onTouchStart={(event) => {
                 if (event.touches.length === 2) {
+                  event.preventDefault();
                   const [a, b] = [event.touches[0]!, event.touches[1]!];
                   pinchStartDistance.current = Math.hypot(
                     a.clientX - b.clientX,
@@ -762,6 +782,7 @@ export function SatelliteRoofTrace({
               }}
               onTouchMove={(event) => {
                 if (event.touches.length !== 2 || pinchStartDistance.current === null) return;
+                event.preventDefault();
                 const [a, b] = [event.touches[0]!, event.touches[1]!];
                 const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
                 setZoom(

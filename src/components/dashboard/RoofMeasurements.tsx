@@ -159,6 +159,16 @@ export function RoofMeasurements({
           : [],
       );
     });
+  const [aerialImageUrl, setAerialImageUrl] = useState("");
+  useEffect(() => {
+    const aerial = media.find((item) => item.category === "aerial");
+    if (!aerial) { setAerialImageUrl(""); return; }
+    let active = true;
+    void supabase.storage.from("roof-job-photos").createSignedUrl(aerial.path, 300).then(({ data, error }) => {
+      if (active) setAerialImageUrl(error ? "" : data?.signedUrl ?? "");
+    });
+    return () => { active = false; };
+  }, [media]);
   function edit(next: RoofDrawing) {
     userEditedDrawing.current = true;
     setHistory((h) => [...h.slice(-29), d]);
@@ -499,7 +509,18 @@ export function RoofMeasurements({
       ];
       setMedia(next);
       setTraceIndex(next.length - 1);
-      setD({ ...d, accuracy: "photo_estimate", image_credit: r.credit, verified: false });
+      setD({
+        ...d,
+        accuracy: "photo_estimate",
+        image_credit: r.credit,
+        geo_reference: d.geo_reference ?? {
+          addressLatitude: r.lat,
+          addressLongitude: r.lon,
+          originLatitude: r.lat,
+          originLongitude: r.lon,
+        },
+        verified: false,
+      });
       setDirty(true);
       setAerialStatus(
         `Aerial image ready for ${r.matchedAddress}. This resampled public image has no dependable pixel-level measurement scale. Calibrate against a known distance before tracing; review all measurements on site.`,
@@ -930,6 +951,7 @@ export function RoofMeasurements({
               >
                 <Scene
                   drawing={d}
+                  aerialImageUrl={aerialImageUrl}
                   selected={selected}
                   onSelect={setSelected}
                   view={view}

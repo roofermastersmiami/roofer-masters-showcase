@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Line, Environment, Lightformer } from "@react-three/drei";
+import { OrbitControls, Line, Environment, Lightformer, useTexture } from "@react-three/drei";
 import {
   BufferGeometry,
   Float32BufferAttribute,
@@ -112,6 +112,16 @@ function Plane({
     </group>
   );
 }
+function AerialGround({ url, position }: { url: string; position: [number, number, number] }) {
+  const texture = useTexture(url);
+  texture.colorSpace = SRGBColorSpace;
+  return (
+    <mesh rotation-x={-Math.PI / 2} position={position} receiveShadow>
+      <planeGeometry args={[393.7, 393.7]} />
+      <meshBasicMaterial map={texture} side={DoubleSide} depthWrite={false} />
+    </mesh>
+  );
+}
 function Ready({ onReady }: { onReady: () => void }) {
   const [done, setDone] = useState(false);
   useFrame(() => {
@@ -179,6 +189,7 @@ function Walls({ drawing, color }: { drawing: RoofDrawing; color: string }) {
 }
 export default function RoofScene({
   drawing,
+  aerialImageUrl,
   selected,
   onSelect,
   view,
@@ -188,6 +199,7 @@ export default function RoofScene({
   zoomKey,
 }: {
   drawing: RoofDrawing;
+  aerialImageUrl?: string;
   selected: string;
   onSelect: (id: string) => void;
   view: "3d" | "plan";
@@ -271,6 +283,7 @@ export default function RoofScene({
           />
         </Environment>
         <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
+        {aerialImageUrl && addressPin && <AerialGround url={aerialImageUrl} position={[addressPin.x, 0.05, addressPin.z]} />}
         <Walls drawing={drawing} color={colors.ground} />
         {addressPin && (
           <group
@@ -338,6 +351,11 @@ export default function RoofScene({
           makeDefault
           target={[0, 10, 0]}
           enableRotate={view === "3d"}
+          enablePan
+          enableDamping
+          dampingFactor={0.08}
+          minPolarAngle={0.01}
+          maxPolarAngle={Math.PI - 0.01}
           autoRotate={view === "3d" && autoRotate}
           autoRotateSpeed={0.6}
           minDistance={5}
