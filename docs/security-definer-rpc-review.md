@@ -40,3 +40,41 @@ Reviewed SQL definitions on `feat/customizable-crm-dashboard`. This is a targete
 ## Safe next step
 
 Use the connected Lovable database workflow to implement schema and SQL changes only after the company backfill and tenant-context design are agreed. Do not add hand-written Drizzle/Supabase migration files in this repository. For each function, add database-level tests proving Company A cannot read or mutate Company B records, and add positive tests proving the existing Roofer Masters owner/team workflows still work. Do not enable company onboarding, switching, or subscription billing until the full release gate in `saas-multi-tenant-isolation-audit.md` passes.
+
+## Second-pass RPC grants, storage, and customer/job policy findings
+
+Reviewed migrations 0013, 0022, 0024, 0031, 0035, and 0037. This is a source review of declared policies and grants; deployed database state must still be checked against the live schema before release.
+
+### RPC execution grants
+
+- `reserve_invoice_checkout(uuid,text,text)`, `settle_invoice_checkout(text,text,bigint)`, and `capture_instant_roof_lead(jsonb,jsonb,text,bigint)` are revoked from browser roles and granted to `service_role`. Preserve this boundary.
+- `record_invoice_payment`, `set_invoice_status`, `save_crm_customer`, and the roof-report creation/drawing functions are granted to `authenticated` after revoking PUBLIC/anon. Their function-body role checks are therefore essential; tenant-aware checks must be added before multi-company use.
+- `get_available_slots(date)` is explicitly executable by `anon`, `authenticated`, and `service_role`. This is an intentional public calendar surface, but its current query checks the shared appointments table without a company key. Before multiple companies can book independently, change the public booking configuration so a public caller can only see availability for the company-specific calendar associated with that booking page/token.
+- The trigger functions `grant_owner_role`, `log_crm_lead_activity`, `sync_lead_customer`, and `touch_lead_on_message` have direct execution revoked from browser roles. Keep them trigger-only.
+
+### Storage policy findings
+
+- `roof-job-photos`: staff policy uses global office/sales/production-manager roles; crew read/upload policy checks that the first path segment is a job ID and that the authenticated user is in that job's assigned-user array. Tenant rollout must bind the job to the member's company and include company identity in the storage path or derive it from a trusted parent record.
+- `roofing-proposals`: proposal file, expense receipt, roof-report PDF, and PDF-template policies share one bucket and separate access primarily by global role and path prefix. Every path prefix must be resolved to a database parent record and checked against the same company. Prefix matching alone is not tenant isolation.
+- `signed-contracts`: upload/read policies validate UUID path segments and match the report/customer/source-lead relationship, then authorize global office/sales/production-manager roles. They do not establish a company membership boundary. Add a company-consistent join through report → customer → lead and require the caller's membership in that company.
+- `crm-company-branding`: current branding policy is account-owner scoped, not a shared company membership policy. Do not treat this bucket as company-shared branding until its owner model is migrated deliberately.
+
+### Customer and job table boundaries
+
+Migration 0024 adds global-role policies for `leads`, `crm_customers`, `crm_properties`, `crm_activity`, `crm_tasks`, `roof_jobs`, reports, drawings, proposals, and estimates. The policies decide which *global role* may access a table; they do not restrict rows to a company. The original customer/property foundation in migration 0013 similarly has owner-wide policies, and `sync_lead_customer` creates customer/property rows from a lead without any tenant context.
+
+Specific relationship checks needed during the tenant migration:
+- `crm_customers.source_lead_id` and `leads.customer_id` must point to records in the same company.
+- `crm_properties.customer_id` must resolve to a customer in the same company.
+- `roof_jobs.lead_id`, `proposal_id`, and `property_id` must all resolve within the same company.
+- `roof_estimates`, `proposals`, `crm_invoices`, `roof_report_orders`, `roof_drawings`, and `crm_activity` must inherit company ownership from their authoritative parent and reject mismatched references.
+- `invoice_project_links` must prove invoice, job, customer/lead, and property all belong to the same company, in addition to its existing customer/property consistency checks.
+- Crew assignments must be memberships/users of the job's company; matching a UUID in `assigned_user_ids` alone is not sufficient.
+
+### Remediation order
+
+1. Build a deployed-schema inventory of every function signature and effective `EXECUTE` privilege for `anon`, `authenticated`, `service_role`, and PUBLIC.
+2. Add a server-derived active-company context and backfill existing Roofer Masters records without changing existing user access.
+3. Add company-consistent foreign-key/trigger checks and row-level policies for customers, leads, properties, jobs, and dependent financial/document records.
+4. Scope every storage path and policy to the parent record's company; issue signed URLs only after a company-aware authorization check.
+5. Add integration tests with two companies and test both direct table operations and every RPC/storage surface. Verify public booking and invoice payment capabilities cannot cross company boundaries.
