@@ -166,15 +166,30 @@ export function RoofMeasurementsTab({
               {report.title}
             </p>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setActiveId(null);
-              onSelectReport(null);
-            }}
-          >
-            <ArrowLeft /> All measurements
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => {
+                setActiveId(null);
+                onSelectReport(null);
+                setForm({ address: "", title: "Roof measurement report", provider: "manual", notes: "" });
+                setOriginalCrmAddress("");
+                setLocatedAddress(null);
+                setAddressError("");
+                setAdding(true);
+              }}
+            >
+              <Plus /> Create report by address
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setActiveId(null);
+                onSelectReport(null);
+              }}
+            >
+              <ArrowLeft /> All measurements
+            </Button>
+          </div>
         </div>
         {drawings.isPending ? (
           <p>Loading saved roof drawing…</p>
