@@ -538,11 +538,13 @@ export function RoofMeasurements({
         ...d,
         accuracy: "photo_estimate",
         image_credit: r.credit,
-        geo_reference: d.geo_reference ?? {
+        geo_reference: {
+          // Always refresh the address marker from the latest successful geocode.
+          // Preserve the drawing origin so existing traced geometry stays in place.
           addressLatitude: r.lat,
           addressLongitude: r.lon,
-          originLatitude: r.lat,
-          originLongitude: r.lon,
+          originLatitude: d.geo_reference?.originLatitude ?? r.lat,
+          originLongitude: d.geo_reference?.originLongitude ?? r.lon,
         },
         verified: false,
       });
