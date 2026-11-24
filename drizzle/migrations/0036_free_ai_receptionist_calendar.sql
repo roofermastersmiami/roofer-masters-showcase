@@ -73,6 +73,38 @@ $$;
 REVOKE ALL ON FUNCTION public.get_available_slots(date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_available_slots(date) TO anon, authenticated, service_role;
 
+
+-- Enforce hours and overlap protection even for manual dashboard inserts.
+CREATE OR REPLACE FUNCTION public.guard_roof_appointment()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $
+DECLARE local_start timestamp;
+BEGIN
+  local_start := NEW.start_time AT TIME ZONE 'America/New_York';
+  IF NEW.status <> 'Cancelled' THEN
+    IF extract(isodow FROM local_start) NOT BETWEEN 1 AND 6
+       OR extract(hour FROM local_start) NOT BETWEEN 8 AND 17
+       OR extract(minute FROM local_start) <> 0
+       OR NEW.end_time - NEW.start_time <> interval '1 hour' THEN
+      RAISE EXCEPTION 'Appointments must be one-hour slots Monday-Saturday, 8 AM-6 PM Eastern';
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended((local_start::date)::text,0));
+    IF EXISTS (
+      SELECT 1 FROM public.appointments a
+      WHERE a.id <> NEW.id AND a.status <> 'Cancelled'
+        AND tstzrange(a.start_time,a.end_time,'[)') && tstzrange(NEW.start_time,NEW.end_time,'[)')
+    ) THEN
+      RAISE EXCEPTION 'That appointment overlaps an existing booking';
+    END IF;
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$;
+DROP TRIGGER IF EXISTS appointments_guard_overlap ON public.appointments;
+CREATE TRIGGER appointments_guard_overlap
+  BEFORE INSERT OR UPDATE OF start_time,end_time,status ON public.appointments
+  FOR EACH ROW EXECUTE FUNCTION public.guard_roof_appointment();
+
 -- A single database transaction and advisory lock prevent two callers booking the same slot.
 CREATE OR REPLACE FUNCTION public.book_roof_appointment(
   p_lead_id uuid, p_customer_name text, p_customer_phone text, p_customer_email text,
