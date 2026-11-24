@@ -174,7 +174,7 @@ describe("roof edge topology validation", () => {
     const drawing = roofPreset("flat", 40, 30);
     const plane = drawing.planes[0];
     if (!plane) throw new Error("Missing roof plane");
-    plane.points[1] = { ...plane.points[0]! };
+    plane.points[3] = { ...plane.points[0]! };
     expect(() => measureDrawing(drawing)).toThrow("at least 0.01 feet long");
   });
 });
