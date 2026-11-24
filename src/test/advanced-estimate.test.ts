@@ -119,11 +119,13 @@ describe("estimate and recorded profitability", () => {
 
 describe("financial profit calculations", () => {
   it("separates direct costs from business overhead", () => {
-    expect(actualProfit(100000, [
-      { category: "materials", amount_cents: 25000 },
-      { category: "insurance", amount_cents: 5000 },
-      { category: "labor", amount_cents: 10000 },
-    ])).toEqual({
+    expect(
+      actualProfit(100000, [
+        { category: "materials", amount_cents: 25000 },
+        { category: "insurance", amount_cents: 5000 },
+        { category: "labor", amount_cents: 10000 },
+      ]),
+    ).toEqual({
       direct: 35000,
       overhead: 5000,
       expenses: 40000,
@@ -145,10 +147,12 @@ describe("financial profit calculations", () => {
   });
 
   it("rejects totals that exceed safe integer precision", () => {
-    expect(() => actualProfit(1000, [
-      { category: "materials", amount_cents: Number.MAX_SAFE_INTEGER },
-      { category: "labor", amount_cents: 1 },
-    ])).toThrow("Direct expenses exceed the supported amount");
+    expect(() =>
+      actualProfit(1000, [
+        { category: "materials", amount_cents: Number.MAX_SAFE_INTEGER },
+        { category: "labor", amount_cents: 1 },
+      ]),
+    ).toThrow("Direct expenses exceed the supported amount");
   });
 
   it("returns no margin when no cash has been collected", () => {

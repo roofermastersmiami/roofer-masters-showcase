@@ -16,24 +16,24 @@ Never use production customer data or production payment credentials. Tests must
 
 ## Required isolation matrix
 
-| Surface | Company A expected behavior | Cross-company denial |
-| --- | --- | --- |
-| Leads, customers, properties | A members read and update A rows within their role | A cannot select, update, delete, or infer B rows |
-| Customer/lead relationship | A customer can link only to an A lead; lead/customer synchronization stays within A | Reject A customer ↔ B lead links in either direction |
-| Property relationship | A property can link only to an A customer | Reject A property ↔ B customer and B property ↔ A customer |
-| Jobs | A authorized staff can read and update A jobs | A cannot read, update, delete, export, or attach B job IDs |
-| Job relationships | A job can reference only A lead, property, and proposal | Reject any mixed-company parent references |
-| Crew assignments | A job can be assigned only to active A crew members | Reject B crew IDs and users without an A crew membership, even if their UUID is supplied |
-| Estimates/proposals | A users see only A records and A customer-safe projections | B record IDs cannot be attached to A leads/jobs or exposed by a guessed URL |
-| Invoices/payments | A accounting/owner roles manage A financial rows; customers can use A's issued-invoice capability | A CRM user cannot read B financial rows; A invoice capability cannot resolve or pay B invoice |
-| Expenses/allocation links | A expenses and invoice-project links resolve only to A jobs/invoices/customers/properties | Reject every mixed-company link, including indirect invoice-to-job joins |
-| Roof reports/drawings | A report and immutable drawing revisions resolve only through A customer/property | A cannot read, save, revise, or delete B report/drawing records |
-| Activity/tasks/messages | A activity and task views contain only A records | No B activity, task, or lead-message visibility through joins or search |
-| Public booking | A public booking page returns only A availability and books only A appointments | A public configuration/token cannot query or reserve B calendar slots |
-| Signed URLs | A authorized member can create a short-lived URL for an A object | A cannot sign, download, overwrite, or delete B object paths by guessing UUIDs |
-| Storage listing | A sees only A objects under allowed parent records | Listing prefixes or object names cannot enumerate B files |
-| RPC execution | A role-appropriate RPC succeeds for A records | Every RPC denies B IDs, including SECURITY DEFINER functions and direct RPC invocation |
-| Exports/search | A exports and search results include only A data | B rows must not leak through aggregate totals, CSV/PDF exports, counts, autocomplete, or error messages |
+| Surface                      | Company A expected behavior                                                                       | Cross-company denial                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Leads, customers, properties | A members read and update A rows within their role                                                | A cannot select, update, delete, or infer B rows                                                        |
+| Customer/lead relationship   | A customer can link only to an A lead; lead/customer synchronization stays within A               | Reject A customer ↔ B lead links in either direction                                                    |
+| Property relationship        | A property can link only to an A customer                                                         | Reject A property ↔ B customer and B property ↔ A customer                                              |
+| Jobs                         | A authorized staff can read and update A jobs                                                     | A cannot read, update, delete, export, or attach B job IDs                                              |
+| Job relationships            | A job can reference only A lead, property, and proposal                                           | Reject any mixed-company parent references                                                              |
+| Crew assignments             | A job can be assigned only to active A crew members                                               | Reject B crew IDs and users without an A crew membership, even if their UUID is supplied                |
+| Estimates/proposals          | A users see only A records and A customer-safe projections                                        | B record IDs cannot be attached to A leads/jobs or exposed by a guessed URL                             |
+| Invoices/payments            | A accounting/owner roles manage A financial rows; customers can use A's issued-invoice capability | A CRM user cannot read B financial rows; A invoice capability cannot resolve or pay B invoice           |
+| Expenses/allocation links    | A expenses and invoice-project links resolve only to A jobs/invoices/customers/properties         | Reject every mixed-company link, including indirect invoice-to-job joins                                |
+| Roof reports/drawings        | A report and immutable drawing revisions resolve only through A customer/property                 | A cannot read, save, revise, or delete B report/drawing records                                         |
+| Activity/tasks/messages      | A activity and task views contain only A records                                                  | No B activity, task, or lead-message visibility through joins or search                                 |
+| Public booking               | A public booking page returns only A availability and books only A appointments                   | A public configuration/token cannot query or reserve B calendar slots                                   |
+| Signed URLs                  | A authorized member can create a short-lived URL for an A object                                  | A cannot sign, download, overwrite, or delete B object paths by guessing UUIDs                          |
+| Storage listing              | A sees only A objects under allowed parent records                                                | Listing prefixes or object names cannot enumerate B files                                               |
+| RPC execution                | A role-appropriate RPC succeeds for A records                                                     | Every RPC denies B IDs, including SECURITY DEFINER functions and direct RPC invocation                  |
+| Exports/search               | A exports and search results include only A data                                                  | B rows must not leak through aggregate totals, CSV/PDF exports, counts, autocomplete, or error messages |
 
 ## Authorization variants to run for each applicable surface
 

@@ -136,14 +136,16 @@ export function actualProfit(
     .filter((e) => !overheadCategories.has(e.category))
     .reduce((sum, e) => {
       const next = sum + e.amount_cents;
-      if (!Number.isSafeInteger(next)) throw new Error("Direct expenses exceed the supported amount");
+      if (!Number.isSafeInteger(next))
+        throw new Error("Direct expenses exceed the supported amount");
       return next;
     }, 0);
   const overhead = expenses
     .filter((e) => overheadCategories.has(e.category))
     .reduce((sum, e) => {
       const next = sum + e.amount_cents;
-      if (!Number.isSafeInteger(next)) throw new Error("Business overhead exceeds the supported amount");
+      if (!Number.isSafeInteger(next))
+        throw new Error("Business overhead exceeds the supported amount");
       return next;
     }, 0);
   const totalExpenses = direct + overhead;

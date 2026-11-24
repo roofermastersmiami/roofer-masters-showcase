@@ -171,13 +171,23 @@ export function CrmShell({
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-        if (fallbackTheme && ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(fallbackTheme)) setTheme(fallbackTheme);
-        if (fallbackSidebar && ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)) setSidebarAppearance(fallbackSidebar);
+        if (
+          fallbackTheme &&
+          ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(fallbackTheme)
+        )
+          setTheme(fallbackTheme);
+        if (
+          fallbackSidebar &&
+          ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)
+        )
+          setSidebarAppearance(fallbackSidebar);
       } catch {
         // Browser storage may be disabled; use the in-memory defaults.
       }
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (cancelled) return;
         if (user) {
           setBrandingUserId(user.id);
@@ -188,14 +198,32 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (["executive-berry", "modern-enterprise", "canyon-corporate"].includes(data.theme_palette)) setTheme(data.theme_palette);
-            if (["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(data.sidebar_appearance)) setSidebarAppearance(data.sidebar_appearance);
+            if (
+              ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(
+                data.theme_palette,
+              )
+            )
+              setTheme(data.theme_palette);
+            if (
+              ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
+                data.sidebar_appearance,
+              )
+            )
+              setSidebarAppearance(data.sidebar_appearance);
             setLogoPath(data.logo_path);
-            setLogoUrl(data.logo_path ? supabase.storage.from("crm-company-branding").getPublicUrl(data.logo_path).data.publicUrl : "");
+            setLogoUrl(
+              data.logo_path
+                ? supabase.storage.from("crm-company-branding").getPublicUrl(data.logo_path).data
+                    .publicUrl
+                : "",
+            );
           }
         }
       } catch {
-        if (!cancelled) setBrandingError("Company branding could not be loaded. Your current appearance remains available.");
+        if (!cancelled)
+          setBrandingError(
+            "Company branding could not be loaded. Your current appearance remains available.",
+          );
       } finally {
         if (!cancelled) {
           setSidebarPreferencesLoaded(true);
@@ -204,7 +232,9 @@ export function CrmShell({
       }
     };
     void loadBranding();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
   useEffect(() => {
     if (!sidebarPreferencesLoaded) return;
@@ -217,8 +247,14 @@ export function CrmShell({
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove(
-      "crm-theme-ocean", "crm-theme-slate", "crm-theme-emerald", "crm-theme-sunset", "crm-theme-violet",
-      "crm-theme-executive-berry", "crm-theme-modern-enterprise", "crm-theme-canyon-corporate",
+      "crm-theme-ocean",
+      "crm-theme-slate",
+      "crm-theme-emerald",
+      "crm-theme-sunset",
+      "crm-theme-violet",
+      "crm-theme-executive-berry",
+      "crm-theme-modern-enterprise",
+      "crm-theme-canyon-corporate",
     );
     root.classList.add(`crm-theme-${theme}`);
     try {
@@ -229,15 +265,22 @@ export function CrmShell({
   }, [theme]);
   useEffect(() => {
     if (!brandingLoaded || !brandingUserId) return;
-    void supabase.from("crm_company_branding").upsert({
-      owner_user_id: brandingUserId,
-      logo_path: logoPath,
-      theme_palette: theme,
-      sidebar_appearance: sidebarAppearance,
-    }, { onConflict: "owner_user_id" }).then(({ error: saveError }) => {
-      if (saveError) setBrandingError("Your branding preference could not be saved to your account.");
-      else setBrandingError("");
-    });
+    void supabase
+      .from("crm_company_branding")
+      .upsert(
+        {
+          owner_user_id: brandingUserId,
+          logo_path: logoPath,
+          theme_palette: theme,
+          sidebar_appearance: sidebarAppearance,
+        },
+        { onConflict: "owner_user_id" },
+      )
+      .then(({ error: saveError }) => {
+        if (saveError)
+          setBrandingError("Your branding preference could not be saved to your account.");
+        else setBrandingError("");
+      });
   }, [brandingLoaded, brandingUserId, logoPath, theme, sidebarAppearance]);
   async function uploadCompanyLogo(file: File) {
     setBrandingError("");
@@ -251,9 +294,13 @@ export function CrmShell({
     }
     setLogoUploading(true);
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
       if (authError || !user) throw authError ?? new Error("Sign in to upload a company logo.");
-      const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      const extension =
+        file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
       const path = `${user.id}/company-logo.${extension}`;
       const { error: uploadError } = await supabase.storage
         .from("crm-company-branding")
@@ -261,10 +308,14 @@ export function CrmShell({
       if (uploadError) throw uploadError;
       setBrandingUserId(user.id);
       setLogoPath(path);
-      setLogoUrl(`${supabase.storage.from("crm-company-branding").getPublicUrl(path).data.publicUrl}?v=${Date.now()}`);
+      setLogoUrl(
+        `${supabase.storage.from("crm-company-branding").getPublicUrl(path).data.publicUrl}?v=${Date.now()}`,
+      );
       setBrandingLoaded(true);
     } catch (error) {
-      setBrandingError(error instanceof Error ? error.message : "The company logo could not be uploaded.");
+      setBrandingError(
+        error instanceof Error ? error.message : "The company logo could not be uploaded.",
+      );
     } finally {
       setLogoUploading(false);
     }
@@ -352,36 +403,59 @@ export function CrmShell({
   const results = [...propertyResults, ...leadResults].slice(0, 10);
   const current = groups.flatMap((g) => g.items).find((i) => i.id === section);
   const sidebarIsLight = sidebarAppearance === "light" || sidebarAppearance === "steel";
-  const sidebarSurface = sidebarAppearance === "light"
-    ? "border-border bg-card text-foreground"
-    : sidebarAppearance === "accent"
-      ? "border-transparent bg-primary text-primary-foreground"
-      : sidebarAppearance === "charcoal"
-        ? "border-transparent bg-slate-900 text-slate-100"
-        : sidebarAppearance === "gradient"
-          ? "border-transparent bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 text-white"
-          : sidebarAppearance === "steel"
-            ? "border-border bg-slate-100 text-slate-800"
-            : "border-transparent bg-navy text-navy-foreground";
+  const sidebarSurface =
+    sidebarAppearance === "light"
+      ? "border-border bg-card text-foreground"
+      : sidebarAppearance === "accent"
+        ? "border-transparent bg-primary text-primary-foreground"
+        : sidebarAppearance === "charcoal"
+          ? "border-transparent bg-slate-900 text-slate-100"
+          : sidebarAppearance === "gradient"
+            ? "border-transparent bg-gradient-to-b from-slate-900 via-blue-950 to-slate-950 text-white"
+            : sidebarAppearance === "steel"
+              ? "border-border bg-slate-100 text-slate-800"
+              : "border-transparent bg-navy text-navy-foreground";
   const sidebarMutedText = sidebarIsLight ? "text-foreground/80" : "text-white/80";
-  const sidebarHover = sidebarIsLight ? "hover:bg-muted hover:text-foreground" : "hover:bg-white/10 hover:text-white";
-  const sidebarActive = sidebarIsLight ? "bg-accent text-accent-foreground" : "bg-white/15 text-white";
+  const sidebarHover = sidebarIsLight
+    ? "hover:bg-muted hover:text-foreground"
+    : "hover:bg-white/10 hover:text-white";
+  const sidebarActive = sidebarIsLight
+    ? "bg-accent text-accent-foreground"
+    : "bg-white/15 text-white";
   function navigation(compact: boolean) {
     return (
       <div className="flex h-full flex-col">
-        <div className={cn("flex h-24 shrink-0 items-center gap-3 border-b px-5", sidebarIsLight ? "border-border" : "border-white/15")}>
-          {logoUrl ? (
-            <img src={logoUrl} alt="Company logo" className={compact ? "h-9 max-w-12 object-contain" : "h-10 max-w-36 object-contain"} />
-          ) : (
-            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><HardHat className="size-6" /></div>
+        <div
+          className={cn(
+            "flex h-24 shrink-0 items-center gap-3 border-b px-5",
+            sidebarIsLight ? "border-border" : "border-white/15",
           )}
-          {!compact && !logoUrl && <span className="font-display text-lg font-bold leading-tight">Roofing CRM</span>}
+        >
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Company logo"
+              className={compact ? "h-9 max-w-12 object-contain" : "h-10 max-w-36 object-contain"}
+            />
+          ) : (
+            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <HardHat className="size-6" />
+            </div>
+          )}
+          {!compact && !logoUrl && (
+            <span className="font-display text-lg font-bold leading-tight">Roofing CRM</span>
+          )}
         </div>
         <nav aria-label="CRM navigation" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
           {visibleGroups.map((g) => (
             <div key={g.label} className="mb-6">
               {!compact && (
-                <p className={cn("mb-2 px-3 text-[10px] font-bold uppercase", sidebarIsLight ? "text-muted-foreground" : "text-white/55")}>
+                <p
+                  className={cn(
+                    "mb-2 px-3 text-[10px] font-bold uppercase",
+                    sidebarIsLight ? "text-muted-foreground" : "text-white/55",
+                  )}
+                >
                   {g.label}
                 </p>
               )}
@@ -416,7 +490,12 @@ export function CrmShell({
             </div>
           ))}
         </nav>
-        <div className={cn("border-t p-3", sidebarAppearance === "light" ? "border-border" : "border-primary-foreground/15")}>
+        <div
+          className={cn(
+            "border-t p-3",
+            sidebarAppearance === "light" ? "border-border" : "border-primary-foreground/15",
+          )}
+        >
           <Button
             variant="ghost"
             className={cn("w-full justify-start", sidebarMutedText, sidebarHover)}
@@ -429,7 +508,14 @@ export function CrmShell({
             </Link>
           </Button>
           {!compact && (
-            <p className={cn("px-3 pt-3 text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/50")}>Company workspace</p>
+            <p
+              className={cn(
+                "px-3 pt-3 text-[10px]",
+                sidebarIsLight ? "text-muted-foreground" : "text-white/50",
+              )}
+            >
+              Company workspace
+            </p>
           )}
         </div>
       </div>
@@ -459,7 +545,11 @@ export function CrmShell({
     >
       <div className="flex min-h-dvh bg-background text-foreground">
         <aside
-          className={cn("sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block", sidebarSurface, collapsed ? "w-20" : "w-60") }
+          className={cn(
+            "sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block",
+            sidebarSurface,
+            collapsed ? "w-20" : "w-60",
+          )}
         >
           {navigation(collapsed)}
         </aside>
@@ -532,17 +622,40 @@ export function CrmShell({
                 </div>
               )}
             </div>
-            <label className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 sm:gap-1.5 sm:px-2" title="Choose CRM color theme">
+            <label
+              className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 sm:gap-1.5 sm:px-2"
+              title="Choose CRM color theme"
+            >
               <Palette className="size-4 text-muted-foreground" />
               <span className="sr-only">CRM color theme</span>
-              <select aria-label="CRM color theme" value={theme} onChange={(event) => setTheme(event.target.value)} className="h-8 max-w-24 bg-transparent text-[11px] outline-none sm:max-w-32 sm:text-xs">
-                <option value="executive-berry">Executive Berry</option><option value="modern-enterprise">Modern Enterprise</option><option value="canyon-corporate">Canyon Corporate</option>
+              <select
+                aria-label="CRM color theme"
+                value={theme}
+                onChange={(event) => setTheme(event.target.value)}
+                className="h-8 max-w-24 bg-transparent text-[11px] outline-none sm:max-w-32 sm:text-xs"
+              >
+                <option value="executive-berry">Executive Berry</option>
+                <option value="modern-enterprise">Modern Enterprise</option>
+                <option value="canyon-corporate">Canyon Corporate</option>
               </select>
             </label>
-            <label className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 xl:flex" title="Choose sidebar appearance">
+            <label
+              className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 xl:flex"
+              title="Choose sidebar appearance"
+            >
               <span className="text-[11px] text-muted-foreground">Sidebar</span>
-              <select aria-label="Sidebar appearance" value={sidebarAppearance} onChange={(event) => setSidebarAppearance(event.target.value)} className="h-8 max-w-20 bg-transparent text-xs outline-none">
-                <option value="navy">Navy</option><option value="light">Light</option><option value="accent">Accent</option><option value="charcoal">Charcoal</option><option value="gradient">Midnight gradient</option><option value="steel">Steel</option>
+              <select
+                aria-label="Sidebar appearance"
+                value={sidebarAppearance}
+                onChange={(event) => setSidebarAppearance(event.target.value)}
+                className="h-8 max-w-20 bg-transparent text-xs outline-none"
+              >
+                <option value="navy">Navy</option>
+                <option value="light">Light</option>
+                <option value="accent">Accent</option>
+                <option value="charcoal">Charcoal</option>
+                <option value="gradient">Midnight gradient</option>
+                <option value="steel">Steel</option>
               </select>
             </label>
             <input
@@ -566,8 +679,16 @@ export function CrmShell({
               disabled={logoUploading}
               onClick={() => logoInputRef.current?.click()}
             >
-              {logoUploading ? <LoaderCircle className="size-4 animate-spin" /> : logoUrl ? <img src={logoUrl} alt="" className="size-6 rounded object-contain" /> : <ImagePlus className="size-4" />}
-              <span className="hidden text-xs sm:inline">{logoUploading ? "Uploading" : logoUrl ? "Company logo" : "Upload logo"}</span>
+              {logoUploading ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : logoUrl ? (
+                <img src={logoUrl} alt="" className="size-6 rounded object-contain" />
+              ) : (
+                <ImagePlus className="size-4" />
+              )}
+              <span className="hidden text-xs sm:inline">
+                {logoUploading ? "Uploading" : logoUrl ? "Company logo" : "Upload logo"}
+              </span>
             </Button>
             <Button
               variant="ghost"
@@ -608,7 +729,14 @@ export function CrmShell({
               <LogOut className="size-4" />
             </Button>
           </header>
-          {brandingError && <p role="status" className="border-b border-border bg-muted px-4 py-2 text-right text-xs text-destructive">{brandingError}</p>}
+          {brandingError && (
+            <p
+              role="status"
+              className="border-b border-border bg-muted px-4 py-2 text-right text-xs text-destructive"
+            >
+              {brandingError}
+            </p>
+          )}
           <main className="mx-auto max-w-[1600px] p-4 sm:p-7 lg:p-9">
             {error ? (
               <p role="alert" className="text-destructive">

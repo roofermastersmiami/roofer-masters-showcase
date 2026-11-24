@@ -17,14 +17,14 @@ This document records the current security boundary and the work required before
 
 The following tables are present in the generated Supabase database types. Every operational or private table must either gain a `company_id` (with a safe backfill) or be explicitly classified as global/reference data.
 
-| Area | Tables |
-| --- | --- |
-| Leads and customer records | `leads`, `crm_customers`, `crm_properties`, `crm_activity`, `crm_tasks`, `lead_messages` |
-| Sales and documents | `roof_estimates`, `proposals`, `proposal_shares`, `client_portal_links`, `pdf_sign_templates` |
-| Production and measurement | `roof_jobs`, `job_change_orders`, `roof_drawings`, `roof_report_orders` |
-| Financial records | `crm_invoices`, `invoice_payments`, `invoice_checkouts`, `invoice_project_links`, `crm_expenses`, `roof_cost_catalog` |
-| Company and access | `crm_companies`, `crm_company_memberships`, `crm_company_branding`, `user_roles` |
-| Configuration/reference | `instant_roof_rates`, `site_content` |
+| Area                       | Tables                                                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Leads and customer records | `leads`, `crm_customers`, `crm_properties`, `crm_activity`, `crm_tasks`, `lead_messages`                              |
+| Sales and documents        | `roof_estimates`, `proposals`, `proposal_shares`, `client_portal_links`, `pdf_sign_templates`                         |
+| Production and measurement | `roof_jobs`, `job_change_orders`, `roof_drawings`, `roof_report_orders`                                               |
+| Financial records          | `crm_invoices`, `invoice_payments`, `invoice_checkouts`, `invoice_project_links`, `crm_expenses`, `roof_cost_catalog` |
+| Company and access         | `crm_companies`, `crm_company_memberships`, `crm_company_branding`, `user_roles`                                      |
+| Configuration/reference    | `instant_roof_rates`, `site_content`                                                                                  |
 
 ## Required migration sequence
 

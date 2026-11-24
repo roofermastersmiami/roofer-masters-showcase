@@ -18,10 +18,29 @@ export const ROLE_LABELS: Record<TeamRole, string> = {
 type R = Exclude<TeamRole, "admin">;
 /** Canonical route IDs shared by the router, sidebar, and authorization tests. */
 export const CRM_SECTION_IDS = [
-  "", "detailed-estimator", "prices", "expenses", "financials", "roof-reports",
-  "appointments", "measurements", "pipeline", "submissions", "customers",
-  "properties", "chat", "proposals", "estimates", "jobs", "invoices",
-  "followups", "sales", "content", "instant", "team", "my-jobs",
+  "",
+  "detailed-estimator",
+  "prices",
+  "expenses",
+  "financials",
+  "roof-reports",
+  "appointments",
+  "measurements",
+  "pipeline",
+  "submissions",
+  "customers",
+  "properties",
+  "chat",
+  "proposals",
+  "estimates",
+  "jobs",
+  "invoices",
+  "followups",
+  "sales",
+  "content",
+  "instant",
+  "team",
+  "my-jobs",
 ] as const;
 /** Which roles (besides the owner, who sees everything) may open each CRM section. Mirrors database rules. */
 export const SECTION_ROLES: Record<string, readonly R[]> = {

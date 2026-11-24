@@ -1,6 +1,15 @@
 export const EXPENSE_CATEGORIES = [
-  "materials", "labor", "subcontractors", "fuel", "equipment", "permits",
-  "disposal", "insurance", "advertising", "office", "other",
+  "materials",
+  "labor",
+  "subcontractors",
+  "fuel",
+  "equipment",
+  "permits",
+  "disposal",
+  "insurance",
+  "advertising",
+  "office",
+  "other",
 ] as const;
 
 export type ExpenseInput = {

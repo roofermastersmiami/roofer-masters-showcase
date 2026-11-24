@@ -195,7 +195,8 @@ export function FinancialAnalytics() {
       )}
       {paymentSetupMissing && !failed && (
         <p className="mb-4 text-sm text-muted-foreground">
-          Online payments are not configured. Invoice and payment totals use the sandbox environment; recorded business expenses are included independently.
+          Online payments are not configured. Invoice and payment totals use the sandbox
+          environment; recorded business expenses are included independently.
         </p>
       )}
       {failed ? (

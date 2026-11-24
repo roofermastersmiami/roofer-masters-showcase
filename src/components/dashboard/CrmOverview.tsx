@@ -49,36 +49,63 @@ export function CrmOverview() {
     [accent, setAccent] = useState("#2563eb"),
     [density, setDensity] = useState<"comfortable" | "compact">("comfortable"),
     [cardStyle, setCardStyle] = useState<"outlined" | "soft" | "elevated">("outlined"),
-    [cardOrder, setCardOrder] = useState(["Payments received", "Outstanding balance", "Active projects", "New leads"]),
+    [cardOrder, setCardOrder] = useState([
+      "Payments received",
+      "Outstanding balance",
+      "Active projects",
+      "New leads",
+    ]),
     [hiddenCards, setHiddenCards] = useState<string[]>([]),
     [draggedCard, setDraggedCard] = useState<string | null>(null),
     [preferencesLoaded, setPreferencesLoaded] = useState(false);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
-      if (typeof saved.accent === "string" && /^#[0-9a-f]{6}$/i.test(saved.accent)) setAccent(saved.accent);
+      if (typeof saved.accent === "string" && /^#[0-9a-f]{6}$/i.test(saved.accent))
+        setAccent(saved.accent);
       if (saved.density === "compact" || saved.density === "comfortable") setDensity(saved.density);
-      if (saved.cardStyle === "outlined" || saved.cardStyle === "soft" || saved.cardStyle === "elevated") setCardStyle(saved.cardStyle);
-      const allowedCards = ["Payments received", "Outstanding balance", "Active projects", "New leads"];
+      if (
+        saved.cardStyle === "outlined" ||
+        saved.cardStyle === "soft" ||
+        saved.cardStyle === "elevated"
+      )
+        setCardStyle(saved.cardStyle);
+      const allowedCards = [
+        "Payments received",
+        "Outstanding balance",
+        "Active projects",
+        "New leads",
+      ];
       if (Array.isArray(saved.cardOrder)) {
         const restored = saved.cardOrder.filter(
-          (item: unknown): item is string => typeof item === "string" && allowedCards.includes(item),
+          (item: unknown): item is string =>
+            typeof item === "string" && allowedCards.includes(item),
         );
-        const unique = restored.filter((item: string, index: number) => restored.indexOf(item) === index);
+        const unique = restored.filter(
+          (item: string, index: number) => restored.indexOf(item) === index,
+        );
         setCardOrder([...unique, ...allowedCards.filter((item) => !unique.includes(item))]);
       }
       if (Array.isArray(saved.hiddenCards)) {
-        setHiddenCards(saved.hiddenCards.filter(
-          (item: unknown): item is string => typeof item === "string" && allowedCards.includes(item),
-        ));
+        setHiddenCards(
+          saved.hiddenCards.filter(
+            (item: unknown): item is string =>
+              typeof item === "string" && allowedCards.includes(item),
+          ),
+        );
       }
-    } catch { /* Keep defaults if saved preferences are unavailable. */ }
+    } catch {
+      /* Keep defaults if saved preferences are unavailable. */
+    }
     setPreferencesLoaded(true);
   }, []);
   useEffect(() => {
     if (preferencesLoaded) {
       try {
-        localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards }));
+        localStorage.setItem(
+          "crm-dashboard-layout",
+          JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards }),
+        );
       } catch {
         // Storage can be disabled or full; dashboard customization still works for this session.
       }
@@ -165,15 +192,54 @@ export function CrmOverview() {
   const value = (n: number) =>
     loading ? "…" : unavailable || !validRange ? "Unavailable" : money(n);
   const metricCards = [
-    { label: "Payments received", value: value(ledger.collected), icon: Wallet, section: "invoices", note: "Selected period" },
-    { label: "Outstanding balance", value: value(ledger.outstanding), icon: Receipt, section: "invoices", note: "All issued invoices" },
-    { label: "Active projects", value: jobs.isPending ? "…" : jobs.error ? "Unavailable" : String(activeJobs.length), icon: HardHat, section: "jobs", note: `${jobs.data?.filter((j) => j.status === "completed").length ?? 0} completed` },
-    { label: "New leads", value: String(selectedLeads.length), icon: Users, section: "pipeline", note: `${selectedLeads.length ? Math.round((converted.length / selectedLeads.length) * 100) : 0}% lead conversion` },
-  ].sort((a, b) => { const ai = cardOrder.indexOf(a.label), bi = cardOrder.indexOf(b.label); return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi); });
-  const moveCard = (from: string, to: string) => { const next = [...cardOrder], i = next.indexOf(from), j = next.indexOf(to); if (i < 0 || j < 0) return; next.splice(i, 1); next.splice(j, 0, from); setCardOrder(next); };
+    {
+      label: "Payments received",
+      value: value(ledger.collected),
+      icon: Wallet,
+      section: "invoices",
+      note: "Selected period",
+    },
+    {
+      label: "Outstanding balance",
+      value: value(ledger.outstanding),
+      icon: Receipt,
+      section: "invoices",
+      note: "All issued invoices",
+    },
+    {
+      label: "Active projects",
+      value: jobs.isPending ? "…" : jobs.error ? "Unavailable" : String(activeJobs.length),
+      icon: HardHat,
+      section: "jobs",
+      note: `${jobs.data?.filter((j) => j.status === "completed").length ?? 0} completed`,
+    },
+    {
+      label: "New leads",
+      value: String(selectedLeads.length),
+      icon: Users,
+      section: "pipeline",
+      note: `${selectedLeads.length ? Math.round((converted.length / selectedLeads.length) * 100) : 0}% lead conversion`,
+    },
+  ].sort((a, b) => {
+    const ai = cardOrder.indexOf(a.label),
+      bi = cardOrder.indexOf(b.label);
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+  });
+  const moveCard = (from: string, to: string) => {
+    const next = [...cardOrder],
+      i = next.indexOf(from),
+      j = next.indexOf(to);
+    if (i < 0 || j < 0) return;
+    next.splice(i, 1);
+    next.splice(j, 0, from);
+    setCardOrder(next);
+  };
   const moveCardBy = (label: string, offset: number) => {
-    const current = metricCards.map((card) => card.label).filter((name) => !hiddenCards.includes(name));
-    const index = current.indexOf(label), target = index + offset;
+    const current = metricCards
+      .map((card) => card.label)
+      .filter((name) => !hiddenCards.includes(name));
+    const index = current.indexOf(label),
+      target = index + offset;
     if (index < 0 || target < 0 || target >= current.length) return;
     const next = [...current];
     [next[index], next[target]] = [next[target], next[index]];
@@ -196,32 +262,148 @@ export function CrmOverview() {
             })}
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3"><Button variant="outline" onClick={() => setCustomize((open) => !open)} aria-expanded={customize}><SlidersHorizontal className="mr-2 size-4" /> Customize dashboard</Button><div className="w-44">
-          <Choice
-            label="Reporting period"
-            value={period}
-            onChange={setPeriod}
-            options={[
-              { value: "today", label: "Today" },
-              { value: "week", label: "This week" },
-              { value: "month", label: "This month" },
-              { value: "year", label: "This year" },
-              { value: "custom", label: "Custom range" },
-            ]}
-          />
+        <div className="flex flex-wrap items-end gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setCustomize((open) => !open)}
+            aria-expanded={customize}
+          >
+            <SlidersHorizontal className="mr-2 size-4" /> Customize dashboard
+          </Button>
+          <div className="w-44">
+            <Choice
+              label="Reporting period"
+              value={period}
+              onChange={setPeriod}
+              options={[
+                { value: "today", label: "Today" },
+                { value: "week", label: "This week" },
+                { value: "month", label: "This month" },
+                { value: "year", label: "This year" },
+                { value: "custom", label: "Custom range" },
+              ]}
+            />
           </div>
         </div>
       </div>
-      {customize && <section className="mb-6 rounded-xl border border-border bg-card p-5" aria-label="Dashboard customization">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Your workspace, your way</h2><p className="text-sm text-muted-foreground">Drag cards to reorder them. Preferences are saved on this device.</p></div>
-          <Button size="sm" variant="ghost" onClick={() => { setAccent("#2563eb"); setDensity("comfortable"); setCardStyle("outlined"); setCardOrder(["Payments received", "Outstanding balance", "Active projects", "New leads"]); setHiddenCards([]); }}>Reset layout</Button></div>
-        <div className="mt-4 flex flex-wrap items-center gap-5">
-          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p><div className="flex gap-2">{["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => <button key={color} type="button" aria-label={`Set accent color ${color}`} aria-pressed={accent === color} onClick={() => setAccent(color)} className="size-8 rounded-full border-2 border-background" style={{ backgroundColor: color, outline: accent === color ? `2px solid ${color}` : "none" }} />)}</div></div>
-          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">SHOW / HIDE SUMMARY CARDS</p><div className="flex flex-wrap gap-2">{["Payments received", "Outstanding balance", "Active projects", "New leads"].map((label) => <Button key={label} size="sm" variant={hiddenCards.includes(label) ? "outline" : "secondary"} onClick={() => setHiddenCards((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label])}>{hiddenCards.includes(label) ? <EyeOff className="mr-1 size-3" /> : <Eye className="mr-1 size-3" />}{label}</Button>)}</div></div>
-          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD SPACING</p><div className="flex gap-2"><Button size="sm" variant={density === "comfortable" ? "default" : "outline"} onClick={() => setDensity("comfortable")}>Comfortable</Button><Button size="sm" variant={density === "compact" ? "default" : "outline"} onClick={() => setDensity("compact")}>Compact</Button></div></div>
-          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD STYLE</p><div className="flex flex-wrap gap-2">{(["outlined", "soft", "elevated"] as const).map((style) => <Button key={style} size="sm" variant={cardStyle === style ? "default" : "outline"} onClick={() => setCardStyle(style)}>{style[0].toUpperCase() + style.slice(1)}</Button>)}</div></div>
-        </div>
-      </section>}
+      {customize && (
+        <section
+          className="mb-6 rounded-xl border border-border bg-card p-5"
+          aria-label="Dashboard customization"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Your workspace, your way</h2>
+              <p className="text-sm text-muted-foreground">
+                Drag cards to reorder them. Preferences are saved on this device.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setAccent("#2563eb");
+                setDensity("comfortable");
+                setCardStyle("outlined");
+                setCardOrder([
+                  "Payments received",
+                  "Outstanding balance",
+                  "Active projects",
+                  "New leads",
+                ]);
+                setHiddenCards([]);
+              }}
+            >
+              Reset layout
+            </Button>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-5">
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p>
+              <div className="flex gap-2">
+                {["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    aria-label={`Set accent color ${color}`}
+                    aria-pressed={accent === color}
+                    onClick={() => setAccent(color)}
+                    className="size-8 rounded-full border-2 border-background"
+                    style={{
+                      backgroundColor: color,
+                      outline: accent === color ? `2px solid ${color}` : "none",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                SHOW / HIDE SUMMARY CARDS
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {["Payments received", "Outstanding balance", "Active projects", "New leads"].map(
+                  (label) => (
+                    <Button
+                      key={label}
+                      size="sm"
+                      variant={hiddenCards.includes(label) ? "outline" : "secondary"}
+                      onClick={() =>
+                        setHiddenCards((current) =>
+                          current.includes(label)
+                            ? current.filter((item) => item !== label)
+                            : [...current, label],
+                        )
+                      }
+                    >
+                      {hiddenCards.includes(label) ? (
+                        <EyeOff className="mr-1 size-3" />
+                      ) : (
+                        <Eye className="mr-1 size-3" />
+                      )}
+                      {label}
+                    </Button>
+                  ),
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">CARD SPACING</p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={density === "comfortable" ? "default" : "outline"}
+                  onClick={() => setDensity("comfortable")}
+                >
+                  Comfortable
+                </Button>
+                <Button
+                  size="sm"
+                  variant={density === "compact" ? "default" : "outline"}
+                  onClick={() => setDensity("compact")}
+                >
+                  Compact
+                </Button>
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">CARD STYLE</p>
+              <div className="flex flex-wrap gap-2">
+                {(["outlined", "soft", "elevated"] as const).map((style) => (
+                  <Button
+                    key={style}
+                    size="sm"
+                    variant={cardStyle === style ? "default" : "outline"}
+                    onClick={() => setCardStyle(style)}
+                  >
+                    {style[0].toUpperCase() + style.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
       {period === "custom" && (
         <div className="mb-5 flex flex-wrap gap-3">
           <label className="text-sm">
@@ -254,23 +436,90 @@ export function CrmOverview() {
             : "Some records could not load. Totals are unavailable until records load."}
         </p>
       )}
-      <div className={`grid ${density === "compact" ? "gap-2" : "gap-4"} sm:grid-cols-2 xl:grid-cols-4`}>
+      <div
+        className={`grid ${density === "compact" ? "gap-2" : "gap-4"} sm:grid-cols-2 xl:grid-cols-4`}
+      >
         {metricCards.filter((card) => !hiddenCards.includes(card.label)).length === 0 ? (
           <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center">
             <p className="font-semibold text-foreground">Your summary cards are hidden</p>
-            <p className="mt-1 text-sm text-muted-foreground">Restore the cards to bring your business metrics back to the dashboard.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Restore the cards to bring your business metrics back to the dashboard.
+            </p>
             <Button className="mt-4" variant="outline" onClick={() => setHiddenCards([])}>
               <Eye className="mr-2 size-4" /> Show all summary cards
             </Button>
           </div>
-        ) : metricCards.filter((card) => !hiddenCards.includes(card.label)).map((card) => (
-          <article key={card.label} draggable onDragStart={() => setDraggedCard(card.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== card.label) moveCard(draggedCard, card.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)}
-            className={`cursor-grab rounded-lg ${cardStyle === "outlined" ? "border border-border bg-card" : cardStyle === "soft" ? "border border-transparent bg-muted/70" : "border border-border bg-card shadow-lg"} ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === card.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
-            <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{card.label}</span><span className="flex items-center gap-1"><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${card.label} earlier`} title={`Move ${card.label} earlier`} disabled={metricCards.filter((item) => !hiddenCards.includes(item.label)).findIndex((item) => item.label === card.label) === 0} onClick={() => moveCardBy(card.label, -1)}><ArrowUp className="size-3.5" /></Button><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${card.label} later`} title={`Move ${card.label} later`} disabled={metricCards.filter((item) => !hiddenCards.includes(item.label)).findIndex((item) => item.label === card.label) === metricCards.filter((item) => !hiddenCards.includes(item.label)).length - 1} onClick={() => moveCardBy(card.label, 1)}><ArrowDown className="size-3.5" /></Button><GripVertical className="size-4 text-muted-foreground" aria-hidden="true" /><card.icon className="size-5" style={{ color: accent }} /></span></div>
-            <p className="mt-4 break-words text-3xl font-bold">{card.value}</p>
-            <div className="mt-4 flex items-center justify-between"><span className="text-xs text-muted-foreground">{card.note}</span><Button size="icon" variant="ghost" title={`View ${card.label.toLowerCase()}`} aria-label={`View ${card.label.toLowerCase()}`} onClick={() => go(card.section)}><ArrowUpRight className="size-4" /></Button></div>
-          </article>
-        ))}
+        ) : (
+          metricCards
+            .filter((card) => !hiddenCards.includes(card.label))
+            .map((card) => (
+              <article
+                key={card.label}
+                draggable
+                onDragStart={() => setDraggedCard(card.label)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (draggedCard && draggedCard !== card.label) moveCard(draggedCard, card.label);
+                  setDraggedCard(null);
+                }}
+                onDragEnd={() => setDraggedCard(null)}
+                className={`cursor-grab rounded-lg ${cardStyle === "outlined" ? "border border-border bg-card" : cardStyle === "soft" ? "border border-transparent bg-muted/70" : "border border-border bg-card shadow-lg"} ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === card.label ? "opacity-50" : ""}`}
+                style={{ borderTop: `3px solid ${accent}` }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-muted-foreground">{card.label}</span>
+                  <span className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7"
+                      aria-label={`Move ${card.label} earlier`}
+                      title={`Move ${card.label} earlier`}
+                      disabled={
+                        metricCards
+                          .filter((item) => !hiddenCards.includes(item.label))
+                          .findIndex((item) => item.label === card.label) === 0
+                      }
+                      onClick={() => moveCardBy(card.label, -1)}
+                    >
+                      <ArrowUp className="size-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7"
+                      aria-label={`Move ${card.label} later`}
+                      title={`Move ${card.label} later`}
+                      disabled={
+                        metricCards
+                          .filter((item) => !hiddenCards.includes(item.label))
+                          .findIndex((item) => item.label === card.label) ===
+                        metricCards.filter((item) => !hiddenCards.includes(item.label)).length - 1
+                      }
+                      onClick={() => moveCardBy(card.label, 1)}
+                    >
+                      <ArrowDown className="size-3.5" />
+                    </Button>
+                    <GripVertical className="size-4 text-muted-foreground" aria-hidden="true" />
+                    <card.icon className="size-5" style={{ color: accent }} />
+                  </span>
+                </div>
+                <p className="mt-4 break-words text-3xl font-bold">{card.value}</p>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{card.note}</span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title={`View ${card.label.toLowerCase()}`}
+                    aria-label={`View ${card.label.toLowerCase()}`}
+                    onClick={() => go(card.section)}
+                  >
+                    <ArrowUpRight className="size-4" />
+                  </Button>
+                </div>
+              </article>
+            ))
+        )}
       </div>
       <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
         <div className="min-w-0">

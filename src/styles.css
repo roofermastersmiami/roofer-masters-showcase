@@ -402,7 +402,6 @@
   }
 }
 
-
 /* CRM-only palette presets. Public website colors remain untouched. */
 .crm-theme-slate {
   --primary: oklch(0.43 0.035 255);

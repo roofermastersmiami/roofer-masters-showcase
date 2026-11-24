@@ -9,15 +9,51 @@ export type Database = {
   public: {
     Tables: {
       crm_companies: {
-        Row: { id: string; name: string; created_by: string; created_at: string; updated_at: string };
-        Insert: { id?: string; name: string; created_by: string; created_at?: string; updated_at?: string };
-        Update: { id?: string; name?: string; created_by?: string; created_at?: string; updated_at?: string };
+        Row: {
+          id: string;
+          name: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       crm_company_memberships: {
-        Row: { id: string; company_id: string; user_id: string; role: Database["public"]["Enums"]["crm_company_role"]; created_at: string };
-        Insert: { id?: string; company_id: string; user_id: string; role?: Database["public"]["Enums"]["crm_company_role"]; created_at?: string };
-        Update: { id?: string; company_id?: string; user_id?: string; role?: Database["public"]["Enums"]["crm_company_role"]; created_at?: string };
+        Row: {
+          id: string;
+          company_id: string;
+          user_id: string;
+          role: Database["public"]["Enums"]["crm_company_role"];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          user_id: string;
+          role?: Database["public"]["Enums"]["crm_company_role"];
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          user_id?: string;
+          role?: Database["public"]["Enums"]["crm_company_role"];
+          created_at?: string;
+        };
         Relationships: [];
       };
       crm_company_branding: {
@@ -1268,7 +1304,14 @@ export type Database = {
       };
     };
     Enums: {
-      crm_company_role: "owner" | "admin" | "office" | "sales" | "production_manager" | "crew" | "accounting";
+      crm_company_role:
+        | "owner"
+        | "admin"
+        | "office"
+        | "sales"
+        | "production_manager"
+        | "crew"
+        | "accounting";
       app_role:
         | "admin"
         | "user"
@@ -1404,7 +1447,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      crm_company_role: ["owner", "admin", "office", "sales", "production_manager", "crew", "accounting"],
+      crm_company_role: [
+        "owner",
+        "admin",
+        "office",
+        "sales",
+        "production_manager",
+        "crew",
+        "accounting",
+      ],
       app_role: ["admin", "user", "office", "sales", "production_manager", "crew", "accounting"],
       lead_source: ["callback", "contact", "quote", "chat"],
       lead_status: ["new", "contacted", "estimate_sent", "won", "lost"],
