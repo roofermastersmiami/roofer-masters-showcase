@@ -740,7 +740,9 @@ export function RoofMeasurements({
                 size="sm"
                 variant={autoRotate ? "secondary" : "outline"}
                 onClick={() => setAutoRotate((value) => !value)}
-                aria-label={autoRotate ? "Pause automatic 3D rotation" : "Start automatic 3D rotation"}
+                aria-label={
+                  autoRotate ? "Pause automatic 3D rotation" : "Start automatic 3D rotation"
+                }
                 title={autoRotate ? "Pause automatic rotation" : "Start automatic rotation"}
               >
                 {autoRotate ? <Pause /> : <Play />}
@@ -1341,7 +1343,8 @@ export function RoofMeasurements({
           const hasImportedFootprint = d.planes.some((item) =>
             item.id.startsWith("osm-footprint-"),
           );
-          const replaceStarter = !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
+          const replaceStarter =
+            !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
           const existingPlanes = replaceStarter
             ? []
             : d.planes.filter((item) => !item.id.startsWith("osm-footprint-"));

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { nextSatelliteZoom, satelliteTraceToPlane } from "@/components/dashboard/SatelliteRoofTrace";
+import {
+  nextSatelliteZoom,
+  satelliteTraceToPlane,
+} from "@/components/dashboard/SatelliteRoofTrace";
 import { measureDrawing, planeInfo, toMaterialReport } from "@/lib/roof-geometry";
 
 const origin = { lat: 25.47, lon: -80.48 };
 const metersToLatitudeDegrees = 20 / 110540;
-const metersToLongitudeDegrees =
-  20 / (111320 * Math.cos((origin.lat * Math.PI) / 180));
+const metersToLongitudeDegrees = 20 / (111320 * Math.cos((origin.lat * Math.PI) / 180));
 
 describe("manual satellite trace geometry units", () => {
   it("converts a 20-meter mapped footprint into feet before roof calculations", () => {
@@ -93,7 +95,6 @@ describe("manual satellite trace geometry units", () => {
   });
 });
 
-
 describe("satellite map zoom", () => {
   it("zooms in and out in predictable steps", () => {
     expect(nextSatelliteZoom(1, "in")).toBe(1.5);
@@ -106,20 +107,37 @@ describe("satellite map zoom", () => {
   });
 });
 
-
 describe("satellite trace validation", () => {
   it("rejects traces with fewer than three corners or repeated corners", () => {
-    expect(() => satelliteTraceToPlane([origin, { lat: origin.lat, lon: origin.lon + 0.001 }], 0)).toThrow(/between 3 and 100/);
-    expect(() => satelliteTraceToPlane([origin, origin, { lat: origin.lat - 0.001, lon: origin.lon }], 0)).toThrow(/different location/);
+    expect(() =>
+      satelliteTraceToPlane([origin, { lat: origin.lat, lon: origin.lon + 0.001 }], 0),
+    ).toThrow(/between 3 and 100/);
+    expect(() =>
+      satelliteTraceToPlane([origin, origin, { lat: origin.lat - 0.001, lon: origin.lon }], 0),
+    ).toThrow(/different location/);
   });
 
   it("rejects invalid pitch and crossed outlines before they enter the drawing", () => {
-    expect(() => satelliteTraceToPlane([origin, { lat: origin.lat, lon: origin.lon + 0.001 }, { lat: origin.lat - 0.001, lon: origin.lon }], 25)).toThrow(/pitch/);
-    expect(() => satelliteTraceToPlane([
-      origin,
-      { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon + metersToLongitudeDegrees },
-      { lat: origin.lat, lon: origin.lon + metersToLongitudeDegrees },
-      { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon },
-    ], 0)).toThrow(/edges cross/);
+    expect(() =>
+      satelliteTraceToPlane(
+        [
+          origin,
+          { lat: origin.lat, lon: origin.lon + 0.001 },
+          { lat: origin.lat - 0.001, lon: origin.lon },
+        ],
+        25,
+      ),
+    ).toThrow(/pitch/);
+    expect(() =>
+      satelliteTraceToPlane(
+        [
+          origin,
+          { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon + metersToLongitudeDegrees },
+          { lat: origin.lat, lon: origin.lon + metersToLongitudeDegrees },
+          { lat: origin.lat - metersToLatitudeDegrees, lon: origin.lon },
+        ],
+        0,
+      ),
+    ).toThrow(/edges cross/);
   });
 });

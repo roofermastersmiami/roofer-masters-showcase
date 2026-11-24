@@ -24,7 +24,15 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
   if (!Number.isFinite(pitch) || pitch < 0 || pitch > 24) {
     throw new Error("Roof pitch must be between 0:12 and 24:12.");
   }
-  if (points.some((p) => !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180)) {
+  if (
+    points.some(
+      (p) =>
+        !Number.isFinite(p.lat) ||
+        !Number.isFinite(p.lon) ||
+        Math.abs(p.lat) > 90 ||
+        Math.abs(p.lon) > 180,
+    )
+  ) {
     throw new Error("The trace contains an invalid map coordinate.");
   }
   const unique = new Set(points.map((p) => `${p.lat.toFixed(8)},${p.lon.toFixed(8)}`));
@@ -158,7 +166,11 @@ export function SatelliteRoofTrace({
     })();
     return () => controller.abort();
   }, [initialAddress]);
-  function tracePointFromPointer(clientX: number, clientY: number, rect: DOMRect): TracePoint | null {
+  function tracePointFromPointer(
+    clientX: number,
+    clientY: number,
+    rect: DOMRect,
+  ): TracePoint | null {
     if (!bounds || rect.width <= 0 || rect.height <= 0) return null;
     const x = ((clientX - rect.left) / rect.width) * MAP_WIDTH;
     const y = ((clientY - rect.top) / rect.height) * MAP_HEIGHT;
@@ -281,7 +293,8 @@ export function SatelliteRoofTrace({
                   event.clientY,
                   event.currentTarget.getBoundingClientRect(),
                 );
-                if (point) setPoints((current) => current.map((item, i) => i === index ? point : item));
+                if (point)
+                  setPoints((current) => current.map((item, i) => (i === index ? point : item)));
               }}
               onPointerUp={() => {
                 if (draggingPoint.current !== null) {
