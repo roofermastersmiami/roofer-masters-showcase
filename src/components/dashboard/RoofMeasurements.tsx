@@ -57,7 +57,6 @@ type Media = {
   path: string;
   name: string;
   category: "aerial" | "before" | "after" | "diagram";
-  feet_per_pixel?: number;
   source?: string;
   matched_address?: string;
   latitude?: number;
@@ -121,11 +120,6 @@ export function RoofMeasurements({
                 path: m["path"],
                 name: m["name"],
                 category: m["category"] as Media["category"],
-                ...(typeof m["feet_per_pixel"] === "number" &&
-                Number.isFinite(m["feet_per_pixel"]) &&
-                m["feet_per_pixel"] > 0
-                  ? { feet_per_pixel: m["feet_per_pixel"] }
-                  : {}),
                 ...(typeof m["source"] === "string" ? { source: m["source"].slice(0, 80) } : {}),
                 ...(typeof m["matched_address"] === "string"
                   ? { matched_address: m["matched_address"].slice(0, 250) }
@@ -258,7 +252,6 @@ export function RoofMeasurements({
           ...(item.matched_address ? { matchedAddress: item.matched_address } : {}),
           ...(typeof item.latitude === "number" ? { latitude: item.latitude } : {}),
           ...(typeof item.longitude === "number" ? { longitude: item.longitude } : {}),
-          ...(item.feet_per_pixel ? { feetPerPixel: item.feet_per_pixel } : {}),
         });
       }
       const bytes = await roofDrawingPdf(
@@ -584,11 +577,6 @@ export function RoofMeasurements({
                             path: m["path"],
                             name: m["name"],
                             category: m["category"] as Media["category"],
-                            ...(typeof m["feet_per_pixel"] === "number" &&
-                            Number.isFinite(m["feet_per_pixel"]) &&
-                            m["feet_per_pixel"] > 0
-                              ? { feet_per_pixel: m["feet_per_pixel"] }
-                              : {}),
                           },
                         ]
                       : [],
