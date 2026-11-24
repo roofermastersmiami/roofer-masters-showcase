@@ -7,14 +7,19 @@ function failure(stage: string, message: string, status?: number) {
   console.warn("Public aerial import failed", { stage, status: status ?? null });
   return { error: message + FALLBACK, stage } as const;
 }
-async function request(url: string, timeout: number, fetcher: typeof fetch) {
+async function request(
+  url: string,
+  timeout: number,
+  fetcher: typeof fetch,
+  accept = "application/json, image/png;q=0.9, */*;q=0.1",
+) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
     return await fetcher(url, {
       signal: controller.signal,
       redirect: "follow",
-      headers: { Accept: "application/json, image/png;q=0.9, */*;q=0.1" },
+      headers: { Accept: accept },
     });
   } catch {
     return null;
@@ -32,6 +37,7 @@ export async function fetchPublicAerial(
     `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(address)}&benchmark=Public_AR_Current&format=json`,
     15000,
     fetcher,
+    "application/json",
   );
   if (!geo?.ok)
     return failure(
@@ -50,7 +56,7 @@ export async function fetchPublicAerial(
   if (!contentType.toLowerCase().includes("json")) {
     return failure(
       "geocoding_response",
-      `Census did not return JSON (${contentType}, HTTP ${geo.status}). The address service may be redirecting to an HTML page; try again later or use Add image.`,
+      `Census returned a web page instead of address data (${contentType}, HTTP ${geo.status}). This can happen when the public geocoder is temporarily unavailable or blocks the hosting request. Try again shortly, or use Add image to continue with a roof photo.`,
       geo.status,
     );
   }
