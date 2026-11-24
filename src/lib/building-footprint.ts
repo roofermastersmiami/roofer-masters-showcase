@@ -41,6 +41,14 @@ function polygonArea(points: FootprintPoint[], originLat: number): number {
 function orientation(a: FootprintPoint, b: FootprintPoint, c: FootprintPoint): number {
   return (b.lon - a.lon) * (c.lat - a.lat) - (b.lat - a.lat) * (c.lon - a.lon);
 }
+function onSegment(a: FootprintPoint, b: FootprintPoint, point: FootprintPoint): boolean {
+  const epsilon = 1e-10;
+  return Math.abs(orientation(a, b, point)) <= epsilon &&
+    point.lon >= Math.min(a.lon, b.lon) - epsilon &&
+    point.lon <= Math.max(a.lon, b.lon) + epsilon &&
+    point.lat >= Math.min(a.lat, b.lat) - epsilon &&
+    point.lat <= Math.max(a.lat, b.lat) + epsilon;
+}
 function segmentsIntersect(
   a: FootprintPoint,
   b: FootprintPoint,
@@ -51,8 +59,11 @@ function segmentsIntersect(
   const abD = orientation(a, b, d);
   const cdA = orientation(c, d, a);
   const cdB = orientation(c, d, b);
-  return ((abC > 1e-12 && abD < -1e-12) || (abC < -1e-12 && abD > 1e-12)) &&
-    ((cdA > 1e-12 && cdB < -1e-12) || (cdA < -1e-12 && cdB > 1e-12));
+  const epsilon = 1e-10;
+  const proper = ((abC > epsilon && abD < -epsilon) || (abC < -epsilon && abD > epsilon)) &&
+    ((cdA > epsilon && cdB < -epsilon) || (cdA < -epsilon && cdB > epsilon));
+  return proper || onSegment(a, b, c) || onSegment(a, b, d) ||
+    onSegment(c, d, a) || onSegment(c, d, b);
 }
 function hasSelfIntersection(points: FootprintPoint[]): boolean {
   for (let i = 0; i < points.length; i += 1) {
