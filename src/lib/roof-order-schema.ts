@@ -33,7 +33,6 @@ export const REPORT_STATUS_LABELS = {
 };
 
 export const roofOrderSchema = z.object({
-  customer_id: z.string().uuid(),
   address: z.string().trim().min(8, "Enter the full customer property address").max(250),
   title: z.string().trim().min(1).max(180),
   provider: z.enum(["manual", "eagleview", "gaf", "roofr", "hover", "other"]),

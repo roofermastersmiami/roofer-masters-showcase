@@ -6,7 +6,6 @@ import {
   reviewedReport,
   roofOrderTransferRoles,
 } from "@/lib/roof-order-schema";
-const customer = "bc1ce3a1-e666-4169-9c65-4e17b3d156bb";
 const report = {
   roof_type: "Metal Roof",
   area_sqft: 2000,
@@ -29,7 +28,6 @@ describe("roof report transfer permissions", () => {
 describe("address-based roof report requests", () => {
   it("starts only company-owned reports, not paid provider orders", () => {
     const input = {
-      customer_id: customer,
       address: "123 Customer Road, Homestead FL",
       title: "Report",
       provider: "manual",
@@ -38,10 +36,9 @@ describe("address-based roof report requests", () => {
     expect(ownRoofReportSchema.safeParse(input).success).toBe(true);
     expect(ownRoofReportSchema.safeParse({ ...input, provider: "eagleview" }).success).toBe(false);
   });
-  it("requires a customer property address instead of deriving measurements from an address", () => {
+  it("accepts a complete property address without requiring an existing customer", () => {
     expect(
       roofOrderSchema.safeParse({
-        customer_id: customer,
         address: "",
         title: "Report",
         provider: "manual",
@@ -49,7 +46,6 @@ describe("address-based roof report requests", () => {
       }).success,
     ).toBe(false);
     const parsed = roofOrderSchema.parse({
-      customer_id: customer,
       address: "  123 Customer Road, Homestead FL 33030  ",
       title: "Report",
       provider: "manual",
