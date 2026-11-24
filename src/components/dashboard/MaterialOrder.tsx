@@ -118,7 +118,10 @@ export function MaterialOrder({
     [valid.success, r],
   );
   const warnings = valid.success ? materialOrderWarnings(valid.data) : [];
-  const sourceLabel = resolveMaterialOrderSource({ source, ...(source === "drawing" && drawingId ? { drawing_id: drawingId } : {}) }).label;
+  const sourceLabel = resolveMaterialOrderSource({
+    source,
+    ...(source === "drawing" && drawingId ? { drawing_id: drawingId } : {}),
+  }).label;
   const text = `Material order – ${title}
 Source: ${sourceLabel}
 ${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
@@ -166,7 +169,13 @@ Roofer Masters · 305-942-3093`;
         Enter the roof size and measurements from the roof report — materials are calculated
         automatically.
       </p>
-      <p className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs" role="status">Estimate source: <strong>{sourceLabel}</strong>{source === "drawing" ? " · Review drawing revision before ordering." : ""}</p>
+      <p
+        className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
+        role="status"
+      >
+        Estimate source: <strong>{sourceLabel}</strong>
+        {source === "drawing" ? " · Review drawing revision before ordering." : ""}
+      </p>
       <div className="mb-4 rounded-md border border-dashed border-border p-4">
         <Button asChild variant="secondary" disabled={reading}>
           <label className="cursor-pointer">
@@ -194,7 +203,11 @@ Roofer Masters · 305-942-3093`;
         <Choice
           label="Roof type"
           value={r.roof_type}
-          onChange={(v) => { setR({ ...r, roof_type: v as RoofReport["roof_type"] }); setSource("manual"); setDrawingId(undefined); }}
+          onChange={(v) => {
+            setR({ ...r, roof_type: v as RoofReport["roof_type"] });
+            setSource("manual");
+            setDrawingId(undefined);
+          }}
           options={ROOF_TYPES.map((t) => ({ value: t, label: t }))}
         />
         {fields
@@ -206,7 +219,11 @@ Roofer Masters · 305-942-3093`;
                 min={0}
                 inputMode="decimal"
                 value={(r[k] as number | undefined) ?? (k === "panel_width_in" ? 16 : 0)}
-                onChange={(e) => { setR({ ...r, [k]: Number(e.target.value) || 0 }); setSource("manual"); setDrawingId(undefined); }}
+                onChange={(e) => {
+                  setR({ ...r, [k]: Number(e.target.value) || 0 });
+                  setSource("manual");
+                  setDrawingId(undefined);
+                }}
               />
             </Field>
           ))}

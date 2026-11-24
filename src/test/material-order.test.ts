@@ -72,12 +72,13 @@ describe("material takeoff review warnings", () => {
   });
 });
 
-
 describe("material order source tracking", () => {
   it("recognizes a saved drawing-linked takeoff", async () => {
     const { resolveMaterialOrderSource } = await import("@/lib/material-order");
     expect(resolveMaterialOrderSource({ drawing_id: "drawing-123" })).toEqual({
-      source: "drawing", label: "Transferred from saved roof drawing", drawingId: "drawing-123",
+      source: "drawing",
+      label: "Transferred from saved roof drawing",
+      drawingId: "drawing-123",
     });
   });
   it("labels uploaded reports as requiring verification", async () => {
