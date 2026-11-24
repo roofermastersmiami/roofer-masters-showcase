@@ -132,15 +132,24 @@ describe("guided satellite gable facet splitting", () => {
     expect(planes).toHaveLength(2);
     expect(planeInfo(planes[0]!).pitch).toBeCloseTo(6, 1);
     expect(planeInfo(planes[1]!).pitch).toBeCloseTo(6, 1);
-    expect(measureDrawing({
-      planes, penetrations: [], waste: 0, roof_type: "Metal Roof",
-      notes: "", condition: "", verified: false,
-    }).area).toBeGreaterThan(0);
+    expect(
+      measureDrawing({
+        planes,
+        penetrations: [],
+        waste: 0,
+        roof_type: "Metal Roof",
+        notes: "",
+        condition: "",
+        verified: false,
+      }).area,
+    ).toBeGreaterThan(0);
   });
 
   it("rejects ambiguous ridge cuts, zero pitch, and outlines with too few corners", () => {
     expect(() => satelliteTraceToGablePlanes(rectangle, 0, "north-south")).toThrow(/pitch/);
-    expect(() => satelliteTraceToGablePlanes(rectangle.slice(0, 3), 6, "north-south")).toThrow(/four/);
+    expect(() => satelliteTraceToGablePlanes(rectangle.slice(0, 3), 6, "north-south")).toThrow(
+      /four/,
+    );
     const toGeo = (x: number, z: number) => ({
       lat: origin.lat - (z / 20) * metersToLatitudeDegrees,
       lon: origin.lon + (x / 20) * metersToLongitudeDegrees,
@@ -148,8 +157,14 @@ describe("guided satellite gable facet splitting", () => {
     // A C-shaped outline crosses its centerline four times, so a simple
     // two-facet gable split would be ambiguous and must be rejected.
     const concave = [
-      toGeo(-10, -10), toGeo(10, -10), toGeo(10, -5), toGeo(-5, -5),
-      toGeo(-5, 5), toGeo(10, 5), toGeo(10, 10), toGeo(-10, 10),
+      toGeo(-10, -10),
+      toGeo(10, -10),
+      toGeo(10, -5),
+      toGeo(-5, -5),
+      toGeo(-5, 5),
+      toGeo(10, 5),
+      toGeo(10, 10),
+      toGeo(-10, 10),
     ];
     expect(() => satelliteTraceToGablePlanes(concave, 6, "north-south")).toThrow(/exactly two/);
   });

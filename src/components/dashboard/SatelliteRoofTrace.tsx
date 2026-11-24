@@ -144,7 +144,6 @@ export function satelliteTraceToPlane(
   return plane;
 }
 
-
 export type RidgeAxis = "north-south" | "east-west";
 
 /**
@@ -172,15 +171,18 @@ export function satelliteTraceToGablePlanes(
     x: (p.lon - lon0) * 111320 * cos * METERS_TO_FEET,
     z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
   }));
-  const axisValue = (p: { x: number; z: number }) =>
-    ridgeAxis === "north-south" ? p.x : p.z;
+  const axisValue = (p: { x: number; z: number }) => (ridgeAxis === "north-south" ? p.x : p.z);
   const centerAxis = local.reduce((sum, p) => sum + axisValue(p), 0) / local.length;
   const tolerance = 0.00001;
   const expanded: { x: number; z: number }[] = [];
   for (let i = 0; i < local.length; i++) {
     const a = local[i]!;
     const b = local[(i + 1) % local.length]!;
-    if (!expanded.length || Math.hypot(expanded[expanded.length - 1]!.x - a.x, expanded[expanded.length - 1]!.z - a.z) > tolerance)
+    if (
+      !expanded.length ||
+      Math.hypot(expanded[expanded.length - 1]!.x - a.x, expanded[expanded.length - 1]!.z - a.z) >
+        tolerance
+    )
       expanded.push(a);
     const da = axisValue(a) - centerAxis;
     const db = axisValue(b) - centerAxis;
@@ -196,7 +198,9 @@ export function satelliteTraceToGablePlanes(
     .map((p, index) => ({ p, index }))
     .filter(({ p }) => Math.abs(axisValue(p) - centerAxis) <= tolerance);
   if (intersections.length !== 2) {
-    throw new Error("This ridge direction must cross the outline at exactly two points. Try the other direction or adjust the trace.");
+    throw new Error(
+      "This ridge direction must cross the outline at exactly two points. Try the other direction or adjust the trace.",
+    );
   }
   const [first, second] = intersections;
   if (!first || !second || first.index === second.index) {
@@ -204,23 +208,25 @@ export function satelliteTraceToGablePlanes(
   }
   const pathBetween = (start: number, end: number) => {
     const path: { x: number; z: number }[] = [];
-    for (let index = start, count = 0; count <= expanded.length; index = (index + 1) % expanded.length, count++) {
+    for (
+      let index = start, count = 0;
+      count <= expanded.length;
+      index = (index + 1) % expanded.length, count++
+    ) {
       path.push(expanded[index]!);
       if (index === end) break;
     }
     return path;
   };
-  const paths = [
-    pathBetween(first.index, second.index),
-    pathBetween(second.index, first.index),
-  ];
+  const paths = [pathBetween(first.index, second.index), pathBetween(second.index, first.index)];
   if (paths.some((path) => path.length < 3)) {
     throw new Error("The ridge split creates a collapsed roof facet.");
   }
   // Keep the output order geographically stable: west/east or north/south.
-  paths.sort((a, b) =>
-    a.reduce((sum, point) => sum + axisValue(point), 0) / a.length -
-    b.reduce((sum, point) => sum + axisValue(point), 0) / b.length,
+  paths.sort(
+    (a, b) =>
+      a.reduce((sum, point) => sum + axisValue(point), 0) / a.length -
+      b.reduce((sum, point) => sum + axisValue(point), 0) / b.length,
   );
   const maxDistance = Math.max(...expanded.map((p) => Math.abs(axisValue(p) - centerAxis)));
   const ridgeHeight = 10 + (maxDistance * pitch) / 12;
@@ -232,13 +238,14 @@ export function satelliteTraceToGablePlanes(
     }));
     const plane: RoofPlane = {
       id: `satellite-gable-${index}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-      name: ridgeAxis === "north-south"
-        ? path.reduce((sum, point) => sum + point.x, 0) / path.length < centerAxis
-          ? "West gable facet"
-          : "East gable facet"
-        : path.reduce((sum, point) => sum + point.z, 0) / path.length < centerAxis
-          ? "North gable facet"
-          : "South gable facet",
+      name:
+        ridgeAxis === "north-south"
+          ? path.reduce((sum, point) => sum + point.x, 0) / path.length < centerAxis
+            ? "West gable facet"
+            : "East gable facet"
+          : path.reduce((sum, point) => sum + point.z, 0) / path.length < centerAxis
+            ? "North gable facet"
+            : "South gable facet",
       points: vertices,
       edges: vertices.map((_, edgeIndex) =>
         edgeIndex === vertices.length - 1 ? "ridge" : "other",
@@ -714,7 +721,11 @@ export function SatelliteRoofTrace({
                   onAdd(satelliteTraceToGablePlanes(points, Number(pitch), ridgeAxis));
                   setPoints([]);
                 } catch (e) {
-                  setError(e instanceof Error ? e.message : "Could not split this outline into gable facets.");
+                  setError(
+                    e instanceof Error
+                      ? e.message
+                      : "Could not split this outline into gable facets.",
+                  );
                 } finally {
                   setBusy(false);
                 }
@@ -723,7 +734,9 @@ export function SatelliteRoofTrace({
               Split into 2 gable planes
             </Button>
             <p className="basis-full text-xs text-muted-foreground">
-              Creates two preliminary facets along a center ridge. Choose the ridge direction that matches the roof; confirm the ridge, eaves, overhangs, and pitch before using quantities. Irregular outlines that cannot be split cleanly are rejected.
+              Creates two preliminary facets along a center ridge. Choose the ridge direction that
+              matches the roof; confirm the ridge, eaves, overhangs, and pitch before using
+              quantities. Irregular outlines that cannot be split cleanly are rejected.
             </p>
           </div>
           {autoTraced && (
