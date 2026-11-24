@@ -95,8 +95,8 @@ export function nearestBuildingFootprint(
   return candidates[0]?.ring ?? null;
 }
 
-const MAP_WIDTH = 1024;
-const MAP_HEIGHT = 640;
+const MAP_WIDTH = 2048;
+const MAP_HEIGHT = 1280;
 const TILE_SPAN = 0.0015;
 const METERS_TO_FEET = 1 / 0.3048;
 
@@ -395,7 +395,7 @@ export function SatelliteRoofTrace({
     [mapCenter, zoom],
   );
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
     : "";
 
   useEffect(() => {
@@ -854,8 +854,9 @@ export function SatelliteRoofTrace({
               onTouchEnd={(event) => {
                 if (event.touches.length < 2) pinchStartDistance.current = null;
               }}
-              onWheel={(event) => {
+              onWheelCapture={(event) => {
                 event.preventDefault();
+                if (Math.abs(event.deltaY) < 1) return;
                 setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
               }}
               onDoubleClick={(event) => {
