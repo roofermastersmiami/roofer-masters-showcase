@@ -45,7 +45,8 @@ export function CrmOverview() {
     [accent, setAccent] = useState("#2563eb"),
     [density, setDensity] = useState<"comfortable" | "compact">("comfortable"),
     [cardOrder, setCardOrder] = useState(["Payments received", "Outstanding balance", "Active projects", "New leads"]),
-    [draggedCard, setDraggedCard] = useState<string | null>(null);
+    [draggedCard, setDraggedCard] = useState<string | null>(null),
+    [preferencesLoaded, setPreferencesLoaded] = useState(false);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
@@ -53,8 +54,11 @@ export function CrmOverview() {
       if (saved.density === "compact" || saved.density === "comfortable") setDensity(saved.density);
       if (Array.isArray(saved.cardOrder) && saved.cardOrder.every((item: unknown) => typeof item === "string")) setCardOrder(saved.cardOrder);
     } catch { /* Keep defaults if saved preferences are unavailable. */ }
+    setPreferencesLoaded(true);
   }, []);
-  useEffect(() => { localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardOrder })); }, [accent, density, cardOrder]);
+  useEffect(() => {
+    if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardOrder }));
+  }, [accent, density, cardOrder, preferencesLoaded]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
