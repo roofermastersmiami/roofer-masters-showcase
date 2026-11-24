@@ -82,10 +82,10 @@ export function RoofMeasurementsTab({
   const rows = orders.data ?? [];
   return (
     <div>
-      <SectionHeading
-        title="Roof measurements"
-        description="Open a linked roof report to continue its 2D plan, 3D roof model, measurements, and takeoff."
-      />
+      <SectionHeading title="Roof measurements" />
+      <p className="mb-5 text-sm text-muted-foreground">
+        Open a linked roof report to continue its 2D plan, 3D roof model, measurements, and takeoff.
+      </p>
       {orders.error || drawings.error ? (
         <p role="alert" className="mb-4 text-destructive">Roof measurement records could not load.</p>
       ) : orders.isPending || drawings.isPending ? (
