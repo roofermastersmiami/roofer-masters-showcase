@@ -257,6 +257,19 @@ describe("georeferenced address marker", () => {
     expect(north.z).toBeLessThan(0);
     expect(east.x).toBeCloseTo(329.7, 0);
     expect(north.z).toBeCloseTo(-362.7, 0);
+
+    // A newly matched address must be converted relative to the preserved
+    // drawing origin, rather than silently pinning to the old geocode.
+    const preservedOrigin = {
+      ...reference,
+      addressLatitude: 25.59946,
+      addressLongitude: -80.41797,
+      originLatitude: 25.6001,
+      originLongitude: -80.4188,
+    };
+    const matchedPin = addressPinPosition(preservedOrigin);
+    expect(matchedPin.x).toBeGreaterThan(0);
+    expect(matchedPin.z).toBeGreaterThan(0);
   });
 
   it("keeps geographic metadata optional for legacy drawings", () => {

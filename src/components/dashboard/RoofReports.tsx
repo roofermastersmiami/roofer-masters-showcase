@@ -293,11 +293,11 @@ export function RoofReports({
             {pdfLoading ? (
               <p className="p-6 text-sm text-muted-foreground">Loading PDF…</p>
             ) : pdfUrl ? (
-              <div className="mx-auto h-full min-h-[70vh]" style={{ width: `${100 * zoom}%` }}>
+              <div className="mx-auto" style={{ width: `${100 * zoom}%`, height: `${100 * zoom}%`, minHeight: `${70 * zoom}vh` }}>
                 <iframe
                   title="Roof measurement PDF preview"
                   src={pdfUrl}
-                  className="h-full min-h-[70vh] w-full border-0"
+                  className="h-full w-full border-0"
                 />
               </div>
             ) : (

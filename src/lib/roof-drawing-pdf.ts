@@ -86,7 +86,7 @@ export async function roofDrawingPdf(
     });
     const headerPoint = (point: { x: number; y: number }, size: number) => ({
       x: Math.max(8, Math.min(PAGE_W - MARGIN, (point.x / 100) * PAGE_W)),
-      y: PAGE_H - (point.y / 100) * 78 - size,
+      y: PAGE_H - Math.max(8, Math.min(70, (point.y / 100) * 78)) - size,
     });
     p.drawText("ROOFER MASTERS", {
       ...headerPoint(layout.brand, 20),

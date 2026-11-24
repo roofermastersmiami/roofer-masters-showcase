@@ -247,14 +247,24 @@ export default function RoofScene({
   const addressPin = drawing.geo_reference ? addressPinPosition(drawing.geo_reference) : null;
   const pinBaseHeight =
     Math.max(10, ...drawing.planes.flatMap((p) => p.points.map((v) => v.y))) + 0.8;
-  const extent = Math.max(
-    30,
-    Math.abs(addressPin?.x ?? 0) * 2,
-    Math.abs(addressPin?.z ?? 0) * 2,
-    ...drawing.planes.flatMap((p) =>
-      p.points.flatMap((v) => [Math.abs(v.x) * 2, Math.abs(v.z) * 2]),
-    ),
+  // Frame the actual roof-and-address bounds; a half-pin camera target only
+  // works when the roof is centered at the drawing origin.
+  const sceneBounds = drawing.planes.flatMap((plane) =>
+    plane.points.map((point) => ({ x: point.x, y: point.y, z: point.z })),
   );
+  if (addressPin) sceneBounds.push({ x: addressPin.x, y: 0, z: addressPin.z });
+  const minX = Math.min(0, ...sceneBounds.map((point) => point.x));
+  const maxX = Math.max(0, ...sceneBounds.map((point) => point.x));
+  const minZ = Math.min(0, ...sceneBounds.map((point) => point.z));
+  const maxZ = Math.max(0, ...sceneBounds.map((point) => point.z));
+  const minY = Math.min(0, ...sceneBounds.map((point) => point.y));
+  const maxY = Math.max(10, ...sceneBounds.map((point) => point.y));
+  const sceneCenter: [number, number, number] = [
+    (minX + maxX) / 2,
+    (minY + maxY) / 2,
+    (minZ + maxZ) / 2,
+  ];
+  const extent = Math.max(30, maxX - minX, maxZ - minZ, maxY - minY);
   if (!colors.roof)
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -267,7 +277,9 @@ export default function RoofScene({
         key={`${view}-${fitKey}`}
         frameloop={view === "3d" && autoRotate ? "always" : "demand"}
         camera={{
-          position: view === "plan" ? [0, extent * 1.5, 0.01] : [extent * 0.9, extent, extent],
+          position: view === "plan"
+            ? [sceneCenter[0], sceneCenter[1] + extent * 1.5, sceneCenter[2] + 0.01]
+            : [sceneCenter[0] + extent * 0.9, sceneCenter[1] + extent, sceneCenter[2] + extent],
           fov: 42,
           near: 0.1,
           far: 20000,
@@ -284,9 +296,12 @@ export default function RoofScene({
             rotation-x={-Math.PI / 2}
           />
         </Environment>
-        <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
-        {aerialImageUrl && addressPin && (
-          <AerialGround url={aerialImageUrl} position={[addressPin.x, 0.05, addressPin.z]} />
+        <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} position={[sceneCenter[0], 0, sceneCenter[2]]} />
+        {aerialImageUrl && (
+          <AerialGround
+            url={aerialImageUrl}
+            position={aerialImageCenter ?? (addressPin ? [addressPin.x, 0.05, addressPin.z] : [0, 0.05, 0])}
+          />
         )}
         <Walls drawing={drawing} color={colors.ground} />
         {addressPin && (
@@ -353,7 +368,7 @@ export default function RoofScene({
         <OrbitControls
           ref={controls}
           makeDefault
-          target={[0, 10, 0]}
+          target={sceneCenter}
           enableRotate={view === "3d"}
           enablePan
           enableDamping
@@ -362,8 +377,11 @@ export default function RoofScene({
           maxPolarAngle={Math.PI - 0.01}
           autoRotate={view === "3d" && autoRotate}
           autoRotateSpeed={0.6}
-          minDistance={5}
-          maxDistance={extent * 5}
+          minDistance={2}
+          maxDistance={extent * 12}
+          zoomSpeed={1.2}
+          panSpeed={1.1}
+          screenSpacePanning
         />
         <Ready onReady={() => setReady(true)} />
       </Canvas>
