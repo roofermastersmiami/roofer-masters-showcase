@@ -18,7 +18,21 @@ const INK = rgb(0.13, 0.17, 0.21);
 const MUTED = rgb(0.4, 0.45, 0.5);
 const WHITE = rgb(1, 1, 1);
 
-export type RoofPdfLayout = {\n  brand: { x: number; y: number };\n  tagline: { x: number; y: number };\n  contact: { x: number; y: number };\n  heading: { x: number; y: number };\n};\n\nexport const defaultRoofPdfLayout: RoofPdfLayout = {\n  brand: { x: 7, y: 24 },\n  tagline: { x: 7, y: 49 },\n  contact: { x: 7, y: 78 },\n  heading: { x: 62, y: 25 },\n};\n\ntype Photo = {
+export type RoofPdfLayout = {
+  brand: { x: number; y: number };
+  tagline: { x: number; y: number };
+  contact: { x: number; y: number };
+  heading: { x: number; y: number };
+};
+
+export const defaultRoofPdfLayout: RoofPdfLayout = {
+  brand: { x: 7, y: 24 },
+  tagline: { x: 7, y: 49 },
+  contact: { x: 7, y: 78 },
+  heading: { x: 62, y: 25 },
+};
+
+type Photo = {
   bytes: Uint8Array;
   mime: string;
   category: string;
