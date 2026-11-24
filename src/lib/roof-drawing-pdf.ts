@@ -22,7 +22,6 @@ type Photo = {
   matchedAddress?: string;
   latitude?: number;
   longitude?: number;
-  feetPerPixel?: number;
 };
 
 export async function roofDrawingPdf(
@@ -486,14 +485,6 @@ export async function roofDrawingPdf(
     if (typeof photo.latitude === "number" && typeof photo.longitude === "number") {
       paragraph(
         `Map coordinates: ${photo.latitude.toFixed(6)}, ${photo.longitude.toFixed(6)}`,
-        8,
-        false,
-        MUTED,
-      );
-    }
-    if (typeof photo.feetPerPixel === "number") {
-      paragraph(
-        `Image scale: ${photo.feetPerPixel.toFixed(3)} feet per pixel (approximate)`,
         8,
         false,
         MUTED,
