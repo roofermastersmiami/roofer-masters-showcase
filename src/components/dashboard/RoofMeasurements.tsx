@@ -685,7 +685,9 @@ export function RoofMeasurements({
       setTraceIndex(media.length);
       setMedia([...media, uploadedPhoto]);
       setDirty(true);
-      toast.success("Photo uploaded and selected for manual roof tracing. Save drawing to retain it.");
+      toast.success(
+        "Photo uploaded and selected for manual roof tracing. Save drawing to retain it.",
+      );
     }
   }
   return (
@@ -1506,7 +1508,9 @@ export function RoofMeasurements({
           <div>
             <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload your own overhead roof photo or aerial image, then use the calibrated photo tracer below to draw each roof plane, set its scale and pitch, and classify its edges. You can also load free public aerial imagery in the next section.
+              Upload your own overhead roof photo or aerial image, then use the calibrated photo
+              tracer below to draw each roof plane, set its scale and pitch, and classify its edges.
+              You can also load free public aerial imagery in the next section.
             </p>
           </div>
           <Button variant="outline" asChild disabled={busy || !property}>
@@ -1770,7 +1774,8 @@ export function RoofMeasurements({
         <section className="rounded-lg border border-dashed border-primary/40 bg-muted/30 p-4">
           <h3 className="font-semibold">Trace a roof from your own photo</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload an overhead or elevated roof image above. The photo tracing workspace will appear here so you can calibrate a known distance and draw the roof planes yourself.
+            Upload an overhead or elevated roof image above. The photo tracing workspace will appear
+            here so you can calibrate a known distance and draw the roof planes yourself.
           </p>
         </section>
       )}
