@@ -28,6 +28,7 @@ import {
   ExternalLink,
   LogOut,
   ChevronRight,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,6 +142,7 @@ export function CrmShell({
   const [collapsed, setCollapsed] = useState(false),
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
+    [theme, setTheme] = useState("ocean"),
     [query, setQuery] = useState(""),
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
@@ -153,7 +155,15 @@ export function CrmShell({
     [selectedRoofReportId, setSelectedRoofReportId] = useState<string | null>(null);
   useEffect(() => {
     setDark(localStorage.getItem("crm-theme") === "dark");
+    const savedTheme = localStorage.getItem("crm-theme-preset");
+    if (savedTheme && ["ocean", "slate", "emerald", "sunset", "violet"].includes(savedTheme)) setTheme(savedTheme);
   }, []);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("crm-theme-ocean", "crm-theme-slate", "crm-theme-emerald", "crm-theme-sunset", "crm-theme-violet");
+    root.classList.add(`crm-theme-${theme}`);
+    localStorage.setItem("crm-theme-preset", theme);
+  }, [theme]);
   useEffect(() => {
     document.documentElement.classList.toggle("crm-dark", dark);
     document.documentElement.classList.toggle("dark", dark);
@@ -408,6 +418,13 @@ export function CrmShell({
                 </div>
               )}
             </div>
+            <label className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 sm:flex" title="Choose CRM color theme">
+              <Palette className="size-4 text-muted-foreground" />
+              <span className="sr-only">CRM color theme</span>
+              <select aria-label="CRM color theme" value={theme} onChange={(event) => setTheme(event.target.value)} className="h-8 max-w-24 bg-transparent text-xs outline-none">
+                <option value="ocean">Ocean</option><option value="slate">Slate</option><option value="emerald">Emerald</option><option value="sunset">Sunset</option><option value="violet">Violet</option>
+              </select>
+            </label>
             <Button
               variant="ghost"
               size="icon"
