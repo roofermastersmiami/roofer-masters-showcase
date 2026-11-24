@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ROOF_TYPES } from "@/lib/instant-estimate-schema";
 import {
   materialOrder,
+  escapeMaterialOrderHtml,
   reportSchema,
   type RoofReport,
   type MaterialLine,
@@ -108,7 +109,12 @@ export function MaterialOrder({
     () => (valid.success ? materialOrder(valid.data) : []),
     [valid.success, r],
   );
-  const text = `Material order – ${title}\n${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)\n\n${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}\n\nRoofer Masters · 305-942-3093`;
+  const text = `Material order – ${title}
+${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
+
+${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}
+
+Roofer Masters · 305-942-3093`;
   async function save() {
     if (!valid.success) return;
     setBusy(true);
@@ -133,7 +139,7 @@ export function MaterialOrder({
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(
-      `<pre style="font:14px sans-serif;white-space:pre-wrap">${text.replace(/</g, "&lt;")}</pre>`,
+      `<pre style="font:14px sans-serif;white-space:pre-wrap">${escapeMaterialOrderHtml(text)}</pre>`,
     );
     w.document.close();
     w.print();
