@@ -380,6 +380,7 @@ export function SatelliteRoofTrace({
   function selectLocation(result: GeocodeResult) {
     skipNextAddressSearch.current = true;
     setLocation(result);
+    setMapCenter({ lat: Number(result.lat), lon: Number(result.lon) });
     setAddress(result.display_name);
     setResults([]);
     setPoints([]);
@@ -396,6 +397,7 @@ export function SatelliteRoofTrace({
     // Clear the previous property's pin and trace immediately so they cannot be
     // mistaken for the newly selected address while geocoding is in flight.
     setLocation(null);
+    setMapCenter(null);
     setPoints([]);
     setAutoTraced(false);
     setResults([]);
