@@ -285,8 +285,11 @@ export default function RoofScene({
           />
         </Environment>
         <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
-        {aerialImageUrl && addressPin && (
-          <AerialGround url={aerialImageUrl} position={[addressPin.x, 0.05, addressPin.z]} />
+        {aerialImageUrl && (
+          <AerialGround
+            url={aerialImageUrl}
+            position={aerialImageCenter ?? (addressPin ? [addressPin.x, 0.05, addressPin.z] : [0, 0.05, 0])}
+          />
         )}
         <Walls drawing={drawing} color={colors.ground} />
         {addressPin && (
@@ -353,7 +356,11 @@ export default function RoofScene({
         <OrbitControls
           ref={controls}
           makeDefault
-          target={[0, 10, 0]}
+          target={[
+            addressPin ? addressPin.x / 2 : 0,
+            10,
+            addressPin ? addressPin.z / 2 : 0,
+          ]}
           enableRotate={view === "3d"}
           enablePan
           enableDamping
@@ -362,8 +369,11 @@ export default function RoofScene({
           maxPolarAngle={Math.PI - 0.01}
           autoRotate={view === "3d" && autoRotate}
           autoRotateSpeed={0.6}
-          minDistance={5}
-          maxDistance={extent * 5}
+          minDistance={2}
+          maxDistance={extent * 12}
+          zoomSpeed={1.2}
+          panSpeed={1.1}
+          screenSpacePanning
         />
         <Ready onReady={() => setReady(true)} />
       </Canvas>
