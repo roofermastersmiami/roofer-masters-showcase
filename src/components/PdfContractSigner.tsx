@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Check,
   FilePlus2,
-  FileStack,
   Lock,
   Mail,
   PenLine,
@@ -406,8 +405,8 @@ export function PdfContractSigner({
   };
 
   const saveAsTemplate = async () => {
-    if (!sourceBytes || !leadId) {
-      toast.error("Load a PDF and select a customer roof report before saving a template");
+    if (!sourceBytes) {
+      toast.error("Load a PDF before saving a template");
       return;
     }
     const name = templateName.trim();
@@ -584,7 +583,6 @@ export function PdfContractSigner({
         </select>
         <span className="text-xs text-muted-foreground">Templates keep your PDF and field positions for reuse.</span>
       </div>
-      </div>
       {selected && !isClientMode && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
           <div className="min-w-40 flex-1">
@@ -664,6 +662,7 @@ export function PdfContractSigner({
           </Button>
         </div>
       )}
+      </div>
       {!leadId && (
         <p
           role="alert"
