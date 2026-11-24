@@ -173,6 +173,51 @@ describe("automatic OpenStreetMap building footprint selection", () => {
     expect(footprint).toHaveLength(4);
     expect(footprint?.[0]).toEqual({ lat: 25.4701, lon: -80.4801 });
   });
+  it("prefers the building containing the address over a closer neighboring centroid", () => {
+    const containingBuilding = [
+      { lat: center.lat - 0.0001, lon: center.lon - 0.0004 },
+      { lat: center.lat - 0.0001, lon: center.lon + 0.00005 },
+      { lat: center.lat + 0.0001, lon: center.lon + 0.00005 },
+      { lat: center.lat + 0.0001, lon: center.lon - 0.0004 },
+      { lat: center.lat - 0.0001, lon: center.lon - 0.0004 },
+    ];
+    const nearbyNeighbor = [
+      { lat: center.lat - 0.00002, lon: center.lon + 0.00006 },
+      { lat: center.lat - 0.00002, lon: center.lon + 0.00008 },
+      { lat: center.lat + 0.00002, lon: center.lon + 0.00008 },
+      { lat: center.lat + 0.00002, lon: center.lon + 0.00006 },
+      { lat: center.lat - 0.00002, lon: center.lon + 0.00006 },
+    ];
+    const footprint = nearestBuildingFootprint(
+      [
+        { type: "way", geometry: nearbyNeighbor },
+        { type: "way", geometry: containingBuilding },
+      ],
+      center,
+    );
+    expect(footprint).toHaveLength(4);
+    expect(footprint?.[0]).toEqual(containingBuilding[0]);
+  });
+
+  it("accepts an address on the building outline and rejects invalid address coordinates", () => {
+    const boundaryBuilding = [
+      { lat: center.lat, lon: center.lon },
+      { lat: center.lat, lon: center.lon + 0.0002 },
+      { lat: center.lat + 0.0002, lon: center.lon + 0.0002 },
+      { lat: center.lat + 0.0002, lon: center.lon },
+      { lat: center.lat, lon: center.lon },
+    ];
+    expect(
+      nearestBuildingFootprint([{ type: "way", geometry: boundaryBuilding }], center),
+    ).toHaveLength(4);
+    expect(
+      nearestBuildingFootprint([{ type: "way", geometry: boundaryBuilding }], {
+        lat: Number.NaN,
+        lon: center.lon,
+      }),
+    ).toBeNull();
+  });
+
   it("ignores malformed, non-way, and distant building geometry", () => {
     expect(
       nearestBuildingFootprint(
