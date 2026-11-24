@@ -373,19 +373,25 @@ export async function roofDrawingPdf(
   section("ROOF PLANE MEASUREMENTS");
   const planeColumns = [
     { label: "Roof plane", x: MARGIN + 8 },
-    { label: "Area (sq ft)", x: 330 },
-    { label: "Pitch", x: 455 },
+    { label: "Area (sq ft)", x: 290 },
+    { label: "Pitch", x: 410 },
+    { label: "Squares", x: 500 },
   ];
   tableHeader(planeColumns);
 
   const planeCols = [
-    { x: MARGIN + 8, width: 245 },
-    { x: 330, width: 100 },
-    { x: 455, width: 90 },
+    { x: MARGIN + 8, width: 205 },
+    { x: 290, width: 95 },
+    { x: 410, width: 75 },
+    { x: 500, width: 65 },
   ];
 
   m.planes.forEach((p, i) => {
-    tableRow([p.name, p.area.toFixed(2), `${p.pitch.toFixed(2)}:12`], planeCols, i);
+    tableRow(
+      [p.name, p.area.toFixed(2), `${p.pitch.toFixed(2)}:12`, (p.area / 100).toFixed(2)],
+      planeCols,
+      i,
+    );
   });
 
   // Edge measurements
