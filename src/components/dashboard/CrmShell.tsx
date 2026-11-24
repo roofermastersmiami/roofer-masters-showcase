@@ -520,10 +520,10 @@ export function CrmShell({
                 </div>
               )}
             </div>
-            <label className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 sm:flex" title="Choose CRM color theme">
+            <label className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 sm:gap-1.5 sm:px-2" title="Choose CRM color theme">
               <Palette className="size-4 text-muted-foreground" />
               <span className="sr-only">CRM color theme</span>
-              <select aria-label="CRM color theme" value={theme} onChange={(event) => setTheme(event.target.value)} className="h-8 max-w-24 bg-transparent text-xs outline-none">
+              <select aria-label="CRM color theme" value={theme} onChange={(event) => setTheme(event.target.value)} className="h-8 max-w-24 bg-transparent text-[11px] outline-none sm:max-w-32 sm:text-xs">
                 <option value="executive-berry">Executive Berry</option><option value="modern-enterprise">Modern Enterprise</option><option value="canyon-corporate">Canyon Corporate</option>
               </select>
             </label>
