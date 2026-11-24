@@ -133,7 +133,7 @@ export function resolveMaterialOrderSource(saved: unknown): { source: MaterialOr
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return { source: "manual", label: "Manual estimate — not drawing-verified" };
   const data = saved as Record<string, unknown>;
   const drawingId = typeof data.drawing_id === "string" && data.drawing_id.trim() ? data.drawing_id : undefined;
-  if (data.source === "drawing" || (!data.source && drawingId)) return { source: "drawing", label: "Transferred from saved roof drawing", ...(drawingId ? { drawingId } : {}) };
+  if (drawingId && (data.source === "drawing" || !data.source)) return { source: "drawing", label: "Transferred from saved roof drawing", ...(drawingId ? { drawingId } : {}) };
   if (data.source === "uploaded_report") return { source: "uploaded_report", label: "Uploaded roof report — verify measurements" };
   if (data.source === "manual") return { source: "manual", label: "Manual estimate — not drawing-verified" };
   return { source: "legacy", label: "Previously saved estimate — source not recorded" };
