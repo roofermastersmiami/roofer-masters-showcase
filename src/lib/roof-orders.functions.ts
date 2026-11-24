@@ -19,6 +19,8 @@ export const createRoofOrder = createServerFn({ method: "POST" })
       p_title: data.title,
       p_provider: data.provider,
       p_notes: data.notes,
+      p_customer_phone: data.customer_phone,
+      p_customer_email: data.customer_email,
     });
     if (error) {
       // Preserve actionable Postgres/PostgREST diagnostics for the CRM toast.

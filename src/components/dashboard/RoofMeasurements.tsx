@@ -293,7 +293,14 @@ export function RoofMeasurements({
           ...(typeof item.longitude === "number" ? { longitude: item.longitude } : {}),
         });
       }
-      const bytes = await roofDrawingPdf(title, d, customer?.name ?? "", workspaceAddress, photos);
+      const bytes = await roofDrawingPdf(
+        title,
+        d,
+        report?.title || customer?.name || "",
+        workspaceAddress,
+        photos,
+        { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
+      );
 
       if (report) {
         roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;

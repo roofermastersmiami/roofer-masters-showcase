@@ -35,6 +35,7 @@ export async function roofDrawingPdf(
   customer: string,
   address: string,
   photos: Photo[] = [],
+  clientContact: { phone?: string; email?: string } = {},
 ) {
   const m = measureDrawing(d);
   const pdf = await PDFDocument.create();
@@ -282,6 +283,8 @@ export async function roofDrawingPdf(
   section("PROJECT INFORMATION");
   paragraph(title, 15, true, NAVY);
   row("Customer", customer || "Not provided");
+  if (clientContact.phone) row("Customer phone", clientContact.phone, true);
+  if (clientContact.email) row("Customer email", clientContact.email, !clientContact.phone);
   row("Property address", address || "Not provided", true);
   row("Roofing system", d.roof_type);
   row("Review status", d.verified ? "Owner-reviewed drawing" : "Not owner-reviewed", true);

@@ -1007,6 +1007,8 @@ export type Database = {
         Row: {
           address: string;
           created_at: string;
+          customer_email: string;
+          customer_phone: string;
           customer_id: string;
           drawing_id: string | null;
           file_path: string | null;
@@ -1024,6 +1026,8 @@ export type Database = {
         Insert: {
           address: string;
           created_at?: string;
+          customer_email?: string;
+          customer_phone?: string;
           customer_id: string;
           drawing_id?: string | null;
           file_path?: string | null;
@@ -1041,6 +1045,8 @@ export type Database = {
         Update: {
           address?: string;
           created_at?: string;
+          customer_email?: string;
+          customer_phone?: string;
           customer_id?: string;
           drawing_id?: string | null;
           file_path?: string | null;
@@ -1132,6 +1138,8 @@ export type Database = {
       create_roof_report_request: {
         Args: {
           p_address: string;
+          p_customer_email: string;
+          p_customer_phone: string;
           p_notes: string;
           p_provider: string;
           p_title: string;
