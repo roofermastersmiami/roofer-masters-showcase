@@ -30,10 +30,14 @@ export const lookupRoofAddress = createServerFn({ method: "POST" })
         headers: { Accept: "application/json" },
       });
       if (!response.ok)
-        return { error: "The free address lookup is temporarily unavailable. Please retry." } as const;
+        return {
+          error: "The free address lookup is temporarily unavailable. Please retry.",
+        } as const;
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.toLowerCase().includes("json"))
-        return { error: "The address service returned an invalid response. Please retry shortly." } as const;
+        return {
+          error: "The address service returned an invalid response. Please retry shortly.",
+        } as const;
       let payload: unknown;
       try {
         payload = await response.json();
@@ -42,7 +46,9 @@ export const lookupRoofAddress = createServerFn({ method: "POST" })
       }
       const match = parseRoofAddressMatch(payload, data.address);
       if (!match)
-        return { error: "We could not pinpoint that address. Check the street, city, state and ZIP code." } as const;
+        return {
+          error: "We could not pinpoint that address. Check the street, city, state and ZIP code.",
+        } as const;
       return match;
     } catch {
       return {

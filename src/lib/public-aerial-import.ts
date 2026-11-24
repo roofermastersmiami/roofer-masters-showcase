@@ -64,10 +64,7 @@ export function shouldAutoLoadAddressAerial(input: {
   const address = input.address?.trim().toLowerCase();
   const requestKey = input.requestKey.trim();
   return Boolean(
-    address &&
-      requestKey &&
-      !input.hasAerial &&
-      input.attemptedKey !== `${requestKey}:${address}`,
+    address && requestKey && !input.hasAerial && input.attemptedKey !== `${requestKey}:${address}`,
   );
 }
 

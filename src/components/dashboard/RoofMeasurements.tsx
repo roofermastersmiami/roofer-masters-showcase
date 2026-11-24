@@ -467,7 +467,15 @@ export function RoofMeasurements({
       autoAerialAttempted.current = requestKey;
       void loadAerial();
     }
-  }, [report?.id, report?.address, property, propertyRow?.address, initialDrawing?.id, media, loadAerial]);
+  }, [
+    report?.id,
+    report?.address,
+    property,
+    propertyRow?.address,
+    initialDrawing?.id,
+    media,
+    loadAerial,
+  ]);
 
   // Automatically check the free OSM ground outline for address-linked reports.
   // This is a reference footprint only, never a roof measurement or roof plan.
