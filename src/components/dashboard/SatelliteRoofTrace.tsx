@@ -29,7 +29,8 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
     id: `satellite-${Date.now()}`,
     name: "Satellite traced roof plane",
     points: vertices,
-    // A traced polygon does not reveal which sides are eaves, rakes, or ridges.\n    // Keep them unclassified until a user verifies each edge in the measurement editor.\n    edges: vertices.map(() => "other"),
+    // A traced polygon does not reveal which sides are eaves, rakes, or ridges.
+    // Keep them unclassified until a user verifies each edge in the measurement editor.\n    edges: vertices.map(() => "other"),
   };
 }
 
