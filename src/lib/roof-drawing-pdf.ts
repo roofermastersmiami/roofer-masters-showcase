@@ -758,6 +758,52 @@ export async function roofDrawingPdf(
       color: NAVY,
     });
   });
+  // Plane-level takeoff keeps each slope traceable to its drawn geometry.
+  section("ROOF PLANE TAKEOFF");
+  paragraph(
+    "Per-plane surface area, pitch, and classified edge lengths. Shared edges are shown on each adjoining plane for layout reference; roof-wide totals are deduplicated in the summary.",
+    7.5,
+    false,
+    MUTED,
+  );
+  const planeTakeoff = roofPlaneTakeoff(d);
+  tableHeader([
+    { label: "Roof plane", x: MARGIN + 8 },
+    { label: "Area SF", x: 245 },
+    { label: "SQ", x: 300 },
+    { label: "Pitch", x: 345 },
+    { label: "Eave LF", x: 390 },
+    { label: "Rake LF", x: 445 },
+    { label: "Ridge/Hip/Valley LF", x: 500 },
+  ]);
+  const planeCols = [
+    { x: MARGIN + 8, width: 165 },
+    { x: 245, width: 48 },
+    { x: 300, width: 38 },
+    { x: 345, width: 38 },
+    { x: 390, width: 48 },
+    { x: 445, width: 48 },
+    { x: 500, width: 70 },
+  ];
+  planeTakeoff.forEach((plane, index) => {
+    const combined = plane.edges_lf.ridge + plane.edges_lf.hip + plane.edges_lf.valley;
+    tableRow([
+      plane.name,
+      plane.area_sqft.toFixed(1),
+      plane.squares.toFixed(2),
+      `${plane.pitch_rise_per_12.toFixed(1)}:12`,
+      plane.edges_lf.eave.toFixed(1),
+      plane.edges_lf.rake.toFixed(1),
+      combined.toFixed(1),
+    ], planeCols, index);
+  });
+  paragraph(
+    `Waste allowance: ${d.waste}% applied independently to each plane's surface area for planning. Pitch and edge lengths are derived from the saved drawing geometry and inherit its measurement verification status.`,
+    7,
+    false,
+    MUTED,
+  );
+
   // Material takeoff
   section("MATERIAL TAKEOFF");
   paragraph(
