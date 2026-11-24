@@ -168,14 +168,15 @@ export function RoofMeasurements({
       Number.isFinite(item.latitude) &&
       Number.isFinite(item.longitude),
   );
-  const aerialImageCenter = aerialGroundImage && d.geo_reference
-    ? addressPinPosition({
-        addressLatitude: aerialGroundImage.latitude!,
-        addressLongitude: aerialGroundImage.longitude!,
-        originLatitude: d.geo_reference.originLatitude,
-        originLongitude: d.geo_reference.originLongitude,
-      })
-    : null;
+  const aerialImageCenter =
+    aerialGroundImage && d.geo_reference
+      ? addressPinPosition({
+          addressLatitude: aerialGroundImage.latitude!,
+          addressLongitude: aerialGroundImage.longitude!,
+          originLatitude: d.geo_reference.originLatitude,
+          originLongitude: d.geo_reference.originLongitude,
+        })
+      : null;
   useEffect(() => {
     const aerial = media.find((item) => item.category === "aerial");
     if (!aerial) {
@@ -976,7 +977,9 @@ export function RoofMeasurements({
                 <Scene
                   drawing={d}
                   aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
-                  aerialImageCenter={aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined}
+                  aerialImageCenter={
+                    aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined
+                  }
                   selected={selected}
                   onSelect={setSelected}
                   view={view}
