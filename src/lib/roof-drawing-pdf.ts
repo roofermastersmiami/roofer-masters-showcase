@@ -2,6 +2,7 @@ import logoMark from "@/assets/logo-mark.webp";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
 import {
   addressPinPosition,
+  auditRoofReport,
   measureDrawing,
   type RoofDrawing,
   toMaterialReport,
@@ -53,6 +54,7 @@ export async function roofDrawingPdf(
   clientContact: { phone?: string; email?: string } = {},
 ) {
   const m = measureDrawing(d);
+  const reportAudit = auditRoofReport(d);
   const layout = defaultRoofPdfLayout;
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${title} - Roofer Masters`);
@@ -596,6 +598,25 @@ export async function roofDrawingPdf(
     BLUE,
   );
   if (d.image_credit) paragraph(`Image credit: ${d.image_credit}`, 7, false, MUTED);
+  section("AUTOMATED REPORT QUALITY CHECK");
+  paragraph(
+    reportAudit.status === "ready"
+      ? "READY FOR REPORT REVIEW - geometry and required review metadata passed the automated checks."
+      : reportAudit.status === "review"
+        ? "REVIEW REQUIRED - measurements can be reported, but the following items need attention."
+        : "REPORT BLOCKED - geometry validation did not pass. Correct the listed issues before relying on quantities.",
+    8,
+    true,
+    reportAudit.status === "ready" ? BLUE : NAVY,
+  );
+  reportAudit.blockers.forEach((item) => paragraph(`BLOCKER: ${item}`, 7.5, true, INK));
+  reportAudit.warnings.forEach((item) => paragraph(`REVIEW: ${item}`, 7.5, false, MUTED));
+  paragraph(
+    `Automated check summary: ${reportAudit.planeCount} roof plane(s), ${reportAudit.unclassifiedEdges} unclassified edge(s). This check validates drawing consistency and metadata only; it does not independently verify roof dimensions or pitch from imagery.`,
+    7,
+    false,
+    MUTED,
+  );
   section("AREA MEASUREMENTS");
   row("Total roof area", `${m.area.toFixed(2)} sq ft`);
   row("Roofing squares", `${m.squares.toFixed(2)} squares`, true);
