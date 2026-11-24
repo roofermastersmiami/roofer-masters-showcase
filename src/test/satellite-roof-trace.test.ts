@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  nextSatelliteZoom,
+  nextSatelliteZoom,\n  panSatelliteCenter,
   satelliteTraceToPlane,
   satelliteTraceToGablePlanes,
   nearestBuildingFootprint,
@@ -219,6 +219,30 @@ describe("satellite map zoom", () => {
   it("keeps zoom inside supported bounds", () => {
     expect(nextSatelliteZoom(8, "in")).toBe(8);
     expect(nextSatelliteZoom(0.5, "out")).toBe(0.5);
+  });
+
+  it("pans the map in each direction without moving the geocoded address", () => {
+    const center = { lat: 25.47, lon: -80.48 };
+    const north = panSatelliteCenter(center, "north", 1);
+    const south = panSatelliteCenter(center, "south", 1);
+    const east = panSatelliteCenter(center, "east", 1);
+    const west = panSatelliteCenter(center, "west", 1);
+
+    expect(north.lat).toBeGreaterThan(center.lat);
+    expect(south.lat).toBeLessThan(center.lat);
+    expect(east.lon).toBeGreaterThan(center.lon);
+    expect(west.lon).toBeLessThan(center.lon);
+    expect(north.lon).toBe(center.lon);
+    expect(east.lat).toBe(center.lat);
+  });
+
+  it("moves the map less at higher zoom and keeps latitude in safe bounds", () => {
+    const center = { lat: 25.47, lon: -80.48 };
+    const near = panSatelliteCenter(center, "east", 2);
+    const far = panSatelliteCenter(center, "east", 1);
+    expect(far.lon - center.lon).toBeCloseTo((near.lon - center.lon) * 2, 8);
+    expect(panSatelliteCenter({ lat: 85, lon: 0 }, "north", 1).lat).toBe(85);
+    expect(() => panSatelliteCenter(center, "east", 0)).toThrow(/valid map center/);
   });
 });
 
