@@ -15,7 +15,6 @@ export const createRoofOrder = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ownRoofReportSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { data: id, error } = await context.supabase.rpc("create_roof_report_request", {
-      p_customer_id: data.customer_id,
       p_address: data.address,
       p_title: data.title,
       p_provider: data.provider,
