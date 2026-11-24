@@ -399,3 +399,52 @@ export function toMaterialReport(d: RoofDrawing) {
     pipes: d.penetrations.filter((p) => p.kind === "pipe" || p.kind === "vent").length,
   };
 }
+
+export type RoofReportAudit = {
+  status: "ready" | "review" | "blocked";
+  blockers: string[];
+  warnings: string[];
+  unclassifiedEdges: number;
+  planeCount: number;
+};
+
+/**
+ * Preflight checks for a customer-facing roof report.
+ * This validates geometry and disclosure requirements; it does not certify field accuracy.
+ */
+export function auditRoofReport(raw: RoofDrawing): RoofReportAudit {
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  let unclassifiedEdges = 0;
+  let planeCount = 0;
+  try {
+    const drawing = drawingSchema.parse(raw);
+    planeCount = drawing.planes.length;
+    const measurement = measureDrawing(drawing);
+    unclassifiedEdges = drawing.planes.reduce(
+      (total, plane) => total + plane.edges.filter((edge) => edge === "other").length,
+      0,
+    );
+    if (measurement.area <= 0 || !Number.isFinite(measurement.area))
+      blockers.push("Roof area could not be calculated.");
+    if (drawing.planes.some((plane) => plane.points.length !== plane.edges.length))
+      blockers.push("One or more roof planes have missing edge classifications.");
+    if (unclassifiedEdges > 0)
+      warnings.push(`${unclassifiedEdges} roof boundary edge(s) remain unclassified.`);
+    if (!drawing.geo_reference) warnings.push("No geographic origin is saved with this drawing.");
+    if (drawing.accuracy !== "site_verified")
+      warnings.push("Measurements are not marked as site verified.");
+    if (!drawing.verified) warnings.push("The drawing has not been marked as owner reviewed.");
+    if (measurement.planes.some((plane) => plane.pitch <= 0) && drawing.roof_type !== "Flat Roof")
+      warnings.push("A zero-pitch plane exists on a non-flat roofing system; confirm pitch.");
+  } catch (error) {
+    blockers.push(error instanceof Error ? error.message : "Roof geometry failed validation.");
+  }
+  return {
+    status: blockers.length ? "blocked" : warnings.length ? "review" : "ready",
+    blockers,
+    warnings,
+    unclassifiedEdges,
+    planeCount,
+  };
+}
