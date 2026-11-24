@@ -7,21 +7,9 @@ import { money } from "@/lib/crm-schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { expensesQuery } from "./cost-data";
+import { EXPENSE_CATEGORIES, prepareExpenseRecord } from "@/lib/expense-validation";
 import { jobsQuery } from "./operations-data";
 import { Field, Choice, SectionHeading } from "./CrmControls";
-export const EXPENSE_CATEGORIES = [
-  "materials",
-  "labor",
-  "subcontractors",
-  "fuel",
-  "equipment",
-  "permits",
-  "disposal",
-  "insurance",
-  "advertising",
-  "office",
-  "other",
-];
 export function Expenses() {
   const expenses = useQuery(expensesQuery),
     jobs = useQuery(jobsQuery),
@@ -37,8 +25,11 @@ export function Expenses() {
     [busy, setBusy] = useState(false),
     [receipt, setReceipt] = useState<File | null>(null);
   async function save() {
-    if (!form.description.trim() || form.amount <= 0 || !form.incurred_at) {
-      toast.error("Enter a description, amount and date");
+    let record: ReturnType<typeof prepareExpenseRecord>;
+    try {
+      record = prepareExpenseRecord(form);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Enter valid expense details");
       return;
     }
     setBusy(true);
@@ -55,12 +46,7 @@ export function Expenses() {
         if (error) throw error;
       }
       const { error } = await supabase.from("crm_expenses").insert({
-        description: form.description.trim(),
-        category: form.category,
-        amount_cents: Math.round(form.amount * 100),
-        job_id: form.job_id || null,
-        incurred_at: form.incurred_at,
-        payee: form.payee,
+        ...record,
         receipt_path: path,
       });
       if (error) throw error;
