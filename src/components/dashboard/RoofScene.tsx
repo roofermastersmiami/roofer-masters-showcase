@@ -9,6 +9,7 @@ import {
   SRGBColorSpace,
 } from "three";
 import { planeInfo, distance, type RoofDrawing, type RoofPlane } from "@/lib/roof-geometry";
+import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
 function Dimension({ text, position }: { text: string; position: [number, number, number] }) {
   const texture = useMemo(() => {
     const c = document.createElement("canvas");
@@ -40,11 +41,13 @@ function Plane({
   selected,
   onSelect,
   colors,
+  faceColor,
 }: {
   plane: RoofPlane;
   selected: boolean;
   onSelect: () => void;
   colors: { roof: string; selected: string; edge: string };
+  faceColor: string;
 }) {
   const geometry = useMemo(() => {
     const g = new BufferGeometry();
@@ -72,7 +75,7 @@ function Plane({
         }}
       >
         <meshStandardMaterial
-          color={selected ? colors.selected : colors.roof}
+          color={selected ? colors.selected : faceColor}
           side={DoubleSide}
           roughness={0.65}
           metalness={0.15}
@@ -88,8 +91,8 @@ function Plane({
                 [p.x, p.y + 0.04, p.z],
                 [b.x, b.y + 0.04, b.z],
               ]}
-              color={colors.edge}
-              lineWidth={selected ? 2 : 1}
+              color={ROOF_EDGE_STYLES[plane.edges[i] ?? "other"].color}
+              lineWidth={selected ? 3 : 2}
             />
             {selected && (
               <Dimension
@@ -250,6 +253,7 @@ export default function RoofScene({
             selected={p.id === selected}
             onSelect={() => onSelect(p.id)}
             colors={colors}
+            faceColor={ROOF_FACE_COLORS[drawing.planes.indexOf(p) % ROOF_FACE_COLORS.length] ?? colors.roof}
           />
         ))}
         {drawing.penetrations.map((p) => {
@@ -259,10 +263,17 @@ export default function RoofScene({
           );
           return (
             <group key={p.id} position={[p.x, highest + 0.6, p.z]}>
-              <mesh>
-                <boxGeometry args={[p.width, 1.2, p.length]} />
-                <meshStandardMaterial color={colors.edge} />
-              </mesh>
+              {p.kind === "pipe" ? (
+                <mesh>
+                  <cylinderGeometry args={[Math.max(p.width, p.length) * 0.32, Math.max(p.width, p.length) * 0.32, 1.5, 20]} />
+                  <meshStandardMaterial color={PENETRATION_COLORS.pipe} />
+                </mesh>
+              ) : (
+                <mesh>
+                  <boxGeometry args={[p.width, 1.2, p.length]} />
+                  <meshStandardMaterial color={PENETRATION_COLORS[p.kind]} />
+                </mesh>
+              )}
               <Dimension text={p.kind} position={[0, 1.2, 0]} />
             </group>
           );
