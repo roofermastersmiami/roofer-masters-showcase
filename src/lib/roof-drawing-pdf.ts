@@ -809,36 +809,6 @@ export async function roofDrawingPdf(
     MUTED,
   );
 
-  // Plane-by-plane quantities remain traceable to each drawn facet.
-  section("ROOF PLANE TAKEOFF");
-  paragraph(
-    "Each row represents one saved roof plane. Shared boundaries appear on adjoining planes; use the roof-wide edge summary for deduplicated totals.",
-    7.5,
-    false,
-    MUTED,
-  );
-  const planeRows = roofPlaneTakeoff(d);
-  planeRows.forEach((plane) => {
-    paragraph(
-      `${plane.name} | ${plane.area_sqft.toFixed(1)} SF | ${plane.squares.toFixed(2)} SQ | Pitch ${plane.pitch_rise_per_12.toFixed(1)}:12`,
-      8,
-      true,
-      NAVY,
-    );
-    paragraph(
-      `Eaves ${plane.edges_lf.eave.toFixed(1)} LF · Rakes ${plane.edges_lf.rake.toFixed(1)} LF · Ridges ${plane.edges_lf.ridge.toFixed(1)} LF · Hips ${plane.edges_lf.hip.toFixed(1)} LF · Valleys ${plane.edges_lf.valley.toFixed(1)} LF · Other ${plane.edges_lf.other.toFixed(1)} LF`,
-      7.2,
-      false,
-      INK,
-    );
-    paragraph(
-      `With ${d.waste}% waste: ${plane.area_with_waste_sqft.toFixed(1)} SF (${(plane.area_with_waste_sqft / 100).toFixed(2)} SQ)`,
-      7,
-      false,
-      MUTED,
-    );
-  });
-
   // Material takeoff
   section("MATERIAL TAKEOFF");
   paragraph(
