@@ -24,12 +24,13 @@ export function FinancialAnalytics() {
   const filteredInvoices = projectInvoices(invoices.data ?? [], links.data ?? [], project);
   const start = Date.parse(`${from}T00:00:00`),
     end = Date.parse(`${to}T23:59:59.999`);
-  let env = "";
+  let env = "live";
+  let paymentSetupMissing = false;
   try {
     env = getStripeEnvironment();
   } catch {
-    // Keep the ledger input valid so missing payment configuration cannot crash the page.
-    env = "live";
+    // Existing live records remain reportable even when new online checkout is not configured.
+    paymentSetupMissing = true;
   }
   let ledger: ReturnType<typeof dashboardLedger>;
   let ledgerError = false;
@@ -175,6 +176,11 @@ export function FinancialAnalytics() {
             : "Live recorded transactions"}{" "}
         · Cash basis
       </p>
+      {paymentSetupMissing && !failed && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          Online payments are not configured. This report still shows saved live invoices, payments, and expenses.
+        </p>
+      )}
       {failed ? (
         <p role="alert" className="text-destructive">
           {env === "unavailable"
