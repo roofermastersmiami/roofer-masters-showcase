@@ -1,5 +1,10 @@
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
-import { addressPinPosition, measureDrawing, type RoofDrawing, toMaterialReport } from "./roof-geometry";
+import {
+  addressPinPosition,
+  measureDrawing,
+  type RoofDrawing,
+  toMaterialReport,
+} from "./roof-geometry";
 import { materialOrder } from "./material-order";
 
 const PAGE_W = 612;
