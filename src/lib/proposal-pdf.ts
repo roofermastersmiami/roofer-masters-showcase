@@ -48,18 +48,26 @@ export async function generateProposalPdf(
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   let page = pdf.addPage([612, 792]);
-  // A logo conversion failure must never prevent a customer proposal from being generated.
-  try {
-    const logo = await pdf.embedPng(await loadLogoPng());
-    const logoSize = logo.scaleToFit(180, 62);
-    page.drawImage(logo, {
-      x: 50,
-      y: 710,
-      width: logoSize.width,
-      height: logoSize.height,
-    });
-  } catch (error) {
-    console.warn("Proposal logo could not be embedded; using text header.", error);
+  // Browser image APIs are required to convert the imported WebP logo to PNG.
+  // In Node/test environments, skip the fetch entirely and use the text header.
+  let logoEmbedded = false;
+  if (typeof document !== "undefined" && typeof createImageBitmap === "function") {
+    try {
+      const logo = await pdf.embedPng(await loadLogoPng());
+      const logoSize = logo.scaleToFit(180, 62);
+      page.drawImage(logo, {
+        x: 50,
+        y: 710,
+        width: logoSize.width,
+        height: logoSize.height,
+      });
+      logoEmbedded = true;
+    } catch (error) {
+      // A logo conversion failure must never prevent a customer proposal.
+      console.warn("Proposal logo could not be embedded; using text header.", error);
+    }
+  }
+  if (!logoEmbedded) {
     page.drawText("ROOFER MASTERS", { x: 50, y: 738, font: bold, size: 20, color: brand });
     page.drawText("YOUR ROOF, OUR MASTERPIECE", {
       x: 50,
