@@ -167,3 +167,23 @@ describe("reviewable shared roof-edge suggestions", () => {
     expect(suggestSharedEdgeClassifications(roofPreset("gable", 40, 30, 6))).toEqual([]);
   });
 });
+
+
+describe("roof preset dimension validation", () => {
+  it("accepts supported finite dimensions and pitch", () => {
+    expect(() => roofPreset("gable", 500, 500, 24)).not.toThrow();
+    expect(() => roofPreset("flat", 1, 1, 0)).not.toThrow();
+  });
+  it.each([
+    [0, 30, 6],
+    [501, 30, 6],
+    [40, 0, 6],
+    [40, 501, 6],
+    [40, 30, -1],
+    [40, 30, 24.01],
+    [Number.NaN, 30, 6],
+    [40, Number.POSITIVE_INFINITY, 6],
+  ])("rejects invalid dimensions (%s, %s, %s)", (width, length, pitch) => {
+    expect(() => roofPreset("gable", width, length, pitch)).toThrow();
+  });
+});

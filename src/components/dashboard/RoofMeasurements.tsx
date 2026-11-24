@@ -628,7 +628,7 @@ export function RoofMeasurements({
               className="w-28"
               type="number"
               min={label.includes("Pitch") ? 0 : 1}
-              max={1000}
+              max={label.includes("Pitch") ? 24 : 500}
               value={value}
               onChange={(e) => set(Number(e.target.value))}
             />
