@@ -24,12 +24,12 @@ export function FinancialAnalytics() {
   const filteredInvoices = projectInvoices(invoices.data ?? [], links.data ?? [], project);
   const start = Date.parse(`${from}T00:00:00`),
     end = Date.parse(`${to}T23:59:59.999`);
-  let env = "live";
+  let env = "sandbox";
   let paymentSetupMissing = false;
   try {
     env = getStripeEnvironment();
   } catch {
-    // Existing live records remain reportable even when new online checkout is not configured.
+    // Database defaults existing financial records to sandbox when payment setup is absent.
     paymentSetupMissing = true;
   }
   let ledger: ReturnType<typeof dashboardLedger>;
@@ -180,7 +180,7 @@ export function FinancialAnalytics() {
           ? "Test environment — not live business revenue"
           : env === "unavailable"
             ? "Payment environment unavailable — totals cannot be verified"
-            : "Live recorded transactions"}{" "}
+            : "Sandbox recorded transactions — test records, not live revenue"}{" "}
         · Cash basis
       </p>
       {jobs.error && !failed && (
@@ -195,7 +195,7 @@ export function FinancialAnalytics() {
       )}
       {paymentSetupMissing && !failed && (
         <p className="mb-4 text-sm text-muted-foreground">
-          Online payments are not configured. This report still shows saved live invoices, payments, and expenses.
+          Online payments are not configured. This report is showing saved sandbox invoices, payments, and expenses. These are test records, not live revenue.
         </p>
       )}
       {failed ? (
