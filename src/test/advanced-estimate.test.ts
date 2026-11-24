@@ -116,3 +116,42 @@ describe("estimate and recorded profitability", () => {
     expect(projectInvoices(invoices, links, "all")).toHaveLength(3);
   });
 });
+
+describe("financial profit calculations", () => {
+  it("separates direct costs from business overhead", () => {
+    expect(actualProfit(100000, [
+      { category: "materials", amount_cents: 25000 },
+      { category: "insurance", amount_cents: 5000 },
+      { category: "labor", amount_cents: 10000 },
+    ])).toEqual({
+      direct: 35000,
+      overhead: 5000,
+      expenses: 40000,
+      gross: 65000,
+      net: 60000,
+      margin: 60,
+    });
+  });
+
+  it("rejects malformed and unsafe expense amounts", () => {
+    expect(() => actualProfit(1000, null as never)).toThrow("valid non-negative integer cents");
+    expect(() => actualProfit(-1, [])).toThrow("valid non-negative integer cents");
+    expect(() => actualProfit(1000, [{ category: "materials", amount_cents: -1 }])).toThrow(
+      "invalid amount or category",
+    );
+    expect(() => actualProfit(1000, [{ category: "materials", amount_cents: Number.NaN }])).toThrow(
+      "invalid amount or category",
+    );
+  });
+
+  it("rejects totals that exceed safe integer precision", () => {
+    expect(() => actualProfit(1000, [
+      { category: "materials", amount_cents: Number.MAX_SAFE_INTEGER },
+      { category: "labor", amount_cents: 1 },
+    ])).toThrow("Direct expenses exceed the supported amount");
+  });
+
+  it("returns no margin when no cash has been collected", () => {
+    expect(actualProfit(0, [{ category: "materials", amount_cents: 100 }]).margin).toBeNull();
+  });
+});
