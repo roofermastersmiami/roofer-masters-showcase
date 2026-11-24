@@ -1,9 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
-import { createInterface } from "node:readline";
-import { createConnection, type Socket } from "node:net";
-import { connect as tlsConnect } from "node:tls";
-import { Buffer } from "node:buffer";
+import type { Socket } from "node:net";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -19,7 +16,10 @@ const requestSchema = z.object({
   })).min(1).max(10),
 });
 
-function openSocket(host: string, port: number, secure: boolean): Promise<Socket> {
+async function openSocket(host: string, port: number, secure: boolean): Promise<Socket> {
+  const [{ createConnection }, { connect: tlsConnect }] = await Promise.all([
+    import("node:net"), import("node:tls"),
+  ]);
   return new Promise((resolve, reject) => {
     const socket = secure
       ? tlsConnect({ host, port, servername: host }, () => resolve(socket))
@@ -30,13 +30,15 @@ function openSocket(host: string, port: number, secure: boolean): Promise<Socket
 }
 
 async function upgradeTls(socket: Socket, host: string): Promise<Socket> {
+  const { connect: tlsConnect } = await import("node:tls");
   return new Promise((resolve, reject) => {
     const secure = tlsConnect({ socket, servername: host }, () => resolve(secure));
     secure.once("error", reject);
   });
 }
 
-function smtpReader(socket: Socket) {
+async function smtpReader(socket: Socket) {
+  const { createInterface } = await import("node:readline");
   const lines = createInterface({ input: socket });
   const iterator = lines[Symbol.asyncIterator]();
   return {
@@ -65,8 +67,9 @@ async function sendSmtpMessage(input: {
   const user = process.env["SMTP_USER"]!;
   const password = process.env["SMTP_PASSWORD"]!;
   const from = process.env["EMAIL_FROM"]!;
+  const { Buffer } = await import("node:buffer");
   let socket = await openSocket(host, port, port === 465);
-  let reader = smtpReader(socket);
+  let reader = await smtpReader(socket);
   const command = async (value: string, expected: number) => {
     socket.write(value + "\r\n");
     return reader.reply(expected);
@@ -78,7 +81,7 @@ async function sendSmtpMessage(input: {
       await command("STARTTLS", 220);
       reader.close();
       socket = await upgradeTls(socket, host);
-      reader = smtpReader(socket);
+      reader = await smtpReader(socket);
       await command("EHLO roofermasters.local", 250);
     }
     await command("AUTH LOGIN", 334);
