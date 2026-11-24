@@ -48,8 +48,9 @@ describe("resolveCompanyContext", () => {
   });
 
   it("fails closed for incomplete membership rows", () => {
-    expect(
-      resolveCompanyContext("user-1", [{ ...own, company_id: "" }]),
-    ).toEqual({ ok: false, reason: "invalid_membership" });
+    expect(resolveCompanyContext("user-1", [{ ...own, company_id: "" }])).toEqual({
+      ok: false,
+      reason: "invalid_membership",
+    });
   });
 });
