@@ -184,7 +184,7 @@ export function CrmOverview() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-            Roofer Masters · Business overview
+            Business overview
           </p>
           <h1 className="text-3xl font-bold text-foreground">Your business at a glance</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -255,7 +255,15 @@ export function CrmOverview() {
         </p>
       )}
       <div className={`grid ${density === "compact" ? "gap-2" : "gap-4"} sm:grid-cols-2 xl:grid-cols-4`}>
-        {metricCards.filter((card) => !hiddenCards.includes(card.label)).map((card) => (
+        {metricCards.filter((card) => !hiddenCards.includes(card.label)).length === 0 ? (
+          <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center">
+            <p className="font-semibold text-foreground">Your summary cards are hidden</p>
+            <p className="mt-1 text-sm text-muted-foreground">Restore the cards to bring your business metrics back to the dashboard.</p>
+            <Button className="mt-4" variant="outline" onClick={() => setHiddenCards([])}>
+              <Eye className="mr-2 size-4" /> Show all summary cards
+            </Button>
+          </div>
+        ) : metricCards.filter((card) => !hiddenCards.includes(card.label)).map((card) => (
           <article key={card.label} draggable onDragStart={() => setDraggedCard(card.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== card.label) moveCard(draggedCard, card.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)}
             className={`cursor-grab rounded-lg ${cardStyle === "outlined" ? "border border-border bg-card" : cardStyle === "soft" ? "border border-transparent bg-muted/70" : "border border-border bg-card shadow-lg"} ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === card.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
             <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{card.label}</span><span className="flex items-center gap-1"><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${card.label} earlier`} title={`Move ${card.label} earlier`} disabled={metricCards.filter((item) => !hiddenCards.includes(item.label)).findIndex((item) => item.label === card.label) === 0} onClick={() => moveCardBy(card.label, -1)}><ArrowUp className="size-3.5" /></Button><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${card.label} later`} title={`Move ${card.label} later`} disabled={metricCards.filter((item) => !hiddenCards.includes(item.label)).findIndex((item) => item.label === card.label) === metricCards.filter((item) => !hiddenCards.includes(item.label)).length - 1} onClick={() => moveCardBy(card.label, 1)}><ArrowDown className="size-3.5" /></Button><GripVertical className="size-4 text-muted-foreground" aria-hidden="true" /><card.icon className="size-5" style={{ color: accent }} /></span></div>
