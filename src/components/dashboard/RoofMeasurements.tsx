@@ -1201,6 +1201,28 @@ export function RoofMeasurements({
             {footprints.map((footprint) => (
               <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
                 <p className="font-medium">Mapped building #{footprint.id}</p>
+                <svg viewBox="0 0 160 100" role="img" aria-label={`Approximate mapped ground outline for building ${footprint.id}`} className="my-2 h-24 w-full rounded bg-muted/40">
+                  {(() => {
+                    const cos = Math.cos(footprint.center.lat * Math.PI / 180);
+                    const xy = footprint.points.map((point) => ({
+                      x: point.lon * cos,
+                      y: -point.lat,
+                    }));
+                    const minX = Math.min(...xy.map((point) => point.x));
+                    const maxX = Math.max(...xy.map((point) => point.x));
+                    const minY = Math.min(...xy.map((point) => point.y));
+                    const maxY = Math.max(...xy.map((point) => point.y));
+                    const width = Math.max(maxX - minX, 1e-9);
+                    const height = Math.max(maxY - minY, 1e-9);
+                    const scale = Math.min(140 / width, 80 / height);
+                    const offsetX = (160 - width * scale) / 2;
+                    const offsetY = (100 - height * scale) / 2;
+                    const points = xy.map((point) =>
+                      `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
+                    ).join(" ");
+                    return <polygon points={points} fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
+                  })()}
+                </svg>
                 <p className="text-muted-foreground">
                   Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft · {footprint.distanceMeters} m from address point
                 </p>
