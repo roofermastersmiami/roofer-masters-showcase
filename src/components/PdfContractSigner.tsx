@@ -40,6 +40,11 @@ export type PdfSignField = {
   width: number;
   height: number;
   fontSize: number;
+  fontFamily?: "Helvetica" | "TimesRoman" | "Courier" | "Cursive";
+  textColor?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   value: string;
   imageData?: string;
 };
@@ -83,6 +88,11 @@ const makeField = (kind: FieldKind, page: number): PdfSignField => ({
   width: kind === "signature" ? 0.3 : kind === "erase" ? 0.35 : 0.25,
   height: kind === "signature" ? 0.09 : kind === "erase" ? 0.07 : 0.045,
   fontSize: kind === "signature" ? 22 : 12,
+  fontFamily: kind === "signature" ? "Cursive" : "Helvetica",
+  textColor: "#111827",
+  bold: false,
+  italic: false,
+  underline: false,
   value:
     kind === "date"
       ? today()
@@ -435,7 +445,18 @@ export function PdfContractSigner({
     setSaving(true);
     try {
       const pdf = await PDFDocument.load(sourceBytes);
-      const font = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+      const embeddedFonts = new Map<string, Awaited<ReturnType<typeof pdf.embedFont>>>();
+      const getFieldFont = async (field: PdfSignField) => {
+        const family = field.fontFamily ?? "Helvetica";
+        const key = [family, field.bold ? "bold" : "regular", field.italic ? "italic" : "normal"].join("-");
+        const standardFont = family === "TimesRoman"
+          ? field.bold ? (field.italic ? StandardFonts.TimesRomanBoldItalic : StandardFonts.TimesRomanBold) : (field.italic ? StandardFonts.TimesRomanItalic : StandardFonts.TimesRoman)
+          : family === "Courier"
+            ? field.bold ? (field.italic ? StandardFonts.CourierBoldOblique : StandardFonts.CourierBold) : (field.italic ? StandardFonts.CourierOblique : StandardFonts.Courier)
+            : field.bold ? (field.italic ? StandardFonts.HelveticaBoldOblique : StandardFonts.HelveticaBold) : (field.italic ? StandardFonts.HelveticaOblique : StandardFonts.Helvetica);
+        if (!embeddedFonts.has(key)) embeddedFonts.set(key, await pdf.embedFont(standardFont));
+        return embeddedFonts.get(key)!;
+      };
       for (const field of fields) {
         const page = pdf.getPage(field.page);
         const size = page.getSize();
@@ -455,14 +476,17 @@ export function PdfContractSigner({
             height: png.height * scale,
           });
         } else {
-          page.drawText(field.value, {
-            x: x + 3,
-            y: y + Math.max(2, (height - field.fontSize) / 2),
-            size: field.fontSize,
-            font: field.kind === "signature" ? font : await pdf.embedFont(StandardFonts.Helvetica),
-            color: rgb(0.05, 0.08, 0.13),
-            maxWidth: Math.max(20, width - 6),
-          });
+          const font = field.kind === "signature" ? await pdf.embedFont(StandardFonts.TimesRomanItalic) : await getFieldFont(field);
+          const hex = (field.textColor ?? "#111827").replace("#", "");
+          const red = Number.parseInt(hex.slice(0, 2), 16) / 255;
+          const green = Number.parseInt(hex.slice(2, 4), 16) / 255;
+          const blue = Number.parseInt(hex.slice(4, 6), 16) / 255;
+          const textY = y + Math.max(2, (height - field.fontSize) / 2);
+          page.drawText(field.value, { x: x + 3, y: textY, size: field.fontSize, font, color: rgb(red, green, blue), maxWidth: Math.max(20, width - 6) });
+          if (field.underline) {
+            const textWidth = Math.min(width - 6, font.widthOfTextAtSize(field.value, field.fontSize));
+            page.drawLine({ start: { x: x + 3, y: textY - 1 }, end: { x: x + 3 + textWidth, y: textY - 1 }, thickness: Math.max(0.5, field.fontSize / 18), color: rgb(red, green, blue) });
+          }
         }
       }
       const bytes = await pdf.save();
@@ -737,6 +761,25 @@ export function PdfContractSigner({
               }
             />
           </div>
+          {selected.kind !== "erase" && selected.kind !== "signature" && (
+            <>
+              <div className="w-36">
+                <label className="mb-1 block text-xs text-muted-foreground">Font style</label>
+                <select aria-label="Text font style" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={selected.fontFamily ?? "Helvetica"} onChange={(e) => updateField(selected.id, { fontFamily: e.target.value as PdfSignField["fontFamily"] })}>
+                  <option value="Helvetica">Modern</option><option value="TimesRoman">Classic / serif</option><option value="Courier">Monospace</option><option value="Cursive">Cursive</option>
+                </select>
+              </div>
+              <div className="grid gap-1">
+                <label className="text-xs text-muted-foreground">Text color</label>
+                <input aria-label="Text color" type="color" className="h-9 w-12 cursor-pointer rounded border bg-background p-1" value={selected.textColor ?? "#111827"} onChange={(e) => updateField(selected.id, { textColor: e.target.value })} />
+              </div>
+              <div className="flex items-center gap-2 pb-2 text-xs">
+                <label className="flex items-center gap-1"><input type="checkbox" checked={!!selected.bold} onChange={(e) => updateField(selected.id, { bold: e.target.checked })} /> Bold</label>
+                <label className="flex items-center gap-1"><input type="checkbox" checked={!!selected.italic} onChange={(e) => updateField(selected.id, { italic: e.target.checked })} /> Italic</label>
+                <label className="flex items-center gap-1"><input type="checkbox" checked={!!selected.underline} onChange={(e) => updateField(selected.id, { underline: e.target.checked })} /> Underline</label>
+              </div>
+            </>
+          )}
           <div className="w-24">
             <label className="mb-1 block text-xs text-muted-foreground">Width %</label>
             <Input
@@ -879,6 +922,11 @@ export function PdfContractSigner({
                             width: `${field.width * 100}%`,
                             height: `${field.height * 100}%`,
                             fontSize: `${field.fontSize}px`,
+                            color: field.textColor ?? "#111827",
+                            fontFamily: field.fontFamily === "Cursive" ? "cursive" : field.fontFamily === "TimesRoman" ? "Georgia, serif" : field.fontFamily === "Courier" ? "monospace" : "Arial, sans-serif",
+                            fontWeight: field.bold ? 700 : 400,
+                            fontStyle: field.italic ? "italic" : "normal",
+                            textDecoration: field.underline ? "underline" : "none",
                           }}
                         >
                           {field.imageData ? (
@@ -888,7 +936,7 @@ export function PdfContractSigner({
                               className="pointer-events-none h-full max-w-full object-contain"
                             />
                           ) : (
-                            <span className="max-w-full truncate overflow-hidden text-blue-900">
+                            <span className="max-w-full truncate overflow-hidden">
                               {field.kind === "erase" ? "Whiteout area" : field.value || fieldLabel[field.kind]}
                             </span>
                           )}
