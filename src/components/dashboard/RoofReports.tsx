@@ -48,7 +48,7 @@ export function RoofReports({
     [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null),
     [addressError, setAddressError] = useState(""),
     [swipedReportId, setSwipedReportId] = useState<string | null>(null),
-    [pendingDelete, setPendingDelete] = useState<(typeof orders.data extends (infer T)[] | undefined ? T : never) | null>(null),
+    [pendingDelete, setPendingDelete] = useState<{ id: string; address: string } | null>(null),
     [deleting, setDeleting] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const [form, setForm] = useState({
@@ -265,7 +265,9 @@ export function RoofReports({
                 const start = touchStartX.current;
                 touchStartX.current = null;
                 if (start === null) return;
-                const delta = event.changedTouches[0]?.clientX - start;
+                const end = event.changedTouches[0]?.clientX;
+                if (end === undefined) return;
+                const delta = end - start;
                 if (delta < -55) setSwipedReportId(row.id);
                 else if (delta > 55) setSwipedReportId(null);
               }}
