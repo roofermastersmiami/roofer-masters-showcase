@@ -112,8 +112,7 @@ export function MaterialOrder({
   const text = `Material order – ${title}
 ${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
 
-${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("
-")}
+${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}
 
 Roofer Masters · 305-942-3093`;
   async function save() {
