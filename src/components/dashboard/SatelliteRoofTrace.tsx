@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { RoofPlane, Point } from "@/lib/roof-geometry";
+import { planeInfo, type RoofPlane, type Point } from "@/lib/roof-geometry";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type TracePoint = { lat: number; lon: number };
@@ -10,14 +10,34 @@ type TracePoint = { lat: number; lon: number };
 const MAP_WIDTH = 1024;
 const MAP_HEIGHT = 640;
 const TILE_SPAN = 0.0015;
+const METERS_TO_FEET = 1 / 0.3048;
+
+export function nextSatelliteZoom(current: number, direction: "in" | "out"): number {
+  const factor = direction === "in" ? 1.5 : 1 / 1.5;
+  return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
+}
 
 export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
+  if (points.length < 3 || points.length > 100) {
+    throw new Error("A roof trace needs between 3 and 100 corners.");
+  }
+  if (!Number.isFinite(pitch) || pitch < 0 || pitch > 24) {
+    throw new Error("Roof pitch must be between 0:12 and 24:12.");
+  }
+  if (points.some((p) => !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180)) {
+    throw new Error("The trace contains an invalid map coordinate.");
+  }
+  const unique = new Set(points.map((p) => `${p.lat.toFixed(8)},${p.lon.toFixed(8)}`));
+  if (unique.size !== points.length) {
+    throw new Error("Each roof corner must be in a different location.");
+  }
   const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
   const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
   const cos = Math.cos((lat0 * Math.PI) / 180);
+  // The map projection produces meters, but the roof geometry engine stores feet.
   const local = points.map((p) => ({
-    x: (p.lon - lon0) * 111320 * cos,
-    z: (lat0 - p.lat) * 110540,
+    x: (p.lon - lon0) * 111320 * cos * METERS_TO_FEET,
+    z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
   }));
   const minZ = Math.min(...local.map((p) => p.z));
   const vertices: Point[] = local.map((p) => ({
@@ -25,14 +45,17 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
     z: p.z,
     y: 10 + ((p.z - minZ) * pitch) / 12,
   }));
-  return {
-    id: `satellite-${Date.now()}`,
+  const plane: RoofPlane = {
+    id: `satellite-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
     name: "Satellite traced roof plane",
     points: vertices,
     // A traced polygon does not reveal which sides are eaves, rakes, or ridges.
     // Keep them unclassified until a user verifies each edge in the measurement editor.
     edges: vertices.map(() => "other"),
   };
+  // Reject crossed, collapsed, or otherwise non-planar outlines before they enter the drawing.
+  planeInfo(plane);
+  return plane;
 }
 
 export function SatelliteRoofTrace({
@@ -51,6 +74,9 @@ export function SatelliteRoofTrace({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const initialLookupStarted = useRef(false);
+  const skipNextAddressSearch = useRef(false);
+  const draggingPoint = useRef<number | null>(null);
+  const suppressNextMapClick = useRef(false);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
   const bounds = useMemo(
     () =>
@@ -69,6 +95,11 @@ export function SatelliteRoofTrace({
     : "";
 
   useEffect(() => {
+    if (skipNextAddressSearch.current) {
+      skipNextAddressSearch.current = false;
+      setResults([]);
+      return;
+    }
     if (!address.trim()) {
       setResults([]);
       return;
@@ -94,6 +125,7 @@ export function SatelliteRoofTrace({
   }, [address]);
 
   function selectLocation(result: GeocodeResult) {
+    skipNextAddressSearch.current = true;
     setLocation(result);
     setAddress(result.display_name);
     setResults([]);
@@ -126,18 +158,26 @@ export function SatelliteRoofTrace({
     })();
     return () => controller.abort();
   }, [initialAddress]);
+  function tracePointFromPointer(clientX: number, clientY: number, rect: DOMRect): TracePoint | null {
+    if (!bounds || rect.width <= 0 || rect.height <= 0) return null;
+    const x = ((clientX - rect.left) / rect.width) * MAP_WIDTH;
+    const y = ((clientY - rect.top) / rect.height) * MAP_HEIGHT;
+    return {
+      lon: bounds.west + (x / MAP_WIDTH) * (bounds.east - bounds.west),
+      lat: bounds.north - (y / MAP_HEIGHT) * (bounds.north - bounds.south),
+    };
+  }
   function addMapPoint(event: MouseEvent<SVGSVGElement>) {
-    if (!bounds) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * MAP_WIDTH;
-    const y = ((event.clientY - rect.top) / rect.height) * MAP_HEIGHT;
-    setPoints((current) => [
-      ...current,
-      {
-        lon: bounds.west + (x / MAP_WIDTH) * (bounds.east - bounds.west),
-        lat: bounds.north - (y / MAP_HEIGHT) * (bounds.north - bounds.south),
-      },
-    ]);
+    if (suppressNextMapClick.current) {
+      suppressNextMapClick.current = false;
+      return;
+    }
+    const point = tracePointFromPointer(
+      event.clientX,
+      event.clientY,
+      event.currentTarget.getBoundingClientRect(),
+    );
+    if (point) setPoints((current) => [...current, point]);
   }
   const polygon = points
     .map((p) => {
@@ -202,7 +242,7 @@ export function SatelliteRoofTrace({
                 variant="outline"
                 size="sm"
                 disabled={zoom <= 0.5}
-                onClick={() => setZoom((value) => Math.max(0.5, Number((value / 1.5).toFixed(3))))}
+                onClick={() => setZoom((value) => nextSatelliteZoom(value, "out"))}
                 aria-label="Zoom out"
               >
                 <Minus className="h-4 w-4" /> Zoom out
@@ -212,7 +252,7 @@ export function SatelliteRoofTrace({
                 variant="outline"
                 size="sm"
                 disabled={zoom >= 8}
-                onClick={() => setZoom((value) => Math.min(8, Number((value * 1.5).toFixed(3))))}
+                onClick={() => setZoom((value) => nextSatelliteZoom(value, "in"))}
                 aria-label="Zoom in"
               >
                 <Plus className="h-4 w-4" /> Zoom in
@@ -231,8 +271,36 @@ export function SatelliteRoofTrace({
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className="block aspect-[8/5] w-full cursor-crosshair"
+              className="block aspect-[8/5] w-full cursor-crosshair touch-none"
               onClick={addMapPoint}
+              onPointerMove={(event) => {
+                const index = draggingPoint.current;
+                if (index === null) return;
+                const point = tracePointFromPointer(
+                  event.clientX,
+                  event.clientY,
+                  event.currentTarget.getBoundingClientRect(),
+                );
+                if (point) setPoints((current) => current.map((item, i) => i === index ? point : item));
+              }}
+              onPointerUp={() => {
+                if (draggingPoint.current !== null) {
+                  draggingPoint.current = null;
+                  suppressNextMapClick.current = true;
+                }
+              }}
+              onPointerCancel={() => {
+                draggingPoint.current = null;
+                suppressNextMapClick.current = true;
+              }}
+              onWheel={(event) => {
+                event.preventDefault();
+                setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
+              }}
+              onDoubleClick={(event) => {
+                event.preventDefault();
+                setZoom((value) => nextSatelliteZoom(value, "in"));
+              }}
               role="img"
               aria-label="Satellite image. Click around the roof to trace its outline."
             >
@@ -282,6 +350,13 @@ export function SatelliteRoofTrace({
               {points.map((point, index) => (
                 <circle
                   key={index}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    draggingPoint.current = index;
+                    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+                  }}
+                  className="cursor-move"
                   cx={((point.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH}
                   cy={((bounds.north - point.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT}
                   r="9"

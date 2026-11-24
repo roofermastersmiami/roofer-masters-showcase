@@ -174,12 +174,14 @@ export default function RoofScene({
   onSelect,
   view,
   fitKey,
+  autoRotate,
 }: {
   drawing: RoofDrawing;
   selected: string;
   onSelect: (id: string) => void;
   view: "3d" | "plan";
   fitKey: number;
+  autoRotate: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const [colors, setColors] = useState({ roof: "", selected: "", edge: "", ground: "" });
@@ -220,7 +222,7 @@ export default function RoofScene({
     <div data-scene-ready={ready ? "true" : undefined} className="h-full w-full">
       <Canvas
         key={`${view}-${fitKey}`}
-        frameloop="demand"
+        frameloop={view === "3d" && autoRotate ? "always" : "demand"}
         camera={{
           position: view === "plan" ? [0, extent * 1.5, 0.01] : [extent * 0.9, extent, extent],
           fov: 42,
@@ -269,6 +271,8 @@ export default function RoofScene({
           makeDefault
           target={[0, 10, 0]}
           enableRotate={view === "3d"}
+          autoRotate={view === "3d" && autoRotate}
+          autoRotateSpeed={0.6}
           minDistance={5}
           maxDistance={extent * 5}
         />
