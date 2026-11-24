@@ -29,11 +29,16 @@ describe("material orders from roof report", () => {
   });
 });
 
-
 describe("metal panel length and validation", () => {
   it("does not add area waste to the average panel cut length", () => {
-    const noWaste = q(materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 0 }), "Average panel length");
-    const withWaste = q(materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 15 }), "Average panel length");
+    const noWaste = q(
+      materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 0 }),
+      "Average panel length",
+    );
+    const withWaste = q(
+      materialOrder({ ...base, roof_type: "Metal Roof", waste_pct: 15 }),
+      "Average panel length",
+    );
     expect(noWaste).toBe(17);
     expect(withWaste).toBe(noWaste);
   });
