@@ -4,6 +4,8 @@ import {
   measureDrawing,
   toMaterialReport,
   suggestSharedEdgeClassifications,
+  addressPinPosition,
+  drawingSchema,
   type RoofPlane,
 } from "@/lib/roof-geometry";
 describe("roof geometry", () => {
@@ -235,5 +237,41 @@ describe("roof penetration dimension validation", () => {
     const drawing = roofPreset("flat");
     drawing.penetrations = [{ id: "invalid", kind: "vent", ...penetration }];
     expect(() => measureDrawing(drawing)).toThrow();
+  });
+});
+
+describe("georeferenced address marker", () => {
+  it("converts the geocoded address into the trace's local feet coordinate frame", () => {
+    const reference = {
+      addressLatitude: 25.47,
+      addressLongitude: -80.48,
+      originLatitude: 25.47,
+      originLongitude: -80.48,
+    };
+    expect(addressPinPosition(reference)).toEqual({ x: 0, z: 0 });
+    const east = addressPinPosition({ ...reference, addressLongitude: -80.479 });
+    const north = addressPinPosition({ ...reference, addressLatitude: 25.471 });
+    expect(east.x).toBeGreaterThan(0);
+    expect(east.z).toBe(0);
+    expect(north.x).toBe(0);
+    expect(north.z).toBeLessThan(0);
+    expect(east.x).toBeCloseTo(30.6, 0);
+    expect(north.z).toBeCloseTo(-33.7, 0);
+  });
+
+  it("keeps geographic metadata optional for legacy drawings", () => {
+    expect(drawingSchema.parse(roofPreset("gable")).geo_reference).toBeUndefined();
+  });
+
+  it("rejects invalid latitude or longitude in a saved address anchor", () => {
+    expect(() => drawingSchema.parse({
+      ...roofPreset("gable"),
+      geo_reference: {
+        addressLatitude: 91,
+        addressLongitude: -80,
+        originLatitude: 25,
+        originLongitude: -80,
+      },
+    })).toThrow();
   });
 });
