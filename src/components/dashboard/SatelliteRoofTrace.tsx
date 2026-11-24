@@ -495,10 +495,9 @@ export function SatelliteRoofTrace({
       let elements: OSMBuildingWay[] | null = null;
       for (const endpoint of endpoints) {
         try {
-          const response = await fetch(
-            `${endpoint}?data=${encodeURIComponent(query)}`,
-            { headers: { Accept: "application/json" } },
-          );
+          const response = await fetch(`${endpoint}?data=${encodeURIComponent(query)}`, {
+            headers: { Accept: "application/json" },
+          });
           if (!response.ok) continue;
           const data = (await response.json()) as { elements?: OSMBuildingWay[] };
           if (Array.isArray(data.elements)) {
@@ -552,7 +551,8 @@ export function SatelliteRoofTrace({
         <div>
           <h3 className="font-semibold">Free satellite roof tracing</h3>
           <p className="text-xs text-muted-foreground">
-            An address centers the map only. Trace the roof corners, then add the plane to update measurements and the 2D/3D drawing.
+            An address centers the map only. Trace the roof corners, then add the plane to update
+            measurements and the 2D/3D drawing.
           </p>
         </div>
       </div>
