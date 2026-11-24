@@ -187,7 +187,6 @@ describe("roof preset dimension validation", () => {
   });
 });
 
-
 describe("roof edge topology validation", () => {
   it("rejects zero-length roof edges", () => {
     const drawing = roofPreset("flat", 40, 30);
