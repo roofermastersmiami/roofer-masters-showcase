@@ -226,7 +226,9 @@ export function PdfContractSigner({
       const bytes = await pdf.save();
       const safeAddress = propertyAddress.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "property";
       const path = `${leadId}/${reportId}/${Date.now()}-${safeAddress}-signed.pdf`;
-      const blob = new Blob([bytes], { type: "application/pdf" });
+      const outputBuffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(outputBuffer).set(bytes);
+      const blob = new Blob([outputBuffer], { type: "application/pdf" });
       const { error } = await supabase.storage.from("signed-contracts").upload(path, blob, { contentType: "application/pdf", upsert: false });
       if (error) throw error;
       const downloadUrl = URL.createObjectURL(blob);
