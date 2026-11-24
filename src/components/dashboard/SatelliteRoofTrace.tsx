@@ -59,6 +59,8 @@ export function SatelliteRoofTrace({
   const [error, setError] = useState("");
   const initialLookupStarted = useRef(false);
   const skipNextAddressSearch = useRef(false);
+  const draggingPoint = useRef<number | null>(null);
+  const suppressNextMapClick = useRef(false);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
   const bounds = useMemo(
     () =>
@@ -140,18 +142,26 @@ export function SatelliteRoofTrace({
     })();
     return () => controller.abort();
   }, [initialAddress]);
+  function tracePointFromPointer(clientX: number, clientY: number, rect: DOMRect): TracePoint | null {
+    if (!bounds || rect.width <= 0 || rect.height <= 0) return null;
+    const x = ((clientX - rect.left) / rect.width) * MAP_WIDTH;
+    const y = ((clientY - rect.top) / rect.height) * MAP_HEIGHT;
+    return {
+      lon: bounds.west + (x / MAP_WIDTH) * (bounds.east - bounds.west),
+      lat: bounds.north - (y / MAP_HEIGHT) * (bounds.north - bounds.south),
+    };
+  }
   function addMapPoint(event: MouseEvent<SVGSVGElement>) {
-    if (!bounds) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * MAP_WIDTH;
-    const y = ((event.clientY - rect.top) / rect.height) * MAP_HEIGHT;
-    setPoints((current) => [
-      ...current,
-      {
-        lon: bounds.west + (x / MAP_WIDTH) * (bounds.east - bounds.west),
-        lat: bounds.north - (y / MAP_HEIGHT) * (bounds.north - bounds.south),
-      },
-    ]);
+    if (suppressNextMapClick.current) {
+      suppressNextMapClick.current = false;
+      return;
+    }
+    const point = tracePointFromPointer(
+      event.clientX,
+      event.clientY,
+      event.currentTarget.getBoundingClientRect(),
+    );
+    if (point) setPoints((current) => [...current, point]);
   }
   const polygon = points
     .map((p) => {
@@ -245,8 +255,28 @@ export function SatelliteRoofTrace({
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className="block aspect-[8/5] w-full cursor-crosshair"
+              className="block aspect-[8/5] w-full cursor-crosshair touch-none"
               onClick={addMapPoint}
+              onPointerMove={(event) => {
+                const index = draggingPoint.current;
+                if (index === null) return;
+                const point = tracePointFromPointer(
+                  event.clientX,
+                  event.clientY,
+                  event.currentTarget.getBoundingClientRect(),
+                );
+                if (point) setPoints((current) => current.map((item, i) => i === index ? point : item));
+              }}
+              onPointerUp={() => {
+                if (draggingPoint.current !== null) {
+                  draggingPoint.current = null;
+                  suppressNextMapClick.current = true;
+                }
+              }}
+              onPointerCancel={() => {
+                draggingPoint.current = null;
+                suppressNextMapClick.current = true;
+              }}
               onWheel={(event) => {
                 event.preventDefault();
                 setZoom((value) => nextSatelliteZoom(value, event.deltaY < 0 ? "in" : "out"));
@@ -304,6 +334,14 @@ export function SatelliteRoofTrace({
               {points.map((point, index) => (
                 <circle
                   key={index}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    draggingPoint.current = index;
+                    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  className="cursor-move"
                   cx={((point.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH}
                   cy={((bounds.north - point.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT}
                   r="9"
