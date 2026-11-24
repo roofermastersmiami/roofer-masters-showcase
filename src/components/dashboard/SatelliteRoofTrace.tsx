@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { planeInfo, type RoofPlane, type Point } from "@/lib/roof-geometry";
@@ -87,6 +87,28 @@ const METERS_TO_FEET = 1 / 0.3048;
 export function nextSatelliteZoom(current: number, direction: "in" | "out"): number {
   const factor = direction === "in" ? 1.5 : 1 / 1.5;
   return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
+}
+
+export function panSatelliteCenter(
+  center: TracePoint,
+  direction: "north" | "south" | "east" | "west",
+  zoom: number,
+): TracePoint {
+  if (
+    !Number.isFinite(center.lat) ||
+    !Number.isFinite(center.lon) ||
+    !Number.isFinite(zoom) ||
+    zoom <= 0 ||
+    Math.abs(center.lat) > 90 ||
+    Math.abs(center.lon) > 180
+  )
+    throw new Error("A valid map center and zoom are required.");
+  const step = TILE_SPAN / zoom * 0.4;
+  const latitudeStep = step * 0.7;
+  return {
+    lat: Math.max(-85, Math.min(85, center.lat + (direction === "north" ? latitudeStep : direction === "south" ? -latitudeStep : 0))),
+    lon: Math.max(-180, Math.min(180, center.lon + (direction === "east" ? step : direction === "west" ? -step : 0))),
+  };
 }
 
 export function satelliteTraceToPlane(
@@ -290,7 +312,7 @@ export function SatelliteRoofTrace({
   initialAddress?: string;
 }) {
   const [address, setAddress] = useState("");
-  const [location, setLocation] = useState<GeocodeResult | null>(null);
+  const [location, setLocation] = useState<GeocodeResult | null>(null);\n  const [mapCenter, setMapCenter] = useState<TracePoint | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
@@ -318,7 +340,7 @@ export function SatelliteRoofTrace({
             north: center.lat + (TILE_SPAN * 0.7) / zoom,
           }
         : null,
-    [center, zoom],
+    [mapCenter, zoom],
   );
   const imageryUrl = bounds
     ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
@@ -558,6 +580,12 @@ export function SatelliteRoofTrace({
               >
                 Reset zoom
               </Button>
+              <div className="flex items-center gap-1" aria-label="Pan satellite map">
+                <Button type="button" size="icon" variant="outline" aria-label="Pan map north" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "north", zoom) : current)}><ArrowUp className="h-4 w-4" /></Button>
+                <Button type="button" size="icon" variant="outline" aria-label="Pan map south" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "south", zoom) : current)}><ArrowDown className="h-4 w-4" /></Button>
+                <Button type="button" size="icon" variant="outline" aria-label="Pan map west" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "west", zoom) : current)}><ArrowLeft className="h-4 w-4" /></Button>
+                <Button type="button" size="icon" variant="outline" aria-label="Pan map east" onClick={() => setMapCenter((current) => current ? panSatelliteCenter(current, "east", zoom) : current)}><ArrowRight className="h-4 w-4" /></Button>
+              </div>
             </div>
           </div>
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
