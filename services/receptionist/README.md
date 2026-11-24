@@ -6,6 +6,10 @@
 3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server only.
 4. Set `ALLOWED_ORIGINS` to your website and CRM origins.
 5. Run `uvicorn main:app --host 0.0.0.0 --port 8000`.
+6. In Lovable project environment settings, set `VITE_RECEPTIONIST_API_URL` to the public HTTPS URL of this FastAPI service, then rebuild the website.
+7. Include the exact website origin(s) in the backend `ALLOWED_ORIGINS` value (comma-separated). Keep `SUPABASE_SERVICE_ROLE_KEY` only on the Python server; never add it to Vite variables.
+
+For a hosted service, run Ollama on the same host/container and keep the default `OLLAMA_URL`, or set `OLLAMA_URL` to a private Ollama server reachable by the API. Do not expose an unauthenticated Ollama port to the public internet.
 
 Optional email worker: set `EMAIL_IMAP_HOST`, `EMAIL_USER`, `EMAIL_APP_PASSWORD`; Gmail uses `imap.gmail.com` and an App Password, plus SMTP host `smtp.gmail.com`. Do not commit credentials.
 
