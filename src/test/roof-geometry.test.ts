@@ -364,7 +364,10 @@ describe("per-plane roof report takeoff", () => {
     const measured = measureDrawing(drawing);
     expect(rows).toHaveLength(2);
     expect(rows.reduce((sum, row) => sum + row.area_sqft, 0)).toBeCloseTo(measured.area, 5);
-    expect(rows.reduce((sum, row) => sum + row.area_with_waste_sqft, 0)).toBeCloseTo(measured.withWaste, 5);
+    expect(rows.reduce((sum, row) => sum + row.area_with_waste_sqft, 0)).toBeCloseTo(
+      measured.withWaste,
+      5,
+    );
     expect(rows.every((row) => row.pitch_rise_per_12 > 0)).toBe(true);
     for (const row of rows) {
       const plane = drawing.planes.find((candidate) => candidate.id === row.id)!;
