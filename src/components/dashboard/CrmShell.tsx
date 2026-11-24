@@ -1,6 +1,6 @@
 import { useRoles } from "./RolesContext";
 import { canOpen } from "@/lib/team-roles";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -29,6 +29,8 @@ import {
   LogOut,
   ChevronRight,
   Palette,
+  ImagePlus,
+  LoaderCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +49,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { LogoMark } from "@/components/site/Logo";
+import { supabase } from "@/integrations/supabase/client";
 import { CrmContext } from "./CrmContext";
 import { LeadSheet } from "./LeadSheet";
 import { leadsQuery, formatWhen } from "./data";
@@ -142,9 +145,15 @@ export function CrmShell({
   const [collapsed, setCollapsed] = useState(false),
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
-    [theme, setTheme] = useState("ocean"),
+    [theme, setTheme] = useState("executive-berry"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
+    [brandingUserId, setBrandingUserId] = useState<string | null>(null),
+    [brandingLoaded, setBrandingLoaded] = useState(false),
+    [logoPath, setLogoPath] = useState<string | null>(null),
+    [logoUrl, setLogoUrl] = useState(""),
+    [logoUploading, setLogoUploading] = useState(false),
+    [brandingError, setBrandingError] = useState(""),
     [query, setQuery] = useState(""),
     [notifications, setNotifications] = useState(false),
     [openId, setOpenId] = useState<string | null>(null),
@@ -155,14 +164,100 @@ export function CrmShell({
       address: string;
     } | null>(null),
     [selectedRoofReportId, setSelectedRoofReportId] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    setDark(localStorage.getItem("crm-theme") === "dark");
-    const savedTheme = localStorage.getItem("crm-theme-preset");
-    if (savedTheme && ["ocean", "slate", "emerald", "sunset", "violet"].includes(savedTheme)) setTheme(savedTheme);
-    const savedSidebar = localStorage.getItem("crm-sidebar-appearance");
-    if (savedSidebar && ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(savedSidebar)) setSidebarAppearance(savedSidebar);
-    setSidebarPreferencesLoaded(true);
+    let cancelled = false;
+    const loadBranding = async () => {
+      setDark(localStorage.getItem("crm-theme") === "dark");
+      const fallbackTheme = localStorage.getItem("crm-theme-preset");
+      const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
+      if (fallbackTheme && ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(fallbackTheme)) setTheme(fallbackTheme);
+      if (fallbackSidebar && ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)) setSidebarAppearance(fallbackSidebar);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (user) {
+          setBrandingUserId(user.id);
+          const { data, error: loadError } = await supabase
+            .from("crm_company_branding")
+            .select("logo_path, theme_palette, sidebar_appearance")
+            .eq("owner_user_id", user.id)
+            .maybeSingle();
+          if (loadError) throw loadError;
+          if (data) {
+            if (["executive-berry", "modern-enterprise", "canyon-corporate"].includes(data.theme_palette)) setTheme(data.theme_palette);
+            if (["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(data.sidebar_appearance)) setSidebarAppearance(data.sidebar_appearance);
+            setLogoPath(data.logo_path);
+            setLogoUrl(data.logo_path ? supabase.storage.from("crm-company-branding").getPublicUrl(data.logo_path).data.publicUrl : "");
+          }
+        }
+      } catch {
+        if (!cancelled) setBrandingError("Company branding could not be loaded. Your current appearance remains available.");
+      } finally {
+        if (!cancelled) {
+          setSidebarPreferencesLoaded(true);
+          setBrandingLoaded(true);
+        }
+      }
+    };
+    void loadBranding();
+    return () => { cancelled = true; };
   }, []);
+  useEffect(() => {
+    if (!sidebarPreferencesLoaded) return;
+    localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
+  }, [sidebarAppearance, sidebarPreferencesLoaded]);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove(
+      "crm-theme-ocean", "crm-theme-slate", "crm-theme-emerald", "crm-theme-sunset", "crm-theme-violet",
+      "crm-theme-executive-berry", "crm-theme-modern-enterprise", "crm-theme-canyon-corporate",
+    );
+    root.classList.add(`crm-theme-${theme}`);
+    localStorage.setItem("crm-theme-preset", theme);
+  }, [theme]);
+  useEffect(() => {
+    if (!brandingLoaded || !brandingUserId) return;
+    void supabase.from("crm_company_branding").upsert({
+      owner_user_id: brandingUserId,
+      logo_path: logoPath,
+      theme_palette: theme,
+      sidebar_appearance: sidebarAppearance,
+    }, { onConflict: "owner_user_id" }).then(({ error: saveError }) => {
+      if (saveError) setBrandingError("Your branding preference could not be saved to your account.");
+      else setBrandingError("");
+    });
+  }, [brandingLoaded, brandingUserId, logoPath, theme, sidebarAppearance]);
+  async function uploadCompanyLogo(file: File) {
+    setBrandingError("");
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setBrandingError("Choose a PNG, JPG, or WebP image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setBrandingError("Company logos must be 2 MB or smaller.");
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw authError ?? new Error("Sign in to upload a company logo.");
+      const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      const path = `${user.id}/company-logo.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("crm-company-branding")
+        .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+      if (uploadError) throw uploadError;
+      setBrandingUserId(user.id);
+      setLogoPath(path);
+      setLogoUrl(`${supabase.storage.from("crm-company-branding").getPublicUrl(path).data.publicUrl}?v=${Date.now()}`);
+      setBrandingLoaded(true);
+    } catch (error) {
+      setBrandingError(error instanceof Error ? error.message : "The company logo could not be uploaded.");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
   useEffect(() => {
     if (sidebarPreferencesLoaded) localStorage.setItem("crm-sidebar-appearance", sidebarAppearance);
   }, [sidebarAppearance, sidebarPreferencesLoaded]);
@@ -273,9 +368,11 @@ export function CrmShell({
     return (
       <div className="flex h-full flex-col">
         <div className={cn("flex h-24 shrink-0 items-center gap-3 border-b px-5", sidebarIsLight ? "border-border" : "border-white/15")}>
-          <LogoMark
-            className={compact ? "h-7 max-w-10 object-cover object-left" : "h-8 max-w-32"}
-          />
+          {logoUrl ? (
+            <img src={logoUrl} alt="Company logo" className={compact ? "h-9 max-w-12 object-contain" : "h-10 max-w-36 object-contain"} />
+          ) : (
+            <LogoMark className={compact ? "h-7 max-w-10 object-cover object-left" : "h-8 max-w-32"} />
+          )}
           {!compact && (
             <span className="font-display text-lg font-bold leading-tight">
               ROOFER
@@ -443,7 +540,7 @@ export function CrmShell({
               <Palette className="size-4 text-muted-foreground" />
               <span className="sr-only">CRM color theme</span>
               <select aria-label="CRM color theme" value={theme} onChange={(event) => setTheme(event.target.value)} className="h-8 max-w-24 bg-transparent text-xs outline-none">
-                <option value="ocean">Ocean</option><option value="slate">Slate</option><option value="emerald">Emerald</option><option value="sunset">Sunset</option><option value="violet">Violet</option>
+                <option value="executive-berry">Executive Berry</option><option value="modern-enterprise">Modern Enterprise</option><option value="canyon-corporate">Canyon Corporate</option>
               </select>
             </label>
             <label className="hidden items-center gap-1.5 rounded-md border border-border bg-background px-2 xl:flex" title="Choose sidebar appearance">
@@ -452,6 +549,30 @@ export function CrmShell({
                 <option value="navy">Navy</option><option value="light">Light</option><option value="accent">Accent</option><option value="charcoal">Charcoal</option><option value="gradient">Midnight gradient</option><option value="steel">Steel</option>
               </select>
             </label>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              aria-label="Upload company logo"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) void uploadCompanyLogo(file);
+                event.currentTarget.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 gap-2 px-2 sm:px-3"
+              title="Upload or change company logo"
+              aria-label="Upload or change company logo"
+              disabled={logoUploading}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              {logoUploading ? <LoaderCircle className="size-4 animate-spin" /> : logoUrl ? <img src={logoUrl} alt="" className="size-6 rounded object-contain" /> : <ImagePlus className="size-4" />}
+              <span className="hidden text-xs sm:inline">{logoUploading ? "Uploading" : logoUrl ? "Company logo" : "Upload logo"}</span>
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -487,6 +608,7 @@ export function CrmShell({
               <LogOut className="size-4" />
             </Button>
           </header>
+          {brandingError && <p role="status" className="border-b border-border bg-muted px-4 py-2 text-right text-xs text-destructive">{brandingError}</p>}
           <main className="mx-auto max-w-[1600px] p-4 sm:p-7 lg:p-9">
             {error ? (
               <p role="alert" className="text-destructive">
