@@ -225,8 +225,11 @@ export default function RoofScene({
     });
   }, []);
   const addressPin = drawing.geo_reference ? addressPinPosition(drawing.geo_reference) : null;
+  const pinBaseHeight = Math.max(10, ...drawing.planes.flatMap((p) => p.points.map((v) => v.y))) + 0.8;
   const extent = Math.max(
     30,
+    Math.abs(addressPin?.x ?? 0) * 2,
+    Math.abs(addressPin?.z ?? 0) * 2,
     ...drawing.planes.flatMap((p) =>
       p.points.flatMap((v) => [Math.abs(v.x) * 2, Math.abs(v.z) * 2]),
     ),
@@ -263,7 +266,7 @@ export default function RoofScene({
         <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
         <Walls drawing={drawing} color={colors.ground} />
         {addressPin && (
-          <group position={[addressPin.x, 0, addressPin.z]} name="Geocoded property address">
+          <group position={[addressPin.x, pinBaseHeight, addressPin.z]} name="Geocoded property address">
             <mesh rotation-x={-Math.PI / 2} position={[0, 0.12, 0]}>
               <ringGeometry args={[0.75, 1.05, 28]} />
               <meshBasicMaterial color="#DC2626" side={DoubleSide} />
