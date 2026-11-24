@@ -771,6 +771,7 @@ export function SatelliteRoofTrace({
               }}
               onTouchStart={(event) => {
                 if (event.touches.length === 2) {
+                  event.preventDefault();
                   const [a, b] = [event.touches[0]!, event.touches[1]!];
                   pinchStartDistance.current = Math.hypot(
                     a.clientX - b.clientX,
@@ -781,6 +782,7 @@ export function SatelliteRoofTrace({
               }}
               onTouchMove={(event) => {
                 if (event.touches.length !== 2 || pinchStartDistance.current === null) return;
+                event.preventDefault();
                 const [a, b] = [event.touches[0]!, event.touches[1]!];
                 const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
                 setZoom(
