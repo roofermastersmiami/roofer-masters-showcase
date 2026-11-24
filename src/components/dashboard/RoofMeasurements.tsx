@@ -196,7 +196,7 @@ export function RoofMeasurements({
       (!j.property_id || j.property_id === property),
   );
   async function save() {
-    if (report && !initialDrawing && !userEditedDrawing.current) {
+    if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error("Add a measured roof dimension or trace the actual roof before saving this report");
       return;
     }
@@ -230,7 +230,7 @@ export function RoofMeasurements({
     }
   }
   async function exportPdf(share = false) {
-    if (report && !initialDrawing && !userEditedDrawing.current) {
+    if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error("Add measured roof geometry before exporting this property report");
       return;
     }
@@ -465,7 +465,7 @@ export function RoofMeasurements({
       }
       setFootprints(result.footprints);
       const candidate = result.footprints[0];
-      if (candidate && report && !initialDrawing && !userEditedDrawing.current) {
+      if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
         const plane = {
           ...footprintToDraftPlane(candidate),
           id: `osm-footprint-${candidate.id}-${Date.now()}`,
@@ -562,7 +562,7 @@ export function RoofMeasurements({
                 busy ||
                 !measurement ||
                 !property ||
-                (!!report && !initialDrawing && !userEditedDrawing.current)
+                (!!report && !initialDrawing && !parent && !userEditedDrawing.current)
               }
               onClick={() => void save()}
             >
