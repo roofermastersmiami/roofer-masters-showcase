@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, ArrowRight, MapPin, Plus, Search } from "lucide-react";
@@ -25,9 +25,12 @@ import { Field, SectionHeading, Empty } from "./CrmControls";
 type LocatedAddress = { matchedAddress: string; lat: number; lon: number };
 
 export function RoofReports({
+  initialCustomer,
+  initialPropertyId,
   initialAddress = "",
 }: {
   initialCustomer?: string;
+  initialPropertyId?: string;
   initialAddress?: string;
 }) {
   const customers = useQuery(customersQuery),
@@ -51,6 +54,11 @@ export function RoofReports({
     notes: "",
   });
   const report = orders.data?.find((r) => r.id === selected);
+  const matchingPropertyReport = initialPropertyId
+    ? orders.data?.find((r) => r.property_id === initialPropertyId)
+    : initialAddress
+      ? orders.data?.find((r) => r.address.trim().toLowerCase() === initialAddress.trim().toLowerCase())
+      : undefined;
 
   async function locateAddress() {
     const address = form.address.trim();
@@ -80,6 +88,19 @@ export function RoofReports({
       setLookupBusy(false);
     }
   }
+
+  const initialLookupStarted = useRef(false);
+  useEffect(() => {
+    if (!initialAddress || orders.isPending || initialLookupStarted.current) return;
+    initialLookupStarted.current = true;
+    if (matchingPropertyReport) {
+      setSelected(matchingPropertyReport.id);
+      setAdding(false);
+      return;
+    }
+    setAdding(true);
+    void locateAddress();
+  }, [initialAddress, orders.isPending, matchingPropertyReport?.id]);
 
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
