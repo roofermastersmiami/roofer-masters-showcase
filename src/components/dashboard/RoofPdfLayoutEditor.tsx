@@ -33,7 +33,7 @@ type LayoutKey = keyof RoofPdfLayout;
 export const defaultRoofPdfLayout: RoofPdfLayout = {
   brand: { x: 7, y: 24 },
   tagline: { x: 7, y: 49 },
-  contact: { x: 7, y: 78 },
+  contact: { x: 7, y: 66 },
   heading: { x: 62, y: 25 },
 };
 
