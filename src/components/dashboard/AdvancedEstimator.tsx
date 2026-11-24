@@ -566,12 +566,12 @@ export function AdvancedEstimator() {
           {totals ? (
             <div className="grid gap-5 border-y border-border py-6 sm:grid-cols-3">
               {[
-                ["Internal cost", totals.cost],
-                ["Internal profit before tax", totals.profit],
+                ["Internal cost", unpricedItems.length ? null : totals.cost],
+                ["Internal profit before tax", unpricedItems.length ? null : totals.profit],
                 ["Customer total", unpricedItems.length ? null : totals.total],
-                ["Deposit", totals.deposit],
-                ["Balance", totals.balance],
-                ["Tax", totals.tax],
+                ["Deposit", unpricedItems.length ? null : totals.deposit],
+                ["Balance", unpricedItems.length ? null : totals.balance],
+                ["Tax", unpricedItems.length ? null : totals.tax],
               ].map(([label, value]) => (
                 <div key={label}>
                   <p className="text-xs text-muted-foreground">{label}</p>
