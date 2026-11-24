@@ -507,7 +507,18 @@ export function RoofMeasurements({
       ];
       setMedia(next);
       setTraceIndex(next.length - 1);
-      setD({ ...d, accuracy: "photo_estimate", image_credit: r.credit, verified: false });
+      setD({
+        ...d,
+        accuracy: "photo_estimate",
+        image_credit: r.credit,
+        geo_reference: d.geo_reference ?? {
+          addressLatitude: r.lat,
+          addressLongitude: r.lon,
+          originLatitude: r.lat,
+          originLongitude: r.lon,
+        },
+        verified: false,
+      });
       setDirty(true);
       setAerialStatus(
         `Aerial image ready for ${r.matchedAddress}. This resampled public image has no dependable pixel-level measurement scale. Calibrate against a known distance before tracing; review all measurements on site.`,
