@@ -1,373 +1,91 @@
-import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, MapPin, Plus, Search } from "lucide-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, Download, FileText, MapPin, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { createRoofOrder } from "@/lib/roof-orders.functions";
-import { lookupRoofAddress } from "@/lib/roof-address.functions";
-import { roofOrderSchema } from "@/lib/roof-order-schema";
+import { supabase } from "@/integrations/supabase/client";
 import { customersQuery } from "./foundation-data";
-import { roofOrdersQuery } from "./roof-orders-data";
-import { Field, SectionHeading, Empty } from "./CrmControls";
-
-type LocatedAddress = { matchedAddress: string; lat: number; lon: number };
+import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
+import { downloadPdf } from "./proposal-data";
+import { Empty, SectionHeading } from "./CrmControls";
 
 export function RoofReports({
-  initialCustomer,
-  initialPropertyId,
-  initialAddress = "",
   onOpenMeasurement,
-  onRequestHandled,
 }: {
-  initialCustomer?: string;
-  initialPropertyId?: string;
-  initialAddress?: string;
   onOpenMeasurement: (reportId: string) => void;
-  onRequestHandled: () => void;
 }) {
-  const customers = useQuery(customersQuery),
-    orders = useQuery(roofOrdersQuery),
-    qc = useQueryClient();
-  const create = useServerFn(createRoofOrder);
-  const lookup = useServerFn(lookupRoofAddress);
-  const [adding, setAdding] = useState(!!initialAddress),
-    [busy, setBusy] = useState(false),
-    [lookupBusy, setLookupBusy] = useState(false),
-    [search, setSearch] = useState(""),
-    [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null),
-    [addressError, setAddressError] = useState("");
-  const [form, setForm] = useState({
-    address: initialAddress,
-    title: "Roof measurement report",
-    provider: "manual" as const,
-    notes: "",
+  const customers = useQuery(customersQuery);
+  const orders = useQuery(roofOrdersQuery);
+  const [search, setSearch] = useState("");
+
+  async function downloadReport(row: RoofOrder) {
+    if (!row.file_path) return;
+    try {
+      const { data, error } = await supabase.storage.from("roofing-proposals").download(row.file_path);
+      if (error || !data) throw error ?? new Error("PDF file not found");
+      downloadPdf(new Uint8Array(await data.arrayBuffer()), row.title || "Roof measurement report");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not download roof report PDF");
+    }
+  }
+
+  const query = search.trim().toLocaleLowerCase();
+  const rows = (orders.data ?? []).filter((row) => {
+    const customerName = customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "";
+    return `${customerName} ${row.address} ${row.title}`.toLocaleLowerCase().includes(query);
   });
-  const matchingPropertyReport = initialPropertyId
-    ? orders.data?.find((r) => r.property_id === initialPropertyId)
-    : initialAddress
-      ? orders.data?.find(
-          (r) => r.address.trim().toLowerCase() === initialAddress.trim().toLowerCase(),
-        )
-      : undefined;
-
-  async function locateAddress() {
-    const address = form.address.trim();
-    if (address.length < 8) {
-      setAddressError("Enter the complete street address, city, state and ZIP code.");
-      return;
-    }
-    setLookupBusy(true);
-    setAddressError("");
-    setLocatedAddress(null);
-    try {
-      const result = await lookup({ data: { address } });
-      if ("error" in result) {
-        setAddressError(result.error);
-        return;
-      }
-      setLocatedAddress(result);
-      setForm((current) => ({ ...current, address: result.matchedAddress }));
-      toast.success("Property address located");
-    } catch (error) {
-      setAddressError(
-        error instanceof Error
-          ? error.message
-          : "The address lookup could not complete. Please retry.",
-      );
-    } finally {
-      setLookupBusy(false);
-    }
-  }
-
-  const initialLookupStarted = useRef(false);
-  useEffect(() => {
-    if (!initialAddress || orders.isPending || initialLookupStarted.current) return;
-    initialLookupStarted.current = true;
-    if (matchingPropertyReport) {
-      setAdding(false);
-      onRequestHandled();
-      onOpenMeasurement(matchingPropertyReport.id);
-      return;
-    }
-    setAdding(true);
-    const address = initialAddress.trim();
-    setLookupBusy(true);
-    setAddressError("");
-    void (async () => {
-      try {
-        const result = await lookup({ data: { address } });
-        if ("error" in result) {
-          setAddressError(result.error);
-          return;
-        }
-        setLocatedAddress(result);
-        setForm((current) => ({ ...current, address: result.matchedAddress }));
-        // The property was explicitly selected from CRM search. Once its
-        // address is confirmed, create the report request and enter its
-        // drawing workspace without making the estimator repeat the action.
-        const created = await create({
-          data: {
-            // Keep the exact saved CRM address so the server can reuse this
-            // property's existing customer/property records instead of creating
-            // a duplicate from the geocoder's normalized display address.
-            address,
-            title: "Roof measurement report",
-            provider: "manual",
-            notes: "",
-          },
-        });
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
-          qc.invalidateQueries({ queryKey: ["crm-properties"] }),
-        ]);
-        setAdding(false);
-        onRequestHandled();
-        onOpenMeasurement(created.id);
-        toast.success("Property located. Opening its roof drawing workspace.");
-      } catch (error) {
-        setAddressError(
-          error instanceof Error
-            ? error.message
-            : "The property could not be opened. Please retry.",
-        );
-      } finally {
-        setLookupBusy(false);
-      }
-    })();
-  }, [
-    initialAddress,
-    orders.isPending,
-    matchingPropertyReport?.id,
-    lookup,
-    create,
-    qc,
-    onOpenMeasurement,
-    onRequestHandled,
-  ]);
-
-  async function submit() {
-    if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
-      toast.error("Locate and confirm the property address before creating the report");
-      return;
-    }
-    const parsed = roofOrderSchema.safeParse({
-      ...form,
-      address: locatedAddress.matchedAddress,
-    });
-    if (!parsed.success) {
-      toast.error("Enter the complete property address");
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await create({ data: parsed.data });
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
-        qc.invalidateQueries({ queryKey: ["crm-properties"] }),
-      ]);
-      setAdding(false);
-      onOpenMeasurement(result.id);
-      toast.success("Your address-linked roof report is ready for measurement");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create roof report");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const rows = (orders.data ?? []).filter((r) =>
-    `${r.address} ${r.title} ${customers.data?.find((c) => c.id === r.customer_id)?.name ?? ""}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
 
   return (
     <div>
-      <SectionHeading
-        title="Roof reports"
-        action={
-          <Button
-            onClick={() => {
-              setForm({
-                address: initialAddress,
-                title: "Roof measurement report",
-                provider: "manual",
-                notes: "",
-              });
-              setLocatedAddress(null);
-              setAddressError("");
-              setAdding(true);
-            }}
-          >
-            <Plus /> Create report by address
-          </Button>
-        }
-      />
+      <SectionHeading title="Roof reports" />
       <div className="mb-6 flex flex-wrap items-center gap-4">
-        <div className="relative w-full max-w-md">
+        <div className="relative w-full max-w-xl">
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
-          <Input
-            aria-label="Search roof reports"
-            placeholder="Search customer or property address…"
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input aria-label="Search roof reports by customer name or property address"
+            placeholder="Search by customer name or property address…"
+            className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
-        <p className="text-sm text-muted-foreground">Roofer Masters · Company-owned reports</p>
+        <p className="text-sm text-muted-foreground">Completed measurement PDFs · Roofer Masters</p>
       </div>
-      {orders.error && (
-        <p role="alert" className="text-destructive">
-          Roof reports could not load.
-        </p>
-      )}
-      {orders.isPending ? (
-        <p>Loading roof reports…</p>
-      ) : (
+      {orders.error && <p role="alert" className="text-destructive">Roof reports could not load.</p>}
+      {orders.isPending ? <p>Loading roof reports…</p> : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map((row) => (
-            <article
-              key={row.id}
-              className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5"
-            >
-              <MapPin className="size-5 text-primary" />
-              <button
-                type="button"
-                className="mt-3 break-words text-left text-lg font-bold text-primary underline-offset-4 hover:underline"
-                onClick={() => onOpenMeasurement(row.id)}
-                aria-label={`Open 2D and 3D roof workspace for ${row.address}`}
-              >
-                {row.address}
-              </button>
-              <p className="mt-2 text-sm">
-                {customers.data?.find((c) => c.id === row.customer_id)?.name}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{row.title}</p>
-              <p className="my-4 text-xs font-semibold text-muted-foreground">
-                {row.status === "reviewed"
-                  ? "Owner-reviewed measurements"
-                  : row.drawing_id
-                    ? "Drawing saved · awaiting review"
-                    : "Awaiting measurements"}{" "}
-                · {new Date(row.created_at).toLocaleDateString()}
-              </p>
-              <Button
-                variant="outline"
-                className="mt-auto"
-                onClick={() => onOpenMeasurement(row.id)}
-              >
-                Open measurement report <ArrowRight />
-              </Button>
-            </article>
-          ))}
+          {rows.map((row) => {
+            const customerName = customers.data?.find((customer) => customer.id === row.customer_id)?.name ?? "Customer property";
+            return (
+              <article key={row.id} className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-5">
+                <div className="flex items-center gap-2 text-primary">
+                  {row.file_path ? <FileText className="size-5" /> : <MapPin className="size-5" />}
+                  <span className="text-xs font-semibold uppercase tracking-wide">
+                    {row.file_path ? "Measurement PDF" : "Measurement in progress"}
+                  </span>
+                </div>
+                <h2 className="mt-3 break-words font-bold">{customerName}</h2>
+                <p className="mt-1 break-words text-sm text-muted-foreground">{row.address}</p>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {row.file_path ? "PDF generated from the saved roof measurement drawing" :
+                    row.drawing_id ? "Drawing saved · PDF not generated yet" : "Awaiting roof measurements"}
+                  {" · "}{new Date(row.created_at).toLocaleDateString()}
+                </p>
+                <div className="mt-auto flex flex-wrap gap-2 pt-5">
+                  {row.file_path && (
+                    <Button onClick={() => void downloadReport(row)}>
+                      <Download /> Download PDF
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => onOpenMeasurement(row.id)}>
+                    {row.file_path ? "Open measurements" : "Continue measurements"} <ArrowRight />
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
-      {!orders.isPending && !orders.error && !rows.length && <Empty>No roof reports yet.</Empty>}
-      <Dialog
-        open={adding}
-        onOpenChange={(open) => {
-          setAdding(open);
-          if (!open) {
-            setLocatedAddress(null);
-            setAddressError("");
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create roof report by address</DialogTitle>
-            <DialogDescription>
-              {initialCustomer
-                ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
-                : ""}
-              Enter the complete property address and locate it first. This confirms the map
-              coordinates before creating the report. Roof facets and dimensions still require a
-              verified roof source or calibrated tracing.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submit();
-            }}
-          >
-            <Field label="Customer property address">
-              <Input
-                required
-                minLength={8}
-                maxLength={250}
-                autoComplete="street-address"
-                placeholder="123 Main Street, Miami, FL 33130"
-                value={form.address}
-                onChange={(event) => {
-                  setForm({ ...form, address: event.target.value });
-                  setLocatedAddress(null);
-                  setAddressError("");
-                }}
-              />
-            </Field>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={lookupBusy || form.address.trim().length < 8}
-              onClick={() => void locateAddress()}
-            >
-              <MapPin /> {lookupBusy ? "Locating property…" : "Locate exact address"}
-            </Button>
-            {addressError && (
-              <p role="alert" className="text-sm text-destructive">
-                {addressError}
-              </p>
-            )}
-            {locatedAddress && (
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-                <p className="font-semibold">Address matched</p>
-                <p className="mt-1">{locatedAddress.matchedAddress}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}
-                </p>
-              </div>
-            )}
-            <Field label="Report title">
-              <Input
-                required
-                maxLength={180}
-                value={form.title}
-                onChange={(event) => setForm({ ...form, title: event.target.value })}
-              />
-            </Field>
-            <Field label="Inspection notes">
-              <Textarea
-                value={form.notes}
-                maxLength={4000}
-                onChange={(event) => setForm({ ...form, notes: event.target.value })}
-              />
-            </Field>
-            <Button
-              disabled={
-                busy ||
-                lookupBusy ||
-                !locatedAddress ||
-                form.address.trim() !== locatedAddress.matchedAddress
-              }
-              type="submit"
-            >
-              <Plus /> {busy ? "Creating…" : "Create my roof report"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {!orders.isPending && !orders.error && !rows.length && (
+        <Empty>{query ? "No roof reports match that customer name or address." : "No roof measurement reports yet. Create one in Roof measurements."}</Empty>
+      )}
     </div>
   );
 }
