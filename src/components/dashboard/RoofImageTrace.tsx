@@ -247,10 +247,10 @@ export function RoofImageTrace({
             >
               <ZoomIn />
             </Button>
-            <Button type="button" size="icon" variant="outline" aria-label="Move photo up" onClick={() => setPhotoPan((p) => ({ ...p, y: p.y + 48 }))}><ArrowUp /></Button>
-            <Button type="button" size="icon" variant="outline" aria-label="Move photo down" onClick={() => setPhotoPan((p) => ({ ...p, y: p.y - 48 }))}><ArrowDown /></Button>
-            <Button type="button" size="icon" variant="outline" aria-label="Move photo left" onClick={() => setPhotoPan((p) => ({ ...p, x: p.x + 48 }))}><ArrowLeft /></Button>
-            <Button type="button" size="icon" variant="outline" aria-label="Move photo right" onClick={() => setPhotoPan((p) => ({ ...p, x: p.x - 48 }))}><ArrowRight /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo up" onClick={() => setPhotoPan((p) => ({ ...p, y: p.y - 48 }))}><ArrowUp /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo down" onClick={() => setPhotoPan((p) => ({ ...p, y: p.y + 48 }))}><ArrowDown /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo left" onClick={() => setPhotoPan((p) => ({ ...p, x: p.x - 48 }))}><ArrowLeft /></Button>
+            <Button type="button" size="icon" variant="outline" aria-label="Move photo right" onClick={() => setPhotoPan((p) => ({ ...p, x: p.x + 48 }))}><ArrowRight /></Button>
             <Button
               type="button"
               size="icon"
