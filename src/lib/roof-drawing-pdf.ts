@@ -710,7 +710,12 @@ export async function roofDrawingPdf(
       { x: 0, y: 0 },
     );
     const localPath =
-      pts.map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"} ${(point.x - center.x).toFixed(2)} ${(point.y - center.y).toFixed(2)}`).join(" ") + " Z";
+      pts
+        .map(
+          (point, pointIndex) =>
+            `${pointIndex === 0 ? "M" : "L"} ${(point.x - center.x).toFixed(2)} ${(point.y - center.y).toFixed(2)}`,
+        )
+        .join(" ") + " Z";
     page.drawSvgPath(localPath, {
       x: center.x,
       y: center.y,
