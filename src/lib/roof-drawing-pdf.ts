@@ -787,15 +787,19 @@ export async function roofDrawingPdf(
   ];
   planeTakeoff.forEach((plane, index) => {
     const combined = plane.edges_lf.ridge + plane.edges_lf.hip + plane.edges_lf.valley;
-    tableRow([
-      plane.name,
-      plane.area_sqft.toFixed(1),
-      plane.squares.toFixed(2),
-      `${plane.pitch_rise_per_12.toFixed(1)}:12`,
-      plane.edges_lf.eave.toFixed(1),
-      plane.edges_lf.rake.toFixed(1),
-      combined.toFixed(1),
-    ], planeCols, index);
+    tableRow(
+      [
+        plane.name,
+        plane.area_sqft.toFixed(1),
+        plane.squares.toFixed(2),
+        `${plane.pitch_rise_per_12.toFixed(1)}:12`,
+        plane.edges_lf.eave.toFixed(1),
+        plane.edges_lf.rake.toFixed(1),
+        combined.toFixed(1),
+      ],
+      planeCols,
+      index,
+    );
   });
   paragraph(
     `Waste allowance: ${d.waste}% applied independently to each plane's surface area for planning. Pitch and edge lengths are derived from the saved drawing geometry and inherit its measurement verification status.`,
