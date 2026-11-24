@@ -13,6 +13,13 @@ export function nearestBuildingFootprint(
   elements: OSMBuildingWay[],
   center: TracePoint,
 ): TracePoint[] | null {
+  if (
+    !Number.isFinite(center.lat) ||
+    !Number.isFinite(center.lon) ||
+    Math.abs(center.lat) > 90 ||
+    Math.abs(center.lon) > 180
+  )
+    return null;
   const metersPerLatDegree = 110540;
   const metersPerLonDegree = 111320 * Math.cos((center.lat * Math.PI) / 180);
   const candidates = elements.flatMap((element) => {
@@ -26,25 +33,54 @@ export function nearestBuildingFootprint(
       ring.pop();
     if (
       ring.length < 3 ||
-      ring.some((point) => !Number.isFinite(point.lat) || !Number.isFinite(point.lon))
+      ring.length > 200 ||
+      ring.some(
+        (point) =>
+          !Number.isFinite(point.lat) ||
+          !Number.isFinite(point.lon) ||
+          Math.abs(point.lat) > 90 ||
+          Math.abs(point.lon) > 180,
+      )
     )
       return [];
     if (new Set(ring.map((point) => `${point.lat.toFixed(7)},${point.lon.toFixed(7)}`)).size < 3)
       return [];
-    const centroid = ring.reduce(
-      (sum, point) => ({
-        lat: sum.lat + point.lat / ring.length,
-        lon: sum.lon + point.lon / ring.length,
-      }),
-      { lat: 0, lon: 0 },
-    );
-    const distance = Math.hypot(
-      (centroid.lat - center.lat) * metersPerLatDegree,
-      (centroid.lon - center.lon) * metersPerLonDegree,
-    );
-    return distance <= 50 ? [{ ring, distance }] : [];
+
+    // Rank a footprint containing the geocoded address ahead of nearby
+    // neighboring buildings; centroid-only ranking can select the wrong lot.
+    let inside = false;
+    let minimumEdgeDistance = Number.POSITIVE_INFINITY;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const a = ring[j]!;
+      const b = ring[i]!;
+      const ax = (a.lon - center.lon) * metersPerLonDegree;
+      const ay = (a.lat - center.lat) * metersPerLatDegree;
+      const bx = (b.lon - center.lon) * metersPerLonDegree;
+      const by = (b.lat - center.lat) * metersPerLatDegree;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSquared = dx * dx + dy * dy;
+      const t =
+        lengthSquared === 0
+          ? 0
+          : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSquared));
+      minimumEdgeDistance = Math.min(
+        minimumEdgeDistance,
+        Math.hypot(ax + t * dx, ay + t * dy),
+      );
+      const crossesLatitude = (a.lat > center.lat) !== (b.lat > center.lat);
+      if (
+        crossesLatitude &&
+        center.lon < ((b.lon - a.lon) * (center.lat - a.lat)) / (b.lat - a.lat) + a.lon
+      )
+        inside = !inside;
+    }
+    const distance = inside ? 0 : minimumEdgeDistance;
+    return distance <= 50 ? [{ ring, distance, containsAddress: inside }] : [];
   });
-  candidates.sort((a, b) => a.distance - b.distance);
+  candidates.sort(
+    (a, b) => Number(b.containsAddress) - Number(a.containsAddress) || a.distance - b.distance,
+  );
   return candidates[0]?.ring ?? null;
 }
 
