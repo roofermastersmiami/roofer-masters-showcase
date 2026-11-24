@@ -371,6 +371,7 @@ export function SatelliteRoofTrace({
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
   const [selectedBuildingCenter, setSelectedBuildingCenter] = useState<TracePoint | null>(null);
+  const [placingTarget, setPlacingTarget] = useState(false);
   const [error, setError] = useState("");
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
@@ -379,17 +380,21 @@ export function SatelliteRoofTrace({
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
+  // ArcGIS export imagery can return an empty image for extremely narrow
+  // geographic extents. Keep the view responsive at high UI zoom levels while
+  // limiting the requested source extent to a stable, supported detail level.
+  const imageryZoom = Math.min(zoom, 5);
   const bounds = useMemo(
     () =>
       mapCenter
         ? {
-            west: mapCenter.lon - TILE_SPAN / zoom,
-            east: mapCenter.lon + TILE_SPAN / zoom,
-            south: mapCenter.lat - (TILE_SPAN * 0.7) / zoom,
-            north: mapCenter.lat + (TILE_SPAN * 0.7) / zoom,
+            west: mapCenter.lon - TILE_SPAN / imageryZoom,
+            east: mapCenter.lon + TILE_SPAN / imageryZoom,
+            south: mapCenter.lat - (TILE_SPAN * 0.7) / imageryZoom,
+            north: mapCenter.lat + (TILE_SPAN * 0.7) / imageryZoom,
           }
         : null,
-    [mapCenter, zoom],
+    [mapCenter, imageryZoom],
   );
   const imageryUrl = bounds
     ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
@@ -502,10 +507,19 @@ export function SatelliteRoofTrace({
       event.clientY,
       event.currentTarget.getBoundingClientRect(),
     );
-    if (point) {
+    if (!point) return;
+    if (placingTarget) {
+      // Let the estimator explicitly place the house target when the geocoded
+      // address pin lands on a road, driveway, or neighboring parcel.
+      setSelectedBuildingCenter(point);
+      setMapCenter(point);
+      setPlacingTarget(false);
       setAutoTraced(false);
-      setPoints((current) => [...current, point]);
+      setError("");
+      return;
     }
+    setAutoTraced(false);
+    setPoints((current) => [...current, point]);
   }
   async function autoTraceBuildingFootprint() {
     if (!location) return;
@@ -676,6 +690,14 @@ export function SatelliteRoofTrace({
               <Satellite className="h-4 w-4" />{" "}
               {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={placingTarget ? "secondary" : "outline"}
+              onClick={() => setPlacingTarget((current) => !current)}
+            >
+              <MapPin className="h-4 w-4" /> {placingTarget ? "Click the house…" : "Place house target"}
+            </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
@@ -780,6 +802,12 @@ export function SatelliteRoofTrace({
               </div>
             </div>
           </div>
+          {placingTarget && (
+            <p className="rounded-md border border-primary bg-primary/5 p-2 text-sm">
+              Click the center of the correct house on the satellite image. The map will recenter on
+              that target; the address pin remains a separate reference.
+            </p>
+          )}
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
@@ -842,7 +870,7 @@ export function SatelliteRoofTrace({
                 setZoom((value) => nextSatelliteZoom(value, "in"));
               }}
               role="img"
-              aria-label="Satellite image. Click around the roof to trace its outline."
+              aria-label={placingTarget ? "Click the center of the house to place the target." : "Satellite image. Click around the roof to trace its outline."}
             >
               <image
                 href={imageryUrl}
