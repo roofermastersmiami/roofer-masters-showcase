@@ -50,6 +50,7 @@ import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
+import { AutomatedRoofReport } from "./AutomatedRoofReport";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
 import {
@@ -1715,6 +1716,32 @@ export function RoofMeasurements({
           </div>
         )}
       </section>
+      <AutomatedRoofReport
+        address={workspaceAddress}
+        onApply={(detectedDrawing) => {
+          if (
+            (initialDrawing || userEditedDrawing.current || d.planes.length > 1) &&
+            !confirm("Replace the current roof planes with public LiDAR candidates? Existing planes and penetrations will be removed. You can undo immediately afterward.")
+          ) return;
+          try {
+            const nextDrawing: RoofDrawing = {
+              ...detectedDrawing,
+              roof_type: d.roof_type,
+              waste: d.waste,
+              notes: detectedDrawing.notes,
+              condition: d.condition,
+            };
+            // Validate topology and plane geometry before accepting external coordinates.
+            measureDrawing(nextDrawing);
+            edit(nextDrawing);
+            setSelected(nextDrawing.planes[0]?.id ?? "");
+            setFit((value) => value + 1);
+            toast.success("Preliminary LiDAR facets loaded. Review pitch and classify every edge before generating a report.");
+          } catch (cause) {
+            toast.error(cause instanceof Error ? cause.message : "LiDAR facets failed roof geometry validation.");
+          }
+        }}
+      />
       <SatelliteRoofTrace
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         initialAddress={report?.address?.trim() || propertyRow?.address || ""}
