@@ -118,21 +118,41 @@ export function PdfContractSigner({
 }: PdfContractSignerProps) {
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
   const [sourceFileName, setSourceFileName] = useState("document.pdf");
-  const [templates, setTemplates] = useState<Array<{ id: string; name: string; file_path: string; fields: PdfSignField[] }>>([]);
+  const [templates, setTemplates] = useState<
+    Array<{ id: string; name: string; file_path: string; fields: PdfSignField[] }>
+  >([]);
   const [templateName, setTemplateName] = useState("");
   const [templateBusy, setTemplateBusy] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("Roofing documents from Roofer Masters");
-  const [emailMessage, setEmailMessage] = useState("Hello,\n\nPlease find the attached roofing documents.");
-  const [companySignature, setCompanySignature] = useState("Thank you,\nRoofer Masters\n(305) 942-3093\nroofermasters@gmail.com\nroofermastersmiami.com");
+  const [emailMessage, setEmailMessage] = useState(
+    "Hello,\n\nPlease find the attached roofing documents.",
+  );
+  const [companySignature, setCompanySignature] = useState(
+    "Thank you,\nRoofer Masters\n(305) 942-3093\nroofermasters@gmail.com\nroofermastersmiami.com",
+  );
   const [drawFieldMode, setDrawFieldMode] = useState(false);
-  const [drawDraft, setDrawDraft] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [drawDraft, setDrawDraft] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const drawStartRef = useRef<{ page: number; x: number; y: number; rect: DOMRect } | null>(null);
-  const resizeRef = useRef<{ id: string; pointerX: number; pointerY: number; width: number; height: number; rect: DOMRect } | null>(null);
+  const resizeRef = useRef<{
+    id: string;
+    pointerX: number;
+    pointerY: number;
+    width: number;
+    height: number;
+    rect: DOMRect;
+  } | null>(null);
   const [emailFiles, setEmailFiles] = useState<File[]>([]);
   const [includeCurrentPdf, setIncludeCurrentPdf] = useState(true);
-  const [savedAttachments, setSavedAttachments] = useState<Array<{ path: string; filename: string }>>([]);
+  const [savedAttachments, setSavedAttachments] = useState<
+    Array<{ path: string; filename: string }>
+  >([]);
   const [emailBusy, setEmailBusy] = useState(false);
   const [pages, setPages] = useState<PdfPage[]>([]);
   const [fields, setFields] = useState<PdfSignField[]>(initialFields);
@@ -309,8 +329,20 @@ export function PdfContractSigner({
     const resize = resizeRef.current;
     if (resize && !isClientMode) {
       updateField(resize.id, {
-        width: Math.max(0.05, Math.min(1 - (fields.find((field) => field.id === resize.id)?.x ?? 0.05), resize.width + (event.clientX - resize.pointerX) / resize.rect.width)),
-        height: Math.max(0.02, Math.min(1 - (fields.find((field) => field.id === resize.id)?.y ?? 0.05), resize.height + (event.clientY - resize.pointerY) / resize.rect.height)),
+        width: Math.max(
+          0.05,
+          Math.min(
+            1 - (fields.find((field) => field.id === resize.id)?.x ?? 0.05),
+            resize.width + (event.clientX - resize.pointerX) / resize.rect.width,
+          ),
+        ),
+        height: Math.max(
+          0.02,
+          Math.min(
+            1 - (fields.find((field) => field.id === resize.id)?.y ?? 0.05),
+            resize.height + (event.clientY - resize.pointerY) / resize.rect.height,
+          ),
+        ),
       });
       return;
     }
@@ -318,7 +350,12 @@ export function PdfContractSigner({
     if (draw && drawFieldMode && !isClientMode) {
       const x = Math.max(0, Math.min(1, (event.clientX - draw.rect.left) / draw.rect.width));
       const y = Math.max(0, Math.min(1, (event.clientY - draw.rect.top) / draw.rect.height));
-      setDrawDraft({ x: Math.min(draw.x, x), y: Math.min(draw.y, y), width: Math.abs(x - draw.x), height: Math.abs(y - draw.y) });
+      setDrawDraft({
+        x: Math.min(draw.x, x),
+        y: Math.min(draw.y, y),
+        width: Math.abs(x - draw.x),
+        height: Math.abs(y - draw.y),
+      });
       return;
     }
     const drag = dragRef.current;
@@ -342,7 +379,8 @@ export function PdfContractSigner({
   };
 
   const beginDrawField = (event: PointerEvent<HTMLDivElement>, page: number) => {
-    if (!drawFieldMode || isClientMode || (event.target as HTMLElement).closest("[data-pdf-field]")) return;
+    if (!drawFieldMode || isClientMode || (event.target as HTMLElement).closest("[data-pdf-field]"))
+      return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
@@ -381,7 +419,14 @@ export function PdfContractSigner({
     event.currentTarget.setPointerCapture(event.pointerId);
     const rect = pageRefs.current[field.page]?.getBoundingClientRect();
     if (!rect) return;
-    resizeRef.current = { id: field.id, pointerX: event.clientX, pointerY: event.clientY, width: field.width, height: field.height, rect };
+    resizeRef.current = {
+      id: field.id,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      width: field.width,
+      height: field.height,
+      rect,
+    };
     setSelectedId(field.id);
   };
 
@@ -448,12 +493,35 @@ export function PdfContractSigner({
       const embeddedFonts = new Map<string, Awaited<ReturnType<typeof pdf.embedFont>>>();
       const getFieldFont = async (field: PdfSignField) => {
         const family = field.fontFamily ?? "Helvetica";
-        const key = [family, field.bold ? "bold" : "regular", field.italic ? "italic" : "normal"].join("-");
-        const standardFont = family === "TimesRoman"
-          ? field.bold ? (field.italic ? StandardFonts.TimesRomanBoldItalic : StandardFonts.TimesRomanBold) : (field.italic ? StandardFonts.TimesRomanItalic : StandardFonts.TimesRoman)
-          : family === "Courier"
-            ? field.bold ? (field.italic ? StandardFonts.CourierBoldOblique : StandardFonts.CourierBold) : (field.italic ? StandardFonts.CourierOblique : StandardFonts.Courier)
-            : field.bold ? (field.italic ? StandardFonts.HelveticaBoldOblique : StandardFonts.HelveticaBold) : (field.italic ? StandardFonts.HelveticaOblique : StandardFonts.Helvetica);
+        const key = [
+          family,
+          field.bold ? "bold" : "regular",
+          field.italic ? "italic" : "normal",
+        ].join("-");
+        const standardFont =
+          family === "TimesRoman"
+            ? field.bold
+              ? field.italic
+                ? StandardFonts.TimesRomanBoldItalic
+                : StandardFonts.TimesRomanBold
+              : field.italic
+                ? StandardFonts.TimesRomanItalic
+                : StandardFonts.TimesRoman
+            : family === "Courier"
+              ? field.bold
+                ? field.italic
+                  ? StandardFonts.CourierBoldOblique
+                  : StandardFonts.CourierBold
+                : field.italic
+                  ? StandardFonts.CourierOblique
+                  : StandardFonts.Courier
+              : field.bold
+                ? field.italic
+                  ? StandardFonts.HelveticaBoldOblique
+                  : StandardFonts.HelveticaBold
+                : field.italic
+                  ? StandardFonts.HelveticaOblique
+                  : StandardFonts.Helvetica;
         if (!embeddedFonts.has(key)) embeddedFonts.set(key, await pdf.embedFont(standardFont));
         return embeddedFonts.get(key)!;
       };
@@ -465,7 +533,14 @@ export function PdfContractSigner({
         const height = field.height * size.height;
         const y = size.height - field.y * size.height - height;
         if (field.kind === "erase") {
-          page.drawRectangle({ x, y, width, height, color: rgb(1, 1, 1), borderColor: rgb(1, 1, 1) });
+          page.drawRectangle({
+            x,
+            y,
+            width,
+            height,
+            color: rgb(1, 1, 1),
+            borderColor: rgb(1, 1, 1),
+          });
         } else if (field.kind === "signature" && field.imageData) {
           const png = await pdf.embedPng(field.imageData);
           const scale = Math.min(width / png.width, height / png.height);
@@ -476,16 +551,34 @@ export function PdfContractSigner({
             height: png.height * scale,
           });
         } else {
-          const font = field.kind === "signature" ? await pdf.embedFont(StandardFonts.TimesRomanItalic) : await getFieldFont(field);
+          const font =
+            field.kind === "signature"
+              ? await pdf.embedFont(StandardFonts.TimesRomanItalic)
+              : await getFieldFont(field);
           const hex = (field.textColor ?? "#111827").replace("#", "");
           const red = Number.parseInt(hex.slice(0, 2), 16) / 255;
           const green = Number.parseInt(hex.slice(2, 4), 16) / 255;
           const blue = Number.parseInt(hex.slice(4, 6), 16) / 255;
           const textY = y + Math.max(2, (height - field.fontSize) / 2);
-          page.drawText(field.value, { x: x + 3, y: textY, size: field.fontSize, font, color: rgb(red, green, blue), maxWidth: Math.max(20, width - 6) });
+          page.drawText(field.value, {
+            x: x + 3,
+            y: textY,
+            size: field.fontSize,
+            font,
+            color: rgb(red, green, blue),
+            maxWidth: Math.max(20, width - 6),
+          });
           if (field.underline) {
-            const textWidth = Math.min(width - 6, font.widthOfTextAtSize(field.value, field.fontSize));
-            page.drawLine({ start: { x: x + 3, y: textY - 1 }, end: { x: x + 3 + textWidth, y: textY - 1 }, thickness: Math.max(0.5, field.fontSize / 18), color: rgb(red, green, blue) });
+            const textWidth = Math.min(
+              width - 6,
+              font.widthOfTextAtSize(field.value, field.fontSize),
+            );
+            page.drawLine({
+              start: { x: x + 3, y: textY - 1 },
+              end: { x: x + 3 + textWidth, y: textY - 1 },
+              thickness: Math.max(0.5, field.fontSize / 18),
+              color: rgb(red, green, blue),
+            });
           }
         }
       }
@@ -504,7 +597,10 @@ export function PdfContractSigner({
         .from("signed-contracts")
         .upload(path, blob, { contentType: "application/pdf", upsert: false });
       if (error) throw error;
-      setSavedAttachments((current) => [...current, { path, filename: `${safeAddress}-signed.pdf` }]);
+      setSavedAttachments((current) => [
+        ...current,
+        { path, filename: `${safeAddress}-signed.pdf` },
+      ]);
       const downloadUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = downloadUrl;
@@ -536,15 +632,35 @@ export function PdfContractSigner({
       if (userError || !userResult.user) throw new Error("Sign in again to save a template");
       const id = crypto.randomUUID();
       const path = `pdf-templates/${id}/${Date.now()}-${sourceFileName.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
-      const { error: uploadError } = await supabase.storage.from("roofing-proposals").upload(path, new Blob([Uint8Array.from(sourceBytes)], { type: "application/pdf" }), { contentType: "application/pdf" });
+      const { error: uploadError } = await supabase.storage
+        .from("roofing-proposals")
+        .upload(path, new Blob([Uint8Array.from(sourceBytes)], { type: "application/pdf" }), {
+          contentType: "application/pdf",
+        });
       if (uploadError) throw uploadError;
-      const templateFields = fields.map((field) => ({ ...field, id: crypto.randomUUID(), value: "", imageData: undefined }));
-      const { error: insertError } = await supabase.from("pdf_sign_templates").insert({ id, name, file_path: path, fields: templateFields as unknown as import("@/integrations/supabase/types").Json, created_by: userResult.user.id });
+      const templateFields = fields.map((field) => ({
+        ...field,
+        id: crypto.randomUUID(),
+        value: "",
+        imageData: undefined,
+      }));
+      const { error: insertError } = await supabase
+        .from("pdf_sign_templates")
+        .insert({
+          id,
+          name,
+          file_path: path,
+          fields: templateFields as unknown as import("@/integrations/supabase/types").Json,
+          created_by: userResult.user.id,
+        });
       if (insertError) {
         await supabase.storage.from("roofing-proposals").remove([path]);
         throw insertError;
       }
-      setTemplates((current) => [{ id, name, file_path: path, fields: templateFields }, ...current]);
+      setTemplates((current) => [
+        { id, name, file_path: path, fields: templateFields },
+        ...current,
+      ]);
       setTemplateName("");
       toast.success("PDF template saved");
     } catch (error) {
@@ -559,9 +675,16 @@ export function PdfContractSigner({
     if (!template) return;
     setTemplateBusy(true);
     try {
-      const { data, error } = await supabase.storage.from("roofing-proposals").download(template.file_path);
+      const { data, error } = await supabase.storage
+        .from("roofing-proposals")
+        .download(template.file_path);
       if (error || !data) throw error ?? new Error("Template PDF not found");
-      const fieldsForUse = template.fields.map((field) => ({ ...field, id: crypto.randomUUID(), value: field.kind === "date" ? today() : "", imageData: undefined }));
+      const fieldsForUse = template.fields.map((field) => ({
+        ...field,
+        id: crypto.randomUUID(),
+        value: field.kind === "date" ? today() : "",
+        imageData: undefined,
+      }));
       await loadPdf(new Uint8Array(await data.arrayBuffer()), template.name + ".pdf", fieldsForUse);
       toast.success(`Loaded template: ${template.name}`);
     } catch (error) {
@@ -580,7 +703,10 @@ export function PdfContractSigner({
       toast.error("Add at least one PDF attachment");
       return;
     }
-    const selectedBytes = emailFiles.reduce((total, file) => total + file.size, includeCurrentPdf && sourceBytes ? sourceBytes.byteLength : 0);
+    const selectedBytes = emailFiles.reduce(
+      (total, file) => total + file.size,
+      includeCurrentPdf && sourceBytes ? sourceBytes.byteLength : 0,
+    );
     if (selectedBytes > 20 * 1024 * 1024) {
       toast.error("All PDF attachments together must be 20 MB or less");
       return;
@@ -590,32 +716,50 @@ export function PdfContractSigner({
     try {
       const uploaded = [...savedAttachments];
       if (includeCurrentPdf && sourceBytes) {
-        const safeName = sourceFileName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100) || "roof-report.pdf";
+        const safeName =
+          sourceFileName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100) || "roof-report.pdf";
         const path = `${leadId}/${reportId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
         const blob = new Blob([Uint8Array.from(sourceBytes)], { type: "application/pdf" });
-        const { error } = await supabase.storage.from("signed-contracts").upload(path, blob, { contentType: "application/pdf", upsert: false });
+        const { error } = await supabase.storage
+          .from("signed-contracts")
+          .upload(path, blob, { contentType: "application/pdf", upsert: false });
         if (error) throw error;
         uploadedPaths.push(path);
         uploaded.push({ path, filename: safeName });
       }
       for (const file of emailFiles) {
-        if (file.type !== "application/pdf" || file.size > 20 * 1024 * 1024) throw new Error(`${file.name} must be a PDF under 20 MB`);
+        if (file.type !== "application/pdf" || file.size > 20 * 1024 * 1024)
+          throw new Error(`${file.name} must be a PDF under 20 MB`);
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
         const path = `${leadId}/${reportId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-        const { error } = await supabase.storage.from("signed-contracts").upload(path, file, { contentType: "application/pdf", upsert: false });
+        const { error } = await supabase.storage
+          .from("signed-contracts")
+          .upload(path, file, { contentType: "application/pdf", upsert: false });
         if (error) throw error;
         uploadedPaths.push(path);
         uploaded.push({ path, filename: safeName });
       }
-      const fullMessage = [emailMessage.trim(), companySignature.trim()].filter(Boolean).join("\n\n");
-      const result = await emailRoofReportPdfs({ data: { leadId, reportId, to: emailTo.trim(), subject: emailSubject.trim(), message: fullMessage, attachments: uploaded } });
+      const fullMessage = [emailMessage.trim(), companySignature.trim()]
+        .filter(Boolean)
+        .join("\n\n");
+      const result = await emailRoofReportPdfs({
+        data: {
+          leadId,
+          reportId,
+          to: emailTo.trim(),
+          subject: emailSubject.trim(),
+          message: fullMessage,
+          attachments: uploaded,
+        },
+      });
       if (!result.sent) throw new Error("Email was not sent");
       setSavedAttachments(uploaded);
       setEmailFiles([]);
       setEmailOpen(false);
       toast.success(`Email sent with ${result.attachmentCount} PDF file(s)`);
     } catch (error) {
-      if (uploadedPaths.length) await supabase.storage.from("signed-contracts").remove(uploadedPaths);
+      if (uploadedPaths.length)
+        await supabase.storage.from("signed-contracts").remove(uploadedPaths);
       toast.error(error instanceof Error ? error.message : "Could not send email");
     } finally {
       setEmailBusy(false);
@@ -625,18 +769,37 @@ export function PdfContractSigner({
   useEffect(() => {
     let cancelled = false;
     if (!emailOpen || !leadId || emailTo.trim()) return;
-    void supabase.from("leads").select("email").eq("id", leadId).maybeSingle().then(({ data }) => {
-      if (!cancelled && data?.email) setEmailTo(data.email);
-    });
-    return () => { cancelled = true; };
+    void supabase
+      .from("leads")
+      .select("email")
+      .eq("id", leadId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.email) setEmailTo(data.email);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [emailOpen, leadId, emailTo]);
 
   useEffect(() => {
     let cancelled = false;
-    void supabase.from("pdf_sign_templates").select("id,name,file_path,fields").order("updated_at", { ascending: false }).then(({ data, error }) => {
-      if (!cancelled && !error && data) setTemplates(data.map((row) => ({ ...row, fields: Array.isArray(row.fields) ? row.fields as unknown as PdfSignField[] : [] })));
-    });
-    return () => { cancelled = true; };
+    void supabase
+      .from("pdf_sign_templates")
+      .select("id,name,file_path,fields")
+      .order("updated_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!cancelled && !error && data)
+          setTemplates(
+            data.map((row) => ({
+              ...row,
+              fields: Array.isArray(row.fields) ? (row.fields as unknown as PdfSignField[]) : [],
+            })),
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const uploadFile = async (file?: File) => {
@@ -684,151 +847,228 @@ export function PdfContractSigner({
         </label>
       </div>
       <div className="sticky top-0 z-30 flex flex-col gap-2 rounded-lg border bg-background/95 p-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
-      <div className="flex flex-wrap items-center gap-2">
-        {fieldTools.map(({ kind, label, icon: Icon }) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {fieldTools.map(({ kind, label, icon: Icon }) => (
+            <Button
+              key={kind}
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!sourceBytes || isClientMode}
+              onClick={() => addField(kind)}
+            >
+              <Icon className="mr-1 size-4" />
+              {label}
+            </Button>
+          ))}
+          {isClientMode && (
+            <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+              <Lock className="size-3" /> Field positions locked
+            </span>
+          )}
           <Button
-            key={kind}
-            type="button"
+            className="ml-auto"
+            size="sm"
+            onClick={() => void exportPdf()}
+            disabled={!sourceBytes || saving || loading || !leadId}
+          >
+            <Check className="mr-1 size-4" />
+            {saving ? "Saving…" : "Save & Download Signed PDF"}
+          </Button>
+          <Button
+            size="sm"
+            variant={drawFieldMode ? "default" : "outline"}
+            disabled={!sourceBytes || isClientMode}
+            onClick={() => setDrawFieldMode((value) => !value)}
+          >
+            <Plus className="mr-1 size-4" /> {drawFieldMode ? "Cancel drawing" : "Draw field area"}
+          </Button>
+          <Button
             size="sm"
             variant="outline"
-            disabled={!sourceBytes || isClientMode}
-            onClick={() => addField(kind)}
+            disabled={!sourceBytes || templateBusy}
+            onClick={() => void saveAsTemplate()}
           >
-            <Icon className="mr-1 size-4" />
-            {label}
+            <Save className="mr-1 size-4" /> Save template
           </Button>
-        ))}
-        {isClientMode && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-            <Lock className="size-3" /> Field positions locked
-          </span>
-        )}
-        <Button
-          className="ml-auto"
-          size="sm"
-          onClick={() => void exportPdf()}
-          disabled={!sourceBytes || saving || loading || !leadId}
-        >
-          <Check className="mr-1 size-4" />
-          {saving ? "Saving…" : "Save & Download Signed PDF"}
-        </Button>
-        <Button size="sm" variant={drawFieldMode ? "default" : "outline"} disabled={!sourceBytes || isClientMode} onClick={() => setDrawFieldMode((value) => !value)}>
-          <Plus className="mr-1 size-4" /> {drawFieldMode ? "Cancel drawing" : "Draw field area"}
-        </Button>
-        <Button size="sm" variant="outline" disabled={!sourceBytes || templateBusy} onClick={() => void saveAsTemplate()}>
-          <Save className="mr-1 size-4" /> Save template
-        </Button>
-        <Button size="sm" variant="outline" disabled={!leadId || !reportId} onClick={() => setEmailOpen(true)}>
-          <Mail className="mr-1 size-4" /> Email PDFs
-        </Button>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Input className="w-44" placeholder="New template name" value={templateName} onChange={(event) => setTemplateName(event.target.value)} />
-        <select aria-label="Load saved PDF template" className="h-9 max-w-64 rounded-md border bg-background px-3 text-sm" value="" onChange={(event) => { if (event.target.value) void loadTemplate(event.target.value); }}>
-          <option value="">Load a saved template…</option>
-          {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-        </select>
-        <span className="text-xs text-muted-foreground">Templates keep your PDF and field positions for reuse.</span>
-      </div>
-      {selected && !isClientMode && (
-        <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
-          <div className="min-w-40 flex-1">
-            <label className="mb-1 block text-xs text-muted-foreground">
-              {fieldLabel[selected.kind]}
-            </label>
-            <Input
-              value={selected.value}
-              placeholder={
-                selected.kind === "signature"
-                  ? "Add signature using the signature pad"
-                  : "Enter field value"
-              }
-              disabled={selected.kind === "signature" || selected.kind === "erase"}
-              onChange={(e) => updateField(selected.id, { value: e.target.value })}
-            />
-          </div>
-          <div className="w-24">
-            <label className="mb-1 block text-xs text-muted-foreground">Font size</label>
-            <Input
-              type="number"
-              min={6}
-              max={48}
-              value={selected.fontSize}
-              onChange={(e) =>
-                updateField(selected.id, {
-                  fontSize: Math.max(6, Math.min(48, Number(e.target.value) || 12)),
-                })
-              }
-            />
-          </div>
-          {selected.kind !== "erase" && selected.kind !== "signature" && (
-            <>
-              <div className="w-36">
-                <label className="mb-1 block text-xs text-muted-foreground">Font style</label>
-                <select aria-label="Text font style" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={selected.fontFamily ?? "Helvetica"} onChange={(e) => updateField(selected.id, { fontFamily: e.target.value as PdfSignField["fontFamily"] })}>
-                  <option value="Helvetica">Modern</option><option value="TimesRoman">Classic / serif</option><option value="Courier">Monospace</option><option value="Cursive">Cursive</option>
-                </select>
-              </div>
-              <div className="grid gap-1">
-                <label className="text-xs text-muted-foreground">Text color</label>
-                <input aria-label="Text color" type="color" className="h-9 w-12 cursor-pointer rounded border bg-background p-1" value={selected.textColor ?? "#111827"} onChange={(e) => updateField(selected.id, { textColor: e.target.value })} />
-              </div>
-              <div className="flex items-center gap-2 pb-2 text-xs">
-                <label className="flex items-center gap-1"><input type="checkbox" checked={!!selected.bold} onChange={(e) => updateField(selected.id, { bold: e.target.checked })} /> Bold</label>
-                <label className="flex items-center gap-1"><input type="checkbox" checked={!!selected.italic} onChange={(e) => updateField(selected.id, { italic: e.target.checked })} /> Italic</label>
-                <label className="flex items-center gap-1"><input type="checkbox" checked={!!selected.underline} onChange={(e) => updateField(selected.id, { underline: e.target.checked })} /> Underline</label>
-              </div>
-            </>
-          )}
-          <div className="w-24">
-            <label className="mb-1 block text-xs text-muted-foreground">Width %</label>
-            <Input
-              type="number"
-              min={5}
-              max={90}
-              value={Math.round(selected.width * 100)}
-              onChange={(e) =>
-                updateField(selected.id, {
-                  width: Math.max(0.05, Math.min(0.9, Number(e.target.value) / 100 || 0.2)),
-                })
-              }
-            />
-          </div>
-          <div className="w-24">
-            <label className="mb-1 block text-xs text-muted-foreground">Height %</label>
-            <Input
-              type="number"
-              min={2}
-              max={30}
-              value={Math.round(selected.height * 100)}
-              onChange={(e) =>
-                updateField(selected.id, {
-                  height: Math.max(0.02, Math.min(0.3, Number(e.target.value) / 100 || 0.05)),
-                })
-              }
-            />
-          </div>
-          {selected.kind === "erase" && <span className="pb-2 text-xs text-muted-foreground">This area will be covered with white when exported. Place replacement text over it afterward.</span>}
-          {selected.kind === "signature" && (
-            <Button type="button" variant="outline" onClick={() => setSignatureOpen(true)}>
-              <PenLine className="mr-1 size-4" />
-              {selected.imageData ? "Edit signature" : "Add signature"}
-            </Button>
-          )}
           <Button
-            type="button"
-            variant="destructive"
-            size="icon"
-            aria-label="Delete selected field"
-            onClick={() => {
-              setFields((all) => all.filter((f) => f.id !== selected.id));
-              setSelectedId(null);
-            }}
+            size="sm"
+            variant="outline"
+            disabled={!leadId || !reportId}
+            onClick={() => setEmailOpen(true)}
           >
-            <Trash2 className="size-4" />
+            <Mail className="mr-1 size-4" /> Email PDFs
           </Button>
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            className="w-44"
+            placeholder="New template name"
+            value={templateName}
+            onChange={(event) => setTemplateName(event.target.value)}
+          />
+          <select
+            aria-label="Load saved PDF template"
+            className="h-9 max-w-64 rounded-md border bg-background px-3 text-sm"
+            value=""
+            onChange={(event) => {
+              if (event.target.value) void loadTemplate(event.target.value);
+            }}
+          >
+            <option value="">Load a saved template…</option>
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-muted-foreground">
+            Templates keep your PDF and field positions for reuse.
+          </span>
+        </div>
+        {selected && !isClientMode && (
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="min-w-40 flex-1">
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {fieldLabel[selected.kind]}
+              </label>
+              <Input
+                value={selected.value}
+                placeholder={
+                  selected.kind === "signature"
+                    ? "Add signature using the signature pad"
+                    : "Enter field value"
+                }
+                disabled={selected.kind === "signature" || selected.kind === "erase"}
+                onChange={(e) => updateField(selected.id, { value: e.target.value })}
+              />
+            </div>
+            <div className="w-24">
+              <label className="mb-1 block text-xs text-muted-foreground">Font size</label>
+              <Input
+                type="number"
+                min={6}
+                max={48}
+                value={selected.fontSize}
+                onChange={(e) =>
+                  updateField(selected.id, {
+                    fontSize: Math.max(6, Math.min(48, Number(e.target.value) || 12)),
+                  })
+                }
+              />
+            </div>
+            {selected.kind !== "erase" && selected.kind !== "signature" && (
+              <>
+                <div className="w-36">
+                  <label className="mb-1 block text-xs text-muted-foreground">Font style</label>
+                  <select
+                    aria-label="Text font style"
+                    className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                    value={selected.fontFamily ?? "Helvetica"}
+                    onChange={(e) =>
+                      updateField(selected.id, {
+                        fontFamily: e.target.value as PdfSignField["fontFamily"],
+                      })
+                    }
+                  >
+                    <option value="Helvetica">Modern</option>
+                    <option value="TimesRoman">Classic / serif</option>
+                    <option value="Courier">Monospace</option>
+                    <option value="Cursive">Cursive</option>
+                  </select>
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-xs text-muted-foreground">Text color</label>
+                  <input
+                    aria-label="Text color"
+                    type="color"
+                    className="h-9 w-12 cursor-pointer rounded border bg-background p-1"
+                    value={selected.textColor ?? "#111827"}
+                    onChange={(e) => updateField(selected.id, { textColor: e.target.value })}
+                  />
+                </div>
+                <div className="flex items-center gap-2 pb-2 text-xs">
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={!!selected.bold}
+                      onChange={(e) => updateField(selected.id, { bold: e.target.checked })}
+                    />{" "}
+                    Bold
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={!!selected.italic}
+                      onChange={(e) => updateField(selected.id, { italic: e.target.checked })}
+                    />{" "}
+                    Italic
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={!!selected.underline}
+                      onChange={(e) => updateField(selected.id, { underline: e.target.checked })}
+                    />{" "}
+                    Underline
+                  </label>
+                </div>
+              </>
+            )}
+            <div className="w-24">
+              <label className="mb-1 block text-xs text-muted-foreground">Width %</label>
+              <Input
+                type="number"
+                min={5}
+                max={90}
+                value={Math.round(selected.width * 100)}
+                onChange={(e) =>
+                  updateField(selected.id, {
+                    width: Math.max(0.05, Math.min(0.9, Number(e.target.value) / 100 || 0.2)),
+                  })
+                }
+              />
+            </div>
+            <div className="w-24">
+              <label className="mb-1 block text-xs text-muted-foreground">Height %</label>
+              <Input
+                type="number"
+                min={2}
+                max={30}
+                value={Math.round(selected.height * 100)}
+                onChange={(e) =>
+                  updateField(selected.id, {
+                    height: Math.max(0.02, Math.min(0.3, Number(e.target.value) / 100 || 0.05)),
+                  })
+                }
+              />
+            </div>
+            {selected.kind === "erase" && (
+              <span className="pb-2 text-xs text-muted-foreground">
+                This area will be covered with white when exported. Place replacement text over it
+                afterward.
+              </span>
+            )}
+            {selected.kind === "signature" && (
+              <Button type="button" variant="outline" onClick={() => setSignatureOpen(true)}>
+                <PenLine className="mr-1 size-4" />
+                {selected.imageData ? "Edit signature" : "Add signature"}
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              aria-label="Delete selected field"
+              onClick={() => {
+                setFields((all) => all.filter((f) => f.id !== selected.id));
+                setSelectedId(null);
+              }}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        )}
       </div>
       {!leadId && (
         <p
@@ -843,16 +1083,38 @@ export function PdfContractSigner({
       {!sourceBytes && !loading && (
         <div className="rounded-lg border border-dashed p-12 text-center text-sm text-muted-foreground">
           <FilePlus2 className="mx-auto mb-2 size-8" />
-          Upload a PDF to start editing. Existing fillable text and signature fields are detected automatically; for a flat or scanned PDF, add whiteout and text areas manually.
+          Upload a PDF to start editing. Existing fillable text and signature fields are detected
+          automatically; for a flat or scanned PDF, add whiteout and text areas manually.
         </div>
       )}
-      {drawFieldMode && <p className="text-xs text-blue-700">Click and drag on the PDF to create a text area. For replacing existing content, add a Whiteout / erase area first, then add replacement text above it. Select any item to move, resize, edit, or delete it.</p>}
-      {sourceBytes && <p className="text-xs text-muted-foreground">PDF editor: select an item to move or resize it. Use Whiteout / erase to cover old wording, then Add / replace text to write the corrected information. Export applies the edits to a new PDF; your uploaded original stays unchanged.</p>}
+      {drawFieldMode && (
+        <p className="text-xs text-blue-700">
+          Click and drag on the PDF to create a text area. For replacing existing content, add a
+          Whiteout / erase area first, then add replacement text above it. Select any item to move,
+          resize, edit, or delete it.
+        </p>
+      )}
+      {sourceBytes && (
+        <p className="text-xs text-muted-foreground">
+          PDF editor: select an item to move or resize it. Use Whiteout / erase to cover old
+          wording, then Add / replace text to write the corrected information. Export applies the
+          edits to a new PDF; your uploaded original stays unchanged.
+        </p>
+      )}
       {sourceBytes && (
         <div className="h-[min(68dvh,760px)] min-h-[320px] overflow-y-auto overscroll-contain rounded-lg bg-muted/60 p-3">
           <div className="mx-auto flex max-w-5xl flex-col items-center gap-5">
             {pages.map((page, index) => (
-              <div key={index} ref={(el) => { pageScrollRefs.current[index] = el; }} className={cn("w-full rounded-lg p-1 transition-shadow", activePage === index ? "ring-2 ring-primary" : "")}>
+              <div
+                key={index}
+                ref={(el) => {
+                  pageScrollRefs.current[index] = el;
+                }}
+                className={cn(
+                  "w-full rounded-lg p-1 transition-shadow",
+                  activePage === index ? "ring-2 ring-primary" : "",
+                )}
+              >
                 <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
                     Page {index + 1} of {pages.length}
@@ -862,7 +1124,10 @@ export function PdfContractSigner({
                     variant={activePage === index ? "secondary" : "ghost"}
                     onClick={() => {
                       setActivePage(index);
-                      pageScrollRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      pageScrollRefs.current[index]?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
                     }}
                   >
                     Edit this page
@@ -882,7 +1147,10 @@ export function PdfContractSigner({
                     className="block h-auto w-full"
                   />
                   <div
-                    className={cn("absolute inset-0 touch-none", drawFieldMode ? "cursor-crosshair" : "")}
+                    className={cn(
+                      "absolute inset-0 touch-none",
+                      drawFieldMode ? "cursor-crosshair" : "",
+                    )}
                     onPointerDown={(event) => beginDrawField(event, index)}
                     onPointerMove={moveDrag}
                     onPointerUp={() => {
@@ -923,7 +1191,14 @@ export function PdfContractSigner({
                             height: `${field.height * 100}%`,
                             fontSize: `${field.fontSize}px`,
                             color: field.textColor ?? "#111827",
-                            fontFamily: field.fontFamily === "Cursive" ? "cursive" : field.fontFamily === "TimesRoman" ? "Georgia, serif" : field.fontFamily === "Courier" ? "monospace" : "Arial, sans-serif",
+                            fontFamily:
+                              field.fontFamily === "Cursive"
+                                ? "cursive"
+                                : field.fontFamily === "TimesRoman"
+                                  ? "Georgia, serif"
+                                  : field.fontFamily === "Courier"
+                                    ? "monospace"
+                                    : "Arial, sans-serif",
                             fontWeight: field.bold ? 700 : 400,
                             fontStyle: field.italic ? "italic" : "normal",
                             textDecoration: field.underline ? "underline" : "none",
@@ -937,7 +1212,9 @@ export function PdfContractSigner({
                             />
                           ) : (
                             <span className="max-w-full truncate overflow-hidden">
-                              {field.kind === "erase" ? "Whiteout area" : field.value || fieldLabel[field.kind]}
+                              {field.kind === "erase"
+                                ? "Whiteout area"
+                                : field.value || fieldLabel[field.kind]}
                             </span>
                           )}
                           {selectedId === field.id && !isClientMode && (
@@ -947,14 +1224,24 @@ export function PdfContractSigner({
                               title="Drag to resize"
                               onPointerDown={(event) => beginResize(event, field)}
                               onPointerMove={moveDrag}
-                              onPointerUp={() => { resizeRef.current = null; }}
+                              onPointerUp={() => {
+                                resizeRef.current = null;
+                              }}
                               className="absolute -bottom-0.5 -right-0.5 z-20 size-3 cursor-nwse-resize rounded-sm border border-white bg-blue-700 shadow"
                             />
                           )}
                         </div>
                       ))}
                     {drawDraft && drawStartRef.current?.page === index && (
-                      <div className="pointer-events-none absolute border-2 border-dashed border-blue-600 bg-blue-200/40" style={{ left: `${drawDraft.x * 100}%`, top: `${drawDraft.y * 100}%`, width: `${drawDraft.width * 100}%`, height: `${drawDraft.height * 100}%` }} />
+                      <div
+                        className="pointer-events-none absolute border-2 border-dashed border-blue-600 bg-blue-200/40"
+                        style={{
+                          left: `${drawDraft.x * 100}%`,
+                          top: `${drawDraft.y * 100}%`,
+                          width: `${drawDraft.width * 100}%`,
+                          height: `${drawDraft.height * 100}%`,
+                        }}
+                      />
                     )}
                   </div>
                 </div>
@@ -967,18 +1254,126 @@ export function PdfContractSigner({
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Email multiple PDF files</DialogTitle>
-            <DialogDescription>Send the signed document and any additional PDFs to the customer. Attachments are sent privately from the CRM server.</DialogDescription>
+            <DialogDescription>
+              Send the signed document and any additional PDFs to the customer. Attachments are sent
+              privately from the CRM server.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
-            <label className="grid gap-1 text-sm">To<Input type="email" value={emailTo} onChange={(event) => setEmailTo(event.target.value)} placeholder="customer@example.com" /></label>
-            <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
-            <label className="grid gap-1 text-sm">Compose message<textarea className="min-h-28 rounded-md border bg-background p-3 text-sm" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} placeholder="Write your message to the customer…" /></label>
-            <label className="grid gap-1 text-sm">Company email signature<textarea className="min-h-24 rounded-md border bg-background p-3 text-sm" value={companySignature} onChange={(event) => setCompanySignature(event.target.value)} placeholder="Your name, company, phone, website…" /></label>
-            {sourceBytes && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeCurrentPdf} onChange={(event) => setIncludeCurrentPdf(event.target.checked)} /> Attach current PDF ({sourceFileName})</label>}
-            <label className="grid gap-1 text-sm">Add more PDF files<input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => { const incoming = Array.from(event.target.files ?? []); setEmailFiles((current) => [...current, ...incoming.filter((file) => !current.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified))]); event.target.value = ""; }} /></label>
-            {emailFiles.length > 0 && <ul className="space-y-1 text-xs">{emailFiles.map((file, index) => <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-2 rounded border p-2"><span className="truncate">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span><Button type="button" size="sm" variant="ghost" onClick={() => setEmailFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</Button></li>)}</ul>}
-            <p className="text-xs text-muted-foreground">{savedAttachments.length + emailFiles.length + (includeCurrentPdf && sourceBytes ? 1 : 0)} PDF attachment(s) selected. Combined limit: 20 MB.</p>
-            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEmailOpen(false)}>Cancel</Button><Button onClick={() => void sendEmail()} disabled={emailBusy || !emailTo.trim()}>{emailBusy ? "Sending…" : <><Send className="mr-1 size-4" /> Send email</>}</Button></div>
+            <label className="grid gap-1 text-sm">
+              To
+              <Input
+                type="email"
+                value={emailTo}
+                onChange={(event) => setEmailTo(event.target.value)}
+                placeholder="customer@example.com"
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Subject
+              <Input
+                value={emailSubject}
+                onChange={(event) => setEmailSubject(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Compose message
+              <textarea
+                className="min-h-28 rounded-md border bg-background p-3 text-sm"
+                value={emailMessage}
+                onChange={(event) => setEmailMessage(event.target.value)}
+                placeholder="Write your message to the customer…"
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              Company email signature
+              <textarea
+                className="min-h-24 rounded-md border bg-background p-3 text-sm"
+                value={companySignature}
+                onChange={(event) => setCompanySignature(event.target.value)}
+                placeholder="Your name, company, phone, website…"
+              />
+            </label>
+            {sourceBytes && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={includeCurrentPdf}
+                  onChange={(event) => setIncludeCurrentPdf(event.target.checked)}
+                />{" "}
+                Attach current PDF ({sourceFileName})
+              </label>
+            )}
+            <label className="grid gap-1 text-sm">
+              Add more PDF files
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                multiple
+                onChange={(event) => {
+                  const incoming = Array.from(event.target.files ?? []);
+                  setEmailFiles((current) => [
+                    ...current,
+                    ...incoming.filter(
+                      (file) =>
+                        !current.some(
+                          (item) =>
+                            item.name === file.name &&
+                            item.size === file.size &&
+                            item.lastModified === file.lastModified,
+                        ),
+                    ),
+                  ]);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {emailFiles.length > 0 && (
+              <ul className="space-y-1 text-xs">
+                {emailFiles.map((file, index) => (
+                  <li
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    className="flex items-center justify-between gap-2 rounded border p-2"
+                  >
+                    <span className="truncate">
+                      {file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setEmailFiles((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {savedAttachments.length +
+                emailFiles.length +
+                (includeCurrentPdf && sourceBytes ? 1 : 0)}{" "}
+              PDF attachment(s) selected. Combined limit: 20 MB.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEmailOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void sendEmail()} disabled={emailBusy || !emailTo.trim()}>
+                {emailBusy ? (
+                  "Sending…"
+                ) : (
+                  <>
+                    <Send className="mr-1 size-4" /> Send email
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
