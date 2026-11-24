@@ -851,7 +851,10 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd([satelliteTraceToPlane(points, Number(pitch), pitchDirection)], traceGeoReference(points, center!));
+                  onAdd(
+                    [satelliteTraceToPlane(points, Number(pitch), pitchDirection)],
+                    traceGeoReference(points, center!),
+                  );
                   setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
