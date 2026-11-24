@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBuildingFootprints } from "@/lib/building-footprint";
+import { parseBuildingFootprints, shouldAutoSearchFootprint } from "@/lib/building-footprint";
 
 const origin = { lat: 25.47, lon: -80.48 };
 const square = [
@@ -100,5 +100,16 @@ describe("OpenStreetMap building footprint parsing", () => {
       geometry: square.map((p) => ({ ...p, lon: p.lon + index * 0.00003 })),
     }));
     expect(parseBuildingFootprints({ elements }, origin)).toHaveLength(8);
+  });
+});
+
+
+describe("automatic building footprint lookup guard", () => {
+  it("runs once for each address/report key and skips missing addresses", () => {
+    expect(shouldAutoSearchFootprint("123 Main St", "report-1", "")).toBe(true);
+    expect(shouldAutoSearchFootprint("123 Main St", "report-1", "report-1")).toBe(false);
+    expect(shouldAutoSearchFootprint("456 Oak Ave", "report-2", "report-1")).toBe(true);
+    expect(shouldAutoSearchFootprint("  ", "report-2", "report-1")).toBe(false);
+    expect(shouldAutoSearchFootprint(undefined, "report-2", "report-1")).toBe(false);
   });
 });
