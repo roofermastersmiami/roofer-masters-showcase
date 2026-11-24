@@ -978,6 +978,7 @@ export function RoofMeasurements({
               >
                 <Scene
                   drawing={d}
+                  edgeSuggestions={sharedEdgeSuggestions}
                   aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
                   aerialImageCenter={
                     aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined
@@ -1010,6 +1011,9 @@ export function RoofMeasurements({
                 <span>{feature.label}</span>
               </div>
             ))}
+            {sharedEdgeSuggestions.length > 0 && (
+              <span className="text-xs font-medium text-amber-600">Thicker colored edges are geometry-based suggestions — review before applying</span>
+            )}
           </div>
         </div>
         <aside className="min-w-0 border-t border-border py-5 xl:border-l xl:border-t-0 xl:pl-5">
