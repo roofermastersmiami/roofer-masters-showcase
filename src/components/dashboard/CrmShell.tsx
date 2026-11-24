@@ -48,7 +48,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { LogoMark } from "@/components/site/Logo";
 import { supabase } from "@/integrations/supabase/client";
 import { CrmContext } from "./CrmContext";
 import { LeadSheet } from "./LeadSheet";
@@ -362,15 +361,9 @@ export function CrmShell({
           {logoUrl ? (
             <img src={logoUrl} alt="Company logo" className={compact ? "h-9 max-w-12 object-contain" : "h-10 max-w-36 object-contain"} />
           ) : (
-            <LogoMark className={compact ? "h-7 max-w-10 object-cover object-left" : "h-8 max-w-32"} />
+            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><HardHat className="size-6" /></div>
           )}
-          {!compact && (
-            <span className="font-display text-lg font-bold leading-tight">
-              ROOFER
-              <br />
-              MASTERS
-            </span>
-          )}
+          {!compact && !logoUrl && <span className="font-display text-lg font-bold leading-tight">Roofing CRM</span>}
         </div>
         <nav aria-label="CRM navigation" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
           {visibleGroups.map((g) => (
@@ -424,7 +417,7 @@ export function CrmShell({
             </Link>
           </Button>
           {!compact && (
-            <p className={cn("px-3 pt-3 text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/50")}>Miami-Dade & Broward</p>
+            <p className={cn("px-3 pt-3 text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/50")}>Company workspace</p>
           )}
         </div>
       </div>
@@ -616,7 +609,7 @@ export function CrmShell({
       <Sheet open={mobile} onOpenChange={setMobile}>
         <SheetContent side="left" className={cn("w-72 border-0 p-0", sidebarSurface)}>
           <SheetHeader className="sr-only">
-            <SheetTitle>Roofer Masters navigation</SheetTitle>
+            <SheetTitle>Company navigation</SheetTitle>
             <SheetDescription>Business workspace</SheetDescription>
           </SheetHeader>
           {navigation(false)}
