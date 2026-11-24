@@ -19,7 +19,7 @@ import { planeInfo, type RoofPlane, type Point, type GeoReference } from "@/lib/
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type PitchDirection = "north" | "south" | "east" | "west";
 type TracePoint = { lat: number; lon: number };
-type OSMBuildingWay = { type?: string; geometry?: Array<{ lat: number; lon: number }> };
+type OSMBuildingWay = { type?: string; geometry?: Array<{ lat: number; lon: number }>; tags?: Record<string, string> };
 
 export function nearestBuildingFootprint(
   elements: OSMBuildingWay[],
@@ -510,7 +510,7 @@ export function SatelliteRoofTrace({
     try {
       const lat = Number(location.lat),
         lon = Number(location.lon);
-      const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out geom;`;
+      const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out tags geom;`;
       // Public Overpass instances occasionally throttle or go offline. Try a
       // second community endpoint before asking the estimator to trace manually.
       const endpoints = [
@@ -547,29 +547,34 @@ export function SatelliteRoofTrace({
       setMapCenter(footprintCenter);
       setAutoTraced(true);
       setZoom((value) => Math.max(value, 3));
-      // OSM provides a ground outline, not roof facets. Create an explicitly
-      // unverified starter gable so the estimator immediately sees a 3D model.
-      try {
-        const preliminaryPlanes = satelliteTraceToGablePlanes(
-          footprint,
-          Math.max(1, Math.min(24, Number(pitch) || 6)),
-          ridgeAxis,
-          ridgeOffsetPercent,
-          ridgeAngleDegrees,
+      // A building footprint is not a roof model. Do not fabricate two gable
+      // facets or assign a user-default pitch to a property whose roof shape
+      // has not been established from imagery/elevation evidence.
+      const selectedElement = elements.find((element) => {
+        if (element.type !== "way" || !Array.isArray(element.geometry)) return false;
+        const ring = element.geometry.filter((point, index, all) =>
+          index === 0 ||
+          point.lat !== all[index - 1]?.lat ||
+          point.lon !== all[index - 1]?.lon
         );
-        const accepted = onAdd(preliminaryPlanes, traceGeoReference(footprint, { lat, lon }));
-        if (accepted === false) {
-          setError(
-            "The existing roof layout was kept. Confirm replacement before adding this preliminary 3D roof.",
-          );
-        } else {
-          setError("");
-        }
-      } catch {
-        setError(
-          "The building was identified and outlined, but its shape could not safely produce a starter gable. Adjust the ridge direction or trace the roof manually, then add planes.",
-        );
-      }
+        return ring.length >= 3 && ring.length === footprint.length &&
+          ring.every((point) => footprint.some((candidate) =>
+            Math.abs(candidate.lat - point.lat) < 1e-7 &&
+            Math.abs(candidate.lon - point.lon) < 1e-7
+          ));
+      });
+      const tags = selectedElement?.tags ?? {};
+      const roofShape = tags["roof:shape"] ?? tags["building:roof"] ?? "";
+      const mappedPitch = Number(tags["roof:angle"]);
+      const hasMappedPitch = Boolean(tags["roof:angle"]) &&
+        Number.isFinite(mappedPitch) && mappedPitch >= 0 && mappedPitch <= 90;
+      const evidence = [
+        roofShape ? `Mapped roof shape: ${roofShape}` : "Roof shape: not available in public map data",
+        hasMappedPitch ? `Mapped roof angle: ${mappedPitch}°` : "Roof pitch: not available in public map data",
+      ];
+      setError(
+        `Building footprint found. ${evidence.join(". ")}. The outline is only a ground/building footprint; no roof planes, ridges, hips, valleys, eaves, or rakes have been verified. Continue with roof-plane tracing or provide elevation/oblique imagery before generating a measured roof report.`,
+      );
     } catch (e) {
       setError(
         e instanceof Error && e.message.includes("No nearby")
