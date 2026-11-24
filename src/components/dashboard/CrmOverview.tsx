@@ -51,7 +51,9 @@ export function CrmOverview() {
     [cardOrder, setCardOrder] = useState(["Payments received", "Outstanding balance", "Active projects", "New leads"]),
     [hiddenCards, setHiddenCards] = useState<string[]>([]),
     [draggedCard, setDraggedCard] = useState<string | null>(null),
-    [preferencesLoaded, setPreferencesLoaded] = useState(false);
+    [preferencesLoaded, setPreferencesLoaded] = useState(false),
+    [sectionOrder, setSectionOrder] = useState(["Revenue & sales", "Daily operations"]),
+    [hiddenSections, setHiddenSections] = useState<string[]>([]);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
@@ -65,8 +67,6 @@ export function CrmOverview() {
   useEffect(() => {
     if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardOrder, hiddenCards, sectionOrder, hiddenSections }));
   }, [accent, density, cardOrder, hiddenCards, sectionOrder, hiddenSections, preferencesLoaded]);
-  const [sectionOrder, setSectionOrder] = useState(["Revenue & sales", "Daily operations"]),
-    [hiddenSections, setHiddenSections] = useState<string[]>([]);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
