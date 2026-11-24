@@ -613,3 +613,414 @@
   --navy: #303941;
   --navy-foreground: #ffffff;
 }
+
+
+/* Additional CRM-only professional palettes. Semantic tokens keep surfaces consistent. */
+.crm-theme-midnight-teal {
+  --primary: #087f8c;
+  --primary-glow: #14343b;
+  --accent: #e7f3f3;
+  --accent-foreground: #25434a;
+  --ring: #087f8c;
+  --navy: #14343b;
+  --navy-foreground: #ffffff;
+  --chart-1: #087f8c;
+  --chart-2: #14343b;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-midnight-teal {
+  --primary: #087f8c;
+  --primary-foreground: #ffffff;
+  --primary-glow: #25434a;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #087f8c;
+  --navy: #25434a;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-ocean-slate {
+  --primary: #2878a5;
+  --primary-glow: #29465c;
+  --accent: #eaf2f7;
+  --accent-foreground: #35566d;
+  --ring: #2878a5;
+  --navy: #29465c;
+  --navy-foreground: #ffffff;
+  --chart-1: #2878a5;
+  --chart-2: #29465c;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-ocean-slate {
+  --primary: #2878a5;
+  --primary-foreground: #ffffff;
+  --primary-glow: #35566d;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #2878a5;
+  --navy: #35566d;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-royal-indigo {
+  --primary: #5146a5;
+  --primary-glow: #302b61;
+  --accent: #efedfb;
+  --accent-foreground: #403b78;
+  --ring: #5146a5;
+  --navy: #302b61;
+  --navy-foreground: #ffffff;
+  --chart-1: #5146a5;
+  --chart-2: #302b61;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-royal-indigo {
+  --primary: #5146a5;
+  --primary-foreground: #ffffff;
+  --primary-glow: #403b78;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #5146a5;
+  --navy: #403b78;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-emerald-ledger {
+  --primary: #16815b;
+  --primary-glow: #164b3a;
+  --accent: #e8f5ef;
+  --accent-foreground: #245b48;
+  --ring: #16815b;
+  --navy: #164b3a;
+  --navy-foreground: #ffffff;
+  --chart-1: #16815b;
+  --chart-2: #164b3a;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-emerald-ledger {
+  --primary: #16815b;
+  --primary-foreground: #ffffff;
+  --primary-glow: #245b48;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #16815b;
+  --navy: #245b48;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-copperstone {
+  --primary: #a65b35;
+  --primary-glow: #594033;
+  --accent: #f6eee8;
+  --accent-foreground: #674b3c;
+  --ring: #a65b35;
+  --navy: #594033;
+  --navy-foreground: #ffffff;
+  --chart-1: #a65b35;
+  --chart-2: #594033;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-copperstone {
+  --primary: #a65b35;
+  --primary-foreground: #ffffff;
+  --primary-glow: #674b3c;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #a65b35;
+  --navy: #674b3c;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-arctic-blue {
+  --primary: #2876bd;
+  --primary-glow: #274d72;
+  --accent: #eaf3fb;
+  --accent-foreground: #345b80;
+  --ring: #2876bd;
+  --navy: #274d72;
+  --navy-foreground: #ffffff;
+  --chart-1: #2876bd;
+  --chart-2: #274d72;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-arctic-blue {
+  --primary: #2876bd;
+  --primary-foreground: #ffffff;
+  --primary-glow: #345b80;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #2876bd;
+  --navy: #345b80;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-graphite-gold {
+  --primary: #98752c;
+  --primary-glow: #343638;
+  --accent: #f4f0e5;
+  --accent-foreground: #494744;
+  --ring: #98752c;
+  --navy: #343638;
+  --navy-foreground: #ffffff;
+  --chart-1: #98752c;
+  --chart-2: #343638;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-graphite-gold {
+  --primary: #98752c;
+  --primary-foreground: #ffffff;
+  --primary-glow: #494744;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #98752c;
+  --navy: #494744;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-crimson-executive {
+  --primary: #a52a42;
+  --primary-glow: #4b2731;
+  --accent: #f7ecee;
+  --accent-foreground: #5c3440;
+  --ring: #a52a42;
+  --navy: #4b2731;
+  --navy-foreground: #ffffff;
+  --chart-1: #a52a42;
+  --chart-2: #4b2731;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-crimson-executive {
+  --primary: #a52a42;
+  --primary-foreground: #ffffff;
+  --primary-glow: #5c3440;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #a52a42;
+  --navy: #5c3440;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-sage-stone {
+  --primary: #637d62;
+  --primary-glow: #414d40;
+  --accent: #eef2eb;
+  --accent-foreground: #53634f;
+  --ring: #637d62;
+  --navy: #414d40;
+  --navy-foreground: #ffffff;
+  --chart-1: #637d62;
+  --chart-2: #414d40;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-sage-stone {
+  --primary: #637d62;
+  --primary-foreground: #ffffff;
+  --primary-glow: #53634f;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #637d62;
+  --navy: #53634f;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-cobalt-professional {
+  --primary: #2458b8;
+  --primary-glow: #233d70;
+  --accent: #eaf0fc;
+  --accent-foreground: #304d83;
+  --ring: #2458b8;
+  --navy: #233d70;
+  --navy-foreground: #ffffff;
+  --chart-1: #2458b8;
+  --chart-2: #233d70;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-cobalt-professional {
+  --primary: #2458b8;
+  --primary-foreground: #ffffff;
+  --primary-glow: #304d83;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #2458b8;
+  --navy: #304d83;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-plum-luxe {
+  --primary: #87528e;
+  --primary-glow: #47334f;
+  --accent: #f3edf4;
+  --accent-foreground: #5b4162;
+  --ring: #87528e;
+  --navy: #47334f;
+  --navy-foreground: #ffffff;
+  --chart-1: #87528e;
+  --chart-2: #47334f;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-plum-luxe {
+  --primary: #87528e;
+  --primary-foreground: #ffffff;
+  --primary-glow: #5b4162;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #87528e;
+  --navy: #5b4162;
+  --navy-foreground: #ffffff;
+}
+.crm-theme-monochrome-pro {
+  --primary: #44484e;
+  --primary-glow: #24282d;
+  --accent: #eff0f1;
+  --accent-foreground: #34383e;
+  --ring: #44484e;
+  --navy: #24282d;
+  --navy-foreground: #ffffff;
+  --chart-1: #44484e;
+  --chart-2: #24282d;
+  --chart-3: #8a929e;
+}
+.crm-dark.crm-theme-monochrome-pro {
+  --primary: #44484e;
+  --primary-foreground: #ffffff;
+  --primary-glow: #34383e;
+  --background: #191c22;
+  --foreground: #f4f5f7;
+  --card: #242a32;
+  --card-foreground: #f4f5f7;
+  --popover: #242a32;
+  --popover-foreground: #f4f5f7;
+  --muted: #303741;
+  --muted-foreground: #bdc5ce;
+  --secondary: #363f49;
+  --secondary-foreground: #f4f5f7;
+  --accent: #3a424d;
+  --accent-foreground: #f4f5f7;
+  --border: #48515c;
+  --input: #505b68;
+  --ring: #44484e;
+  --navy: #34383e;
+  --navy-foreground: #ffffff;
+}

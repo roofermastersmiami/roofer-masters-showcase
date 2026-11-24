@@ -76,6 +76,7 @@ const openSectionSchema = {
   additionalProperties: false,
 };
 const readAnnotations = { readOnlyHint: true };
+const THEME_IDS = ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"];
 const groups = [
   {
     label: "Workspace",
@@ -173,7 +174,7 @@ export function CrmShell({
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
         if (
           fallbackTheme &&
-          ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(fallbackTheme)
+          ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"].includes(fallbackTheme)
         )
           setTheme(fallbackTheme);
         if (
@@ -199,7 +200,7 @@ export function CrmShell({
           if (loadError) throw loadError;
           if (data) {
             if (
-              ["executive-berry", "modern-enterprise", "canyon-corporate"].includes(
+              ["executive-berry","modern-enterprise","canyon-corporate","midnight-teal","ocean-slate","royal-indigo","emerald-ledger","copperstone","arctic-blue","graphite-gold","crimson-executive","sage-stone","cobalt-professional","plum-luxe","monochrome-pro"].includes(
                 data.theme_palette,
               )
             )
@@ -255,6 +256,18 @@ export function CrmShell({
       "crm-theme-executive-berry",
       "crm-theme-modern-enterprise",
       "crm-theme-canyon-corporate",
+      "crm-theme-midnight-teal",
+      "crm-theme-ocean-slate",
+      "crm-theme-royal-indigo",
+      "crm-theme-emerald-ledger",
+      "crm-theme-copperstone",
+      "crm-theme-arctic-blue",
+      "crm-theme-graphite-gold",
+      "crm-theme-crimson-executive",
+      "crm-theme-sage-stone",
+      "crm-theme-cobalt-professional",
+      "crm-theme-plum-luxe",
+      "crm-theme-monochrome-pro",
     );
     root.classList.add(`crm-theme-${theme}`);
     try {
@@ -637,6 +650,18 @@ export function CrmShell({
                 <option value="executive-berry">Executive Berry</option>
                 <option value="modern-enterprise">Modern Enterprise</option>
                 <option value="canyon-corporate">Canyon Corporate</option>
+                <option value="midnight-teal">Midnight Teal</option>
+                <option value="ocean-slate">Ocean Slate</option>
+                <option value="royal-indigo">Royal Indigo</option>
+                <option value="emerald-ledger">Emerald Ledger</option>
+                <option value="copperstone">Copperstone</option>
+                <option value="arctic-blue">Arctic Blue</option>
+                <option value="graphite-gold">Graphite Gold</option>
+                <option value="crimson-executive">Crimson Executive</option>
+                <option value="sage-stone">Sage & Stone</option>
+                <option value="cobalt-professional">Cobalt Professional</option>
+                <option value="plum-luxe">Plum Luxe</option>
+                <option value="monochrome-pro">Monochrome Pro</option>
               </select>
             </label>
             <label
