@@ -34,7 +34,7 @@ describe("material orders from roof report", () => {
     expect(q(materialOrder({ ...base, roof_type: "Shingle Roof" }), "Architectural")).toBe(66);
   });
   it("drip edge from eaves + rakes", () => {
-    expect(q(materialOrder({ ...base, ...metal }), "Drip edge")).toBe(22);
+    expect(q(materialOrder({ ...base, ...metal }), "Drip Edge")).toBe(22);
   });
   it("metal: panel count is calculated from each measured plane and product coverage", () => {
     expect(q(materialOrder({ ...base, ...metal }), "measured plane cut list")).toBe(100);
