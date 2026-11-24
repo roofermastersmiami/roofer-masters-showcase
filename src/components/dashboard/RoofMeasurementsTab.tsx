@@ -49,6 +49,7 @@ export function RoofMeasurementsTab({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [mapZoom, setMapZoom] = useState(1);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
   const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
   const [addressError, setAddressError] = useState("");
@@ -118,6 +119,7 @@ export function RoofMeasurementsTab({
         return;
       }
       setLocatedAddress(result);
+      setMapZoom(1);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
     } catch (error) {
@@ -192,6 +194,7 @@ export function RoofMeasurementsTab({
                 });
                 setOriginalCrmAddress("");
                 setLocatedAddress(null);
+                setMapZoom(1);
                 setAddressError("");
                 setAdding(true);
               }}
@@ -263,6 +266,7 @@ export function RoofMeasurementsTab({
               });
               setOriginalCrmAddress("");
               setLocatedAddress(null);
+              setMapZoom(1);
               setAddressError("");
               setAdding(true);
             }}
@@ -332,16 +336,16 @@ export function RoofMeasurementsTab({
           }
         }}
       >
-        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogContent className="max-h-[94dvh] w-[min(96vw,980px)] max-w-[980px] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create roof report by address</DialogTitle>
             <DialogDescription>
               {initialCustomer
                 ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
                 : ""}
-              Locate the complete property address before opening its roof measurement workspace.
-              Address lookup places the map pin; roof dimensions still require tracing or field
-              measurement.
+              Search for an address and confirm the pin is on the correct building. For apartment
+              complexes or condos, create a separate report for each building. Roof dimensions still
+              require tracing or field measurement.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -367,6 +371,45 @@ export function RoofMeasurementsTab({
                 }}
               />
             </Field>
+            {locatedAddress ? (
+              <section className="space-y-2" aria-label="Property satellite map">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold">Confirm building location</h3>
+                    <p className="text-xs text-muted-foreground">Red pin marks the matched address · zoom to verify the correct structure</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" size="icon" variant="outline" aria-label="Zoom map in" onClick={() => setMapZoom((z) => Math.min(8, z * 1.7))}>+</Button>
+                    <Button type="button" size="icon" variant="outline" aria-label="Zoom map out" onClick={() => setMapZoom((z) => Math.max(0.5, z / 1.7))}>−</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setMapZoom(1)}>Reset</Button>
+                  </div>
+                </div>
+                <div className="relative h-[min(58vh,520px)] min-h-[300px] overflow-hidden rounded-md border border-border bg-muted">
+                  <img
+                    alt={`Satellite map centered on ${locatedAddress.matchedAddress}`}
+                    className="h-full w-full object-cover"
+                    src={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${locatedAddress.lon - 0.035 / mapZoom},${locatedAddress.lat - 0.0245 / mapZoom},${locatedAddress.lon + 0.035 / mapZoom},${locatedAddress.lat + 0.0245 / mapZoom}&bboxSR=4326&imageSR=4326&size=1200,760&format=jpg&f=image`}
+                  />
+                  <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
+                    <MapPin className="h-10 w-10 fill-red-600 text-white drop-shadow-lg" />
+                  </div>
+                  <div className="absolute bottom-3 left-3 max-w-[85%] rounded bg-background/95 px-3 py-2 text-xs shadow">
+                    <strong className="block">Address pin</strong>
+                    {locatedAddress.matchedAddress}
+                  </div>
+                  <div className="absolute right-3 top-3 rounded bg-background/95 px-2 py-1 text-[11px] font-medium shadow">Satellite imagery · Esri</div>
+                </div>
+                <p className="text-xs text-muted-foreground">Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}. The pin is the geocoded address point, not a roof outline or verified measurement.</p>
+              </section>
+            ) : (
+              <div className="grid min-h-[230px] place-items-center rounded-md border border-dashed border-border bg-muted/40 p-6 text-center">
+                <div className="max-w-sm">
+                  <MapPin className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="font-semibold">Property map</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Search an address and select “Locate exact address” to load satellite imagery and place the property pin.</p>
+                </div>
+              </div>
+            )}
             <Button
               type="button"
               variant="outline"
