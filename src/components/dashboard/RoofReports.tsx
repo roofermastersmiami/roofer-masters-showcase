@@ -111,16 +111,33 @@ export function RoofReports({
         }
         setLocatedAddress(result);
         setForm((current) => ({ ...current, address: result.matchedAddress }));
-        toast.success("Saved property address located");
+        // The property was explicitly selected from CRM search. Once its
+        // address is confirmed, create the report request and enter its
+        // drawing workspace without making the estimator repeat the action.
+        const created = await create({
+          data: {
+            address: result.matchedAddress,
+            title: "Roof measurement report",
+            provider: "manual",
+            notes: "",
+          },
+        });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
+          qc.invalidateQueries({ queryKey: ["crm-properties"] }),
+        ]);
+        setAdding(false);
+        setSelected(created.id);
+        toast.success("Property located. Opening its roof drawing workspace.");
       } catch (error) {
         setAddressError(
-          error instanceof Error ? error.message : "The saved property address could not be located.",
+          error instanceof Error ? error.message : "The property could not be opened. Please retry.",
         );
       } finally {
         setLookupBusy(false);
       }
     })();
-  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup]);
+  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup, create, qc]);
 
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
