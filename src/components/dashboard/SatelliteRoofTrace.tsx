@@ -1129,8 +1129,8 @@ export function SatelliteRoofTrace({
                   };
                   return (
                     <label key={index} className="flex items-center justify-between gap-2 text-sm">
-                      <span>
-                        Edge {index + 1} ({index + 1} → {next + 1})
+                      <span style={{ color: ROOF_EDGE_STYLES[edgeTypes[index] ?? "other"].color }}>
+                        Edge {index + 1} ({index + 1} → {next + 1}) · {ROOF_EDGE_STYLES[edgeTypes[index] ?? "other"].label}
                       </span>
                       <select
                         value={edgeTypes[index] ?? "other"}
