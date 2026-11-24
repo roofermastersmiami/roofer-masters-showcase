@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { planeInfo, type RoofPlane, type Point } from "@/lib/roof-geometry";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
+type PitchDirection = "north" | "south" | "east" | "west";
 type TracePoint = { lat: number; lon: number };
 
 const MAP_WIDTH = 1024;
@@ -17,7 +18,11 @@ export function nextSatelliteZoom(current: number, direction: "in" | "out"): num
   return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
 }
 
-export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
+export function satelliteTraceToPlane(
+  points: TracePoint[],
+  pitch: number,
+  direction: PitchDirection = "south",
+): RoofPlane {
   if (points.length < 3 || points.length > 100) {
     throw new Error("A roof trace needs between 3 and 100 corners.");
   }
@@ -47,11 +52,13 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
     x: (p.lon - lon0) * 111320 * cos * METERS_TO_FEET,
     z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
   }));
-  const minZ = Math.min(...local.map((p) => p.z));
+  const riseAt = (p: { x: number; z: number }) =>
+    direction === "north" ? -p.z : direction === "south" ? p.z : direction === "east" ? p.x : -p.x;
+  const minRise = Math.min(...local.map(riseAt));
   const vertices: Point[] = local.map((p) => ({
     x: p.x,
     z: p.z,
-    y: 10 + ((p.z - minZ) * pitch) / 12,
+    y: 10 + ((riseAt(p) - minRise) * pitch) / 12,
   }));
   const plane: RoofPlane = {
     id: `satellite-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
@@ -78,6 +85,7 @@ export function SatelliteRoofTrace({
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
+  const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -403,6 +411,20 @@ export function SatelliteRoofTrace({
                 className="mt-1 w-28"
               />
             </label>
+            <label className="text-sm">
+              Pitch rises toward
+              <select
+                value={pitchDirection}
+                onChange={(e) => setPitchDirection(e.target.value as PitchDirection)}
+                className="mt-1 block h-10 rounded-md border border-input bg-background px-3 text-sm"
+                aria-label="Pitch rises toward"
+              >
+                <option value="north">North</option>
+                <option value="south">South</option>
+                <option value="east">East</option>
+                <option value="west">West</option>
+              </select>
+            </label>
             <Button
               type="button"
               variant="outline"
@@ -425,7 +447,7 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(satelliteTraceToPlane(points, Number(pitch)));
+                  onAdd(satelliteTraceToPlane(points, Number(pitch), pitchDirection));
                   setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
