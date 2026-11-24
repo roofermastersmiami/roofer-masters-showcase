@@ -200,7 +200,10 @@ Roofer Masters · 305-942-3093`;
           ))}
       </div>
       {warnings.length > 0 && (
-        <div role="note" className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+        <div
+          role="note"
+          className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+        >
           <p className="mb-1 font-semibold">Metal panel takeoff — review required</p>
           <ul className="list-disc space-y-1 pl-5">
             {warnings.map((warning) => (

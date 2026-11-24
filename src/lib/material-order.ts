@@ -114,7 +114,6 @@ export function escapeMaterialOrderHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-
 /** Explain why aggregate metal takeoffs require roof-plane review. */
 export function materialOrderWarnings(input: RoofReport): string[] {
   const parsed = reportSchema.parse(input);

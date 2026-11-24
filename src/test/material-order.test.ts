@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { materialOrder, escapeMaterialOrderHtml, materialOrderWarnings } from "@/lib/material-order";
+import {
+  materialOrder,
+  escapeMaterialOrderHtml,
+  materialOrderWarnings,
+} from "@/lib/material-order";
 const base = {
   area_sqft: 2000,
   waste_pct: 10,
@@ -56,7 +60,6 @@ describe("material order print escaping", () => {
     );
   });
 });
-
 
 describe("material takeoff review warnings", () => {
   it("flags aggregate metal panel quantities as preliminary", () => {
