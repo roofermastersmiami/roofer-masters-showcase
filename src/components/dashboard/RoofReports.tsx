@@ -133,7 +133,7 @@ export function RoofReports({
           />
         </div>
         <p className="text-sm text-muted-foreground">
-          Completed measurement PDFs · Roofer Masters · Swipe left to delete
+          Roof reports, measurement PDFs, and customer contract signing · Swipe left to delete
         </p>
       </div>
       {orders.error && (
