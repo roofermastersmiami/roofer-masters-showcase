@@ -272,6 +272,9 @@ export function RoofReports({
           <DialogHeader>
             <DialogTitle>Create roof report by address</DialogTitle>
             <DialogDescription>
+              {initialCustomer
+                ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
+                : ""}
               Enter the complete property address and locate it first. This confirms the map
               coordinates before creating the report. Roof facets and dimensions still require a
               verified roof source or calibrated tracing.
