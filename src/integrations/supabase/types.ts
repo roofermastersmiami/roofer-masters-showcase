@@ -8,6 +8,36 @@ export type Database = {
   };
   public: {
     Tables: {
+      crm_company_branding: {
+        Row: {
+          owner_user_id: string;
+          company_name: string | null;
+          logo_path: string | null;
+          theme_palette: string;
+          sidebar_appearance: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          owner_user_id: string;
+          company_name?: string | null;
+          logo_path?: string | null;
+          theme_palette?: string;
+          sidebar_appearance?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          owner_user_id?: string;
+          company_name?: string | null;
+          logo_path?: string | null;
+          theme_palette?: string;
+          sidebar_appearance?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       pdf_sign_templates: {
         Row: {
           id: string;
