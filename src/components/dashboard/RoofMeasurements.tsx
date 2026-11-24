@@ -1361,7 +1361,9 @@ export function RoofMeasurements({
                 </svg>
                 <p className="text-muted-foreground">
                   Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft ·{" "}
-                  {footprint.distanceMeters} m from address point
+                  {footprint.containsAddress
+                    ? "Address point is inside this outline"
+                    : `${footprint.distanceMeters} m from nearest outline`}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {footprint.points.length} outline corners · OSM building type:{" "}
