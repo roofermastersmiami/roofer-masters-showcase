@@ -1142,9 +1142,10 @@ export function RoofMeasurements({
           </p>
         )}
         <p className="mb-3 text-sm text-muted-foreground">
-          Looks up the address with the free US Census service and loads a free public-domain USGS
-          aerial photo with scale pre-set. Public photos are coarse (often 0.5–1 m detail); results
-          are estimates, never survey-grade. No paid provider is used.
+          Looks up the address with the free US Census service and loads public USGS aerial
+          imagery when coverage is available. Image dimensions do not establish ground scale:
+          calibrate against a known measured distance before tracing. Results are estimates, never
+          survey-grade. No paid provider is used.
         </p>
         {aerialStatus && (
           <p
