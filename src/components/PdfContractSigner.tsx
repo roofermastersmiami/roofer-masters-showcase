@@ -273,7 +273,7 @@ export function PdfContractSigner({
       {sourceBytes && <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-muted/60 p-3">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-5">
           {pages.map((page, index) => <div key={index} className="w-full">
-            <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground"><span>Page {index + 1} of {pages.length}</span><Button size="xs" variant={activePage === index ? "secondary" : "ghost"} onClick={() => setActivePage(index)}>Edit this page</Button></div>
+            <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground"><span>Page {index + 1} of {pages.length}</span><Button size="sm" variant={activePage === index ? "secondary" : "ghost"} onClick={() => setActivePage(index)}>Edit this page</Button></div>
             <div ref={(el) => { pageRefs.current[index] = el; }} className="relative mx-auto w-full overflow-hidden bg-white shadow-md" style={{ aspectRatio: `${page.width} / ${page.height}`, maxWidth: "850px" }}>
               <canvas ref={(el) => { canvasRefs.current[index] = el; }} className="block h-auto w-full" />
               <div className="absolute inset-0" onPointerMove={moveDrag} onPointerUp={() => { dragRef.current = null; }} onPointerCancel={() => { dragRef.current = null; }}>
