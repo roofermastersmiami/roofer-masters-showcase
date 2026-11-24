@@ -340,7 +340,6 @@ export function SatelliteRoofTrace({
                     draggingPoint.current = index;
                     event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
                   }}
-                  onClick={(event) => event.stopPropagation()}
                   className="cursor-move"
                   cx={((point.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH}
                   cy={((bounds.north - point.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT}
