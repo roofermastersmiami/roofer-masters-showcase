@@ -143,8 +143,9 @@ describe("reviewable roof-edge classification suggestions", () => {
     const west = gable.planes.find((plane) => plane.id === "West plane");
     const east = gable.planes.find((plane) => plane.id === "East plane");
     if (!west || !east) throw new Error("Missing gable facets");
-    west.points[1]!.y = 10;
-    east.points[0]!.y = 10;
+    // A level shared edge is intentionally ambiguous: geometry cannot tell
+    // whether it is a ridge, valley, or hip without additional evidence.
+    for (const point of [...west.points, ...east.points]) point.y = 10;
     west.edges[1] = "other";
     east.edges[3] = "other";
     expect(suggestSharedEdgeClassifications(gable).filter((item) => item.sharedWith)).toEqual([]);
