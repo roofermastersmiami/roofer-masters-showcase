@@ -8,6 +8,8 @@ import {
   Undo2,
   Redo2,
   RotateCcw,
+  Play,
+  Pause,
   Trash2,
   ArrowRight,
   FileText,
@@ -107,6 +109,7 @@ export function RoofMeasurements({
     [dirty, setDirty] = useState(!initialDrawing),
     [busy, setBusy] = useState(false),
     [view, setView] = useState<"3d" | "plan">("3d"),
+    [autoRotate, setAutoRotate] = useState(true),
     [fit, setFit] = useState(0),
     [shape, setShape] = useState<RoofShape>("gable"),
     [width, setWidth] = useState(startWidth),
@@ -732,6 +735,18 @@ export function RoofMeasurements({
                 Plan
               </Button>
             </div>
+            {view === "3d" && (
+              <Button
+                size="sm"
+                variant={autoRotate ? "secondary" : "outline"}
+                onClick={() => setAutoRotate((value) => !value)}
+                aria-label={autoRotate ? "Pause automatic 3D rotation" : "Start automatic 3D rotation"}
+                title={autoRotate ? "Pause automatic rotation" : "Start automatic rotation"}
+              >
+                {autoRotate ? <Pause /> : <Play />}
+                {autoRotate ? "Pause rotation" : "Auto rotate"}
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground">
               {dirty ? "Unsaved changes" : "Saved revision"} ·{" "}
               {d.verified ? "Owner reviewed" : "Unverified"}
@@ -757,6 +772,7 @@ export function RoofMeasurements({
                   onSelect={setSelected}
                   view={view}
                   fitKey={fit}
+                  autoRotate={autoRotate}
                 />
               </Suspense>
             </DrawingErrorBoundary>
