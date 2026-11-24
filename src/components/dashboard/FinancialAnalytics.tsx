@@ -177,10 +177,10 @@ export function FinancialAnalytics() {
       </div>
       <p className="mb-5 text-xs font-semibold uppercase text-muted-foreground">
         {env === "sandbox"
-          ? "Test environment — not live business revenue"
+          ? "Sandbox invoices and payments — expenses are reported independently"
           : env === "unavailable"
             ? "Payment environment unavailable — totals cannot be verified"
-            : "Sandbox recorded transactions — test records, not live revenue"}{" "}
+            : "Sandbox invoices and payments — expenses are reported independently"}{" "}
         · Cash basis
       </p>
       {jobs.error && !failed && (
@@ -195,7 +195,7 @@ export function FinancialAnalytics() {
       )}
       {paymentSetupMissing && !failed && (
         <p className="mb-4 text-sm text-muted-foreground">
-          Online payments are not configured. This report is showing saved sandbox invoices, payments, and expenses. These are test records, not live revenue.
+          Online payments are not configured. Invoice and payment totals use the sandbox environment; recorded business expenses are included independently.
         </p>
       )}
       {failed ? (
