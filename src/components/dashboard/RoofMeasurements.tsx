@@ -1297,6 +1297,7 @@ export function RoofMeasurements({
         )}
       </section>
       <SatelliteRoofTrace
+        key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         onAdd={(p) => {
           edit({ ...d, planes: [...d.planes, p] });
           setSelected(p.id);

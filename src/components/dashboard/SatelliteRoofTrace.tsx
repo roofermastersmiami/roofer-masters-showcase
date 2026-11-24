@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { MapPin, MousePointer2, RotateCcw, Search, Satellite } from "lucide-react";
+import { MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { RoofPlane, Point } from "@/lib/roof-geometry";
@@ -11,7 +11,7 @@ const MAP_WIDTH = 1024;
 const MAP_HEIGHT = 640;
 const TILE_SPAN = 0.0015;
 
-function toPlane(points: TracePoint[], pitch: number): RoofPlane {
+export function satelliteTraceToPlane(points: TracePoint[], pitch: number): RoofPlane {
   const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
   const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
   const cos = Math.cos((lat0 * Math.PI) / 180);
@@ -29,7 +29,9 @@ function toPlane(points: TracePoint[], pitch: number): RoofPlane {
     id: `satellite-${Date.now()}`,
     name: "Satellite traced roof plane",
     points: vertices,
-    edges: vertices.map(() => "eave"),
+    // A traced polygon does not reveal which sides are eaves, rakes, or ridges.
+    // Keep them unclassified until a user verifies each edge in the measurement editor.
+    edges: vertices.map(() => "other"),
   };
 }
 
@@ -39,6 +41,7 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
+  const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
@@ -46,13 +49,13 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
     () =>
       center
         ? {
-            west: center.lon - TILE_SPAN,
-            east: center.lon + TILE_SPAN,
-            south: center.lat - TILE_SPAN * 0.7,
-            north: center.lat + TILE_SPAN * 0.7,
+            west: center.lon - TILE_SPAN / zoom,
+            east: center.lon + TILE_SPAN / zoom,
+            south: center.lat - (TILE_SPAN * 0.7) / zoom,
+            north: center.lat + (TILE_SPAN * 0.7) / zoom,
           }
         : null,
-    [center],
+    [center, zoom],
   );
   const imageryUrl = bounds
     ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
@@ -88,6 +91,7 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
     setAddress(result.display_name);
     setResults([]);
     setPoints([]);
+    setZoom(1);
     setError("");
   }
   function addMapPoint(event: MouseEvent<SVGSVGElement>) {
@@ -158,6 +162,18 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
       )}
       {location && bounds && (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={zoom <= 0.5} onClick={() => setZoom((value) => Math.max(0.5, Number((value / 1.5).toFixed(3))))} aria-label="Zoom out">
+                <Minus className="h-4 w-4" /> Zoom out
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={zoom >= 8} onClick={() => setZoom((value) => Math.min(8, Number((value * 1.5).toFixed(3))))} aria-label="Zoom in">
+                <Plus className="h-4 w-4" /> Zoom in
+              </Button>
+              <Button type="button" variant="ghost" size="sm" disabled={zoom === 1} onClick={() => setZoom(1)}>Reset zoom</Button>
+            </div>
+          </div>
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
@@ -241,7 +257,7 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(toPlane(points, Number(pitch)));
+                  onAdd(satelliteTraceToPlane(points, Number(pitch)));
                   setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
