@@ -150,6 +150,11 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
         pitch_rise = slope * 12.0
         # The XY convex hull area is horizontal projection; divide by cos(pitch) for true surface area.
         hull = MultiPoint(selected[:, :2]).convex_hull
+        # A line/point hull cannot produce a valid roof polygon. Skip that
+        # candidate instead of returning an empty boundary that breaks the CRM adapter.
+        if hull.geom_type != "Polygon" or hull.area <= 1e-4:
+            remaining = remaining[~inliers]
+            continue
         horizontal_area = float(hull.area)
         surface_area_sqft = horizontal_area / max(math.cos(math.radians(pitch)), 1e-6) * 10.7639104167
         azimuth = (math.degrees(math.atan2(-a, -b)) + 360.0) % 360.0
