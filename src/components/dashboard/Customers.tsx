@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Pencil, Users, MapPin, Phone, Mail } from "lucide-react";
+import { Plus, Pencil, Users, MapPin, Phone, Mail, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { saveCustomer } from "@/lib/customers.functions";
+import { saveCustomer, deleteCustomer } from "@/lib/customers.functions";
 import { customersQuery, propertiesQuery } from "./foundation-data";
 import { Field, Choice, SectionHeading, Empty } from "./CrmControls";
 import type { Lead } from "./data";
@@ -30,11 +30,16 @@ export function Customers({ leads, onOpen }: { leads: Lead[]; onOpen: (lead: Lea
     properties = useQuery(propertiesQuery),
     qc = useQueryClient();
   const save = useServerFn(saveCustomer);
+  const remove = useServerFn(deleteCustomer);
   const [search, setSearch] = useState(""),
     [editing, setEditing] = useState(false),
     [id, setId] = useState<string | null>(null),
     [form, setForm] = useState(blank),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [swipedCustomerId, setSwipedCustomerId] = useState<string | null>(null),
+    [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null),
+    [deleting, setDeleting] = useState(false);
+  const touchStartX = useRef<number | null>(null);
   const visible = (customers.data ?? []).filter((c) =>
     `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -52,6 +57,24 @@ export function Customers({ leads, onOpen }: { leads: Lead[]; onOpen: (lead: Lea
       toast.error("Could not save customer");
     } finally {
       setBusy(false);
+    }
+  }
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await remove({ data: { id: pendingDelete.id } });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["crm-customers"] }),
+        qc.invalidateQueries({ queryKey: ["leads"] }),
+      ]);
+      setSwipedCustomerId(null);
+      setPendingDelete(null);
+      toast.success("Customer deleted. The original lead record was preserved.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete customer");
+    } finally {
+      setDeleting(false);
     }
   }
   return (
@@ -81,71 +104,132 @@ export function Customers({ leads, onOpen }: { leads: Lead[]; onOpen: (lead: Lea
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((c) => {
           const lead = leads.find((l) => l.id === c.source_lead_id);
+          const propertyCount = properties.data?.filter((p) => p.customer_id === c.id).length ?? 0;
           return (
-            <article key={c.id} className="rounded-lg border border-border bg-card p-5">
-              <div className="flex items-start justify-between gap-2">
-                <Users className="size-5 text-primary" />
+            <div
+              key={c.id}
+              className="relative min-w-0 overflow-hidden rounded-lg border border-border bg-destructive/10"
+              onTouchStart={(event) => {
+                touchStartX.current = event.touches[0]?.clientX ?? null;
+              }}
+              onTouchEnd={(event) => {
+                const start = touchStartX.current;
+                touchStartX.current = null;
+                if (start === null) return;
+                const end = event.changedTouches[0]?.clientX;
+                if (end === undefined) return;
+                const delta = end - start;
+                if (delta < -55) setSwipedCustomerId(c.id);
+                else if (delta > 55) setSwipedCustomerId(null);
+              }}
+              onTouchCancel={() => {
+                touchStartX.current = null;
+              }}
+            >
+              <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center">
                 <Button
+                  variant="destructive"
                   size="icon"
-                  variant="ghost"
-                  title="Edit customer"
-                  aria-label={`Edit ${c.name}`}
-                  onClick={() => {
-                    setId(c.id);
-                    setForm({
-                      name: c.name,
-                      phone: c.phone,
-                      email: c.email,
-                      billing_address: c.billing_address,
-                      customer_type:
-                        c.customer_type === "commercial"
-                          ? "commercial"
-                          : c.customer_type === "property_manager"
-                            ? "property_manager"
-                            : "residential",
-                      notes: c.notes,
-                    });
-                    setEditing(true);
-                  }}
+                  aria-label={`Delete customer ${c.name}`}
+                  title="Delete customer"
+                  onClick={() => setPendingDelete({ id: c.id, name: c.name })}
                 >
-                  <Pencil className="size-4" />
+                  <Trash2 />
                 </Button>
               </div>
-              <h3 className="mt-2 break-words text-lg font-bold">{c.name}</h3>
-              <p className="mb-4 text-xs capitalize text-muted-foreground">
-                {c.customer_type.replaceAll("_", " ")}
-              </p>
-              <div className="grid gap-2 text-sm">
-                {c.phone && (
-                  <a className="flex items-center gap-2 text-primary" href={`tel:${c.phone}`}>
-                    <Phone className="size-4" />
-                    {c.phone}
-                  </a>
-                )}
-                {c.email && (
-                  <a
-                    className="flex items-center gap-2 break-all text-primary"
-                    href={`mailto:${c.email}`}
+              <article
+                className="relative min-w-0 rounded-lg border border-border bg-card p-5 transition-transform duration-200 ease-out"
+                style={{
+                  transform: swipedCustomerId === c.id ? "translateX(-6rem)" : "translateX(0)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <Users className="size-5 text-primary" />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    title="Edit customer"
+                    aria-label={`Edit ${c.name}`}
+                    onClick={() => {
+                      setId(c.id);
+                      setForm({
+                        name: c.name,
+                        phone: c.phone,
+                        email: c.email,
+                        billing_address: c.billing_address,
+                        customer_type:
+                          c.customer_type === "commercial"
+                            ? "commercial"
+                            : c.customer_type === "property_manager"
+                              ? "property_manager"
+                              : "residential",
+                        notes: c.notes,
+                      });
+                      setEditing(true);
+                    }}
                   >
-                    <Mail className="size-4" />
-                    {c.email}
-                  </a>
-                )}
-                <p className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin className="size-4" />
-                  {properties.data?.filter((p) => p.customer_id === c.id).length ?? 0} properties
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
+                <h3 className="mt-2 break-words text-lg font-bold">{c.name}</h3>
+                <p className="mb-4 text-xs capitalize text-muted-foreground">
+                  {c.customer_type.replaceAll("_", " ")}
                 </p>
-              </div>
-              {lead && (
-                <Button className="mt-5 w-full" variant="outline" onClick={() => onOpen(lead)}>
-                  Customer activity & documents
-                </Button>
-              )}
-            </article>
+                <div className="grid gap-2 text-sm">
+                  {c.phone && (
+                    <a className="flex items-center gap-2 text-primary" href={`tel:${c.phone}`}>
+                      <Phone className="size-4" />
+                      {c.phone}
+                    </a>
+                  )}
+                  {c.email && (
+                    <a
+                      className="flex items-center gap-2 break-all text-primary"
+                      href={`mailto:${c.email}`}
+                    >
+                      <Mail className="size-4" />
+                      {c.email}
+                    </a>
+                  )}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <MapPin className="size-4" />
+                    {propertyCount} properties
+                  </p>
+                </div>
+                {lead && (
+                  <Button className="mt-5 w-full" variant="outline" onClick={() => onOpen(lead)}>
+                    Customer activity & documents
+                  </Button>
+                )}
+              </article>
+            </div>
           );
         })}
       </div>
       {!customers.isLoading && !visible.length && <Empty>No matching customers.</Empty>}
+      <Dialog open={!!pendingDelete} onOpenChange={(open) => {
+        if (!open && !deleting) setPendingDelete(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this customer?</DialogTitle>
+            <DialogDescription>
+              This will remove the CRM customer record for {pendingDelete?.name ?? "this customer"}.
+              The original lead record is preserved. Customers with linked properties or roof
+              measurement reports cannot be deleted until those records are reassigned or removed.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" disabled={deleting} onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
+              <Trash2 /> {deleting ? "Deleting…" : "Delete customer"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
