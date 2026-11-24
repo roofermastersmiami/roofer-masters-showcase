@@ -82,7 +82,7 @@ describe("roof geometry", () => {
   });
 });
 
-describe("reviewable shared roof-edge suggestions", () => {
+describe("reviewable roof-edge classification suggestions", () => {
   it("suggests both sides of a clear gable ridge without changing the drawing", () => {
     const drawing = roofPreset("gable", 40, 30, 6);
     const west = drawing.planes.find((plane) => plane.id === "West plane");
@@ -114,7 +114,7 @@ describe("reviewable shared roof-edge suggestions", () => {
         { x: 0, y: 0, z: 2 },
         { x: -1, y: 1, z: 2 },
       ],
-      edges: ["other", "other", "other", "other"],
+      edges: ["rake", "other", "rake", "eave"],
     };
     const rightPlane: RoofPlane = {
       ...left,
@@ -126,7 +126,7 @@ describe("reviewable shared roof-edge suggestions", () => {
         { x: 1, y: 1, z: 2 },
         { x: 0, y: 0, z: 2 },
       ],
-      edges: ["other", "other", "other", "other"],
+      edges: ["rake", "eave", "rake", "other"],
     };
     drawing.planes = [leftPlane, rightPlane];
     expect(suggestSharedEdgeClassifications(drawing)).toEqual([
@@ -135,7 +135,7 @@ describe("reviewable shared roof-edge suggestions", () => {
     ]);
   });
 
-  it("leaves exterior and ambiguous shared edges for manual classification", () => {
+  it("leaves flat and ambiguous shared edges unclassified", () => {
     const drawing = roofPreset("flat", 2, 2);
     expect(suggestSharedEdgeClassifications(drawing)).toEqual([]);
 
@@ -147,7 +147,24 @@ describe("reviewable shared roof-edge suggestions", () => {
     east.points[0]!.y = 10;
     west.edges[1] = "other";
     east.edges[3] = "other";
-    expect(suggestSharedEdgeClassifications(gable)).toEqual([]);
+    expect(suggestSharedEdgeClassifications(gable).filter((item) => item.sharedWith)).toEqual([]);
+  });
+
+  it("suggests exterior eaves and rakes from pitched facets", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    for (const plane of drawing.planes) plane.edges.fill("other");
+    const suggestions = suggestSharedEdgeClassifications(drawing);
+    expect(suggestions.some((item) => item.type === "eave" && !item.sharedWith)).toBe(true);
+    expect(suggestions.some((item) => item.type === "rake" && !item.sharedWith)).toBe(true);
+  });
+
+  it("suggests both sides of hip lines on a hip roof", () => {
+    const drawing = roofPreset("hip", 40, 30, 6);
+    for (const plane of drawing.planes) plane.edges.fill("other");
+    const suggestions = suggestSharedEdgeClassifications(drawing);
+    const hips = suggestions.filter((item) => item.type === "hip" && item.sharedWith);
+    expect(hips.length).toBeGreaterThanOrEqual(4);
+    expect(hips.every((item) => Boolean(item.sharedWith))).toBe(true);
   });
 
   it("returns both sides when only one side of a shared edge needs correction", () => {
