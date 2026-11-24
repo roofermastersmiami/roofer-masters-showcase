@@ -114,7 +114,7 @@ async def book_crm_appointment(data: BookingRequest, channel: str | None = None)
         raise HTTPException(422, "Appointments must start on the hour")
     lead_id = await upsert_lead(data.name, data.phone, data.email, data.address,
                                 data.service_type, data.notes or "Appointment booked by receptionist")
-    source = channel or data.source
+    source = {"chat": "ai_chat", "browser_voice": "ai_voice", "email": "email"}.get(channel or "", data.source)
     rows = await sb_request("POST", "rpc/book_roof_appointment", payload={
         "p_lead_id": lead_id, "p_customer_name": data.name, "p_customer_phone": data.phone,
         "p_customer_email": data.email, "p_property_address": data.address,
