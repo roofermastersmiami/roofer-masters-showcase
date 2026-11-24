@@ -15,8 +15,11 @@ WITH CHECK (
   AND (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   AND (storage.foldername(name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   AND EXISTS (
-    SELECT 1 FROM public.crm_customers c
-    WHERE c.source_lead_id::text = (storage.foldername(name))[1]
+    SELECT 1
+    FROM public.roof_report_orders r
+    JOIN public.crm_customers c ON c.id = r.customer_id
+    WHERE r.id::text = (storage.foldername(name))[2]
+      AND c.source_lead_id::text = (storage.foldername(name))[1]
   )
   AND public.has_any_role(auth.uid(), ARRAY['office','sales','production_manager']::public.app_role[])
 );
@@ -28,8 +31,11 @@ USING (
   bucket_id = 'signed-contracts'
   AND (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   AND EXISTS (
-    SELECT 1 FROM public.crm_customers c
-    WHERE c.source_lead_id::text = (storage.foldername(name))[1]
+    SELECT 1
+    FROM public.roof_report_orders r
+    JOIN public.crm_customers c ON c.id = r.customer_id
+    WHERE r.id::text = (storage.foldername(name))[2]
+      AND c.source_lead_id::text = (storage.foldername(name))[1]
   )
   AND public.has_any_role(auth.uid(), ARRAY['office','sales','production_manager']::public.app_role[])
 );
