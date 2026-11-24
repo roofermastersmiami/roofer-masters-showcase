@@ -91,6 +91,7 @@ export function RoofMeasurements({
   const aerialFn = useServerFn(loadPublicAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
+  const userEditedDrawing = useRef(false);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
     [history, setHistory] = useState<RoofDrawing[]>([]),
@@ -138,6 +139,7 @@ export function RoofMeasurements({
       );
     });
   function edit(next: RoofDrawing) {
+    userEditedDrawing.current = true;
     setHistory((h) => [...h.slice(-29), d]);
     setFuture([]);
     setD({ ...next, verified: false });
@@ -442,6 +444,25 @@ export function RoofMeasurements({
         return;
       }
       setFootprints(result.footprints);
+      const candidate = result.footprints[0];
+      if (candidate && report && !initialDrawing && !userEditedDrawing.current) {
+        const cos = Math.cos((candidate.center.lat * Math.PI) / 180);
+        const points = candidate.points.map((point) => ({
+          x: (point.lon - candidate.center.lon) * 111320 * cos,
+          y: 10,
+          z: (candidate.center.lat - point.lat) * 110540,
+        }));
+        const plane = {
+          id: `osm-footprint-${candidate.id}-${Date.now()}`,
+          name: "Preliminary mapped building footprint",
+          points,
+          edges: points.map(() => "other" as const),
+        };
+        edit({ ...d, planes: [plane], accuracy: "photo_estimate", verified: false });
+        setSelected(plane.id);
+        setFit((value) => value + 1);
+        toast.info("Preliminary footprint measurements added. Confirm roof outline, pitch, and overhangs before using for an estimate.");
+      }
       setFootprintMessage(
         result.footprints.length
           ? `Found ${result.footprints.length} nearby mapped building footprint(s). ${result.attribution}. These are ground outlines only.`
@@ -1298,6 +1319,7 @@ export function RoofMeasurements({
       </section>
       <SatelliteRoofTrace
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
+        initialAddress={report?.address?.trim() || propertyRow?.address || ""}
         onAdd={(p) => {
           edit({ ...d, planes: [...d.planes, p] });
           setSelected(p.id);

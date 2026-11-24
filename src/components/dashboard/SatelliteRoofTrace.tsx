@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { MapPin, Minus, MousePointer2, Plus, RotateCcw, Search, Satellite } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export function satelliteTraceToPlane(points: TracePoint[], pitch: number): Roof
   };
 }
 
-export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => void }) {
+export function SatelliteRoofTrace({ onAdd, initialAddress = "" }: { onAdd: (plane: RoofPlane) => void; initialAddress?: string }) {
   const [address, setAddress] = useState("");
   const [location, setLocation] = useState<GeocodeResult | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
@@ -44,6 +44,7 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const initialLookupStarted = useRef(false);
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
   const bounds = useMemo(
     () =>
@@ -94,6 +95,28 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
     setZoom(1);
     setError("");
   }
+  useEffect(() => {
+    const query = initialAddress.trim();
+    if (!query || initialLookupStarted.current) return;
+    initialLookupStarted.current = true;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+          { signal: controller.signal, headers: { Accept: "application/json" } },
+        );
+        if (!response.ok) throw new Error("Address lookup unavailable");
+        const matches = (await response.json()) as GeocodeResult[];
+        if (matches[0]) selectLocation(matches[0]);
+        else setError("No map location was found for this report address. Search it manually below.");
+      } catch (e) {
+        if (!(e instanceof DOMException && e.name === "AbortError"))
+          setError("Could not locate the report address on the satellite map. Search it manually below.");
+      }
+    })();
+    return () => controller.abort();
+  }, [initialAddress]);
   function addMapPoint(event: MouseEvent<SVGSVGElement>) {
     if (!bounds) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -212,6 +235,16 @@ export function SatelliteRoofTrace({ onAdd }: { onAdd: (plane: RoofPlane) => voi
                 height={MAP_HEIGHT}
                 preserveAspectRatio="none"
               />
+              {center && bounds && (
+                <g
+                  transform={`translate(${((center.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - center.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
+                  pointerEvents="none"
+                >
+                  <path d="M0 24 C-4 16 -18 4 -18 -7 A18 18 0 1 1 18 -7 C18 4 4 16 0 24Z" fill="#dc2626" stroke="white" strokeWidth="3" />
+                  <circle cx="0" cy="-7" r="5" fill="white" />
+                  <text x="24" y="-12" fill="white" stroke="#111827" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="700">Address</text>
+                </g>
+              )}
               {points.length > 2 && (
                 <polygon
                   points={polygon}
