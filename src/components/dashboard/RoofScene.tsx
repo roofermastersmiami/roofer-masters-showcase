@@ -9,11 +9,7 @@ import {
   SRGBColorSpace,
 } from "three";
 import { planeInfo, distance, type RoofDrawing, type RoofPlane } from "@/lib/roof-geometry";
-import {
-  PENETRATION_COLORS,
-  ROOF_EDGE_STYLES,
-  ROOF_FACE_COLORS,
-} from "@/lib/roof-feature-styles";
+import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
 function Dimension({ text, position }: { text: string; position: [number, number, number] }) {
   const texture = useMemo(() => {
     const c = document.createElement("canvas");
