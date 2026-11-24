@@ -9,7 +9,7 @@ const facetSchema = z.object({
   azimuth_degrees: z.number().finite().min(0).lt(360),
   area_sqft: z.number().finite().positive(),
   squares: z.number().finite().positive(),
-  boundary_latlon: z.array(z.tuple([z.number().finite().min(-90).max(90), z.number().finite().min(-180).max(180)])).min(4).max(200),
+  boundary_latlon: z.array(z.tuple([z.number().finite().min(-90).max(90), z.number().finite().min(-180).max(180), z.number().finite()])).min(4).max(200),
   plane_model: z.object({
     z_equals_ax_plus_by_plus_c: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
   }).optional(),
@@ -58,21 +58,15 @@ export function detectedFacetsToDrawing(raw: unknown): RoofDrawing {
   const originLon = result.location.lon;
   const longitudeScale = METERS_PER_LON_DEGREE * Math.cos((originLat * Math.PI) / 180);
   const projected = result.roof.facets.map((facet) => {
-    const points = facet.boundary_latlon.slice(0, -1).map(([lat, lon]) => ({
+    const points = facet.boundary_latlon.slice(0, -1).map(([lat, lon, elevationMeters]) => ({
       x: ((lon - originLon) * longitudeScale) * FEET_PER_METER,
       z: ((originLat - lat) * METERS_PER_LAT_DEGREE) * FEET_PER_METER,
+      elevation: elevationMeters * FEET_PER_METER,
     }));
     if (points.length < 3) throw new Error(`Facet ${facet.id} has too few unique boundary points.`);
     const unique = new Set(points.map((point) => `${point.x.toFixed(2)}:${point.z.toFixed(2)}`));
     if (unique.size !== points.length) throw new Error(`Facet ${facet.id} contains duplicate boundary points.`);
-    const [a, b, c] = facet.plane_model?.z_equals_ax_plus_by_plus_c ?? [0, 0, 0];
-    // The API model uses projected meters; recover relative elevations in feet.
-    const absoluteElevationFt = points.map((point) => {
-      const xMeters = point.x / FEET_PER_METER;
-      const yMeters = point.z / FEET_PER_METER;
-      return (a * xMeters + b * yMeters + c) * FEET_PER_METER;
-    });
-    return { facet, points, elevations: absoluteElevationFt };
+    return { facet, points, elevations: points.map((point) => point.elevation) };
   });
   const minElevation = Math.min(...projected.flatMap((facet) => facet.elevations));
   const planes: RoofPlane[] = projected.map(({ facet, points, elevations }) => ({
