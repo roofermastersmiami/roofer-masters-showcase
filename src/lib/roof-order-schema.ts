@@ -34,7 +34,9 @@ export const REPORT_STATUS_LABELS = {
 
 export const roofOrderSchema = z.object({
   address: z.string().trim().min(8, "Enter the full customer property address").max(250),
-  title: z.string().trim().min(1).max(180),
+  title: z.string().trim().min(2, "Enter the client name").max(180),
+  customer_phone: z.string().trim().max(30).default(""),
+  customer_email: z.string().trim().email("Enter a valid email address").max(255).or(z.literal("")).default(""),
   provider: z.enum(["manual", "eagleview", "gaf", "roofr", "hover", "other"]),
   notes: z.string().max(4000),
 });
