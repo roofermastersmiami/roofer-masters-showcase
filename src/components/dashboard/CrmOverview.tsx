@@ -63,8 +63,17 @@ export function CrmOverview() {
     setPreferencesLoaded(true);
   }, []);
   useEffect(() => {
-    if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardOrder, hiddenCards }));
-  }, [accent, density, cardOrder, hiddenCards, preferencesLoaded]);
+    if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardOrder, hiddenCards, sectionOrder, hiddenSections }));
+  }, [accent, density, cardOrder, hiddenCards, sectionOrder, hiddenSections, preferencesLoaded]);
+  const [sectionOrder, setSectionOrder] = useState(["Revenue & sales", "Daily operations"]),
+    [hiddenSections, setHiddenSections] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
+      if (Array.isArray(saved.sectionOrder) && saved.sectionOrder.every((item: unknown) => typeof item === "string")) setSectionOrder(saved.sectionOrder);
+      if (Array.isArray(saved.hiddenSections) && saved.hiddenSections.every((item: unknown) => typeof item === "string")) setHiddenSections(saved.hiddenSections);
+    } catch { /* Keep defaults if saved preferences are unavailable. */ }
+  }, []);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
@@ -190,7 +199,7 @@ export function CrmOverview() {
       </div>
       {customize && <section className="mb-6 rounded-xl border border-border bg-card p-5" aria-label="Dashboard customization">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Your workspace, your way</h2><p className="text-sm text-muted-foreground">Drag summary cards to reorder them. Preferences are saved on this device.</p></div>
-          <Button size="sm" variant="ghost" onClick={() => { setAccent("#2563eb"); setDensity("comfortable"); setCardOrder(["Payments received", "Outstanding balance", "Active projects", "New leads"]); setHiddenCards([]); }}>Reset layout</Button></div>
+          <Button size="sm" variant="ghost" onClick={() => { setAccent("#2563eb"); setDensity("comfortable"); setCardOrder(["Payments received", "Outstanding balance", "Active projects", "New leads"]); setHiddenCards([]); setSectionOrder(["Revenue & sales", "Daily operations"]); setHiddenSections([]); }}>Reset layout</Button></div>
         <div className="mt-4 flex flex-wrap items-center gap-5"><div><p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p><div className="flex gap-2">
           {["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => <button key={color} type="button" aria-label={`Set accent color ${color}`} aria-pressed={accent === color} onClick={() => setAccent(color)} className="size-8 rounded-full border-2 border-background" style={{ backgroundColor: color, outline: accent === color ? `2px solid ${color}` : "none" }} />)}
         </div></div><div><p className="mb-2 text-xs font-semibold text-muted-foreground">SHOW / HIDE SUMMARY CARDS</p><div className="flex flex-wrap gap-2">{["Payments received", "Outstanding balance", "Active projects", "New leads"].map((label) => <Button key={label} size="sm" variant={hiddenCards.includes(label) ? "outline" : "secondary"} onClick={() => setHiddenCards((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label])}>{hiddenCards.includes(label) ? <EyeOff className="mr-1 size-3" /> : <Eye className="mr-1 size-3" />}{label}</Button>)}</div></div><div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD SPACING</p><div className="flex gap-2"><Button size="sm" variant={density === "comfortable" ? "default" : "outline"} onClick={() => setDensity("comfortable")}>Comfortable</Button><Button size="sm" variant={density === "compact" ? "default" : "outline"} onClick={() => setDensity("compact")}>Compact</Button></div></div></div>
@@ -230,11 +239,17 @@ export function CrmOverview() {
       <div className={`grid ${density === "compact" ? "gap-2" : "gap-4"} sm:grid-cols-2 xl:grid-cols-4`}>
         {metricCards.filter((s) => !hiddenCards.includes(s.label)).map((s) => <article key={s.label} draggable onDragStart={() => setDraggedCard(s.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== s.label) moveCard(draggedCard, s.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)} className={`cursor-grab rounded-lg border border-border bg-card ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === s.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
           <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{s.label}</span><span className="flex items-center gap-2"><GripVertical className="size-4 text-muted-foreground" /><s.icon className="size-5" style={{ color: accent }} /></span></div>
-          <div className="mt-2 flex gap-1"><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${s.label} up`} onClick={() => shiftCard(s.label, -1)}><ChevronUp className="size-3" /></Button><Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${s.label} down`} onClick={() => shiftCard(s.label, 1)}><ChevronDown className="size-3" /></Button></div>
-          <p className="mt-4 break-words text-3xl font-bold">{s.value}</p>
-          <div className="mt-4 flex items-center justify-between"><span className="text-xs text-muted-foreground">{s.note}</span><Button size="icon" variant="ghost" title={`View ${s.label.toLowerCase()}`} aria-label={`View ${s.label.toLowerCase()}`} onClick={() => go(s.section)}><ArrowUpRight className="size-4" /></Button></div>
-        </article>)}
-      </div>
+          <di      {customize && <section className="mb-6 rounded-xl border border-border bg-card p-5" aria-label="Dashboard section customization">
+        <h3 className="font-semibold">Dashboard sections</h3>
+        <p className="mb-3 text-sm text-muted-foreground">Reorder or hide larger dashboard sections. Changes are saved on this device.</p>
+        <div className="flex flex-wrap gap-2">{["Revenue & sales", "Daily operations"].map((label) => <div key={label} className="flex items-center gap-1 rounded-md border border-border p-1">
+          <span className="px-2 text-sm">{label}</span>
+          <Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${label} up`} onClick={() => setSectionOrder((current) => { const next=[...current], i=next.indexOf(label); if(i>0) [next[i-1],next[i]]=[next[i],next[i-1]]; return next; })}><ChevronUp className="size-3" /></Button>
+          <Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${label} down`} onClick={() => setSectionOrder((current) => { const next=[...current], i=next.indexOf(label); if(i>=0 && i<next.length-1) [next[i+1],next[i]]=[next[i],next[i+1]]; return next; })}><ChevronDown className="size-3" /></Button>
+          <Button size="icon" variant="ghost" className="size-7" aria-label={`${hiddenSections.includes(label) ? "Show" : "Hide"} ${label}`} onClick={() => setHiddenSections((current) => current.includes(label) ? current.filter((item) => item!==label) : [...current,label])}>{hiddenSections.includes(label) ? <EyeOff className="size-3" /> : <Eye className="size-3" />}</Button>
+        </div>)}</div>
+      </section>}
+      {sectionOrder.filter((label) => !hiddenSections.includes(label)).map((label) => label === "Revenue & sales" ? (
       <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
         <div className="min-w-0">
           <div className="mb-6 flex items-center justify-between">
@@ -318,6 +333,7 @@ export function CrmOverview() {
           </Button>
         </div>
       </section>
+      ) : (
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         <section>
           <div className="mb-5 flex items-center justify-between">
@@ -373,6 +389,30 @@ export function CrmOverview() {
           <h2 className="mb-5 text-lg font-bold">Recent customer activity</h2>
           {activity.data?.slice(0, 5).map((a) => {
             const lead = leads.find((l) => l.id === a.lead_id);
+            return (
+              <Button
+                key={a.id}
+                variant="ghost"
+                className="h-auto w-full justify-start border-b border-border py-3 text-left"
+                disabled={!lead}
+                onClick={() => {
+                  if (lead) onOpen(lead);
+                }}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{a.body}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatWhen(a.created_at)}</p>
+                </div>
+              </Button>
+            );
+          })}
+          {!activity.data?.length && (
+            <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
+          )}
+        </section>
+      </div>
+      ))}
+a.lead_id);
             return (
               <Button
                 key={a.id}
