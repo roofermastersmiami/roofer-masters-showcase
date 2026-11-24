@@ -292,58 +292,164 @@ export async function roofDrawingPdf(
 
   // Branded first-page property cover
   const firstPage = addPage();
-  const coverPhoto = photos.find((photo) => /aerial|exterior|property/i.test(photo.category)) ?? photos[0];
-  firstPage.drawText("ROOF MEASUREMENT REPORT", { x: MARGIN, y: 752, size: 17, font: bold, color: NAVY });
-  firstPage.drawText("PROPERTY OVERVIEW  |  MEASUREMENTS", { x: MARGIN, y: 733, size: 8, font: bold, color: BLUE });
-  firstPage.drawLine({ start: { x: MARGIN, y: 722 }, end: { x: PAGE_W - MARGIN, y: 722 }, thickness: 1, color: SILVER });
+  const coverPhoto =
+    photos.find((photo) => /aerial|exterior|property/i.test(photo.category)) ?? photos[0];
+  firstPage.drawText("ROOF MEASUREMENT REPORT", {
+    x: MARGIN,
+    y: 752,
+    size: 17,
+    font: bold,
+    color: NAVY,
+  });
+  firstPage.drawText("PROPERTY OVERVIEW  |  MEASUREMENTS", {
+    x: MARGIN,
+    y: 733,
+    size: 8,
+    font: bold,
+    color: BLUE,
+  });
+  firstPage.drawLine({
+    start: { x: MARGIN, y: 722 },
+    end: { x: PAGE_W - MARGIN, y: 722 },
+    thickness: 1,
+    color: SILVER,
+  });
   let photoBottom = 548;
   if (coverPhoto) {
     try {
-      const image = coverPhoto.mime === "image/png" ? await pdf.embedPng(coverPhoto.bytes) : await pdf.embedJpg(coverPhoto.bytes);
+      const image =
+        coverPhoto.mime === "image/png"
+          ? await pdf.embedPng(coverPhoto.bytes)
+          : await pdf.embedJpg(coverPhoto.bytes);
       const fit = image.scaleToFit(PAGE_W - MARGIN * 2, 155);
       const x = (PAGE_W - fit.width) / 2;
       const yPhoto = 558 + (155 - fit.height) / 2;
-      firstPage.drawRectangle({ x: MARGIN, y: 553, width: PAGE_W - MARGIN * 2, height: 165, color: LIGHT, borderColor: SILVER, borderWidth: 0.8 });
+      firstPage.drawRectangle({
+        x: MARGIN,
+        y: 553,
+        width: PAGE_W - MARGIN * 2,
+        height: 165,
+        color: LIGHT,
+        borderColor: SILVER,
+        borderWidth: 0.8,
+      });
       firstPage.drawImage(image, { x, y: yPhoto, width: fit.width, height: fit.height });
       photoBottom = 540;
     } catch {
-      firstPage.drawText("PROPERTY PHOTO UNAVAILABLE", { x: MARGIN + 12, y: 630, size: 9, font: bold, color: MUTED });
+      firstPage.drawText("PROPERTY PHOTO UNAVAILABLE", {
+        x: MARGIN + 12,
+        y: 630,
+        size: 9,
+        font: bold,
+        color: MUTED,
+      });
     }
   } else {
-    firstPage.drawRectangle({ x: MARGIN, y: 553, width: PAGE_W - MARGIN * 2, height: 165, color: LIGHT, borderColor: SILVER, borderWidth: 0.8 });
-    firstPage.drawText("PROPERTY PHOTO NOT PROVIDED", { x: MARGIN + 12, y: 630, size: 9, font: bold, color: MUTED });
+    firstPage.drawRectangle({
+      x: MARGIN,
+      y: 553,
+      width: PAGE_W - MARGIN * 2,
+      height: 165,
+      color: LIGHT,
+      borderColor: SILVER,
+      borderWidth: 0.8,
+    });
+    firstPage.drawText("PROPERTY PHOTO NOT PROVIDED", {
+      x: MARGIN + 12,
+      y: 630,
+      size: 9,
+      font: bold,
+      color: MUTED,
+    });
   }
   let coverY = photoBottom - 12;
   const coverLine = (label: string, value: string) => {
-    firstPage.drawText(safe(label).toUpperCase(), { x: MARGIN, y: coverY, size: 7, font: bold, color: MUTED });
-    firstPage.drawText(safe(value || "Not provided").slice(0, 76), { x: MARGIN + 112, y: coverY - 1, size: 9, font: bold, color: INK });
+    firstPage.drawText(safe(label).toUpperCase(), {
+      x: MARGIN,
+      y: coverY,
+      size: 7,
+      font: bold,
+      color: MUTED,
+    });
+    firstPage.drawText(safe(value || "Not provided").slice(0, 76), {
+      x: MARGIN + 112,
+      y: coverY - 1,
+      size: 9,
+      font: bold,
+      color: INK,
+    });
     coverY -= 17;
   };
   coverLine("Property address", address);
   coverLine("Prepared for", customer);
   coverLine("Prepared by", "ROOFER MASTERS");
-  coverLine("Report date", new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }));
+  coverLine(
+    "Report date",
+    new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+  );
   coverY -= 3;
-  firstPage.drawText("AREA & WASTE CALCULATION", { x: MARGIN, y: coverY, size: 10, font: bold, color: NAVY });
+  firstPage.drawText("AREA & WASTE CALCULATION", {
+    x: MARGIN,
+    y: coverY,
+    size: 10,
+    font: bold,
+    color: NAVY,
+  });
   coverY -= 17;
   const wasteCols = [MARGIN, 190, 325, 455];
-  ["WASTE", "AREA (SQ FT)", "SQUARES", "INCL. WASTE"].forEach((label, i) => firstPage.drawText(label, { x: wasteCols[i], y: coverY, size: 7, font: bold, color: BLUE }));
+  ["WASTE", "AREA (SQ FT)", "SQUARES", "INCL. WASTE"].forEach((label, i) =>
+    firstPage.drawText(label, { x: wasteCols[i], y: coverY, size: 7, font: bold, color: BLUE }),
+  );
   coverY -= 14;
   [0, 5, 10, 15, 20].forEach((waste, i) => {
-    if (i % 2 === 0) firstPage.drawRectangle({ x: MARGIN, y: coverY - 4, width: PAGE_W - MARGIN * 2, height: 15, color: LIGHT });
+    if (i % 2 === 0)
+      firstPage.drawRectangle({
+        x: MARGIN,
+        y: coverY - 4,
+        width: PAGE_W - MARGIN * 2,
+        height: 15,
+        color: LIGHT,
+      });
     const area = m.area * (1 + waste / 100);
-    const values = [`${waste}%`, m.area.toFixed(2), m.squares.toFixed(2), `${area.toFixed(2)} SF  |  ${(area / 100).toFixed(2)} sq`];
-    values.forEach((value, j) => firstPage.drawText(value, { x: wasteCols[j], y: coverY, size: 8, font: j === 0 ? bold : font, color: INK }));
+    const values = [
+      `${waste}%`,
+      m.area.toFixed(2),
+      m.squares.toFixed(2),
+      `${area.toFixed(2)} SF  |  ${(area / 100).toFixed(2)} sq`,
+    ];
+    values.forEach((value, j) =>
+      firstPage.drawText(value, {
+        x: wasteCols[j],
+        y: coverY,
+        size: 8,
+        font: j === 0 ? bold : font,
+        color: INK,
+      }),
+    );
     coverY -= 16;
   });
   coverY -= 4;
-  firstPage.drawText(`SELECTED WASTE: ${d.waste}%  ·  AREA WITH WASTE: ${m.withWaste.toFixed(2)} SF  ·  ${m.withWaste / 100} SQUARES`, { x: MARGIN, y: coverY, size: 7.5, font: bold, color: NAVY });
+  firstPage.drawText(
+    `SELECTED WASTE: ${d.waste}%  ·  AREA WITH WASTE: ${m.withWaste.toFixed(2)} SF  ·  ${m.withWaste / 100} SQUARES`,
+    { x: MARGIN, y: coverY, size: 7.5, font: bold, color: NAVY },
+  );
   coverY -= 15;
   firstPage.drawText("ROOFER MASTERS", { x: 390, y: 48, size: 12, font: bold, color: NAVY });
   firstPage.drawText("ROOFING  ·  (305) 942-3093", { x: 390, y: 35, size: 7, font, color: MUTED });
   firstPage.drawText("roofermasters@gmail.com", { x: 390, y: 24, size: 7, font, color: MUTED });
-  firstPage.drawLine({ start: { x: 380, y: 58 }, end: { x: 555, y: 58 }, thickness: 1.5, color: BLUE });
-  firstPage.drawText("PRELIMINARY REPORT - VERIFY FIELD CONDITIONS", { x: MARGIN, y: 45, size: 7, font: bold, color: MUTED });
+  firstPage.drawLine({
+    start: { x: 380, y: 58 },
+    end: { x: 555, y: 58 },
+    thickness: 1.5,
+    color: BLUE,
+  });
+  firstPage.drawText("PRELIMINARY REPORT - VERIFY FIELD CONDITIONS", {
+    x: MARGIN,
+    y: 45,
+    size: 7,
+    font: bold,
+    color: MUTED,
+  });
 
   // Detailed measurement pages
   addPage();
@@ -352,10 +458,23 @@ export async function roofDrawingPdf(
   row("Property address", address || "Not provided");
   row("Prepared for", customer || "Not provided", true);
   row("Roofing system", d.roof_type);
-  row("Measurement status", d.verified ? "Owner-reviewed drawing" : "Preliminary / not owner-reviewed", true);
-  const accuracyLabels = { photo_estimate: "Estimated from photo / public aerial", scaled: "Scaled from a known measured distance", site_verified: "Verified on site" } as const;
+  row(
+    "Measurement status",
+    d.verified ? "Owner-reviewed drawing" : "Preliminary / not owner-reviewed",
+    true,
+  );
+  const accuracyLabels = {
+    photo_estimate: "Estimated from photo / public aerial",
+    scaled: "Scaled from a known measured distance",
+    site_verified: "Verified on site",
+  } as const;
   row("Measurement basis", accuracyLabels[d.accuracy ?? "photo_estimate"]);
-  paragraph("IMPORTANT: Owner review does not by itself certify measurements. Verify dimensions and site conditions before ordering materials or beginning installation.", 8, true, BLUE);
+  paragraph(
+    "IMPORTANT: Owner review does not by itself certify measurements. Verify dimensions and site conditions before ordering materials or beginning installation.",
+    8,
+    true,
+    BLUE,
+  );
   if (d.image_credit) paragraph(`Image credit: ${d.image_credit}`, 7, false, MUTED);
   section("AREA MEASUREMENTS");
   row("Total roof area", `${m.area.toFixed(2)} sq ft`);
@@ -363,7 +482,11 @@ export async function roofDrawingPdf(
   row("Selected waste allowance", `${d.waste}%`);
   row("Area including selected waste", `${m.withWaste.toFixed(2)} sq ft`, true);
   row("Total perimeter", `${m.perimeter.toFixed(2)} ft`);
-  if (d.geo_reference) row("Geocoded address point", `${d.geo_reference.addressLatitude.toFixed(6)}, ${d.geo_reference.addressLongitude.toFixed(6)}`);
+  if (d.geo_reference)
+    row(
+      "Geocoded address point",
+      `${d.geo_reference.addressLatitude.toFixed(6)}, ${d.geo_reference.addressLongitude.toFixed(6)}`,
+    );
 
   // Roof diagram
   section("SKETCH REPORT | MEASUREMENTS DIAGRAM");
