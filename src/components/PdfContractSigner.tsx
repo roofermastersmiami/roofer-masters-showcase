@@ -112,7 +112,12 @@ export function PdfContractSigner({
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSubject, setEmailSubject] = useState("Roofing documents from Roofer Masters");
-  const [emailMessage, setEmailMessage] = useState("Hello,\n\nPlease find the attached roofing documents.\n\nThank you,\nRoofer Masters");
+  const [emailMessage, setEmailMessage] = useState("Hello,\n\nPlease find the attached roofing documents.");
+  const [companySignature, setCompanySignature] = useState("Thank you,\nRoofer Masters\n(305) 942-3093\nroofermasters@gmail.com\nroofermastersmiami.com");
+  const [drawFieldMode, setDrawFieldMode] = useState(false);
+  const [drawDraft, setDrawDraft] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const drawStartRef = useRef<{ page: number; x: number; y: number; rect: DOMRect } | null>(null);
+  const resizeRef = useRef<{ id: string; pointerX: number; pointerY: number; width: number; height: number; rect: DOMRect } | null>(null);
   const [emailFiles, setEmailFiles] = useState<File[]>([]);
   const [savedAttachments, setSavedAttachments] = useState<Array<{ path: string; filename: string }>>([]);
   const [emailBusy, setEmailBusy] = useState(false);
@@ -265,6 +270,21 @@ export function PdfContractSigner({
     setSelectedId(field.id);
   };
   const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const resize = resizeRef.current;
+    if (resize && !isClientMode) {
+      updateField(resize.id, {
+        width: Math.max(0.05, Math.min(0.9, resize.width + (event.clientX - resize.pointerX) / resize.rect.width)),
+        height: Math.max(0.02, Math.min(0.3, resize.height + (event.clientY - resize.pointerY) / resize.rect.height)),
+      });
+      return;
+    }
+    const draw = drawStartRef.current;
+    if (draw && drawFieldMode && !isClientMode) {
+      const x = Math.max(0, Math.min(1, (event.clientX - draw.rect.left) / draw.rect.width));
+      const y = Math.max(0, Math.min(1, (event.clientY - draw.rect.top) / draw.rect.height));
+      setDrawDraft({ x: Math.min(draw.x, x), y: Math.min(draw.y, y), width: Math.abs(x - draw.x), height: Math.abs(y - draw.y) });
+      return;
+    }
     const drag = dragRef.current;
     if (!drag || isClientMode) return;
     updateField(drag.id, {
@@ -283,6 +303,50 @@ export function PdfContractSigner({
         ),
       ),
     });
+  };
+
+  const beginDrawField = (event: PointerEvent<HTMLDivElement>, page: number) => {
+    if (!drawFieldMode || isClientMode || (event.target as HTMLElement).closest("[data-pdf-field]")) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawStartRef.current = { page, x, y, rect };
+    setDrawDraft({ x, y, width: 0, height: 0 });
+  };
+
+  const finishDrawField = () => {
+    const start = drawStartRef.current;
+    const draft = drawDraft;
+    drawStartRef.current = null;
+    setDrawDraft(null);
+    if (!start || !draft) return;
+    if (draft.width < 0.015 || draft.height < 0.012) {
+      setDrawFieldMode(false);
+      return;
+    }
+    const field: PdfSignField = {
+      ...makeField("text", start.page),
+      x: draft.x,
+      y: draft.y,
+      width: Math.min(0.9, draft.width),
+      height: Math.min(0.3, draft.height),
+    };
+    setFields((current) => [...current, field]);
+    setSelectedId(field.id);
+    setActivePage(start.page);
+    setDrawFieldMode(false);
+  };
+
+  const beginResize = (event: PointerEvent<HTMLButtonElement>, field: PdfSignField) => {
+    if (isClientMode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const rect = pageRefs.current[field.page]?.getBoundingClientRect();
+    if (!rect) return;
+    resizeRef.current = { id: field.id, pointerX: event.clientX, pointerY: event.clientY, width: field.width, height: field.height, rect };
+    setSelectedId(field.id);
   };
 
   const saveSignature = () => {
@@ -475,7 +539,8 @@ export function PdfContractSigner({
         if (error) throw error;
         uploaded.push({ path, filename: safeName });
       }
-      const result = await emailRoofReportPdfs({ data: { leadId, reportId, to: emailTo.trim(), subject: emailSubject.trim(), message: emailMessage, attachments: uploaded } });
+      const fullMessage = [emailMessage.trim(), companySignature.trim()].filter(Boolean).join("\n\n");
+      const result = await emailRoofReportPdfs({ data: { leadId, reportId, to: emailTo.trim(), subject: emailSubject.trim(), message: fullMessage, attachments: uploaded } });
       if (!result.sent) throw new Error("Email was not sent");
       setSavedAttachments(uploaded);
       setEmailFiles([]);
@@ -567,6 +632,9 @@ export function PdfContractSigner({
         >
           <Check className="mr-1 size-4" />
           {saving ? "Saving…" : "Save & Download Signed PDF"}
+        </Button>
+        <Button size="sm" variant={drawFieldMode ? "default" : "outline"} disabled={!sourceBytes || isClientMode} onClick={() => setDrawFieldMode((value) => !value)}>
+          <Plus className="mr-1 size-4" /> {drawFieldMode ? "Cancel drawing" : "Draw field area"}
         </Button>
         <Button size="sm" variant="outline" disabled={!sourceBytes || templateBusy} onClick={() => void saveAsTemplate()}>
           <Save className="mr-1 size-4" /> Save template
@@ -679,6 +747,7 @@ export function PdfContractSigner({
           Upload a PDF or open a report that already has a measurement PDF.
         </div>
       )}
+      {drawFieldMode && <p className="text-xs text-blue-700">Click and drag on the PDF to draw a fillable text field. You can resize it afterward.</p>}
       {sourceBytes && (
         <div className="h-[min(68dvh,760px)] min-h-[320px] overflow-y-auto overscroll-contain rounded-lg bg-muted/60 p-3">
           <div className="mx-auto flex max-w-5xl flex-col items-center gap-5">
@@ -711,13 +780,20 @@ export function PdfContractSigner({
                   />
                   <div
                     className="absolute inset-0"
+                    onPointerDown={(event) => beginDrawField(event, index)}
                     onPointerMove={moveDrag}
                     onPointerUp={() => {
                       dragRef.current = null;
+                      resizeRef.current = null;
+                      finishDrawField();
                     }}
                     onPointerCancel={() => {
                       dragRef.current = null;
+                      resizeRef.current = null;
+                      drawStartRef.current = null;
+                      setDrawDraft(null);
                     }}
+                    className={drawFieldMode ? "cursor-crosshair" : ""}
                   >
                     {fields
                       .filter((field) => field.page === index)
@@ -726,6 +802,7 @@ export function PdfContractSigner({
                           key={field.id}
                           role="button"
                           tabIndex={0}
+                          data-pdf-field="true"
                           aria-label={`${fieldLabel[field.kind]} field`}
                           onClick={() => {
                             setSelectedId(field.id);
@@ -756,8 +833,22 @@ export function PdfContractSigner({
                               {field.value || fieldLabel[field.kind]}
                             </span>
                           )}
+                          {selectedId === field.id && !isClientMode && (
+                            <button
+                              type="button"
+                              aria-label="Resize field"
+                              title="Drag to resize"
+                              onPointerDown={(event) => beginResize(event, field)}
+                              onPointerMove={moveDrag}
+                              onPointerUp={() => { resizeRef.current = null; }}
+                              className="absolute -bottom-0.5 -right-0.5 z-20 size-3 cursor-nwse-resize rounded-sm border border-white bg-blue-700 shadow"
+                            />
+                          )}
                         </div>
                       ))}
+                    {drawDraft && drawStartRef.current?.page === index && (
+                      <div className="pointer-events-none absolute border-2 border-dashed border-blue-600 bg-blue-200/40" style={{ left: `${drawDraft.x * 100}%`, top: `${drawDraft.y * 100}%`, width: `${drawDraft.width * 100}%`, height: `${drawDraft.height * 100}%` }} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -774,7 +865,9 @@ export function PdfContractSigner({
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">To<Input type="email" value={emailTo} onChange={(event) => setEmailTo(event.target.value)} placeholder="customer@example.com" /></label>
             <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
-            <label className="grid gap-1 text-sm">Message<textarea className="min-h-28 rounded-md border bg-background p-3 text-sm" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} /></label>
+            <label className="grid gap-1 text-sm">Subject<Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} /></label>
+            <label className="grid gap-1 text-sm">Compose message<textarea className="min-h-28 rounded-md border bg-background p-3 text-sm" value={emailMessage} onChange={(event) => setEmailMessage(event.target.value)} placeholder="Write your message to the customer…" /></label>
+            <label className="grid gap-1 text-sm">Company email signature<textarea className="min-h-24 rounded-md border bg-background p-3 text-sm" value={companySignature} onChange={(event) => setCompanySignature(event.target.value)} placeholder="Your name, company, phone, website…" /></label>
             <label className="grid gap-1 text-sm">Add multiple PDF files<input type="file" accept="application/pdf,.pdf" multiple onChange={(event) => setEmailFiles(Array.from(event.target.files ?? []))} /></label>
             <p className="text-xs text-muted-foreground">{savedAttachments.length + emailFiles.length} PDF attachment(s) selected. Total email size limit: 20 MB.</p>
             <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setEmailOpen(false)}>Cancel</Button><Button onClick={() => void sendEmail()} disabled={emailBusy || !emailTo.trim()}>{emailBusy ? "Sending…" : <><Send className="mr-1 size-4" /> Send email</>}</Button></div>
