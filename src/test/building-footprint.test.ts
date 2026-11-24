@@ -103,7 +103,6 @@ describe("OpenStreetMap building footprint parsing", () => {
   });
 });
 
-
 describe("automatic building footprint lookup guard", () => {
   it("runs once for each address/report key and skips missing addresses", () => {
     expect(shouldAutoSearchFootprint("123 Main St", "report-1", "")).toBe(true);

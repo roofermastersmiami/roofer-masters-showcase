@@ -210,7 +210,6 @@ export function parseBuildingFootprints(
   return results.sort((a, b) => a.distanceMeters - b.distanceMeters).slice(0, 8);
 }
 
-
 /** Return whether an address/report pair needs its first automatic footprint lookup. */
 export function shouldAutoSearchFootprint(
   address: string | null | undefined,
