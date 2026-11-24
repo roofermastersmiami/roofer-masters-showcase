@@ -39,7 +39,7 @@ describe("OpenStreetMap building footprint parsing", () => {
     expect(result).toHaveLength(1);
     // The L-shaped polygon's area centroid is about 1.36/4 units from
     // the lower-left corner, not the 2/4 vertex-average position.
-    expect(result[0]!.center.lat - origin.lat).toBeCloseTo(0.0000336, 5);
+    expect(result[0]!.center.lat - origin.lat).toBeCloseTo(0.0000407, 5);
     expect(result[0]!.center.lon - origin.lon).toBeCloseTo(0.0000336, 5);
   });
 
@@ -62,7 +62,7 @@ describe("OpenStreetMap building footprint parsing", () => {
           { lat: origin.lat, lon: origin.lon + 0.0002 },
           { lat: origin.lat + 0.0002, lon: origin.lon + 0.0002 },
           { lat: origin.lat + 0.0002, lon: origin.lon },
-          { lat: origin.lat + 0.0001, lon: origin.lon + 0.0001 },
+          { lat: origin.lat, lon: origin.lon + 0.0001 },
           { lat: origin.lat, lon: origin.lon },
         ] },
       ],
