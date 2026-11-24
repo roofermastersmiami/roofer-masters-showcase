@@ -297,7 +297,7 @@ export function RoofMeasurements({
         title,
         d,
         customer?.name ?? "",
-        propertyRow?.address ?? "",
+        workspaceAddress,
         photos,
       );
 
