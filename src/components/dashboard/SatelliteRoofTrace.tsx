@@ -217,6 +217,11 @@ export function satelliteTraceToGablePlanes(
   if (paths.some((path) => path.length < 3)) {
     throw new Error("The ridge split creates a collapsed roof facet.");
   }
+  // Keep the output order geographically stable: west/east or north/south.
+  paths.sort((a, b) =>
+    a.reduce((sum, point) => sum + axisValue(point), 0) / a.length -
+    b.reduce((sum, point) => sum + axisValue(point), 0) / b.length,
+  );
   const maxDistance = Math.max(...expanded.map((p) => Math.abs(axisValue(p) - centerAxis)));
   const ridgeHeight = 10 + (maxDistance * pitch) / 12;
   const makePlane = (path: { x: number; z: number }[], index: number): RoofPlane => {
