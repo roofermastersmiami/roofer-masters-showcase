@@ -192,18 +192,24 @@ export function measureDrawing(raw: RoofDrawing) {
     other: 0,
   };
   const seen = new Map<string, EdgeType>();
+  const edgeOccurrences = new Map<string, number>();
   for (const p of d.planes)
     for (let i = 0; i < p.points.length; i++) {
       const a = p.points[i],
         b = p.points[(i + 1) % p.points.length],
         type = p.edges[i];
       if (!a || !b || !type) continue;
-      const key = edgeKey(a, b),
-        existing = seen.get(key);
+      const length = distance(a, b);
+      if (length < 0.01) throw new Error(`${p.name}: roof edges must be at least 0.01 feet long`);
+      const key = edgeKey(a, b);
+      const occurrences = (edgeOccurrences.get(key) ?? 0) + 1;
+      edgeOccurrences.set(key, occurrences);
+      if (occurrences > 2) throw new Error("A roof edge cannot be shared by more than two planes");
+      const existing = seen.get(key);
       if (existing && existing !== type)
         throw new Error("Shared edges must have matching classifications");
       if (!existing) {
-        edges[type] += distance(a, b);
+        edges[type] += length;
         seen.set(key, type);
       }
     }
