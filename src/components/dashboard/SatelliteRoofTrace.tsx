@@ -370,6 +370,8 @@ export function SatelliteRoofTrace({
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
+  const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
   const [autoTraced, setAutoTraced] = useState(false);
@@ -801,12 +803,45 @@ export function SatelliteRoofTrace({
               </label>
             </div>
           )}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
+            <span className="mr-auto text-sm font-medium">Map interaction</span>
+            <Button type="button" size="sm" variant={mapInteraction === "draw" ? "default" : "outline"} onClick={() => setMapInteraction("draw")}>
+              <MousePointer2 className="h-4 w-4" /> Draw roof
+            </Button>
+            <Button type="button" size="sm" variant={mapInteraction === "pan" ? "default" : "outline"} onClick={() => setMapInteraction("pan")}>
+              <ArrowLeft className="h-4 w-4" /> Move map
+            </Button>
+            <span className="text-xs text-muted-foreground">{mapInteraction === "pan" ? "Drag the map to move around; use wheel or pinch to zoom." : "Click roof corners to add tracing points."}</span>
+          </div>
           <div className="overflow-hidden rounded-lg border border-border bg-muted">
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className="block aspect-[8/5] w-full cursor-crosshair touch-none"
-              onClick={addMapPoint}
+              className={`block aspect-[8/5] w-full touch-none ${mapInteraction === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
+              onClick={(event) => {
+                if (mapInteraction === "pan") return;
+                addMapPoint(event);
+              }}
+              onPointerDown={(event) => {
+                if (mapInteraction !== "pan" || !mapCenter) return;
+                event.preventDefault();
+                mapPanStart.current = { x: event.clientX, y: event.clientY, center: mapCenter };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
               onPointerMove={(event) => {
+                if (mapPanStart.current) {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) {
+                    const dx = event.clientX - mapPanStart.current.x;
+                    const dy = event.clientY - mapPanStart.current.y;
+                    const longitudeSpan = (bounds.east - bounds.west);
+                    const latitudeSpan = (bounds.north - bounds.south);
+                    setMapCenter({
+                      lon: mapPanStart.current.center.lon - (dx / rect.width) * longitudeSpan,
+                      lat: mapPanStart.current.center.lat + (dy / rect.height) * latitudeSpan,
+                    });
+                  }
+                  return;
+                }
                 const index = draggingPoint.current;
                 if (index === null) return;
                 const point = tracePointFromPointer(
@@ -818,12 +853,14 @@ export function SatelliteRoofTrace({
                   setPoints((current) => current.map((item, i) => (i === index ? point : item)));
               }}
               onPointerUp={() => {
+                mapPanStart.current = null;
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
                   suppressNextMapClick.current = true;
                 }
               }}
               onPointerCancel={() => {
+                mapPanStart.current = null;
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
               }}
