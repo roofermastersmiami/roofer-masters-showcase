@@ -346,6 +346,17 @@ describe("per-plane roof report takeoff", () => {
     expect(rows.every((row) => row.pitch_rise_per_12 > 0)).toBe(true);
     expect(rows.every((row) => row.edges_lf.ridge > 0)).toBe(true);
     expect(rows.every((row) => row.edges_lf.eave > 0)).toBe(true);
+    for (const row of rows) {
+      const classified = Object.values(row.edges_lf).reduce((sum, value) => sum + value, 0);
+      const perimeter = drawing.planes.find((plane) => plane.id === row.id)!.points.reduce(
+        (sum, point, index, points) => {
+          const next = points[(index + 1) % points.length]!;
+          return sum + Math.hypot(point.x - next.x, point.y - next.y, point.z - next.z);
+        },
+        0,
+      );
+      expect(classified).toBeCloseTo(perimeter, 5);
+    }
   });
 
   it("does not merge distinct roof planes into one aggregate row", () => {
