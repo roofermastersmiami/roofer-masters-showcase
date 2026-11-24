@@ -103,3 +103,17 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
       ];
   }
 }
+
+
+/**
+ * Explain takeoff limitations that cannot be resolved from aggregate report totals.
+ * Metal panel cut lengths require individual roof-plane run dimensions.
+ */
+export function materialOrderWarnings(input: RoofReport): string[] {
+  const parsed = reportSchema.parse(input);
+  if (parsed.roof_type !== "Metal Roof") return [];
+  return [
+    "Metal panel count is a preliminary estimate based on combined eave length and panel coverage.",
+    "Average panel length is only an area-to-eave estimate; it is not a panel cut list. Verify each roof plane's eave-to-ridge run, overhang, and trim details before ordering.",
+  ];
+}
