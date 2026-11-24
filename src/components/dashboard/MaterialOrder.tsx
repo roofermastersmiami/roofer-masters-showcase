@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ROOF_TYPES } from "@/lib/instant-estimate-schema";
 import {
   materialOrder,
+  escapeMaterialOrderHtml,
   reportSchema,
   type RoofReport,
   type MaterialLine,
@@ -27,16 +28,6 @@ const fields: [keyof RoofReport, string][] = [
   ["pipes", "Pipes / vents"],
   ["panel_width_in", "Metal panel width (in)"],
 ];
-/** Escape untrusted job titles and report text before inserting it into a print document. */
-export function escapeMaterialOrderHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .split("'")
-    .join("&#39;");
-}
 export function MaterialOrder({
   jobId,
   title,
