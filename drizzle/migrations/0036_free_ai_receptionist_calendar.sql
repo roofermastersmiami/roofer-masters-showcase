@@ -76,7 +76,7 @@ GRANT EXECUTE ON FUNCTION public.get_available_slots(date) TO anon, authenticate
 
 -- Enforce hours and overlap protection even for manual dashboard inserts.
 CREATE OR REPLACE FUNCTION public.guard_roof_appointment()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE local_start timestamp;
 BEGIN
   local_start := NEW.start_time AT TIME ZONE 'America/New_York';
@@ -99,7 +99,7 @@ BEGIN
   NEW.updated_at := now();
   RETURN NEW;
 END;
-$;
+$$;
 DROP TRIGGER IF EXISTS appointments_guard_overlap ON public.appointments;
 CREATE TRIGGER appointments_guard_overlap
   BEFORE INSERT OR UPDATE OF start_time,end_time,status ON public.appointments
