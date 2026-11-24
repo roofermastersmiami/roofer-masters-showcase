@@ -234,6 +234,12 @@ export function measureDrawing(raw: RoofDrawing) {
 }
 export type RoofShape = "gable" | "hip" | "flat" | "shed" | "mansard" | "complex";
 export function roofPreset(shape: RoofShape, width = 40, length = 30, pitch = 6): RoofDrawing {
+  if (!Number.isFinite(width) || width < 1 || width > 500)
+    throw new Error("Roof width must be between 1 and 500 feet");
+  if (!Number.isFinite(length) || length < 1 || length > 500)
+    throw new Error("Roof length must be between 1 and 500 feet");
+  if (!Number.isFinite(pitch) || pitch < 0 || pitch > 24)
+    throw new Error("Roof pitch must be between 0:12 and 24:12");
   const w = width / 2,
     l = length / 2,
     h = ((width / 2) * pitch) / 12,
