@@ -332,12 +332,12 @@ export function SatelliteRoofTrace({
   const center = location ? { lat: Number(location.lat), lon: Number(location.lon) } : null;
   const bounds = useMemo(
     () =>
-      center
+      mapCenter
         ? {
-            west: center.lon - TILE_SPAN / zoom,
-            east: center.lon + TILE_SPAN / zoom,
-            south: center.lat - (TILE_SPAN * 0.7) / zoom,
-            north: center.lat + (TILE_SPAN * 0.7) / zoom,
+            west: mapCenter.lon - TILE_SPAN / zoom,
+            east: mapCenter.lon + TILE_SPAN / zoom,
+            south: mapCenter.lat - (TILE_SPAN * 0.7) / zoom,
+            north: mapCenter.lat + (TILE_SPAN * 0.7) / zoom,
           }
         : null,
     [mapCenter, zoom],
