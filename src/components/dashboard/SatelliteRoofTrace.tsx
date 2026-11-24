@@ -486,13 +486,31 @@ export function SatelliteRoofTrace({
       const lat = Number(location.lat),
         lon = Number(location.lon);
       const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out geom;`;
-      const response = await fetch(
-        `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
-        { headers: { Accept: "application/json" } },
-      );
-      if (!response.ok) throw new Error("OpenStreetMap building lookup failed");
-      const data = (await response.json()) as { elements?: OSMBuildingWay[] };
-      const footprint = nearestBuildingFootprint(data.elements ?? [], { lat, lon });
+      // Public Overpass instances occasionally throttle or go offline. Try a
+      // second community endpoint before asking the estimator to trace manually.
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+      ];
+      let elements: OSMBuildingWay[] | null = null;
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(
+            `${endpoint}?data=${encodeURIComponent(query)}`,
+            { headers: { Accept: "application/json" } },
+          );
+          if (!response.ok) continue;
+          const data = (await response.json()) as { elements?: OSMBuildingWay[] };
+          if (Array.isArray(data.elements)) {
+            elements = data.elements;
+            break;
+          }
+        } catch {
+          // Continue to the next free public endpoint.
+        }
+      }
+      if (!elements) throw new Error("OpenStreetMap building lookup failed");
+      const footprint = nearestBuildingFootprint(elements, { lat, lon });
       if (!footprint) throw new Error("No nearby mapped building outline was found");
       setPoints(footprint);
       setAutoTraced(true);
@@ -534,7 +552,7 @@ export function SatelliteRoofTrace({
         <div>
           <h3 className="font-semibold">Free satellite roof tracing</h3>
           <p className="text-xs text-muted-foreground">
-            Search an address, trace the roof outline, and add it to this measurement
+            An address centers the map only. Trace the roof corners, then add the plane to update measurements and the 2D/3D drawing.
           </p>
         </div>
       </div>
