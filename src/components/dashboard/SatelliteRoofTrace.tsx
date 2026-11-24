@@ -713,7 +713,7 @@ export function SatelliteRoofTrace({
                 <MapPin className="h-4 w-4" /> 2D streets
               </Button>
             </div>
-            <Button type="button" size="sm" variant="outline" onClick={() => setPlacingTarget((current) => !current)} aria-pressed={placingTarget}>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setMapInteraction("draw"); setPlacingTarget((current) => !current); }} aria-pressed={placingTarget}>
               <MapPin className="h-4 w-4" /> {placingTarget ? "Click the house…" : "Place house target"}
             </Button>
             <a className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground" href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${(selectedBuildingCenter ?? mapCenter ?? center!).lat},${(selectedBuildingCenter ?? mapCenter ?? center!).lon}`} target="_blank" rel="noopener noreferrer">
