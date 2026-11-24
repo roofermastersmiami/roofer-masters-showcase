@@ -32,11 +32,9 @@ type Traced = { id: string; name: string; points: ImagePoint[] };
 export function RoofImageTrace({
   path,
   onAdd,
-  feetPerPixel,
 }: {
   path: string;
   onAdd: (plane: RoofPlane, replace: boolean) => void;
-  feetPerPixel?: number;
 }) {
   const photo = useQuery({
     queryKey: ["trace-photo", path],
@@ -48,18 +46,11 @@ export function RoofImageTrace({
       return data.signedUrl;
     },
   });
-  const [mode, setMode] = useState<"calibrate" | "trace">(feetPerPixel ? "trace" : "calibrate");
-  const [reference, setReference] = useState<ImagePoint[]>(
-    feetPerPixel
-      ? [
-          { x: 0, y: 0 },
-          { x: 1000, y: 0 },
-        ]
-      : [],
-  );
+  const [mode, setMode] = useState<"calibrate" | "trace">("calibrate");
+  const [reference, setReference] = useState<ImagePoint[]>([]);
   const [points, setPoints] = useState<ImagePoint[]>([]);
   const [edges, setEdges] = useState<EdgeType[]>([]);
-  const [feet, setFeet] = useState(feetPerPixel ? feetPerPixel * 1000 : 0);
+  const [feet, setFeet] = useState(0);
   const [pitch, setPitch] = useState(6);
   const [uphill, setUphill] = useState<Uphill>("up");
   const [name, setName] = useState("");
@@ -186,13 +177,6 @@ export function RoofImageTrace({
           estimates until you check them on site and mark the report verified. Not survey-grade.
         </p>
       </div>
-      {feetPerPixel && (
-        <p className="mb-4 border-l-2 border-primary pl-3 text-sm">
-          Free public aerial: scale pre-set from map data ({feetPerPixel.toFixed(2)} ft per pixel).
-          This image is coarse (about 1 m per pixel) — use it for rough layout only and recalibrate
-          on a measured edge when possible.
-        </p>
-      )}
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <Button
           variant={mode === "calibrate" ? "secondary" : "outline"}
@@ -244,13 +228,6 @@ export function RoofImageTrace({
               const width = e.currentTarget.naturalWidth,
                 height = e.currentTarget.naturalHeight;
               setDimensions({ width, height });
-              if (feetPerPixel) {
-                setReference([
-                  { x: 0, y: 0 },
-                  { x: width, y: 0 },
-                ]);
-                setFeet(feetPerPixel * width);
-              }
             }}
           />
           <svg
