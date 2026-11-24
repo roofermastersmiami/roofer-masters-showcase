@@ -33,7 +33,9 @@ CREATE INDEX IF NOT EXISTS crm_company_memberships_user_idx
 ALTER TABLE public.crm_companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.crm_company_memberships ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT, UPDATE ON public.crm_companies TO authenticated;
+GRANT SELECT ON public.crm_companies TO authenticated;
+REVOKE UPDATE ON public.crm_companies FROM authenticated;
+GRANT UPDATE (name) ON public.crm_companies TO authenticated;
 GRANT SELECT ON public.crm_company_memberships TO authenticated;
 GRANT ALL ON public.crm_companies, public.crm_company_memberships TO service_role;
 
