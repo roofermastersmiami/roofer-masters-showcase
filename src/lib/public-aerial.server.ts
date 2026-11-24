@@ -98,7 +98,7 @@ export async function fetchPublicAerial(
       "geocoding_response",
       "The free address service did not return usable map coordinates.",
     );
-  const box = aerialBox(lat, lon, spanMeters, 2000);
+  const box = aerialBox(lat, lon, spanMeters);
   const params = new URLSearchParams({
     bbox: box.bbox.join(","),
     bboxSR: "3857",
