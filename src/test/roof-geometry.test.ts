@@ -264,14 +264,16 @@ describe("georeferenced address marker", () => {
   });
 
   it("rejects invalid latitude or longitude in a saved address anchor", () => {
-    expect(() => drawingSchema.parse({
-      ...roofPreset("gable"),
-      geo_reference: {
-        addressLatitude: 91,
-        addressLongitude: -80,
-        originLatitude: 25,
-        originLongitude: -80,
-      },
-    })).toThrow();
+    expect(() =>
+      drawingSchema.parse({
+        ...roofPreset("gable"),
+        geo_reference: {
+          addressLatitude: 91,
+          addressLongitude: -80,
+          originLatitude: 25,
+          originLongitude: -80,
+        },
+      }),
+    ).toThrow();
   });
 });

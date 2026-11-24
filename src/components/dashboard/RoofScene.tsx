@@ -8,7 +8,13 @@ import {
   CanvasTexture,
   SRGBColorSpace,
 } from "three";
-import { planeInfo, distance, addressPinPosition, type RoofDrawing, type RoofPlane } from "@/lib/roof-geometry";
+import {
+  planeInfo,
+  distance,
+  addressPinPosition,
+  type RoofDrawing,
+  type RoofPlane,
+} from "@/lib/roof-geometry";
 import { PENETRATION_COLORS, ROOF_EDGE_STYLES, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
 function Dimension({ text, position }: { text: string; position: [number, number, number] }) {
   const texture = useMemo(() => {
@@ -225,7 +231,8 @@ export default function RoofScene({
     });
   }, []);
   const addressPin = drawing.geo_reference ? addressPinPosition(drawing.geo_reference) : null;
-  const pinBaseHeight = Math.max(10, ...drawing.planes.flatMap((p) => p.points.map((v) => v.y))) + 0.8;
+  const pinBaseHeight =
+    Math.max(10, ...drawing.planes.flatMap((p) => p.points.map((v) => v.y))) + 0.8;
   const extent = Math.max(
     30,
     Math.abs(addressPin?.x ?? 0) * 2,
@@ -266,7 +273,10 @@ export default function RoofScene({
         <gridHelper args={[extent * 2, 20, colors.edge, colors.ground]} />
         <Walls drawing={drawing} color={colors.ground} />
         {addressPin && (
-          <group position={[addressPin.x, pinBaseHeight, addressPin.z]} name="Geocoded property address">
+          <group
+            position={[addressPin.x, pinBaseHeight, addressPin.z]}
+            name="Geocoded property address"
+          >
             <mesh rotation-x={-Math.PI / 2} position={[0, 0.12, 0]}>
               <ringGeometry args={[0.75, 1.05, 28]} />
               <meshBasicMaterial color="#DC2626" side={DoubleSide} />
