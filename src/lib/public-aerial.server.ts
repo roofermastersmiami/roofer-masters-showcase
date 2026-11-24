@@ -108,7 +108,7 @@ export async function fetchPublicAerial(
     f: "image",
   });
   const img = await request(
-    `https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/export?${params}`,
+    `https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage?${params}`,
     25000,
     fetcher,
   );
