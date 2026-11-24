@@ -27,11 +27,13 @@ export function RoofReports({
   initialPropertyId,
   initialAddress = "",
   onOpenMeasurement,
+  onRequestHandled,
 }: {
   initialCustomer?: string;
   initialPropertyId?: string;
   initialAddress?: string;
   onOpenMeasurement: (reportId: string) => void;
+  onRequestHandled: () => void;
 }) {
   const customers = useQuery(customersQuery),
     orders = useQuery(roofOrdersQuery),
@@ -91,6 +93,7 @@ export function RoofReports({
     initialLookupStarted.current = true;
     if (matchingPropertyReport) {
       setAdding(false);
+      onRequestHandled();
       onOpenMeasurement(matchingPropertyReport.id);
       return;
     }
@@ -126,6 +129,7 @@ export function RoofReports({
           qc.invalidateQueries({ queryKey: ["crm-properties"] }),
         ]);
         setAdding(false);
+        onRequestHandled();
         onOpenMeasurement(created.id);
         toast.success("Property located. Opening its roof drawing workspace.");
       } catch (error) {
@@ -136,7 +140,7 @@ export function RoofReports({
         setLookupBusy(false);
       }
     })();
-  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup, create, qc, onOpenMeasurement]);
+  }, [initialAddress, orders.isPending, matchingPropertyReport?.id, lookup, create, qc, onOpenMeasurement, onRequestHandled]);
 
   async function submit() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
