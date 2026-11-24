@@ -4,6 +4,7 @@ import {
   addressPinPosition,
   auditRoofReport,
   measureDrawing,
+  roofPlaneTakeoff,
   type RoofDrawing,
   toMaterialReport,
 } from "./roof-geometry";
@@ -776,7 +777,7 @@ export async function roofDrawingPdf(
     { label: "Rake LF", x: 445 },
     { label: "Ridge/Hip/Valley LF", x: 500 },
   ]);
-  const planeCols = [
+  const planeTakeoffCols = [
     { x: MARGIN + 8, width: 165 },
     { x: 245, width: 48 },
     { x: 300, width: 38 },
@@ -797,7 +798,7 @@ export async function roofDrawingPdf(
         plane.edges_lf.rake.toFixed(1),
         combined.toFixed(1),
       ],
-      planeCols,
+      planeTakeoffCols,
       index,
     );
   });
