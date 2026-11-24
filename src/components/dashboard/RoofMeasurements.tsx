@@ -264,7 +264,7 @@ export function RoofMeasurements({
           .from("roof-job-photos")
           .download(item.path);
         if (photoError || !blob) throw new Error("Photo could not load");
-        let bytes = new Uint8Array(await blob.arrayBuffer());
+        let photoBytes = new Uint8Array(await blob.arrayBuffer());
         let mime = blob.type;
         if (mime === "image/webp") {
           const bitmap = await createImageBitmap(blob);
@@ -279,11 +279,11 @@ export function RoofMeasurements({
             canvas.toBlob(resolve, "image/png"),
           );
           if (!converted) throw new Error("Photo conversion failed");
-          bytes = new Uint8Array(await converted.arrayBuffer());
+          photoBytes = new Uint8Array(await converted.arrayBuffer());
           mime = "image/png";
         }
         photos.push({
-          bytes,
+          bytes: photoBytes,
           mime,
           category: item.category,
           name: item.name,
@@ -300,58 +300,36 @@ export function RoofMeasurements({
         propertyRow?.address ?? "",
         photos,
       );
+
       if (report) {
         roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;
         const { error: uploadError } = await supabase.storage
           .from("roofing-proposals")
-          .upload(roofReportPdfPath, new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }), {
-            contentType: "application/pdf",
-          });
+          .upload(
+            roofReportPdfPath,
+            new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }),
+            { contentType: "application/pdf" },
+          );
         if (uploadError) throw uploadError;
         const { data: currentReport, error: currentReportError } = await supabase
           .from("roof_report_orders")
           .select("updated_at")
           .eq("id", report.id)
           .maybeSingle();
-        if (currentReportError || !currentReport) throw new Error("Could not refresh the roof report before attaching its PDF");
-        await attachPdfFn({ data: { id: report.id, path: roofReportPdfPath, updated_at: currentReport.updated_at } });
+        if (currentReportError || !currentReport)
+          throw new Error("Could not refresh the roof report before attaching its PDF");
+        await attachPdfFn({
+          data: {
+            id: report.id,
+            path: roofReportPdfPath,
+            updated_at: currentReport.updated_at,
+          },
+        });
+        roofReportPdfPath = null;
         await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
-        if (share) {
-  else if (share) {
-          const { data: row, error } = await supabase
-            .from("proposals")
-            .insert({
-              title,
-              category: d.roof_type,
-              lead_id: customer?.source_lead_id ?? null,
-              property_id: property,
-              drawing_id: parent,
-              scope: "Roof measurement report",
-              terms: "",
-              amount: null,
-            })
-            .select("id")
-            .single();
-          if (error || !row) throw error;
-          proposalId = row.id;
-          const { uploadProposalPdf } = await import("./proposal-data");
-          const path = await uploadProposalPdf(row.id, bytes);
-          const { error: updateError } = await supabase
-            .from("proposals")
-            .update({ file_path: path })
-            .eq("id", row.id);
-          if (updateError) throw updateError;
-          await qc.invalidateQueries({ queryKey: ["proposals"] });
-          toast.success("Report added to documents; create a private sharing link");
-          go("proposals");
-  
-        } else {
-          const { downloadPdf } = await import("./proposal-data");
-          downloadPdf(bytes, title);
-          toast.success("Measurement PDF saved to Roof reports and downloaded");
-        }
-      } else if (share) {
-else if (share) {
+      }
+
+      if (share) {
         const { data: row, error } = await supabase
           .from("proposals")
           .insert({
@@ -366,7 +344,7 @@ else if (share) {
           })
           .select("id")
           .single();
-        if (error || !row) throw error;
+        if (error || !row) throw error ?? new Error("Could not create customer report");
         proposalId = row.id;
         const { uploadProposalPdf } = await import("./proposal-data");
         const path = await uploadProposalPdf(row.id, bytes);
@@ -376,17 +354,21 @@ else if (share) {
           .eq("id", row.id);
         if (updateError) throw updateError;
         await qc.invalidateQueries({ queryKey: ["proposals"] });
-        toast.success("Report added to documents; create a private sharing link");
+        toast.success(report
+          ? "Measurement PDF saved to Roof reports and customer documents"
+          : "Report added to documents; create a private sharing link");
         go("proposals");
-
       } else {
         const { downloadPdf } = await import("./proposal-data");
         downloadPdf(bytes, title);
-      }
+        toast.success(report
+          ? "Measurement PDF saved to Roof reports and downloaded"
+          : "Roof measurement PDF downloaded");
       }
     } catch (error) {
       if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);
-      if (roofReportPdfPath) await supabase.storage.from("roofing-proposals").remove([roofReportPdfPath]);
+      if (roofReportPdfPath)
+        await supabase.storage.from("roofing-proposals").remove([roofReportPdfPath]);
       toast.error(error instanceof Error ? error.message : "Could not generate report");
     } finally {
       setBusy(false);
