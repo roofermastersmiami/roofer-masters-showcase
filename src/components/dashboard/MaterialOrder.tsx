@@ -108,7 +108,13 @@ export function MaterialOrder({
     () => (valid.success ? materialOrder(valid.data) : []),
     [valid.success, r],
   );
-  const text = `Material order – ${title}\n${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)\n\n${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}\n\nRoofer Masters · 305-942-3093`;
+  const text = `Material order – ${title}
+${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
+
+${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("
+")}
+
+Roofer Masters · 305-942-3093`;
   async function save() {
     if (!valid.success) return;
     setBusy(true);
@@ -191,7 +197,17 @@ export function MaterialOrder({
             </Field>
           ))}
       </div>
-      {warnings.length > 0 && (\n        <div role="note" className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">\n          <p className="mb-1 font-semibold">Metal panel takeoff — review required</p>\n          <ul className="list-disc space-y-1 pl-5">\n            {warnings.map((warning) => (\n              <li key={warning}>{warning}</li>\n            ))}\n          </ul>\n        </div>\n      )}\n      {lines.length ? (
+      {warnings.length > 0 && (
+        <div role="note" className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+          <p className="mb-1 font-semibold">Metal panel takeoff — review required</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {lines.length ? (
         <table className="mt-4 w-full text-sm">
           <tbody>
             {lines.map((l) => (
