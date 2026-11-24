@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 from pyproj import Transformer
 from pystac_client import Client
-from shapely.geometry import Point, Polygon, mapping
+from shapely.geometry import MultiPoint, Point, Polygon, mapping
 from shapely.validation import make_valid
 from sklearn.linear_model import LinearRegression, RANSACRegressor
 
@@ -149,7 +149,7 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
         pitch = math.degrees(math.atan(slope))  # angle from horizontal
         pitch_rise = slope * 12.0
         # The XY convex hull area is horizontal projection; divide by cos(pitch) for true surface area.
-        hull = Polygon(selected[:, :2]).convex_hull
+        hull = MultiPoint(selected[:, :2]).convex_hull
         horizontal_area = float(hull.area)
         surface_area_sqft = horizontal_area / max(math.cos(math.radians(pitch)), 1e-6) * 10.7639104167
         azimuth = (math.degrees(math.atan2(-a, -b)) + 360.0) % 360.0
