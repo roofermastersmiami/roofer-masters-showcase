@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, Download, FileText, MapPin, Search, Trash2 } from "lucide-react";
+import { ArrowRight, Download, Eye, FileText, MapPin, Search, Trash2, ZoomIn, ZoomOut } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,11 @@ export function RoofReports({
   const [swipedReportId, setSwipedReportId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; address: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); }, [pdfUrl]);
   const touchStartX = useRef<number | null>(null);
 
   async function downloadReport(row: RoofOrder) {
@@ -44,6 +49,27 @@ export function RoofReports({
       downloadPdf(new Uint8Array(await data.arrayBuffer()), row.title || "Roof measurement report");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not download roof report PDF");
+    }
+  }
+
+  async function viewReport(row: RoofOrder) {
+    if (!row.file_path) return;
+    setViewingReport(row);
+    setPdfLoading(true);
+    setZoom(1);
+    try {
+      const { data, error } = await supabase.storage.from("roofing-proposals").download(row.file_path);
+      if (error || !data) throw error ?? new Error("PDF file not found");
+      const nextUrl = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      setPdfUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return nextUrl;
+      });
+    } catch (error) {
+      setViewingReport(null);
+      toast.error(error instanceof Error ? error.message : "Could not open roof report PDF");
+    } finally {
+      setPdfLoading(false);
     }
   }
 
