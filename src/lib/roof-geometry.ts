@@ -400,7 +400,6 @@ export function toMaterialReport(d: RoofDrawing) {
   };
 }
 
-
 export type RoofReportAudit = {
   status: "ready" | "review" | "blocked";
   blockers: string[];
@@ -432,12 +431,10 @@ export function auditRoofReport(raw: RoofDrawing): RoofReportAudit {
       blockers.push("One or more roof planes have missing edge classifications.");
     if (unclassifiedEdges > 0)
       warnings.push(`${unclassifiedEdges} roof boundary edge(s) remain unclassified.`);
-    if (!drawing.geo_reference)
-      warnings.push("No geographic origin is saved with this drawing.");
+    if (!drawing.geo_reference) warnings.push("No geographic origin is saved with this drawing.");
     if (drawing.accuracy !== "site_verified")
       warnings.push("Measurements are not marked as site verified.");
-    if (!drawing.verified)
-      warnings.push("The drawing has not been marked as owner reviewed.");
+    if (!drawing.verified) warnings.push("The drawing has not been marked as owner reviewed.");
     if (measurement.planes.some((plane) => plane.pitch <= 0) && drawing.roof_type !== "Flat Roof")
       warnings.push("A zero-pitch plane exists on a non-flat roofing system; confirm pitch.");
   } catch (error) {
