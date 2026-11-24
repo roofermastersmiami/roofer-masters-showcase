@@ -92,7 +92,7 @@ const groups = [
       { id: "prices", label: "Material & labor prices", icon: Settings },
       { id: "proposals", label: "Estimates & proposals", icon: FileText },
       { id: "jobs", label: "Projects & production", icon: HardHat },
-      { id: "followups", label: "Tasks & follow-ups", icon: Clock },
+      { id: "followups", label: "Tasks & follow-ups", icon: Clock },\n      { id: "appointments", label: "Appointment calendar", icon: CalendarDays },
     ],
   },
   {
