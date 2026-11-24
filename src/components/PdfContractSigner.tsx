@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { emailRoofReportPdfs } from "@/lib/pdf-email.functions";
+import { cn } from "@/lib/utils";
 
 type FieldKind = "signature" | "name" | "date" | "initials" | "text" | "erase";
 export type PdfSignField = {
@@ -402,7 +403,7 @@ export function PdfContractSigner({
     const incomplete = fields.find(
       (field) =>
         (field.kind === "signature" && !field.imageData) ||
-        (field.kind !== "signature" && !field.value.trim()),
+        (field.kind !== "signature" && field.kind !== "erase" && !field.value.trim()),
     );
     if (incomplete) {
       setSelectedId(incomplete.id);
