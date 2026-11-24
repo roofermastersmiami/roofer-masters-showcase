@@ -1,3 +1,4 @@
+import logoMark from "@/assets/logo-mark.webp";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
 import {
   addressPinPosition,
@@ -434,15 +435,31 @@ export async function roofDrawingPdf(
     { x: MARGIN, y: coverY, size: 7.5, font: bold, color: NAVY },
   );
   coverY -= 15;
-  firstPage.drawText("ROOFER MASTERS", { x: 390, y: 48, size: 12, font: bold, color: NAVY });
-  firstPage.drawText("ROOFING  ·  (305) 942-3093", { x: 390, y: 35, size: 7, font, color: MUTED });
-  firstPage.drawText("roofermasters@gmail.com", { x: 390, y: 24, size: 7, font, color: MUTED });
-  firstPage.drawLine({
-    start: { x: 380, y: 58 },
-    end: { x: 555, y: 58 },
-    thickness: 1.5,
-    color: BLUE,
-  });
+  let logoEmbedded = false;
+  if (typeof document !== "undefined" && typeof createImageBitmap === "function") {
+    try {
+      const response = await fetch(logoMark);
+      const bitmap = await createImageBitmap(await response.blob());
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Logo canvas unavailable");
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      const logoBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Logo conversion failed")), "image/png"));
+      const logo = await pdf.embedPng(new Uint8Array(await logoBlob.arrayBuffer()));
+      const fit = logo.scaleToFit(150, 48);
+      firstPage.drawImage(logo, { x: PAGE_W - MARGIN - fit.width, y: 24, width: fit.width, height: fit.height });
+      logoEmbedded = true;
+    } catch (error) {
+      console.warn("Roof report logo could not be embedded; using text fallback.", error);
+    }
+  }
+  if (!logoEmbedded) {
+    firstPage.drawText("ROOFER MASTERS", { x: 390, y: 42, size: 12, font: bold, color: NAVY });
+    firstPage.drawText("YOUR ROOF, OUR MASTERPIECE", { x: 390, y: 29, size: 6.5, font, color: MUTED });
+  }
   firstPage.drawText("PRELIMINARY REPORT - VERIFY FIELD CONDITIONS", {
     x: MARGIN,
     y: 45,
