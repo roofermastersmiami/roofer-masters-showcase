@@ -71,3 +71,23 @@ describe("material takeoff review warnings", () => {
     expect(materialOrderWarnings({ ...base, roof_type: "Shingle Roof" })).toEqual([]);
   });
 });
+
+
+describe("material order source tracking", () => {
+  it("recognizes a saved drawing-linked takeoff", async () => {
+    const { resolveMaterialOrderSource } = await import("@/lib/material-order");
+    expect(resolveMaterialOrderSource({ drawing_id: "drawing-123" })).toEqual({
+      source: "drawing", label: "Transferred from saved roof drawing", drawingId: "drawing-123",
+    });
+  });
+  it("labels uploaded reports as requiring verification", async () => {
+    const { resolveMaterialOrderSource } = await import("@/lib/material-order");
+    expect(resolveMaterialOrderSource({ source: "uploaded_report" }).label).toContain("verify");
+  });
+  it("does not treat legacy records without provenance as drawing-verified", async () => {
+    const { resolveMaterialOrderSource } = await import("@/lib/material-order");
+    expect(resolveMaterialOrderSource({ report: base }).source).toBe("legacy");
+    expect(resolveMaterialOrderSource({ source: "drawing" }).source).toBe("legacy");
+    expect(resolveMaterialOrderSource(null).source).toBe("manual");
+  });
+});

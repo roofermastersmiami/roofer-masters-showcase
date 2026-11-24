@@ -123,3 +123,17 @@ export function materialOrderWarnings(input: RoofReport): string[] {
     "Average panel length is only an area-to-eave estimate; it is not a panel cut list. Verify each roof plane's eave-to-ridge run, overhang, and trim details before ordering.",
   ];
 }
+
+
+export type MaterialOrderSource = "drawing" | "uploaded_report" | "manual" | "legacy";
+
+/** Resolve trustworthy provenance from the JSON saved with a roof job. */
+export function resolveMaterialOrderSource(saved: unknown): { source: MaterialOrderSource; label: string; drawingId?: string } {
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return { source: "manual", label: "Manual estimate — not drawing-verified" };
+  const data = saved as Record<string, unknown>;
+  const drawingId = typeof data.drawing_id === "string" && data.drawing_id.trim() ? data.drawing_id : undefined;
+  if (drawingId && (data.source === "drawing" || !data.source)) return { source: "drawing", label: "Transferred from saved roof drawing", ...(drawingId ? { drawingId } : {}) };
+  if (data.source === "uploaded_report") return { source: "uploaded_report", label: "Uploaded roof report — verify measurements" };
+  if (data.source === "manual") return { source: "manual", label: "Manual estimate — not drawing-verified" };
+  return { source: "legacy", label: "Previously saved estimate — source not recorded" };
+}

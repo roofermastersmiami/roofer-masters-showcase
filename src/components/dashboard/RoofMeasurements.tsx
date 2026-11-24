@@ -318,6 +318,7 @@ export function RoofMeasurements({
           material_order: {
             report,
             lines,
+            source: "drawing",
             drawing_id: parent,
             updated_at: new Date().toISOString(),
           },
