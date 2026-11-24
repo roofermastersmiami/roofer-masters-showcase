@@ -694,6 +694,20 @@ export function SatelliteRoofTrace({
       {location && bounds && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1 rounded-md border border-border p-1" aria-label="Map layer">
+              <Button type="button" size="sm" variant={baseMap === "satellite" ? "secondary" : "ghost"} aria-pressed={baseMap === "satellite"} onClick={() => setBaseMap("satellite")}>
+                <Satellite className="h-4 w-4" /> Satellite
+              </Button>
+              <Button type="button" size="sm" variant={baseMap === "streets" ? "secondary" : "ghost"} aria-pressed={baseMap === "streets"} onClick={() => setBaseMap("streets")}>
+                <MapPin className="h-4 w-4" /> 2D streets
+              </Button>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => setPlacingTarget((current) => !current)} aria-pressed={placingTarget}>
+              <MapPin className="h-4 w-4" /> {placingTarget ? "Click the house…" : "Place house target"}
+            </Button>
+            <a className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground" href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${(selectedBuildingCenter ?? mapCenter ?? center!).lat},${(selectedBuildingCenter ?? mapCenter ?? center!).lon}`} target="_blank" rel="noopener noreferrer">
+              <MapPin className="h-4 w-4" /> Open Street View
+            </a>
             <Button
               type="button"
               size="sm"
@@ -854,6 +868,11 @@ export function SatelliteRoofTrace({
                 />
               </label>
             </div>
+          )}
+          {placingTarget && (
+            <p className="rounded-md border border-primary bg-primary/5 p-2 text-sm">
+              Click the center of the correct house on the map. The map recenters on that target; the geocoded address remains a separate reference.
+            </p>
           )}
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
             <span className="mr-auto text-sm font-medium">Map interaction</span>
@@ -1294,7 +1313,7 @@ export function SatelliteRoofTrace({
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Imagery: Esri World Imagery. Building footprints and address lookup: OpenStreetMap. DIY
+            Map layer: Esri {baseMap === "satellite" ? "World Imagery" : "World Street Map"}. Building footprints and address lookup: OpenStreetMap. DIY
             mode: draw each roof plane separately and classify every edge; the software calculates
             its dimensions and area from the traced geometry.
           </p>
