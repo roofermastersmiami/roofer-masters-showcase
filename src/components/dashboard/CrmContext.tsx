@@ -7,6 +7,7 @@ export type CrmState = {
   proposalLeadId: string | null;
   clearProposalLead: () => void;
   go: (section: string) => void;
+  roofReportRequest: { propertyId: string; customerId: string; address: string } | null;
 };
 export const CrmContext = createContext<CrmState | null>(null);
 export function useCrm() {
