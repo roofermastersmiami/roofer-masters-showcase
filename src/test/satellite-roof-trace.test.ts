@@ -160,6 +160,26 @@ describe("guided satellite gable facet splitting", () => {
     expect(() => satelliteTraceToGablePlanes(rectangle, 6, "north-south", -41)).toThrow(/offset/);
   });
 
+  it("supports a diagonal ridge and keeps both candidate facets measurable", () => {
+    const planes = satelliteTraceToGablePlanes(rectangle, 6, "north-south", 0, 15);
+    expect(planes).toHaveLength(2);
+    expect(planes[0]?.name).toBe("Gable facet 1");
+    expect(planes[1]?.name).toBe("Gable facet 2");
+    expect(planeInfo(planes[0]!).pitch).toBeCloseTo(6, 1);
+    expect(planeInfo(planes[1]!).pitch).toBeCloseTo(6, 1);
+    const report = measureDrawing({
+      planes, penetrations: [], waste: 10, roof_type: "Metal Roof",
+      notes: "", condition: "", verified: false,
+    });
+    expect(report.area).toBeGreaterThan(0);
+    expect(report.edges.ridge).toBeGreaterThan(0);
+  });
+
+  it("rejects ridge angles outside the supported range", () => {
+    expect(() => satelliteTraceToGablePlanes(rectangle, 6, "north-south", 0, 31)).toThrow(/angle/);
+    expect(() => satelliteTraceToGablePlanes(rectangle, 6, "north-south", 0, -31)).toThrow(/angle/);
+  });
+
   it("rejects ambiguous ridge cuts, zero pitch, and outlines with too few corners", () => {
     expect(() => satelliteTraceToGablePlanes(rectangle, 0, "north-south")).toThrow(/pitch/);
     expect(() => satelliteTraceToGablePlanes(rectangle.slice(0, 3), 6, "north-south")).toThrow(

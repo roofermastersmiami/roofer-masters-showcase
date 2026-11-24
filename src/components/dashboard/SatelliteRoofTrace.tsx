@@ -156,6 +156,7 @@ export function satelliteTraceToGablePlanes(
   pitch: number,
   ridgeAxis: RidgeAxis,
   ridgeOffsetPercent = 0,
+  ridgeAngleDegrees = 0,
 ): RoofPlane[] {
   if (points.length < 4 || points.length > 100) {
     throw new Error("A gable trace needs at least four boundary corners.");
@@ -172,18 +173,27 @@ export function satelliteTraceToGablePlanes(
     x: (p.lon - lon0) * 111320 * cos * METERS_TO_FEET,
     z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
   }));
-  const axisValue = (p: { x: number; z: number }) => (ridgeAxis === "north-south" ? p.x : p.z);
   if (!Number.isFinite(ridgeOffsetPercent) || ridgeOffsetPercent < -40 || ridgeOffsetPercent > 40) {
     throw new Error("Ridge offset must be between -40% and 40%.");
   }
-  const axisValues = local.map(axisValue);
-  const axisSpan = Math.max(...axisValues) - Math.min(...axisValues);
-  if (axisSpan <= 0.001)
-    throw new Error("The traced outline is too narrow for this ridge direction.");
-  // Offset the center ridge across the traced footprint without changing its orientation.
-  const centerAxis =
-    local.reduce((sum, p) => sum + axisValue(p), 0) / local.length +
-    (axisSpan * ridgeOffsetPercent) / 100;
+  if (!Number.isFinite(ridgeAngleDegrees) || ridgeAngleDegrees < -30 || ridgeAngleDegrees > 30) {
+    throw new Error("Ridge angle must be between -30 and 30 degrees.");
+  }
+  // Project onto the ridge normal so the ridge can rotate off cardinal axes.
+  const angle = (ridgeAngleDegrees * Math.PI) / 180;
+  const baseNormal = ridgeAxis === "north-south" ? { x: 1, z: 0 } : { x: 0, z: 1 };
+  const normal = {
+    x: baseNormal.x * Math.cos(angle) - baseNormal.z * Math.sin(angle),
+    z: baseNormal.x * Math.sin(angle) + baseNormal.z * Math.cos(angle),
+  };
+  const project = (p: { x: number; z: number }) => p.x * normal.x + p.z * normal.z;
+  const projections = local.map(project);
+  const projectionMin = Math.min(...projections);
+  const projectionMax = Math.max(...projections);
+  const projectionSpan = projectionMax - projectionMin;
+  if (projectionSpan <= 0.001) throw new Error("The traced outline is too narrow for this ridge direction.");
+  // Bounding midpoint is stable when users add extra trace points along one edge.
+  const centerAxis = (projectionMin + projectionMax) / 2 + (projectionSpan * ridgeOffsetPercent) / 100;
   const tolerance = 0.00001;
   const expanded: { x: number; z: number }[] = [];
   for (let i = 0; i < local.length; i++) {
@@ -195,8 +205,8 @@ export function satelliteTraceToGablePlanes(
         tolerance
     )
       expanded.push(a);
-    const da = axisValue(a) - centerAxis;
-    const db = axisValue(b) - centerAxis;
+    const da = project(a) - centerAxis;
+    const db = project(b) - centerAxis;
     if (Math.abs(da) <= tolerance && Math.abs(db) <= tolerance) {
       throw new Error("The selected ridge direction overlaps a roof boundary edge.");
     }
@@ -207,7 +217,7 @@ export function satelliteTraceToGablePlanes(
   }
   const intersections = expanded
     .map((p, index) => ({ p, index }))
-    .filter(({ p }) => Math.abs(axisValue(p) - centerAxis) <= tolerance);
+    .filter(({ p }) => Math.abs(project(p) - centerAxis) <= tolerance);
   if (intersections.length !== 2) {
     throw new Error(
       "This ridge direction must cross the outline at exactly two points. Try the other direction or adjust the trace.",
@@ -233,30 +243,32 @@ export function satelliteTraceToGablePlanes(
   if (paths.some((path) => path.length < 3)) {
     throw new Error("The ridge split creates a collapsed roof facet.");
   }
-  // Keep the output order geographically stable: west/east or north/south.
+  // Keep facet order stable on either side of the selected ridge.
   paths.sort(
     (a, b) =>
-      a.reduce((sum, point) => sum + axisValue(point), 0) / a.length -
-      b.reduce((sum, point) => sum + axisValue(point), 0) / b.length,
+      a.reduce((sum, point) => sum + project(point), 0) / a.length -
+      b.reduce((sum, point) => sum + project(point), 0) / b.length,
   );
-  const maxDistance = Math.max(...expanded.map((p) => Math.abs(axisValue(p) - centerAxis)));
+  const maxDistance = Math.max(...expanded.map((p) => Math.abs(project(p) - centerAxis)));
   const ridgeHeight = 10 + (maxDistance * pitch) / 12;
   const makePlane = (path: { x: number; z: number }[], index: number): RoofPlane => {
     const vertices: Point[] = path.map((p) => ({
       x: p.x,
       z: p.z,
-      y: ridgeHeight - (Math.abs(axisValue(p) - centerAxis) * pitch) / 12,
+      y: ridgeHeight - (Math.abs(project(p) - centerAxis) * pitch) / 12,
     }));
     const plane: RoofPlane = {
       id: `satellite-gable-${index}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       name:
-        ridgeAxis === "north-south"
-          ? path.reduce((sum, point) => sum + point.x, 0) / path.length < centerAxis
-            ? "West gable facet"
-            : "East gable facet"
-          : path.reduce((sum, point) => sum + point.z, 0) / path.length < centerAxis
-            ? "North gable facet"
-            : "South gable facet",
+        Math.abs(ridgeAngleDegrees) > 0.001
+          ? `Gable facet ${index + 1}`
+          : ridgeAxis === "north-south"
+            ? path.reduce((sum, point) => sum + project(point), 0) / path.length < centerAxis
+              ? "West gable facet"
+              : "East gable facet"
+            : path.reduce((sum, point) => sum + project(point), 0) / path.length < centerAxis
+              ? "North gable facet"
+              : "South gable facet",
       points: vertices,
       edges: vertices.map((_, edgeIndex) =>
         edgeIndex === vertices.length - 1 ? "ridge" : "other",
@@ -283,6 +295,7 @@ export function SatelliteRoofTrace({
   const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
+  const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
@@ -740,6 +753,21 @@ export function SatelliteRoofTrace({
                 Move the ridge across the traced width
               </span>
             </label>
+            <label className="min-w-48 flex-1 text-sm">
+              Ridge angle: {ridgeAngleDegrees > 0 ? "+" : ""}
+              {ridgeAngleDegrees}°
+              <input
+                type="range"
+                min={-30}
+                max={30}
+                step={1}
+                value={ridgeAngleDegrees}
+                onChange={(e) => setRidgeAngleDegrees(Number(e.target.value))}
+                className="mt-2 block w-full accent-primary"
+                aria-label="Ridge angle"
+              />
+              <span className="text-xs text-muted-foreground">Rotate the ridge up to 30°</span>
+            </label>
             <Button
               type="button"
               variant="outline"
@@ -753,6 +781,7 @@ export function SatelliteRoofTrace({
                       Number(pitch),
                       ridgeAxis,
                       ridgeOffsetPercent,
+                      ridgeAngleDegrees,
                     ),
                   );
                   setPoints([]);
