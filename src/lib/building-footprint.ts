@@ -5,6 +5,7 @@ export type BuildingFootprint = {
   areaSqFt: number;
   center: FootprintPoint;
   distanceMeters: number;
+  containsAddress: boolean;
   buildingType: string;
 };
 type OverpassElement = {
@@ -52,6 +53,23 @@ function distanceToPolygonMeters(point: FootprintPoint, polygon: FootprintPoint[
   }
   return minimum;
 }
+function containsPoint(point: FootprintPoint, polygon: FootprintPoint[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const a = polygon[j]!;
+    const b = polygon[i]!;
+    if (onSegment(a, b, point)) return true;
+    const crossesLatitude = (a.lat > point.lat) !== (b.lat > point.lat);
+    if (
+      crossesLatitude &&
+      point.lon < ((b.lon - a.lon) * (point.lat - a.lat)) / (b.lat - a.lat) + a.lon
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 function polygonArea(points: FootprintPoint[], originLat: number): number {
   const xy = points.map((point) => localXY(point, originLat));
   let twiceArea = 0;
@@ -190,7 +208,8 @@ export function parseBuildingFootprints(
     // The area centroid of a concave footprint can be farther from the
     // address than its nearest wall. Match the search radius to the polygon,
     // not to its centroid, so irregular nearby buildings are not discarded.
-    const distanceMeters = distanceToPolygonMeters(origin, openRing);
+    const containsAddress = containsPoint(origin, openRing);
+    const distanceMeters = containsAddress ? 0 : distanceToPolygonMeters(origin, openRing);
     if (distanceMeters > maxDistanceMeters) continue;
     const areaSqM = polygonArea(openRing, center.lat);
     if (!Number.isFinite(areaSqM) || areaSqM < 20 || areaSqM > 5000) continue;
@@ -204,10 +223,13 @@ export function parseBuildingFootprints(
       areaSqFt: Math.round(areaSqM * 10.7639),
       center,
       distanceMeters: Math.round(distanceMeters * 10) / 10,
+      containsAddress,
       buildingType: typeof tags.building === "string" ? tags.building.slice(0, 40) : "yes",
     });
   }
-  return results.sort((a, b) => a.distanceMeters - b.distanceMeters).slice(0, 8);
+  return results
+    .sort((a, b) => Number(b.containsAddress) - Number(a.containsAddress) || a.distanceMeters - b.distanceMeters)
+    .slice(0, 8);
 }
 
 /** Return whether an address/report pair needs its first automatic footprint lookup. */
