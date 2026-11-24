@@ -144,11 +144,108 @@ export function satelliteTraceToPlane(
   return plane;
 }
 
+
+export type RidgeAxis = "north-south" | "east-west";
+
+/**
+ * Split a traced building outline into two candidate gable facets using a
+ * centerline selected by ridge direction. Only simple outlines intersected
+ * exactly twice are accepted; every generated facet is validated as planar.
+ */
+export function satelliteTraceToGablePlanes(
+  points: TracePoint[],
+  pitch: number,
+  ridgeAxis: RidgeAxis,
+): RoofPlane[] {
+  if (points.length < 4 || points.length > 100) {
+    throw new Error("A gable trace needs at least four boundary corners.");
+  }
+  if (!Number.isFinite(pitch) || pitch <= 0 || pitch > 24) {
+    throw new Error("Gable pitch must be greater than 0:12 and no more than 24:12.");
+  }
+  // Reuse the single-plane validator for coordinate, duplicate, and outline checks.
+  satelliteTraceToPlane(points, 0);
+  const lat0 = points.reduce((sum, p) => sum + p.lat, 0) / points.length;
+  const lon0 = points.reduce((sum, p) => sum + p.lon, 0) / points.length;
+  const cos = Math.cos((lat0 * Math.PI) / 180);
+  const local = points.map((p) => ({
+    x: (p.lon - lon0) * 111320 * cos * METERS_TO_FEET,
+    z: (lat0 - p.lat) * 110540 * METERS_TO_FEET,
+  }));
+  const axisValue = (p: { x: number; z: number }) =>
+    ridgeAxis === "north-south" ? p.x : p.z;
+  const centerAxis = local.reduce((sum, p) => sum + axisValue(p), 0) / local.length;
+  const tolerance = 0.00001;
+  const expanded: { x: number; z: number }[] = [];
+  for (let i = 0; i < local.length; i++) {
+    const a = local[i]!;
+    const b = local[(i + 1) % local.length]!;
+    if (!expanded.length || Math.hypot(expanded[expanded.length - 1]!.x - a.x, expanded[expanded.length - 1]!.z - a.z) > tolerance)
+      expanded.push(a);
+    const da = axisValue(a) - centerAxis;
+    const db = axisValue(b) - centerAxis;
+    if (Math.abs(da) <= tolerance && Math.abs(db) <= tolerance) {
+      throw new Error("The selected ridge direction overlaps a roof boundary edge.");
+    }
+    if (da * db < -tolerance * tolerance) {
+      const t = da / (da - db);
+      expanded.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+    }
+  }
+  const intersections = expanded
+    .map((p, index) => ({ p, index }))
+    .filter(({ p }) => Math.abs(axisValue(p) - centerAxis) <= tolerance);
+  if (intersections.length !== 2) {
+    throw new Error("This ridge direction must cross the outline at exactly two points. Try the other direction or adjust the trace.");
+  }
+  const [first, second] = intersections;
+  if (!first || !second || first.index === second.index) {
+    throw new Error("Could not create two distinct gable facets from this outline.");
+  }
+  const pathBetween = (start: number, end: number) => {
+    const path: { x: number; z: number }[] = [];
+    for (let index = start, count = 0; count <= expanded.length; index = (index + 1) % expanded.length, count++) {
+      path.push(expanded[index]!);
+      if (index === end) break;
+    }
+    return path;
+  };
+  const paths = [
+    pathBetween(first.index, second.index),
+    pathBetween(second.index, first.index),
+  ];
+  if (paths.some((path) => path.length < 3)) {
+    throw new Error("The ridge split creates a collapsed roof facet.");
+  }
+  const maxDistance = Math.max(...expanded.map((p) => Math.abs(axisValue(p) - centerAxis)));
+  const ridgeHeight = 10 + (maxDistance * pitch) / 12;
+  const makePlane = (path: { x: number; z: number }[], index: number): RoofPlane => {
+    const vertices: Point[] = path.map((p) => ({
+      x: p.x,
+      z: p.z,
+      y: ridgeHeight - (Math.abs(axisValue(p) - centerAxis) * pitch) / 12,
+    }));
+    const plane: RoofPlane = {
+      id: `satellite-gable-${index}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      name: ridgeAxis === "north-south"
+        ? index === 0 ? "West gable facet" : "East gable facet"
+        : index === 0 ? "North gable facet" : "South gable facet",
+      points: vertices,
+      edges: vertices.map((_, edgeIndex) =>
+        edgeIndex === vertices.length - 1 ? "ridge" : "other",
+      ),
+    };
+    planeInfo(plane);
+    return plane;
+  };
+  return paths.map(makePlane);
+}
+
 export function SatelliteRoofTrace({
   onAdd,
   initialAddress = "",
 }: {
-  onAdd: (plane: RoofPlane) => void;
+  onAdd: (planes: RoofPlane[]) => void;
   initialAddress?: string;
 }) {
   const [address, setAddress] = useState("");
@@ -157,6 +254,7 @@ export function SatelliteRoofTrace({
   const [points, setPoints] = useState<TracePoint[]>([]);
   const [pitch, setPitch] = useState("6");
   const [pitchDirection, setPitchDirection] = useState<PitchDirection>("south");
+  const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
   const [autoTraceBusy, setAutoTraceBusy] = useState(false);
@@ -571,7 +669,7 @@ export function SatelliteRoofTrace({
               onClick={() => {
                 setBusy(true);
                 try {
-                  onAdd(satelliteTraceToPlane(points, Number(pitch), pitchDirection));
+                  onAdd([satelliteTraceToPlane(points, Number(pitch), pitchDirection)]);
                   setPoints([]);
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
@@ -582,6 +680,42 @@ export function SatelliteRoofTrace({
             >
               <MapPin className="h-4 w-4" /> Add traced plane
             </Button>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3 rounded-md border border-border p-3">
+            <label className="text-sm">
+              Gable ridge runs
+              <select
+                value={ridgeAxis}
+                onChange={(e) => setRidgeAxis(e.target.value as RidgeAxis)}
+                className="mt-1 block h-10 rounded-md border border-input bg-background px-3 text-sm"
+                aria-label="Gable ridge direction"
+              >
+                <option value="north-south">North–South</option>
+                <option value="east-west">East–West</option>
+              </select>
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={points.length < 4 || Number(pitch) <= 0 || busy}
+              onClick={() => {
+                setBusy(true);
+                try {
+                  onAdd(satelliteTraceToGablePlanes(points, Number(pitch), ridgeAxis));
+                  setPoints([]);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Could not split this outline into gable facets.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Split into 2 gable planes
+            </Button>
+            <p className="basis-full text-xs text-muted-foreground">
+              Creates two preliminary facets along a center ridge. Choose the ridge direction that matches the roof; confirm the ridge, eaves, overhangs, and pitch before using quantities. Irregular outlines that cannot be split cleanly are rejected.
+            </p>
           </div>
           {autoTraced && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
