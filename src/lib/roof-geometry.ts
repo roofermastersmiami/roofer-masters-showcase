@@ -17,6 +17,21 @@ export const planeSchema = z
     edges: z.array(z.enum(EDGE_TYPES)).min(3).max(100),
   })
   .refine((p) => p.edges.length === p.points.length, "Each edge needs a classification");
+export const geoReferenceSchema = z.object({
+  addressLatitude: z.number().finite().min(-90).max(90),
+  addressLongitude: z.number().finite().min(-180).max(180),
+  originLatitude: z.number().finite().min(-90).max(90),
+  originLongitude: z.number().finite().min(-180).max(180),
+});
+export type GeoReference = z.infer<typeof geoReferenceSchema>;
+export function addressPinPosition(reference: GeoReference) {
+  const latitudeScale = 110540 * 0.3048;
+  const longitudeScale = 111320 * Math.cos((reference.originLatitude * Math.PI) / 180) * 0.3048;
+  return {
+    x: (reference.addressLongitude - reference.originLongitude) * longitudeScale,
+    z: (reference.originLatitude - reference.addressLatitude) * latitudeScale,
+  };
+}
 export const drawingSchema = z.object({
   planes: z.array(planeSchema).min(1).max(100),
   penetrations: z
@@ -38,6 +53,7 @@ export const drawingSchema = z.object({
   verified: z.boolean(),
   accuracy: z.enum(["photo_estimate", "scaled", "site_verified"]).optional(),
   image_credit: z.string().max(300).optional(),
+  geo_reference: geoReferenceSchema.optional(),
 });
 export type RoofDrawing = z.infer<typeof drawingSchema>;
 export type RoofPlane = z.infer<typeof planeSchema>;
