@@ -30,6 +30,7 @@ import {
   type Uphill,
 } from "@/lib/roof-trace";
 import { planeInfo, type EdgeType, type RoofPlane } from "@/lib/roof-geometry";
+import { ROOF_EDGE_STYLES } from "@/lib/roof-feature-styles";
 import { Field, Choice } from "./CrmControls";
 
 const EDGE_SHORT: Record<EdgeType, string> = {
@@ -478,6 +479,7 @@ export function RoofImageTrace({
             {points.length >= 3 &&
               points.map((p, i) => {
                 const q = points[(i + 1) % points.length]!;
+                const edge = ROOF_EDGE_STYLES[edges[i] ?? "other"];
                 return (
                   <g
                     key={`e${i}`}
@@ -489,22 +491,25 @@ export function RoofImageTrace({
                     }}
                     className="cursor-pointer"
                   >
+                    <line x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke={edge.color} strokeWidth={w / 180} />
                     <rect
                       x={(p.x + q.x) / 2 - w / 28}
                       y={(p.y + q.y) / 2 - w / 70}
                       width={w / 14}
                       height={w / 35}
                       rx={w / 200}
-                      className="fill-background"
-                      stroke="currentColor"
-                      strokeWidth={w / 600}
+                      fill="#ffffff"
+                      fillOpacity={0.94}
+                      stroke={edge.color}
+                      strokeWidth={w / 450}
                     />
                     <text
                       x={(p.x + q.x) / 2}
                       y={(p.y + q.y) / 2 + w / 200}
                       fontSize={w / 60}
                       textAnchor="middle"
-                      className="fill-foreground"
+                      fill={edge.color}
+                      fontWeight="700"
                     >
                       {EDGE_SHORT[edges[i] ?? "other"]}
                     </text>
