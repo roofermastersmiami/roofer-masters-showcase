@@ -23,6 +23,26 @@ describe("OpenStreetMap building footprint parsing", () => {
     expect(result[0]?.points).toHaveLength(4);
   });
 
+  it("uses the area centroid for irregular building outlines", () => {
+    const lShape = [
+      { lat: origin.lat, lon: origin.lon },
+      { lat: origin.lat, lon: origin.lon + 0.00004 },
+      { lat: origin.lat + 0.00001, lon: origin.lon + 0.00004 },
+      { lat: origin.lat + 0.00001, lon: origin.lon + 0.00001 },
+      { lat: origin.lat + 0.00004, lon: origin.lon + 0.00001 },
+      { lat: origin.lat + 0.00004, lon: origin.lon },
+      { lat: origin.lat, lon: origin.lon },
+    ];
+    const result = parseBuildingFootprints({
+      elements: [{ type: "way", id: 77, geometry: lShape }],
+    }, origin);
+    expect(result).toHaveLength(1);
+    // The L-shaped polygon's area centroid is about 1.36/4 units from
+    // the lower-left corner, not the 2/4 vertex-average position.
+    expect(result[0]!.center.lat - origin.lat).toBeCloseTo(0.0000136, 5);
+    expect(result[0]!.center.lon - origin.lon).toBeCloseTo(0.0000136, 5);
+  });
+
   it("rejects open, invalid, oversized, and distant polygons", () => {
     const result = parseBuildingFootprints({
       elements: [
