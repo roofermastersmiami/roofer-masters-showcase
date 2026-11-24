@@ -18,6 +18,20 @@ const INK = rgb(0.13, 0.17, 0.21);
 const MUTED = rgb(0.4, 0.45, 0.5);
 const WHITE = rgb(1, 1, 1);
 
+export type RoofPdfLayout = {
+  brand: { x: number; y: number };
+  tagline: { x: number; y: number };
+  contact: { x: number; y: number };
+  heading: { x: number; y: number };
+};
+
+export const defaultRoofPdfLayout: RoofPdfLayout = {
+  brand: { x: 7, y: 24 },
+  tagline: { x: 7, y: 49 },
+  contact: { x: 7, y: 78 },
+  heading: { x: 62, y: 25 },
+};
+
 type Photo = {
   bytes: Uint8Array;
   mime: string;
@@ -70,30 +84,30 @@ export async function roofDrawingPdf(
       height: 78,
       color: NAVY,
     });
+    const headerPoint = (point: { x: number; y: number }, size: number) => ({
+      x: Math.max(8, Math.min(PAGE_W - MARGIN, (point.x / 100) * PAGE_W)),
+      y: PAGE_H - (point.y / 100) * 78 - size,
+    });
     p.drawText("ROOFER MASTERS", {
-      x: MARGIN,
-      y: PAGE_H - 34,
+      ...headerPoint(layout.brand, 20),
       size: 20,
       font: bold,
       color: WHITE,
     });
     p.drawText("YOUR ROOF, OUR MASTERPIECE", {
-      x: MARGIN,
-      y: PAGE_H - 53,
+      ...headerPoint(layout.tagline, 8),
       size: 8,
       font,
       color: SILVER,
     });
     p.drawText(heading, {
-      x: PAGE_W - MARGIN - bold.widthOfTextAtSize(heading, 9),
-      y: PAGE_H - 35,
+      ...headerPoint(layout.heading, 9),
       size: 9,
       font: bold,
       color: WHITE,
     });
     p.drawText("(305) 942-3093  |  roofermasters@gmail.com", {
-      x: MARGIN,
-      y: PAGE_H - 68,
+      ...headerPoint(layout.contact, 8),
       size: 8,
       font,
       color: SILVER,

@@ -68,6 +68,7 @@ import {
   ROOF_FEATURE_LEGEND,
 } from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
+import { RoofPdfLayoutEditor, defaultRoofPdfLayout } from "./RoofPdfLayoutEditor";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
 type Media = {
@@ -107,6 +108,7 @@ export function RoofMeasurements({
   const aerialFn = useServerFn(loadPublicAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
+  const [pdfLayout, setPdfLayout] = useState(defaultRoofPdfLayout);
   const userEditedDrawing = useRef(false);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
@@ -660,7 +662,7 @@ export function RoofMeasurements({
           </div>
         }
       />
-      {workspaceAddress && (
+      <RoofPdfLayoutEditor value={pdfLayout} onChange={setPdfLayout} />\n      {workspaceAddress && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
