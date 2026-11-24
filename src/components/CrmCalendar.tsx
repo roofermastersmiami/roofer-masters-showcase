@@ -31,12 +31,12 @@ export function CrmCalendar({ onOpenRoofReport }: { onOpenRoofReport?: (reportId
   const qc = useQueryClient();
   const from = mode === "week" ? startOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
   const to = mode === "week" ? endOfWeek(anchor, { weekStartsOn: 1 }) : anchor;
-  const { data: appointments = [], isLoading, error } = useQuery({
+  const db = supabase as any;\n  const { data: appointments = [], isLoading, error } = useQuery({
     queryKey: ["crm-appointments", format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd")],
     queryFn: async () => {
-      const { data, error } = await supabase.from("appointments").select("*")
-        .gte("start_time", new Date(from.setHours(0, 0, 0, 0)).toISOString())
-        .lte("start_time", new Date(to.setHours(23, 59, 59, 999)).toISOString())
+      const { data, error } = await db.from("appointments").select("*")
+        .gte("start_time", new Date(new Date(from).setHours(0, 0, 0, 0)).toISOString())
+        .lte("start_time", new Date(new Date(to).setHours(23, 59, 59, 999)).toISOString())
         .order("start_time");
       if (error) throw error;
       return (data ?? []) as Appointment[];
@@ -45,7 +45,7 @@ export function CrmCalendar({ onOpenRoofReport }: { onOpenRoofReport?: (reportId
   const days = useMemo(() => mode === "day" ? [anchor] : Array.from({ length: 6 }, (_, i) => addDays(startOfWeek(anchor, { weekStartsOn: 1 }), i)), [anchor, mode]);
   const changeStatus = async (id: string, status: Appointment["status"]) => {
     setBusyId(id);
-    const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
+    const { error } = await db.from("appointments").update({ status }).eq("id", id);
     setBusyId(null);
     if (error) { toast.error("Could not update appointment"); return; }
     toast.success(`Appointment marked ${status.toLowerCase()}`);
