@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { getStripeEnvironment } from "@/lib/stripe";
 import { money } from "@/lib/crm-schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +60,6 @@ export function Expenses() {
         amount_cents: Math.round(form.amount * 100),
         job_id: form.job_id || null,
         incurred_at: form.incurred_at,
-        environment: getStripeEnvironment(),
         payee: form.payee,
         receipt_path: path,
       });
