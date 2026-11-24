@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   roofPreset,
   measureDrawing,
+  auditRoofReport,
   toMaterialReport,
   suggestSharedEdgeClassifications,
   addressPinPosition,
@@ -288,5 +289,45 @@ describe("georeferenced address marker", () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+describe("automated roof report readiness audit", () => {
+  it("flags unclassified boundaries and preliminary measurement basis for review", () => {
+    const drawing = roofPreset("gable");
+    drawing.planes.forEach((plane) => plane.edges.fill("other"));
+    const audit = auditRoofReport(drawing);
+    expect(audit.status).toBe("review");
+    expect(audit.unclassifiedEdges).toBeGreaterThan(0);
+    expect(audit.warnings.some((warning) => warning.includes("unclassified"))).toBe(true);
+    expect(audit.warnings.some((warning) => warning.includes("site verified"))).toBe(true);
+  });
+
+  it("reports a field-reviewed drawing as ready only when all checks pass", () => {
+    const drawing = roofPreset("gable");
+    drawing.accuracy = "site_verified";
+    drawing.verified = true;
+    drawing.geo_reference = {
+      addressLatitude: 25.47,
+      addressLongitude: -80.48,
+      originLatitude: 25.47,
+      originLongitude: -80.48,
+    };
+    expect(auditRoofReport(drawing)).toMatchObject({
+      status: "ready",
+      blockers: [],
+      warnings: [],
+      unclassifiedEdges: 0,
+      planeCount: 2,
+    });
+  });
+
+  it("blocks invalid geometry rather than issuing a ready report", () => {
+    const drawing = roofPreset("gable");
+    const plane = drawing.planes[0]!;
+    plane.points[1] = { ...plane.points[0]! };
+    const audit = auditRoofReport(drawing);
+    expect(audit.status).toBe("blocked");
+    expect(audit.blockers.length).toBeGreaterThan(0);
   });
 });
