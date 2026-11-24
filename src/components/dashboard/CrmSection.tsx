@@ -81,20 +81,17 @@ export function CrmSection({ section }: { section: string }) {
       return <FinancialAnalytics />;
     case "roof-reports":
       return (
-        <RoofReports
-          key={roofReportRequest?.propertyId ?? "all-roof-reports"}
-          initialCustomer={roofReportRequest?.customerId}
-          initialPropertyId={roofReportRequest?.propertyId}
-          initialAddress={roofReportRequest?.address ?? ""}
-          onOpenMeasurement={openRoofMeasurements}
-          onRequestHandled={clearRoofReportRequest}
-        />
+        <RoofReports onOpenMeasurement={openRoofMeasurements} />
       );
     case "measurements":
       return (
         <RoofMeasurementsTab
           selectedReportId={selectedRoofReportId}
           onSelectReport={openRoofMeasurements}
+          initialCustomer={roofReportRequest?.customerId}
+          initialPropertyId={roofReportRequest?.propertyId}
+          initialAddress={roofReportRequest?.address ?? ""}
+          onRequestHandled={clearRoofReportRequest}
         />
       );
     case "pipeline":
