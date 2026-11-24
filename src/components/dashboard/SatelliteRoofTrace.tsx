@@ -21,6 +21,7 @@ import {
   type GeoReference,
   type EdgeType,
 } from "@/lib/roof-geometry";
+import { ROOF_EDGE_STYLES } from "@/lib/roof-feature-styles";
 
 type GeocodeResult = { lat: string; lon: string; display_name: string };
 type PitchDirection = "north" | "south" | "east" | "west";
@@ -1216,7 +1217,7 @@ export function SatelliteRoofTrace({
                     ...drawnPlane,
                     name:
                       drawingMode === "diy"
-                        ? planeName.trim() || `Roof plane ${Date.now()}`
+                        ? planeName.trim() || "Main roof section"
                         : drawnPlane.name,
                     edges:
                       drawingMode === "diy" && edgeTypes.length === points.length
@@ -1227,7 +1228,7 @@ export function SatelliteRoofTrace({
                   if (accepted !== false) {
                     setPoints([]);
                     setEdgeTypes([]);
-                    if (drawingMode === "diy") setPlaneName(`Roof plane ${Date.now()}`);
+                    if (drawingMode === "diy") setPlaneName("Next roof section");
                   }
                 } catch {
                   setError("Could not convert this outline into a roof plane.");
