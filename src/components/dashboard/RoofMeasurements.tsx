@@ -1142,9 +1142,9 @@ export function RoofMeasurements({
           </p>
         )}
         <p className="mb-3 text-sm text-muted-foreground">
-          Looks up the address with the free US Census service and loads public USGS aerial
-          imagery when coverage is available. Image dimensions do not establish ground scale:
-          calibrate against a known measured distance before tracing. Results are estimates, never
+          Looks up the address with the free US Census service and loads public USGS aerial imagery
+          when coverage is available. Image dimensions do not establish ground scale: calibrate
+          against a known measured distance before tracing. Results are estimates, never
           survey-grade. No paid provider is used.
         </p>
         {aerialStatus && (
@@ -1179,7 +1179,13 @@ export function RoofMeasurements({
               options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({ value, label }))}
             />
           </div>
-          <Button variant="outline" disabled={footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)} onClick={() => void searchFootprints()}>
+          <Button
+            variant="outline"
+            disabled={
+              footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)
+            }
+            onClick={() => void searchFootprints()}
+          >
             {footprintBusy ? "Searching footprints…" : "Find mapped building outline"}
           </Button>
           {media.length > 1 && (
@@ -1197,9 +1203,17 @@ export function RoofMeasurements({
           )}
         </div>
         {footprintMessage && (
-          <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm" role="status">
+          <p
+            className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+            role="status"
+          >
             {footprintMessage}{" "}
-            <a className="underline underline-offset-4" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+            <a
+              className="underline underline-offset-4"
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               OpenStreetMap attribution and license
             </a>
           </p>
@@ -1209,9 +1223,14 @@ export function RoofMeasurements({
             {footprints.map((footprint) => (
               <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
                 <p className="font-medium">Mapped building #{footprint.id}</p>
-                <svg viewBox="0 0 160 100" role="img" aria-label={`Approximate mapped ground outline for building ${footprint.id}`} className="my-2 h-24 w-full rounded bg-muted/40">
+                <svg
+                  viewBox="0 0 160 100"
+                  role="img"
+                  aria-label={`Approximate mapped ground outline for building ${footprint.id}`}
+                  className="my-2 h-24 w-full rounded bg-muted/40"
+                >
                   {(() => {
-                    const cos = Math.cos(footprint.center.lat * Math.PI / 180);
+                    const cos = Math.cos((footprint.center.lat * Math.PI) / 180);
                     const xy = footprint.points.map((point) => ({
                       x: point.lon * cos,
                       y: -point.lat,
@@ -1225,17 +1244,31 @@ export function RoofMeasurements({
                     const scale = Math.min(140 / width, 80 / height);
                     const offsetX = (160 - width * scale) / 2;
                     const offsetY = (100 - height * scale) / 2;
-                    const points = xy.map((point) =>
-                      `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
-                    ).join(" ");
-                    return <polygon points={points} fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />;
+                    const points = xy
+                      .map(
+                        (point) =>
+                          `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
+                      )
+                      .join(" ");
+                    return (
+                      <polygon
+                        points={points}
+                        fill="currentColor"
+                        fillOpacity="0.12"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    );
                   })()}
                 </svg>
                 <p className="text-muted-foreground">
-                  Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft · {footprint.distanceMeters} m from address point
+                  Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft ·{" "}
+                  {footprint.distanceMeters} m from address point
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {footprint.points.length} outline corners · OSM building type: {footprint.buildingType}
+                  {footprint.points.length} outline corners · OSM building type:{" "}
+                  {footprint.buildingType}
                 </p>
                 <a
                   className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"

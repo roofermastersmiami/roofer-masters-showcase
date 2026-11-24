@@ -17,9 +17,14 @@ const EARTH_RADIUS_M = 6371008.8;
 function validPoint(value: unknown): value is FootprintPoint {
   if (!value || typeof value !== "object") return false;
   const point = value as Record<string, unknown>;
-  return typeof point.lat === "number" && Number.isFinite(point.lat) &&
-    Math.abs(point.lat) <= 90 && typeof point.lon === "number" &&
-    Number.isFinite(point.lon) && Math.abs(point.lon) <= 180;
+  return (
+    typeof point.lat === "number" &&
+    Number.isFinite(point.lat) &&
+    Math.abs(point.lat) <= 90 &&
+    typeof point.lon === "number" &&
+    Number.isFinite(point.lon) &&
+    Math.abs(point.lon) <= 180
+  );
 }
 function localXY(point: FootprintPoint, originLat: number): [number, number] {
   const radians = Math.PI / 180;
@@ -39,9 +44,10 @@ function distanceToPolygonMeters(point: FootprintPoint, polygon: FootprintPoint[
     const dx = b[0] - a[0];
     const dy = b[1] - a[1];
     const lengthSquared = dx * dx + dy * dy;
-    const t = lengthSquared === 0
-      ? 0
-      : Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / lengthSquared));
+    const t =
+      lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / lengthSquared));
     minimum = Math.min(minimum, Math.hypot(px - (a[0] + t * dx), py - (a[1] + t * dy)));
   }
   return minimum;
@@ -61,11 +67,13 @@ function orientation(a: FootprintPoint, b: FootprintPoint, c: FootprintPoint): n
 }
 function onSegment(a: FootprintPoint, b: FootprintPoint, point: FootprintPoint): boolean {
   const epsilon = 1e-10;
-  return Math.abs(orientation(a, b, point)) <= epsilon &&
+  return (
+    Math.abs(orientation(a, b, point)) <= epsilon &&
     point.lon >= Math.min(a.lon, b.lon) - epsilon &&
     point.lon <= Math.max(a.lon, b.lon) + epsilon &&
     point.lat >= Math.min(a.lat, b.lat) - epsilon &&
-    point.lat <= Math.max(a.lat, b.lat) + epsilon;
+    point.lat <= Math.max(a.lat, b.lat) + epsilon
+  );
 }
 function segmentsIntersect(
   a: FootprintPoint,
@@ -78,10 +86,12 @@ function segmentsIntersect(
   const cdA = orientation(c, d, a);
   const cdB = orientation(c, d, b);
   const epsilon = 1e-10;
-  const proper = ((abC > epsilon && abD < -epsilon) || (abC < -epsilon && abD > epsilon)) &&
+  const proper =
+    ((abC > epsilon && abD < -epsilon) || (abC < -epsilon && abD > epsilon)) &&
     ((cdA > epsilon && cdB < -epsilon) || (cdA < -epsilon && cdB > epsilon));
-  return proper || onSegment(a, b, c) || onSegment(a, b, d) ||
-    onSegment(c, d, a) || onSegment(c, d, b);
+  return (
+    proper || onSegment(a, b, c) || onSegment(a, b, d) || onSegment(c, d, a) || onSegment(c, d, b)
+  );
 }
 function hasSelfIntersection(points: FootprintPoint[]): boolean {
   for (let i = 0; i < points.length; i += 1) {
@@ -101,7 +111,8 @@ function haversine(a: FootprintPoint, b: FootprintPoint): number {
   const radians = Math.PI / 180;
   const dLat = (b.lat - a.lat) * radians;
   const dLon = (b.lon - a.lon) * radians;
-  const h = Math.sin(dLat / 2) ** 2 +
+  const h =
+    Math.sin(dLat / 2) ** 2 +
     Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(dLon / 2) ** 2;
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
@@ -111,15 +122,27 @@ export function parseBuildingFootprints(
   origin: FootprintPoint,
   maxDistanceMeters = 100,
 ): BuildingFootprint[] {
-  if (!validPoint(origin) || !Number.isFinite(maxDistanceMeters) ||
-      maxDistanceMeters < 10 || maxDistanceMeters > 500) return [];
+  if (
+    !validPoint(origin) ||
+    !Number.isFinite(maxDistanceMeters) ||
+    maxDistanceMeters < 10 ||
+    maxDistanceMeters > 500
+  )
+    return [];
   if (!raw || typeof raw !== "object" || !Array.isArray((raw as { elements?: unknown }).elements))
     return [];
   const elements = (raw as { elements: OverpassElement[] }).elements;
   const results: BuildingFootprint[] = [];
   for (const element of elements) {
-    if (!element || typeof element !== "object" || element.type !== "way" || typeof element.id !== "number" ||
-        !Number.isSafeInteger(element.id) || !Array.isArray(element.geometry)) continue;
+    if (
+      !element ||
+      typeof element !== "object" ||
+      element.type !== "way" ||
+      typeof element.id !== "number" ||
+      !Number.isSafeInteger(element.id) ||
+      !Array.isArray(element.geometry)
+    )
+      continue;
     if (!element.geometry.every(validPoint)) continue;
     const points = element.geometry as FootprintPoint[];
     if (points.length < 4) continue;
@@ -128,12 +151,14 @@ export function parseBuildingFootprints(
     if (haversine(first, last) > 1) continue;
     const openRing = points.slice(0, -1);
     if (openRing.length < 3 || openRing.length > 200) continue;
-    const uniqueVertices = new Set(openRing.map((point) => `${point.lat.toFixed(8)},${point.lon.toFixed(8)}`));
+    const uniqueVertices = new Set(
+      openRing.map((point) => `${point.lat.toFixed(8)},${point.lon.toFixed(8)}`),
+    );
     if (uniqueVertices.size < 3 || hasSelfIntersection(openRing)) continue;
     // Use the polygon centroid rather than the vertex average so irregular
     // and concave footprints are located by their area, not vertex density.
     const meanLat = openRing.reduce((sum, point) => sum + point.lat, 0) / openRing.length;
-    const longitudeScale = Math.cos(meanLat * Math.PI / 180);
+    const longitudeScale = Math.cos((meanLat * Math.PI) / 180);
     // Translate coordinates near zero before applying the shoelace formula.
     // Using absolute longitude/latitude causes catastrophic cancellation.
     const reference = openRing[0]!;
@@ -152,15 +177,16 @@ export function parseBuildingFootprints(
       centroidX += (a.x + b.x) * cross;
       centroidY += (a.y + b.y) * cross;
     }
-    const center = Math.abs(twiceSignedArea) > 1e-12
-      ? {
-          lat: reference.lat + centroidY / (3 * twiceSignedArea),
-          lon: reference.lon + centroidX / (3 * twiceSignedArea * longitudeScale),
-        }
-      : {
-          lat: meanLat,
-          lon: openRing.reduce((sum, point) => sum + point.lon, 0) / openRing.length,
-        };
+    const center =
+      Math.abs(twiceSignedArea) > 1e-12
+        ? {
+            lat: reference.lat + centroidY / (3 * twiceSignedArea),
+            lon: reference.lon + centroidX / (3 * twiceSignedArea * longitudeScale),
+          }
+        : {
+            lat: meanLat,
+            lon: openRing.reduce((sum, point) => sum + point.lon, 0) / openRing.length,
+          };
     // The area centroid of a concave footprint can be farther from the
     // address than its nearest wall. Match the search radius to the polygon,
     // not to its centroid, so irregular nearby buildings are not discarded.
@@ -168,8 +194,10 @@ export function parseBuildingFootprints(
     if (distanceMeters > maxDistanceMeters) continue;
     const areaSqM = polygonArea(openRing, center.lat);
     if (!Number.isFinite(areaSqM) || areaSqM < 20 || areaSqM > 5000) continue;
-    const tags = element.tags && typeof element.tags === "object"
-      ? element.tags as Record<string, unknown> : {};
+    const tags =
+      element.tags && typeof element.tags === "object"
+        ? (element.tags as Record<string, unknown>)
+        : {};
     results.push({
       id: element.id,
       points: openRing,
