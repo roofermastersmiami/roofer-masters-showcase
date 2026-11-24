@@ -1,15 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { canOpen, seesMoney, SECTION_ROLES } from "@/lib/team-roles";
+import { canOpen, seesMoney, SECTION_ROLES, CRM_SECTION_IDS } from "@/lib/team-roles";
 const money = ["invoices", "expenses", "financials", "sales", "prices", "detailed-estimator"];
 describe("team roles", () => {
   it("defines an authorization policy for every CRM route and sidebar section", () => {
-    const sections = [
-      "", "pipeline", "customers", "properties", "roof-reports", "measurements",
-      "estimates", "detailed-estimator", "prices", "proposals", "jobs", "followups",
-      "appointments", "invoices", "sales", "expenses", "financials", "my-jobs",
-      "team", "chat", "submissions", "instant", "content",
-    ];
-    for (const section of sections) {
+    for (const section of CRM_SECTION_IDS) {
       expect(Object.hasOwn(SECTION_ROLES, section), `missing policy for ${section}`).toBe(true);
     }
   });
