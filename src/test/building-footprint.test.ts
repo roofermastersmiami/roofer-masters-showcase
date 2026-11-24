@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBuildingFootprints, shouldAutoSearchFootprint } from "@/lib/building-footprint";
+import { footprintToDraftPlane, parseBuildingFootprints, shouldAutoSearchFootprint } from "@/lib/building-footprint";
 
 const origin = { lat: 25.47, lon: -80.48 };
 const square = [
@@ -110,5 +110,23 @@ describe("automatic building footprint lookup guard", () => {
     expect(shouldAutoSearchFootprint("456 Oak Ave", "report-2", "report-1")).toBe(true);
     expect(shouldAutoSearchFootprint("  ", "report-2", "report-1")).toBe(false);
     expect(shouldAutoSearchFootprint(undefined, "report-2", "report-1")).toBe(false);
+  });
+});
+
+
+describe("building footprint draft units", () => {
+  it("converts mapped meter coordinates into the feet used by roof calculations", () => {
+    const footprint = parseBuildingFootprints(
+      { elements: [{ type: "way", id: 42, tags: { building: "house" }, geometry: square }] },
+      origin,
+    )[0]!;
+    const plane = footprintToDraftPlane(footprint);
+    const widthFt = Math.max(...plane.points.map((point) => point.x)) - Math.min(...plane.points.map((point) => point.x));
+    const heightFt = Math.max(...plane.points.map((point) => point.z)) - Math.min(...plane.points.map((point) => point.z));
+    expect(widthFt).toBeGreaterThan(60);
+    expect(widthFt).toBeLessThan(80);
+    expect(heightFt).toBeGreaterThan(60);
+    expect(heightFt).toBeLessThan(80);
+    expect(plane.edges).toEqual(["other", "other", "other", "other"]);
   });
 });
