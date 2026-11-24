@@ -13,8 +13,6 @@ import {
   GripVertical,
   Eye,
   EyeOff,
-  ChevronUp,
-  ChevronDown,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -52,13 +50,11 @@ export function CrmOverview() {
     [cardOrder, setCardOrder] = useState(["Payments received", "Outstanding balance", "Active projects", "New leads"]),
     [hiddenCards, setHiddenCards] = useState<string[]>([]),
     [draggedCard, setDraggedCard] = useState<string | null>(null),
-    [preferencesLoaded, setPreferencesLoaded] = useState(false),
-    [sectionOrder, setSectionOrder] = useState(["Revenue & sales", "Daily operations"]),
-    [hiddenSections, setHiddenSections] = useState<string[]>([]);
+    [preferencesLoaded, setPreferencesLoaded] = useState(false);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
-      if (typeof saved.accent === "string") setAccent(saved.accent);
+      if (typeof saved.accent === "string" && /^#[0-9a-f]{6}$/i.test(saved.accent)) setAccent(saved.accent);
       if (saved.density === "compact" || saved.density === "comfortable") setDensity(saved.density);
       if (saved.cardStyle === "outlined" || saved.cardStyle === "soft" || saved.cardStyle === "elevated") setCardStyle(saved.cardStyle);
       if (Array.isArray(saved.cardOrder) && saved.cardOrder.every((item: unknown) => typeof item === "string")) setCardOrder(saved.cardOrder);
@@ -67,15 +63,8 @@ export function CrmOverview() {
     setPreferencesLoaded(true);
   }, []);
   useEffect(() => {
-    if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards, sectionOrder, hiddenSections }));
-  }, [accent, density, cardStyle, cardOrder, hiddenCards, sectionOrder, hiddenSections, preferencesLoaded]);
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("crm-dashboard-layout") ?? "{}");
-      if (Array.isArray(saved.sectionOrder) && saved.sectionOrder.every((item: unknown) => typeof item === "string")) setSectionOrder(saved.sectionOrder);
-      if (Array.isArray(saved.hiddenSections) && saved.hiddenSections.every((item: unknown) => typeof item === "string")) setHiddenSections(saved.hiddenSections);
-    } catch { /* Keep defaults if saved preferences are unavailable. */ }
-  }, []);
+    if (preferencesLoaded) localStorage.setItem("crm-dashboard-layout", JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards }));
+  }, [accent, density, cardStyle, cardOrder, hiddenCards, preferencesLoaded]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
@@ -161,11 +150,10 @@ export function CrmOverview() {
     { label: "Outstanding balance", value: value(ledger.outstanding), icon: Receipt, section: "invoices", note: "All issued invoices" },
     { label: "Active projects", value: jobs.isPending ? "…" : jobs.error ? "Unavailable" : String(activeJobs.length), icon: HardHat, section: "jobs", note: `${jobs.data?.filter((j) => j.status === "completed").length ?? 0} completed` },
     { label: "New leads", value: String(selectedLeads.length), icon: Users, section: "pipeline", note: `${selectedLeads.length ? Math.round((converted.length / selectedLeads.length) * 100) : 0}% lead conversion` },
-  ].sort((a, b) => { const ai = cardOrder.indexOf(a.label); const bi = cardOrder.indexOf(b.label); return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi); });
-  const moveCard = (from: string, to: string) => { const next = [...cardOrder]; const i = next.indexOf(from); const j = next.indexOf(to); if (i < 0 || j < 0) return; next.splice(i, 1); next.splice(j, 0, from); setCardOrder(next); };
-  const shiftCard = (label: string, direction: -1 | 1) => { const next = [...cardOrder]; const index = next.indexOf(label); const target = index + direction; if (index < 0 || target < 0 || target >= next.length) return; [next[index], next[target]] = [next[target], next[index]]; setCardOrder(next); };
+  ].sort((a, b) => { const ai = cardOrder.indexOf(a.label), bi = cardOrder.indexOf(b.label); return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi); });
+  const moveCard = (from: string, to: string) => { const next = [...cardOrder], i = next.indexOf(from), j = next.indexOf(to); if (i < 0 || j < 0) return; next.splice(i, 1); next.splice(j, 0, from); setCardOrder(next); };
   return (
-    <div style={{ "--crm-dashboard-accent": accent } as React.CSSProperties}>
+    <div>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
@@ -181,9 +169,7 @@ export function CrmOverview() {
             })}
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <Button variant="outline" onClick={() => setCustomize(!customize)} aria-expanded={customize}><SlidersHorizontal className="mr-2 size-4" />Customize dashboard</Button>
-          <div className="w-44">
+        <div className="flex flex-wrap items-end gap-3"><Button variant="outline" onClick={() => setCustomize((open) => !open)} aria-expanded={customize}><SlidersHorizontal className="mr-2 size-4" /> Customize dashboard</Button><div className="w-44">
           <Choice
             label="Reporting period"
             value={period}
@@ -200,11 +186,14 @@ export function CrmOverview() {
         </div>
       </div>
       {customize && <section className="mb-6 rounded-xl border border-border bg-card p-5" aria-label="Dashboard customization">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Your workspace, your way</h2><p className="text-sm text-muted-foreground">Drag summary cards to reorder them. Preferences are saved on this device.</p></div>
-          <Button size="sm" variant="ghost" onClick={() => { setAccent("#2563eb"); setDensity("comfortable"); setCardStyle("outlined"); setCardOrder(["Payments received", "Outstanding balance", "Active projects", "New leads"]); setHiddenCards([]); setSectionOrder(["Revenue & sales", "Daily operations"]); setHiddenSections([]); }}>Reset layout</Button></div>
-        <div className="mt-4 flex flex-wrap items-center gap-5"><div><p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p><div className="flex gap-2">
-          {["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => <button key={color} type="button" aria-label={`Set accent color ${color}`} aria-pressed={accent === color} onClick={() => setAccent(color)} className="size-8 rounded-full border-2 border-background" style={{ backgroundColor: color, outline: accent === color ? `2px solid ${color}` : "none" }} />)}
-        </div></div><div><p className="mb-2 text-xs font-semibold text-muted-foreground">SHOW / HIDE SUMMARY CARDS</p><div className="flex flex-wrap gap-2">{["Payments received", "Outstanding balance", "Active projects", "New leads"].map((label) => <Button key={label} size="sm" variant={hiddenCards.includes(label) ? "outline" : "secondary"} onClick={() => setHiddenCards((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label])}>{hiddenCards.includes(label) ? <EyeOff className="mr-1 size-3" /> : <Eye className="mr-1 size-3" />}{label}</Button>)}</div></div><div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD SPACING</p><div className="flex gap-2"><Button size="sm" variant={density === "comfortable" ? "default" : "outline"} onClick={() => setDensity("comfortable")}>Comfortable</Button><Button size="sm" variant={density === "compact" ? "default" : "outline"} onClick={() => setDensity("compact")}>Compact</Button></div></div><div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD STYLE</p><div className="flex flex-wrap gap-2"><Button size="sm" variant={cardStyle === "outlined" ? "default" : "outline"} onClick={() => setCardStyle("outlined")}>Outlined</Button><Button size="sm" variant={cardStyle === "soft" ? "default" : "outline"} onClick={() => setCardStyle("soft")}>Soft</Button><Button size="sm" variant={cardStyle === "elevated" ? "default" : "outline"} onClick={() => setCardStyle("elevated")}>Elevated</Button></div></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Your workspace, your way</h2><p className="text-sm text-muted-foreground">Drag cards to reorder them. Preferences are saved on this device.</p></div>
+          <Button size="sm" variant="ghost" onClick={() => { setAccent("#2563eb"); setDensity("comfortable"); setCardStyle("outlined"); setCardOrder(["Payments received", "Outstanding balance", "Active projects", "New leads"]); setHiddenCards([]); }}>Reset layout</Button></div>
+        <div className="mt-4 flex flex-wrap items-center gap-5">
+          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p><div className="flex gap-2">{["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => <button key={color} type="button" aria-label={`Set accent color ${color}`} aria-pressed={accent === color} onClick={() => setAccent(color)} className="size-8 rounded-full border-2 border-background" style={{ backgroundColor: color, outline: accent === color ? `2px solid ${color}` : "none" }} />)}</div></div>
+          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">SHOW / HIDE SUMMARY CARDS</p><div className="flex flex-wrap gap-2">{["Payments received", "Outstanding balance", "Active projects", "New leads"].map((label) => <Button key={label} size="sm" variant={hiddenCards.includes(label) ? "outline" : "secondary"} onClick={() => setHiddenCards((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label])}>{hiddenCards.includes(label) ? <EyeOff className="mr-1 size-3" /> : <Eye className="mr-1 size-3" />}{label}</Button>)}</div></div>
+          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD SPACING</p><div className="flex gap-2"><Button size="sm" variant={density === "comfortable" ? "default" : "outline"} onClick={() => setDensity("comfortable")}>Comfortable</Button><Button size="sm" variant={density === "compact" ? "default" : "outline"} onClick={() => setDensity("compact")}>Compact</Button></div></div>
+          <div><p className="mb-2 text-xs font-semibold text-muted-foreground">CARD STYLE</p><div className="flex flex-wrap gap-2">{(["outlined", "soft", "elevated"] as const).map((style) => <Button key={style} size="sm" variant={cardStyle === style ? "default" : "outline"} onClick={() => setCardStyle(style)}>{style[0].toUpperCase() + style.slice(1)}</Button>)}</div></div>
+        </div>
       </section>}
       {period === "custom" && (
         <div className="mb-5 flex flex-wrap gap-3">
@@ -239,19 +228,15 @@ export function CrmOverview() {
         </p>
       )}
       <div className={`grid ${density === "compact" ? "gap-2" : "gap-4"} sm:grid-cols-2 xl:grid-cols-4`}>
-        {metricCards.filter((s) => !hiddenCards.includes(s.label)).map((s) => <article key={s.label} draggable onDragStart={() => setDraggedCard(s.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== s.label) moveCard(draggedCard, s.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)} className={`cursor-grab rounded-lg ${cardStyle === "outlined" ? "border border-border bg-card" : cardStyle === "soft" ? "border border-transparent bg-muted/70" : "border border-border bg-card shadow-lg"} ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === s.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
-          <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{s.label}</span><span className="flex items-center gap-2"><GripVertical className="size-4 text-muted-foreground" /><s.icon className="size-5" style={{ color: accent }} /></span></div>
-          <di      {customize && <section className="mb-6 rounded-xl border border-border bg-card p-5" aria-label="Dashboard section customization">
-        <h3 className="font-semibold">Dashboard sections</h3>
-        <p className="mb-3 text-sm text-muted-foreground">Reorder or hide larger dashboard sections. Changes are saved on this device.</p>
-        <div className="flex flex-wrap gap-2">{["Revenue & sales", "Daily operations"].map((label) => <div key={label} className="flex items-center gap-1 rounded-md border border-border p-1">
-          <span className="px-2 text-sm">{label}</span>
-          <Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${label} up`} onClick={() => setSectionOrder((current) => { const next=[...current], i=next.indexOf(label); if(i>0) [next[i-1],next[i]]=[next[i],next[i-1]]; return next; })}><ChevronUp className="size-3" /></Button>
-          <Button size="icon" variant="ghost" className="size-7" aria-label={`Move ${label} down`} onClick={() => setSectionOrder((current) => { const next=[...current], i=next.indexOf(label); if(i>=0 && i<next.length-1) [next[i+1],next[i]]=[next[i],next[i+1]]; return next; })}><ChevronDown className="size-3" /></Button>
-          <Button size="icon" variant="ghost" className="size-7" aria-label={`${hiddenSections.includes(label) ? "Show" : "Hide"} ${label}`} onClick={() => setHiddenSections((current) => current.includes(label) ? current.filter((item) => item!==label) : [...current,label])}>{hiddenSections.includes(label) ? <EyeOff className="size-3" /> : <Eye className="size-3" />}</Button>
-        </div>)}</div>
-      </section>}
-      {sectionOrder.filter((label) => !hiddenSections.includes(label)).map((label) => label === "Revenue & sales" ? (
+        {metricCards.filter((card) => !hiddenCards.includes(card.label)).map((card) => (
+          <article key={card.label} draggable onDragStart={() => setDraggedCard(card.label)} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedCard && draggedCard !== card.label) moveCard(draggedCard, card.label); setDraggedCard(null); }} onDragEnd={() => setDraggedCard(null)}
+            className={`cursor-grab rounded-lg ${cardStyle === "outlined" ? "border border-border bg-card" : cardStyle === "soft" ? "border border-transparent bg-muted/70" : "border border-border bg-card shadow-lg"} ${density === "compact" ? "p-3" : "p-5"} ${draggedCard === card.label ? "opacity-50" : ""}`} style={{ borderTop: `3px solid ${accent}` }}>
+            <div className="flex items-center justify-between"><span className="text-sm font-semibold text-muted-foreground">{card.label}</span><span className="flex items-center gap-2"><GripVertical className="size-4 text-muted-foreground" /><card.icon className="size-5" style={{ color: accent }} /></span></div>
+            <p className="mt-4 break-words text-3xl font-bold">{card.value}</p>
+            <div className="mt-4 flex items-center justify-between"><span className="text-xs text-muted-foreground">{card.note}</span><Button size="icon" variant="ghost" title={`View ${card.label.toLowerCase()}`} aria-label={`View ${card.label.toLowerCase()}`} onClick={() => go(card.section)}><ArrowUpRight className="size-4" /></Button></div>
+          </article>
+        ))}
+      </div>
       <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
         <div className="min-w-0">
           <div className="mb-6 flex items-center justify-between">
@@ -335,7 +320,6 @@ export function CrmOverview() {
           </Button>
         </div>
       </section>
-      ) : (
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         <section>
           <div className="mb-5 flex items-center justify-between">
@@ -391,30 +375,6 @@ export function CrmOverview() {
           <h2 className="mb-5 text-lg font-bold">Recent customer activity</h2>
           {activity.data?.slice(0, 5).map((a) => {
             const lead = leads.find((l) => l.id === a.lead_id);
-            return (
-              <Button
-                key={a.id}
-                variant="ghost"
-                className="h-auto w-full justify-start border-b border-border py-3 text-left"
-                disabled={!lead}
-                onClick={() => {
-                  if (lead) onOpen(lead);
-                }}
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{a.body}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatWhen(a.created_at)}</p>
-                </div>
-              </Button>
-            );
-          })}
-          {!activity.data?.length && (
-            <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
-          )}
-        </section>
-      </div>
-      ))}
-a.lead_id);
             return (
               <Button
                 key={a.id}
