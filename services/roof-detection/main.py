@@ -546,15 +546,15 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
     if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
         parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon)
-        if parcel_polygon is not None:
+        if parcel_polygon is not None and not selected_candidate_id:
             parcel_candidates = [row for row in candidates
                 if parcel_polygon.intersection(row[1]).area / max(row[1].area, 1e-12) >= 0.50]
             parcel_metadata["building_candidates_intersecting_parcel"] = len(parcel_candidates)
             if len(parcel_candidates) == 1:
                 parcel_candidates[0][2]["parcel_match"] = dict(parcel_metadata)
                 candidates = parcel_candidates
-            elif len(parcel_candidates) > 1:
-                for row in parcel_candidates:
+            else:
+                for row in candidates:
                     row[2]["parcel_match"] = dict(parcel_metadata)
         elif parcel_metadata.get("status") in {"ambiguous", "not_found"}:
             for row in candidates:
