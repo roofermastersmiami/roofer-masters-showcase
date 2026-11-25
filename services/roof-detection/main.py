@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from typing import Any
 from time import monotonic
 
@@ -133,7 +134,24 @@ async def geocode(address: str) -> tuple[float, float, str]:
         return await _geocode_census(address)
 
 
-async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]]:
+def _normalize_street_address(value: str | None) -> str:
+    """Normalize a street line for conservative exact address-attribute matching."""
+    if not value:
+        return ""
+    street = value.split(",", 1)[0].upper()
+    street = re.sub(r"[^A-Z0-9 ]+", " ", street)
+    tokens = street.split()
+    expansions = {
+        "N": "NORTH", "S": "SOUTH", "E": "EAST", "W": "WEST",
+        "NE": "NORTHEAST", "NW": "NORTHWEST", "SE": "SOUTHEAST", "SW": "SOUTHWEST",
+        "ST": "STREET", "AVE": "AVENUE", "AV": "AVENUE", "RD": "ROAD",
+        "BLVD": "BOULEVARD", "DR": "DRIVE", "CT": "COURT", "LN": "LANE",
+        "PL": "PLACE", "TRL": "TRAIL", "PKWY": "PARKWAY", "HWY": "HIGHWAY",
+    }
+    return " ".join(expansions.get(token, token) for token in tokens)
+
+
+async def get_footprint(lat: float, lon: float, street_address: str | None = None) -> tuple[Polygon, dict[str, Any]]:
     # Use a nationwide ArcGIS structures layer first. It is independent of
     # Overpass and covers US building polygons; OSM remains a secondary source.
     address_point = Point(lon, lat)
@@ -181,12 +199,18 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
                     else [parsed]
                 )
                 properties = feature.get("properties") or {}
+                address_key = _normalize_street_address(street_address)
+                feature_address_key = _normalize_street_address(properties.get("PROP_ADDR"))
+                address_attribute_match = bool(
+                    address_key and feature_address_key and address_key == feature_address_key
+                )
                 for polygon in parts:
                     if polygon.geom_type != "Polygon" or polygon.is_empty:
                         continue
                     raw_candidates.append((polygon, {
                         "provider": "ArcGIS USA Structures",
                         "source_id": properties.get("OBJECTID"),
+                        "address_attribute_match": address_attribute_match,
                         "building_tags": {
                             key: properties.get(key)
                             for key in ("OCC_CLS", "PROP_ADDR", "PROP_CITY", "PROP_ST", "PROP_ZIP", "SOURCE", "PROD_DATE")
@@ -306,7 +330,20 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
     # Prefer address-point containment, then nearest footprint. If two nearby
     # structures remain similarly plausible, fail safely instead of using a
     # neighboring building.
+    # An exact street-line match from the building provider is stronger than
+    # proximity to a geocoder pin that may fall on a driveway. Only use it when
+    # exactly one distinct footprint matches; never break ties by address text.
+    exact_address_matches = [
+        candidate for candidate in candidates
+        if candidate[2].get("address_attribute_match") is True
+    ]
+    if len(exact_address_matches) == 1:
+        candidates = exact_address_matches
+    elif len(exact_address_matches) > 1:
+        candidates = exact_address_matches
+
     candidates.sort(key=lambda row: (
+        not bool(row[2].get("address_attribute_match")),
         not bool(row[2].get("address_point_inside_footprint")),
         row[0],
     ))
@@ -314,7 +351,8 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
         nearest_distance = candidates[0][0]
         next_distance = candidates[1][0]
         if (
-            next_distance - nearest_distance < 8.0
+            len(exact_address_matches) != 1
+            and next_distance - nearest_distance < 8.0
             and not candidates[0][2].get("address_point_inside_footprint")
         ):
             raise HTTPException(
@@ -576,7 +614,7 @@ async def analyze_roof(request: AnalyzeRequest):
     else:
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
-    footprint, footprint_meta = await get_footprint(lat, lon)
+    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address)
     footprint_sqft = _polygon_area_sqft(footprint)
     try:
         facets, lidar_meta = _read_lidar_facets(footprint)
