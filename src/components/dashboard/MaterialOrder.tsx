@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ROOF_TYPES } from "@/lib/instant-estimate-schema";
 import {
   materialOrder,
+  effectiveMaterialWastePct,
   materialOrderWarnings,
   resolveMaterialOrderSource,
   type MaterialOrderSource,
