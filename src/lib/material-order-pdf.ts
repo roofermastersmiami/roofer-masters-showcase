@@ -114,13 +114,12 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   input.lines.forEach((line, index) => {
     const itemRows = wrap(line.item, qtyX - itemX - 16, 8);
     const rowHeight = Math.max(24, itemRows.length * 11 + 10);
+    const pageCountBeforeRow = pages.length;
     ensureSpace(rowHeight + 4);
-    if (y === PAGE_HEIGHT - 105 || y < PAGE_HEIGHT - 105) {
-      // A page break may have occurred; repeat the table heading on the new page.
-      if (Math.abs(y - (PAGE_HEIGHT - 52)) < 1) {
-        y -= 53;
-        drawTableHeader();
-      }
+    if (pages.length > pageCountBeforeRow) {
+      // Repeat the table heading after moving to a new page.
+      y -= 53;
+      drawTableHeader();
     }
     if (index % 2 === 0) {
       page.drawRectangle({ x: LEFT, y: y - rowHeight + 5, width: RIGHT - LEFT, height: rowHeight, color: LIGHT });
