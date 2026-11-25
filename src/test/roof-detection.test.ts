@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { measureDrawing } from "@/lib/roof-geometry";
 import {
   detectedFacetsToDrawing,
   roofDetectionResponseSchema,
@@ -80,6 +81,46 @@ describe("LiDAR facet roof-system selection", () => {
       expect(drawing.planes[0]?.edges.every((edge) => edge === "other")).toBe(true);
     },
   );
+});
+
+describe("LiDAR geometry measurement parity", () => {
+  it("reconstructs backend facet surface area and pitch from geographic boundary elevations", () => {
+    const lat = response.location.lat;
+    const lon = response.location.lon;
+    const latOffset = 5 / 110540;
+    const lonOffset = 5 / (111320 * Math.cos((lat * Math.PI) / 180));
+    const areaSqFt = (100 / Math.cos(Math.atan(0.5))) * 10.7639104167;
+    const fixture: RoofDetectionResponse = {
+      ...response,
+      roof: {
+        ...response.roof,
+        area_sqft: areaSqFt,
+        total_squares: areaSqFt / 100,
+        facets: [{
+          ...response.roof.facets[0]!,
+          pitch_degrees: 26.565051,
+          pitch_rise_per_12: 6,
+          area_sqft: areaSqFt,
+          squares: areaSqFt / 100,
+          plane_model: { z_equals_ax_plus_by_plus_c: [0.5, 0, 10] },
+          boundary_latlon: [
+            [lat - latOffset, lon - lonOffset, 7.5],
+            [lat - latOffset, lon + lonOffset, 12.5],
+            [lat + latOffset, lon + lonOffset, 12.5],
+            [lat + latOffset, lon - lonOffset, 7.5],
+            [lat - latOffset, lon - lonOffset, 7.5],
+          ],
+        }],
+      },
+    };
+
+    const drawing = detectedFacetsToDrawing(fixture, "Metal Roof");
+    const measured = measureDrawing(drawing).planes[0];
+
+    expect(measured).toBeDefined();
+    expect(measured!.pitch).toBeCloseTo(6, 1);
+    expect(measured!.area).toBeCloseTo(areaSqFt, 0);
+  });
 });
 
 describe("LiDAR source-data evidence", () => {
