@@ -161,7 +161,7 @@ export function CrmShell({
   const [collapsed, setCollapsed] = useState(false),
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
-    [theme, setTheme] = useState("executive-berry"),
+    [theme, setTheme] = useState("default"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
     [brandingUserId, setBrandingUserId] = useState<string | null>(null),
@@ -188,26 +188,7 @@ export function CrmShell({
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-        if (
-          fallbackTheme &&
-          [
-            "executive-berry",
-            "modern-enterprise",
-            "canyon-corporate",
-            "midnight-teal",
-            "ocean-slate",
-            "royal-indigo",
-            "emerald-ledger",
-            "copperstone",
-            "arctic-blue",
-            "graphite-gold",
-            "crimson-executive",
-            "sage-stone",
-            "cobalt-professional",
-            "plum-luxe",
-            "monochrome-pro",
-          ].includes(fallbackTheme)
-        )
+        if (fallbackTheme && ["default", ...THEME_IDS].includes(fallbackTheme))
           setTheme(fallbackTheme);
         if (
           fallbackSidebar &&
@@ -231,25 +212,7 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (
-              [
-                "executive-berry",
-                "modern-enterprise",
-                "canyon-corporate",
-                "midnight-teal",
-                "ocean-slate",
-                "royal-indigo",
-                "emerald-ledger",
-                "copperstone",
-                "arctic-blue",
-                "graphite-gold",
-                "crimson-executive",
-                "sage-stone",
-                "cobalt-professional",
-                "plum-luxe",
-                "monochrome-pro",
-              ].includes(data.theme_palette)
-            )
+            if (["default", ...THEME_IDS].includes(data.theme_palette))
               setTheme(data.theme_palette);
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
@@ -315,7 +278,7 @@ export function CrmShell({
       "crm-theme-plum-luxe",
       "crm-theme-monochrome-pro",
     );
-    root.classList.add(`crm-theme-${theme}`);
+    if (theme !== "default") root.classList.add(`crm-theme-${theme}`);
     try {
       localStorage.setItem("crm-theme-preset", theme);
     } catch {
@@ -693,6 +656,7 @@ export function CrmShell({
                 onChange={(event) => setTheme(event.target.value)}
                 className="h-8 max-w-24 bg-transparent text-[11px] outline-none sm:max-w-32 sm:text-xs"
               >
+                <option value="default">Default — Roofer Masters</option>
                 <option value="executive-berry">Executive Berry</option>
                 <option value="modern-enterprise">Modern Enterprise</option>
                 <option value="canyon-corporate">Canyon Corporate</option>
