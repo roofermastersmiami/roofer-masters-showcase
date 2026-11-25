@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
+import {\n  detectedFacetsToDrawing,\n  roofDetectionResponseSchema,\n  type RoofDetectionResponse,\n} from "@/lib/roof-detection";
 
 const response: RoofDetectionResponse = {
   status: "lidar_facets",
@@ -63,4 +63,26 @@ describe("LiDAR facet roof-system selection", () => {
       expect(drawing.planes[0]?.edges.every((edge) => edge === "other")).toBe(true);
     },
   );
+});
+
+
+describe("LiDAR address-to-footprint confidence metadata", () => {
+  it("preserves the outside-footprint warning and metric distance from the service", () => {
+    const parsed = roofDetectionResponseSchema.parse({
+      ...response,
+      footprint: {
+        ...response.footprint,
+        address_point_inside_footprint: false,
+        address_to_footprint_distance_m: 3.4,
+      },
+    });
+    expect(parsed.footprint.address_point_inside_footprint).toBe(false);
+    expect(parsed.footprint.address_to_footprint_distance_m).toBe(3.4);
+  });
+
+  it("remains compatible with earlier service responses without match metadata", () => {
+    const parsed = roofDetectionResponseSchema.parse(response);
+    expect(parsed.footprint.address_point_inside_footprint).toBeUndefined();
+    expect(parsed.footprint.address_to_footprint_distance_m).toBeUndefined();
+  });
 });
