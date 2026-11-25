@@ -187,7 +187,10 @@ export function escapeMaterialOrderHtml(value: string): string {
  */
 export function materialOrderForTransfer(input: RoofReport): MaterialLine[] {
   const report = reportSchema.parse(input);
-  if (report.roof_type === "Metal Roof" && (!report.metal_plane_runs?.length || !report.metal_config)) {
+  if (
+    report.roof_type === "Metal Roof" &&
+    (!report.metal_plane_runs?.length || !report.metal_config)
+  ) {
     return [];
   }
   return materialOrder(report);
