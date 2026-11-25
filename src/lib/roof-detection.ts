@@ -48,6 +48,16 @@ export const roofDetectionResponseSchema = z.object({
       coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()]))),
     }),
   }),
+  lidar: z
+    .object({
+      source: z.string(),
+      stac_items: z.number().int().nonnegative().optional(),
+      tiles_used: z.number().int().nonnegative().optional(),
+      building_class_points: z.number().int().nonnegative().optional(),
+      raw_building_class_points: z.number().int().nonnegative().optional(),
+      duplicate_points_removed: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   roof: z.object({
     facet_count: z.number().int().nonnegative(),
     area_sqft: z.number().finite().positive().nullable(),
