@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: roofer-masters-roof-detection
+    runtime: docker
+    plan: free
+    rootDir: services/roof-detection
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CACHE_TTL_SECONDS
+        value: "86400"
+      - key: ROOF_SERVICE_USER_AGENT
+        value: "RooferMastersCRM/1.0 (roof-report contact: roofermasters@gmail.com)"
