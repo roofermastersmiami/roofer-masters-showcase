@@ -232,6 +232,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                               <tr className="border-b text-muted-foreground">
                                 <th className="py-2 pr-3">Facet</th>
                                 <th className="py-2 pr-3">LiDAR points</th>
+                                <th className="py-2 pr-3">Fit RMSE</th>
                                 <th className="py-2 pr-3">Area SF</th>
                                 <th className="py-2 pr-3">Squares</th>
                                 <th className="py-2 pr-3">Pitch</th>
@@ -244,6 +245,9 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                                   <td className="py-2 pr-3">{facet.id}</td>
                                   <td className="py-2 pr-3 tabular-nums">
                                     {facet.point_count.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 pr-3 tabular-nums">
+                                    {facet.fit_rmse_m !== undefined ? `${(facet.fit_rmse_m * 100).toFixed(1)} cm` : "—"}
                                   </td>
                                   <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                                   <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
