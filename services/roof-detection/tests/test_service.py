@@ -241,3 +241,21 @@ def test_ransac_does_not_create_facets_from_small_spatial_noise_clusters():
     facets = _fit_facets(np.vstack((roof, noise)))
     assert len(facets) == 1
     assert facets[0]["point_count"] == len(roof)
+
+def test_polygon_area_excludes_interior_courtyard_ring():
+    footprint = Polygon(
+        [(-80.0, 25.0), (-79.999, 25.0), (-79.999, 25.001), (-80.0, 25.001)],
+        [[(-79.9997, 25.0003), (-79.9993, 25.0003), (-79.9993, 25.0007), (-79.9997, 25.0007)]],
+    )
+    solid_outline = Polygon(list(footprint.exterior.coords))
+    assert _polygon_area_sqft(footprint) < _polygon_area_sqft(solid_outline)
+
+
+def test_footprint_distance_treats_courtyard_as_outside_building():
+    footprint = Polygon(
+        [(-80.0, 25.0), (-79.999, 25.0), (-79.999, 25.001), (-80.0, 25.001)],
+        [[(-79.9997, 25.0003), (-79.9993, 25.0003), (-79.9993, 25.0007), (-79.9997, 25.0007)]],
+    )
+    distance = _distance_to_footprint_meters(footprint, 25.0005, -79.9995)
+    assert distance > 5
+
