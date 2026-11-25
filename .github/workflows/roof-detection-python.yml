@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "services/roof-detection/**"
+      - "render.yaml"
       - ".github/workflows/roof-detection-python.yml"
   push:
     branches: [main]
     paths:
       - "services/roof-detection/**"
+      - "render.yaml"
       - ".github/workflows/roof-detection-python.yml"
 
 jobs:
@@ -27,3 +29,5 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m compileall -q main.py
       - run: pytest -q
+      - name: Validate Render deployment blueprint
+        run: ruby -e 'require "yaml"; config = YAML.load_file("../../render.yaml"); abort "Render blueprint must define at least one service" unless config.is_a?(Hash) && config["services"].is_a?(Array) && !config["services"].empty?'
