@@ -40,6 +40,10 @@ import {
 } from "@/lib/roof-geometry";
 import { calculateRoofSummary, measuredEdgeTotalsToInputs } from "@/lib/roof-calculations";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
+import {
+  restoreRoofDrawingMedia,
+  type RoofDrawingMedia,
+} from "@/lib/roof-drawing-media";
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
@@ -74,15 +78,7 @@ import {
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
-type Media = {
-  path: string;
-  name: string;
-  category: "aerial" | "before" | "after" | "diagram";
-  source?: string;
-  matched_address?: string;
-  latitude?: number;
-  longitude?: number;
-};
+type Media = RoofDrawingMedia;
 export function RoofMeasurements({
   report,
   initialDrawing = null,
@@ -132,35 +128,9 @@ export function RoofMeasurements({
     [length, setLength] = useState(startLength),
     [pitch, setPitch] = useState(startPitch),
     [jobId, setJobId] = useState(""),
-    [media, setMedia] = useState<Media[]>(() => {
-      const parsed = Array.isArray(initialDrawing?.media) ? initialDrawing.media : [];
-      return parsed.flatMap((m) =>
-        m &&
-        typeof m === "object" &&
-        !Array.isArray(m) &&
-        typeof m["path"] === "string" &&
-        typeof m["name"] === "string" &&
-        ["aerial", "before", "after", "diagram"].includes(String(m["category"]))
-          ? [
-              {
-                path: m["path"],
-                name: m["name"],
-                category: m["category"] as Media["category"],
-                ...(typeof m["source"] === "string" ? { source: m["source"].slice(0, 80) } : {}),
-                ...(typeof m["matched_address"] === "string"
-                  ? { matched_address: m["matched_address"].slice(0, 250) }
-                  : {}),
-                ...(typeof m["latitude"] === "number" && Number.isFinite(m["latitude"])
-                  ? { latitude: m["latitude"] }
-                  : {}),
-                ...(typeof m["longitude"] === "number" && Number.isFinite(m["longitude"])
-                  ? { longitude: m["longitude"] }
-                  : {}),
-              },
-            ]
-          : [],
-      );
-    });
+    [media, setMedia] = useState<Media[]>(() =>
+      restoreRoofDrawingMedia(initialDrawing?.media),
+    );
   const [aerialImageUrl, setAerialImageUrl] = useState("");
   const aerialGroundImage = media.find(
     (item) =>
