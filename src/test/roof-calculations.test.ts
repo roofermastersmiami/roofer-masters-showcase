@@ -8,6 +8,7 @@ import {
   projectedAreaToSurfaceArea,
   polygonAreaSqFt,
   calculateRoofSummary,
+  measuredEdgeTotalsToInputs,
 } from "../lib/roof-calculations";
 
 describe("Roof calculation helpers", () => {
@@ -60,6 +61,29 @@ describe("Roof calculation helpers", () => {
     expect(result.wasteAreaSqFt).toBe(100);
     expect(result.totalAreaWithWasteSqFt).toBe(1100);
     expect(result.orderSquares).toBe(11);
+  });
+
+  it("uses canonical measured edge totals without re-identifying shared boundaries", () => {
+    const measuredEdges = measuredEdgeTotalsToInputs({
+      eave: 80,
+      rake: 0,
+      ridge: 20,
+      hip: 0,
+      valley: 0,
+      other: 0,
+    });
+    const result = calculateRoofSummary({
+      facets: [
+        { id: "west", surfaceAreaSqFt: 500 },
+        { id: "east", surfaceAreaSqFt: 500 },
+      ],
+      edges: measuredEdges,
+      wastePercent: 10,
+    });
+
+    expect(result.linearFeet.eave).toBe(80);
+    expect(result.linearFeet.ridge).toBe(20);
+    expect(result.totalUniqueEdgeFeet).toBe(100);
   });
 
   it("counts shared edges only once", () => {
