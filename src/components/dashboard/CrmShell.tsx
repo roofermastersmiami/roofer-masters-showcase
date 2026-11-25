@@ -144,6 +144,7 @@ export function CrmShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const section = pathname.split("/")[2] ?? "";
   const [collapsed, setCollapsed] = useState(false),
+    [sidebarVisible, setSidebarVisible] = useState(true),
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
     [theme, setTheme] = useState("default"),
@@ -183,6 +184,8 @@ export function CrmShell({
           setAccent(fallbackAccent);
           if (fallbackAccent !== "magenta") setThemeChoice(`color:${fallbackAccent}`);
         }
+        const savedSidebarVisibility = localStorage.getItem("crm-sidebar-visible");
+        if (savedSidebarVisibility !== null) setSidebarVisible(savedSidebarVisibility !== "false");
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
         if (fallbackTheme && isCrmThemeId(fallbackTheme)) {
           setTheme(fallbackTheme);
@@ -266,6 +269,15 @@ export function CrmShell({
       cancelled = true;
     };
   }, []);
+  useEffect(() => {
+    if (!sidebarPreferencesLoaded) return;
+    try {
+      localStorage.setItem("crm-sidebar-visible", String(sidebarVisible));
+    } catch {
+      // Keep the selected visibility for this session when storage is unavailable.
+    }
+  }, [sidebarVisible, sidebarPreferencesLoaded]);
+
   useEffect(() => {
     if (!sidebarPreferencesLoaded) return;
     try {
@@ -680,7 +692,7 @@ export function CrmShell({
       }}
     >
       <div className="flex min-h-dvh bg-background text-foreground">
-        <aside
+        {sidebarVisible && <aside
           className={cn(
             "sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block",
             sidebarSurface,
@@ -688,7 +700,7 @@ export function CrmShell({
           )}
         >
           {navigation(collapsed)}
-        </aside>
+        </aside>}
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-card px-4 sm:px-7">
             <Button
@@ -700,14 +712,27 @@ export function CrmShell({
             >
               <Menu />
             </Button>
+            {sidebarVisible && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                className="hidden lg:flex"
+                onClick={() => setCollapsed(!collapsed)}
+              >
+                {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+              title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
               className="hidden lg:flex"
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={() => setSidebarVisible((visible) => !visible)}
             >
-              {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+              {sidebarVisible ? <PanelLeftClose /> : <PanelLeftOpen />}
             </Button>
             <div className="hidden items-center gap-2 text-xs text-muted-foreground xl:flex">
               <span>Workspace</span>
