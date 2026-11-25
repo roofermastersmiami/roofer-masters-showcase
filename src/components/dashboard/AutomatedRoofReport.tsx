@@ -106,7 +106,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
   }, [address, currentAddress]);
 
   // Start public-data analysis once when a new property address is loaded.
-  // The manual button remains available for retries; results are never applied automatically.
+  // The manual button remains available for retries; valid LiDAR facets are applied once per address.
   useEffect(() => {
     if (!currentAddress || autoAnalyzedAddress.current === currentAddress) return;
     autoAnalyzedAddress.current = currentAddress;
@@ -122,9 +122,9 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
       visibleResult.roof.facets.length === 0 ||
       autoAppliedAddress.current === currentAddress
     ) return;
-    autoAppliedAddress.current = currentAddress;
     try {
       onApply(detectedFacetsToDrawing(visibleResult, roofType));
+      autoAppliedAddress.current = currentAddress;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Detected facets could not be added.");
       setErrorAddress(currentAddress);
