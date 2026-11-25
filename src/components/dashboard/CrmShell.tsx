@@ -148,6 +148,7 @@ export function CrmShell({
     [dark, setDark] = useState(false),
     [theme, setTheme] = useState("default"),
     [accent, setAccent] = useState("magenta"),
+    [themeChoice, setThemeChoice] = useState("theme:default"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
     [brandingUserId, setBrandingUserId] = useState<string | null>(null),
@@ -174,9 +175,16 @@ export function CrmShell({
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackAccent = localStorage.getItem("crm-accent-color");
-        if (fallbackAccent && isCrmAccentId(fallbackAccent)) setAccent(fallbackAccent);
+        if (fallbackAccent && isCrmAccentId(fallbackAccent)) {
+          setAccent(fallbackAccent);
+          if (fallbackAccent !== "magenta") setThemeChoice(`accent:${fallbackAccent}`);
+        }
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-        if (fallbackTheme && isCrmThemeId(fallbackTheme)) setTheme(fallbackTheme);
+        if (fallbackTheme && isCrmThemeId(fallbackTheme)) {
+          setTheme(fallbackTheme);
+          if (!fallbackAccent || fallbackAccent === "magenta")
+            setThemeChoice(`theme:${fallbackTheme}`);
+        }
         if (
           fallbackSidebar &&
           ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)
@@ -199,7 +207,10 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (isCrmThemeId(data.theme_palette)) setTheme(data.theme_palette);
+            if (isCrmThemeId(data.theme_palette)) {
+              setTheme(data.theme_palette);
+              setThemeChoice(`theme:${data.theme_palette}`);
+            }
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
                 data.sidebar_appearance,
@@ -689,49 +700,49 @@ export function CrmShell({
             </div>
             <label
               className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 sm:gap-1.5 sm:px-2"
-              title="Choose CRM color theme"
+              title="Choose one of 35 CRM appearances"
             >
               <Palette className="size-4 text-muted-foreground" />
-              <span className="sr-only">CRM color theme</span>
+              <span className="sr-only">CRM appearance</span>
               <select
-                aria-label="CRM color theme"
-                value={theme}
-                onChange={(event) => setTheme(event.target.value)}
-                className="h-8 max-w-24 bg-transparent text-[11px] outline-none sm:max-w-32 sm:text-xs"
-              >
-                <option value="default">Default — Roofer Masters</option>
-                <option value="executive-berry">Executive Berry</option>
-                <option value="modern-enterprise">Modern Enterprise</option>
-                <option value="canyon-corporate">Canyon Corporate</option>
-                <option value="midnight-teal">Midnight Teal</option>
-                <option value="ocean-slate">Ocean Slate</option>
-                <option value="royal-indigo">Royal Indigo</option>
-                <option value="emerald-ledger">Emerald Ledger</option>
-                <option value="copperstone">Copperstone</option>
-                <option value="arctic-blue">Arctic Blue</option>
-                <option value="graphite-gold">Graphite Gold</option>
-                <option value="crimson-executive">Crimson Executive</option>
-                <option value="sage-stone">Sage & Stone</option>
-                <option value="cobalt-professional">Cobalt Professional</option>
-                <option value="plum-luxe">Plum Luxe</option>
-                <option value="monochrome-pro">Monochrome Pro</option>
-              </select>
-            </label>
-            <label
-              className="hidden items-center gap-1 rounded-md border border-border bg-background px-2 lg:flex"
-              title="Choose CRM accent color"
-            >
-              <span className="text-[11px] text-muted-foreground">Accent</span>
-              <select
-                aria-label="CRM accent color"
-                value={accent}
+                aria-label="CRM appearance"
+                value={themeChoice}
                 onChange={(event) => {
-                  if (isCrmAccentId(event.target.value)) setAccent(event.target.value);
+                  const value = event.target.value;
+                  if (value.startsWith("accent:")) {
+                    const accentId = value.slice("accent:".length);
+                    if (isCrmAccentId(accentId)) {
+                      setAccent(accentId);
+                      setThemeChoice(value);
+                    }
+                    return;
+                  }
+                  const themeId = value.slice("theme:".length);
+                  if (isCrmThemeId(themeId)) {
+                    setTheme(themeId);
+                    setThemeChoice(value);
+                  }
                 }}
-                className="h-8 max-w-24 bg-transparent text-xs outline-none"
+                className="h-8 max-w-28 bg-transparent text-[11px] outline-none sm:max-w-40 sm:text-xs"
               >
+                <option value="theme:default">Default — Roofer Masters</option>
+                <option value="theme:executive-berry">Executive Berry</option>
+                <option value="theme:modern-enterprise">Modern Enterprise</option>
+                <option value="theme:canyon-corporate">Canyon Corporate</option>
+                <option value="theme:midnight-teal">Midnight Teal</option>
+                <option value="theme:ocean-slate">Ocean Slate</option>
+                <option value="theme:royal-indigo">Royal Indigo</option>
+                <option value="theme:emerald-ledger">Emerald Ledger</option>
+                <option value="theme:copperstone">Copperstone</option>
+                <option value="theme:arctic-blue">Arctic Blue</option>
+                <option value="theme:graphite-gold">Graphite Gold</option>
+                <option value="theme:crimson-executive">Crimson Executive</option>
+                <option value="theme:sage-stone">Sage & Stone</option>
+                <option value="theme:cobalt-professional">Cobalt Professional</option>
+                <option value="theme:plum-luxe">Plum Luxe</option>
+                <option value="theme:monochrome-pro">Monochrome Pro</option>
                 {CRM_ACCENT_COLORS.map((color) => (
-                  <option key={color.id} value={color.id}>
+                  <option key={color.id} value={`accent:${color.id}`}>
                     {color.label}
                   </option>
                 ))}

@@ -34,6 +34,7 @@ import { activityQuery } from "./foundation-data";
 import { Choice } from "./CrmControls";
 import { useCrm } from "./CrmContext";
 import { formatWhen } from "./data";
+import { CRM_ACCENT_COLORS } from "@/lib/crm-accent";
 const dateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export function CrmOverview() {
@@ -303,7 +304,7 @@ export function CrmOverview() {
               size="sm"
               variant="ghost"
               onClick={() => {
-                setAccent("#2563eb");
+                setAccent("#a81762");
                 setDensity("comfortable");
                 setCardStyle("outlined");
                 setCardOrder([
@@ -321,18 +322,19 @@ export function CrmOverview() {
           <div className="mt-4 flex flex-wrap items-center gap-5">
             <div>
               <p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p>
-              <div className="flex gap-2">
-                {["#2563eb", "#0f766e", "#7c3aed", "#c2410c", "#be123c", "#475569"].map((color) => (
+              <div className="flex max-w-2xl flex-wrap gap-2">
+                {CRM_ACCENT_COLORS.map((color) => (
                   <button
-                    key={color}
+                    key={color.id}
                     type="button"
-                    aria-label={`Set accent color ${color}`}
-                    aria-pressed={accent === color}
-                    onClick={() => setAccent(color)}
-                    className="size-8 rounded-full border-2 border-background"
+                    aria-label={`Set dashboard accent color to ${color.label}`}
+                    title={color.label}
+                    aria-pressed={accent.toLowerCase() === color.value.toLowerCase()}
+                    onClick={() => setAccent(color.value)}
+                    className="size-8 rounded-full border-2 border-background transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{
-                      backgroundColor: color,
-                      outline: accent === color ? `2px solid ${color}` : "none",
+                      backgroundColor: color.value,
+                      outline: accent.toLowerCase() === color.value.toLowerCase() ? `2px solid ${color.value}` : "none",
                     }}
                   />
                 ))}
