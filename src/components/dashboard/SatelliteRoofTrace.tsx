@@ -364,6 +364,7 @@ export function SatelliteRoofTrace({
 }) {
   const [address, setAddress] = useState("");
   const [location, setLocation] = useState<GeocodeResult | null>(null);
+  const [targetLocation, setTargetLocation] = useState<TracePoint | null>(null);
   const [mapCenter, setMapCenter] = useState<TracePoint | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
@@ -387,6 +388,7 @@ export function SatelliteRoofTrace({
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
+  const draggingTarget = useRef(false);
   const suppressNextMapClick = useRef(false);
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
@@ -455,7 +457,9 @@ export function SatelliteRoofTrace({
   function selectLocation(result: GeocodeResult) {
     skipNextAddressSearch.current = true;
     setLocation(result);
-    setMapCenter({ lat: Number(result.lat), lon: Number(result.lon) });
+    const addressPoint = { lat: Number(result.lat), lon: Number(result.lon) };
+    setTargetLocation(addressPoint);
+    setMapCenter(addressPoint);
     setPoints([]);
     setSelectedBuildingCenter(null);
     setAutoTraced(false);
@@ -475,6 +479,7 @@ export function SatelliteRoofTrace({
     // Clear the previous property's pin and trace immediately so they cannot be
     // mistaken for the newly selected address while geocoding is in flight.
     setLocation(null);
+    setTargetLocation(null);
     setMapCenter(null);
     setPoints([]);
     setAutoTraced(false);
@@ -540,8 +545,9 @@ export function SatelliteRoofTrace({
     setAutoTraceBusy(true);
     setError("");
     try {
-      const lat = Number(location.lat),
-        lon = Number(location.lon);
+      const searchTarget = targetLocation ?? { lat: Number(location.lat), lon: Number(location.lon) };
+      const lat = searchTarget.lat,
+        lon = searchTarget.lon;
       const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out tags geom;`;
       // Public Overpass instances occasionally throttle or go offline. Try a
       // second community endpoint before asking the estimator to trace manually.
@@ -855,6 +861,9 @@ export function SatelliteRoofTrace({
               </label>
             </div>
           )}
+          <div className="rounded-md border border-blue-500/40 bg-blue-500/5 p-3 text-sm">
+            <strong>Confirm the correct building:</strong> the red pin is the geocoded street address. Drag the blue TARGET pin onto the actual house roof before using automatic footprint tracing. The target is separate from the address reference.
+          </div>
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
             <span className="mr-auto text-sm font-medium">Map interaction</span>
             <Button
@@ -892,12 +901,27 @@ export function SatelliteRoofTrace({
                 addMapPoint(event);
               }}
               onPointerDown={(event) => {
+                if (draggingTarget.current) return;
                 if (mapInteraction !== "pan" || !mapCenter) return;
                 event.preventDefault();
                 mapPanStart.current = { x: event.clientX, y: event.clientY, center: mapCenter };
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
               onPointerMove={(event) => {
+                if (draggingTarget.current) {
+                  const point = tracePointFromPointer(
+                    event.clientX,
+                    event.clientY,
+                    event.currentTarget.getBoundingClientRect(),
+                  );
+                  if (point) {
+                    setTargetLocation(point);
+                    setAutoTraced(false);
+                    setSelectedBuildingCenter(null);
+                    setPoints([]);
+                  }
+                  return;
+                }
                 if (mapPanStart.current) {
                   const rect = event.currentTarget.getBoundingClientRect();
                   if (rect.width > 0 && rect.height > 0) {
@@ -924,6 +948,10 @@ export function SatelliteRoofTrace({
               }}
               onPointerUp={() => {
                 mapPanStart.current = null;
+                if (draggingTarget.current) {
+                  draggingTarget.current = false;
+                  suppressNextMapClick.current = true;
+                }
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
                   suppressNextMapClick.current = true;
@@ -931,6 +959,7 @@ export function SatelliteRoofTrace({
               }}
               onPointerCancel={() => {
                 mapPanStart.current = null;
+                draggingTarget.current = false;
                 draggingPoint.current = null;
                 suppressNextMapClick.current = true;
               }}
@@ -1027,6 +1056,25 @@ export function SatelliteRoofTrace({
                   >
                     Address
                   </text>
+                </g>
+              )}
+              {targetLocation && bounds && (
+                <g
+                  transform={`translate(${((targetLocation.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - targetLocation.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    draggingTarget.current = true;
+                    event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+                  }}
+                  className="cursor-grab active:cursor-grabbing"
+                  role="button"
+                  aria-label="Drag target pin onto the correct house"
+                >
+                  <circle r="27" fill="#2563eb" fillOpacity="0.2" stroke="#93c5fd" strokeWidth="3" />
+                  <path d="M0 22 C-4 14 -16 3 -16 -7 A16 16 0 1 1 16 -7 C16 3 4 14 0 22Z" fill="#2563eb" stroke="white" strokeWidth="3" />
+                  <circle cx="0" cy="-7" r="5" fill="white" />
+                  <text x="24" y="5" fill="white" stroke="#1e3a8a" strokeWidth="5" paintOrder="stroke" fontSize="19" fontWeight="800">TARGET · DRAG ME</text>
                 </g>
               )}
               {points.length > 2 && (
@@ -1186,7 +1234,7 @@ export function SatelliteRoofTrace({
                         ? edgeTypes
                         : drawnPlane.edges,
                   };
-                  const accepted = onAdd([namedPlane], traceGeoReference(points, center!));
+                  const accepted = onAdd([namedPlane], traceGeoReference(points, targetLocation ?? center!));
                   if (accepted !== false) {
                     setPoints([]);
                     setEdgeTypes([]);
@@ -1264,7 +1312,7 @@ export function SatelliteRoofTrace({
                       ridgeOffsetPercent,
                       ridgeAngleDegrees,
                     ),
-                    traceGeoReference(points, center!),
+                    traceGeoReference(points, targetLocation ?? center!),
                   );
                   if (accepted !== false) setPoints([]);
                 } catch (e) {
