@@ -45,6 +45,8 @@ export const roofDetectionResponseSchema = z.object({
       type: z.literal("Polygon"),
       coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()]))),
     }),
+    address_point_inside_footprint: z.boolean().optional(),
+    address_to_footprint_distance_m: z.number().finite().nonnegative().optional(),
   }),
   roof: z.object({
     facet_count: z.number().int().nonnegative(),

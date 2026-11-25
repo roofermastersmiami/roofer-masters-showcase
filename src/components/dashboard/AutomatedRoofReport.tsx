@@ -124,6 +124,11 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       )}
       {visibleResult && (
         <div className="space-y-3">
+          {visibleResult.footprint.address_point_inside_footprint === false && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800">
+              Address match is approximate: the geocoded point is {visibleResult.footprint.address_to_footprint_distance_m?.toFixed(1)} m from the selected building outline. Confirm the correct building before using these measurements.
+            </p>
+          )}
           {visibleResult.status === "lidar_facets" ? (
             <div className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
@@ -131,8 +136,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 <strong>{visibleResult.roof.facet_count} candidate roof facets detected</strong>
                 <p className="text-muted-foreground">
                   {visibleResult.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
-                  {visibleResult.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR
-                  result
+                  {visibleResult.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
                 </p>
               </div>
             </div>
@@ -143,8 +147,8 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 <strong>Footprint found; roof facets were not measurable</strong>
                 <p className="text-muted-foreground">{visibleResult.fallback.message}</p>
                 <p className="mt-1">
-                  Ground footprint: {visibleResult.fallback.footprint_area_sqft.toLocaleString()} sq
-                  ft. This is not roof surface area.
+                  Ground footprint: {visibleResult.fallback.footprint_area_sqft.toLocaleString()} sq ft.
+                  This is not roof surface area.
                 </p>
               </div>
             </div>
@@ -178,8 +182,8 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
-            the measurement editor.
+            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in the
+            measurement editor.
           </p>
           {visibleResult.roof.facets.length > 0 && (
             <Button variant="outline" onClick={apply}>
