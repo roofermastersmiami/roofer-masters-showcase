@@ -43,7 +43,9 @@ describe("material orders from roof report", () => {
     expect(q(materialOrder({ ...base, ...metal }), "Valley")).toBe(4);
   });
   it("metal: refuses to create a cut list without plane runs and product data", () => {
-    expect(() => materialOrder({ ...base, roof_type: "Metal Roof" })).toThrow(/measured eave-to-ridge/);
+    expect(() => materialOrder({ ...base, roof_type: "Metal Roof" })).toThrow(
+      /measured eave-to-ridge/,
+    );
   });
   it("TPO includes insulation boards", () => {
     expect(q(materialOrder({ ...base, roof_type: "TPO" }), "Insulation")).toBe(69);
@@ -84,7 +86,9 @@ describe("material takeoff review warnings", () => {
     expect(warnings.join(" ")).toContain("measured eave-to-ridge run");
   });
   it("keeps a final verification warning after product-specific inputs are supplied", () => {
-    expect(materialOrderWarnings({ ...base, ...metal }).join(" ")).toContain("manufacturer's approved system");
+    expect(materialOrderWarnings({ ...base, ...metal }).join(" ")).toContain(
+      "manufacturer's approved system",
+    );
   });
   it("does not show metal panel warnings for other roof systems", () => {
     expect(materialOrderWarnings({ ...base, roof_type: "Shingle Roof" })).toEqual([]);

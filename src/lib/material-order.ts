@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { ROOF_TYPES } from "./instant-estimate-schema";
-import { calculateRoofTakeoff, type MetalPlaneRun, type MetalTakeoffConfig } from "@/utils/materialTakeoff";
+import {
+  calculateRoofTakeoff,
+  type MetalPlaneRun,
+  type MetalTakeoffConfig,
+} from "@/utils/materialTakeoff";
 
 export const reportSchema = z.object({
   roof_type: z.enum(ROOF_TYPES),
@@ -15,17 +19,25 @@ export const reportSchema = z.object({
   pipes: z.number().int().min(0).max(500).default(0),
   dominant_pitch: z.number().finite().min(0).max(24).default(0),
   flat_installation_method: z.enum(["torch", "peel_and_stick"]).default("torch"),
-  metal_plane_runs: z.array(z.object({
-    eaveLengthFt: z.number().positive().max(100000),
-    panelRunFt: z.number().positive().max(100000),
-  })).min(1).max(100).optional(),
-  metal_config: z.object({
-    panelCoverageIn: z.number().positive().max(48),
-    underlaymentCoverageSqFtPerRoll: z.number().positive().max(100000),
-    fastenersPerPanel: z.number().positive().max(1000),
-    fastenersPerBox: z.number().positive().max(100000),
-    trimStickLengthFt: z.number().positive().max(100),
-  }).optional(),
+  metal_plane_runs: z
+    .array(
+      z.object({
+        eaveLengthFt: z.number().positive().max(100000),
+        panelRunFt: z.number().positive().max(100000),
+      }),
+    )
+    .min(1)
+    .max(100)
+    .optional(),
+  metal_config: z
+    .object({
+      panelCoverageIn: z.number().positive().max(48),
+      underlaymentCoverageSqFtPerRoll: z.number().positive().max(100000),
+      fastenersPerPanel: z.number().positive().max(1000),
+      fastenersPerBox: z.number().positive().max(100000),
+      trimStickLengthFt: z.number().positive().max(100),
+    })
+    .optional(),
 });
 export type RoofReport = z.input<typeof reportSchema>;
 export type MaterialLine = {

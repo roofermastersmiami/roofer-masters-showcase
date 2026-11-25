@@ -123,7 +123,8 @@ export function MaterialOrder({
     } catch (error) {
       return {
         lines: [] as MaterialLine[],
-        takeoffError: error instanceof Error ? error.message : "Complete the required material inputs.",
+        takeoffError:
+          error instanceof Error ? error.message : "Complete the required material inputs.",
       };
     }
   }, [valid.success, r]);
@@ -257,63 +258,120 @@ Roofer Masters · 305-942-3093`;
         <div className="mt-4 space-y-4 rounded-md border border-border p-3">
           <div>
             <h4 className="font-semibold">Measured metal roof planes</h4>
-            <p className="text-xs text-muted-foreground">Enter each plane's measured eave length and eave-to-ridge panel run. Do not use the combined roof perimeter as a substitute.</p>
+            <p className="text-xs text-muted-foreground">
+              Enter each plane's measured eave length and eave-to-ridge panel run. Do not use the
+              combined roof perimeter as a substitute.
+            </p>
           </div>
           {(r.metal_plane_runs ?? []).map((plane, index) => (
             <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
               <Field label={`Plane ${index + 1} eave length (ft)`}>
-                <Input type="number" min="0.01" step="0.01" value={plane.eaveLengthFt} onChange={(event) => {
-                  const next = [...(r.metal_plane_runs ?? [])];
-                  next[index] = { ...plane, eaveLengthFt: Number(event.target.value) };
-                  setR({ ...r, metal_plane_runs: next });
-                  setSource("manual");
-                }} />
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={plane.eaveLengthFt}
+                  onChange={(event) => {
+                    const next = [...(r.metal_plane_runs ?? [])];
+                    next[index] = { ...plane, eaveLengthFt: Number(event.target.value) };
+                    setR({ ...r, metal_plane_runs: next });
+                    setSource("manual");
+                  }}
+                />
               </Field>
               <Field label="Panel run eave to ridge (ft)">
-                <Input type="number" min="0.01" step="0.01" value={plane.panelRunFt} onChange={(event) => {
-                  const next = [...(r.metal_plane_runs ?? [])];
-                  next[index] = { ...plane, panelRunFt: Number(event.target.value) };
-                  setR({ ...r, metal_plane_runs: next });
-                  setSource("manual");
-                }} />
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={plane.panelRunFt}
+                  onChange={(event) => {
+                    const next = [...(r.metal_plane_runs ?? [])];
+                    next[index] = { ...plane, panelRunFt: Number(event.target.value) };
+                    setR({ ...r, metal_plane_runs: next });
+                    setSource("manual");
+                  }}
+                />
               </Field>
-              <Button type="button" size="icon" variant="outline" className="mt-6" aria-label={`Remove plane ${index + 1}`} onClick={() => setR({ ...r, metal_plane_runs: (r.metal_plane_runs ?? []).filter((_, i) => i !== index) })}>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="mt-6"
+                aria-label={`Remove plane ${index + 1}`}
+                onClick={() =>
+                  setR({
+                    ...r,
+                    metal_plane_runs: (r.metal_plane_runs ?? []).filter((_, i) => i !== index),
+                  })
+                }
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>
           ))}
-          <Button type="button" size="sm" variant="outline" onClick={() => setR({ ...r, metal_plane_runs: [...(r.metal_plane_runs ?? []), { eaveLengthFt: 0, panelRunFt: 0 }] })}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setR({
+                ...r,
+                metal_plane_runs: [
+                  ...(r.metal_plane_runs ?? []),
+                  { eaveLengthFt: 0, panelRunFt: 0 },
+                ],
+              })
+            }
+          >
             <Plus className="size-4" /> Add roof plane
           </Button>
           <h4 className="font-semibold">Selected product specifications</h4>
-          <p className="text-xs text-muted-foreground">Use the net coverage and packaging values from the exact manufacturer's product data and fastening schedule.</p>
+          <p className="text-xs text-muted-foreground">
+            Use the net coverage and packaging values from the exact manufacturer's product data and
+            fastening schedule.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {([
-              ["panelCoverageIn", "Net panel coverage (in)"],
-              ["underlaymentCoverageSqFtPerRoll", "Underlayment coverage per roll (sq ft)"],
-              ["fastenersPerPanel", "Fasteners per panel"],
-              ["fastenersPerBox", "Fasteners per box"],
-              ["trimStickLengthFt", "Trim stock length (ft)"],
-            ] as const).map(([key, label]) => (
+            {(
+              [
+                ["panelCoverageIn", "Net panel coverage (in)"],
+                ["underlaymentCoverageSqFtPerRoll", "Underlayment coverage per roll (sq ft)"],
+                ["fastenersPerPanel", "Fasteners per panel"],
+                ["fastenersPerBox", "Fasteners per box"],
+                ["trimStickLengthFt", "Trim stock length (ft)"],
+              ] as const
+            ).map(([key, label]) => (
               <Field key={key} label={label}>
-                <Input type="number" min="0.01" step="0.01" value={r.metal_config?.[key] ?? ""} onChange={(event) => setR({
-                  ...r,
-                  metal_config: {
-                    panelCoverageIn: r.metal_config?.panelCoverageIn ?? 0,
-                    underlaymentCoverageSqFtPerRoll: r.metal_config?.underlaymentCoverageSqFtPerRoll ?? 0,
-                    fastenersPerPanel: r.metal_config?.fastenersPerPanel ?? 0,
-                    fastenersPerBox: r.metal_config?.fastenersPerBox ?? 0,
-                    trimStickLengthFt: r.metal_config?.trimStickLengthFt ?? 0,
-                    [key]: Number(event.target.value),
-                  },
-                })} />
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={r.metal_config?.[key] ?? ""}
+                  onChange={(event) =>
+                    setR({
+                      ...r,
+                      metal_config: {
+                        panelCoverageIn: r.metal_config?.panelCoverageIn ?? 0,
+                        underlaymentCoverageSqFtPerRoll:
+                          r.metal_config?.underlaymentCoverageSqFtPerRoll ?? 0,
+                        fastenersPerPanel: r.metal_config?.fastenersPerPanel ?? 0,
+                        fastenersPerBox: r.metal_config?.fastenersPerBox ?? 0,
+                        trimStickLengthFt: r.metal_config?.trimStickLengthFt ?? 0,
+                        [key]: Number(event.target.value),
+                      },
+                    })
+                  }
+                />
               </Field>
             ))}
           </div>
         </div>
       )}
       {takeoffError && (
-        <p role="alert" className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+        <p
+          role="alert"
+          className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+        >
           {takeoffError}
         </p>
       )}
