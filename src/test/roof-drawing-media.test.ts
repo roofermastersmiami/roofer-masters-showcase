@@ -25,21 +25,18 @@ describe("saved roof drawing media metadata", () => {
     ).toEqual([{ path: "roof-media/job-1/before.jpg", name: "Before", category: "before" }]);
   });
 
-  it.each([
-    { latitude: 91 },
-    { latitude: -91 },
-    { longitude: 181 },
-    { longitude: -181 },
-  ])("rejects invalid geographic coordinates: %o", (coordinates) => {
-    expect(roofDrawingMediaSchema.safeParse([{ ...aerialMedia, ...coordinates }]).success).toBe(
-      false,
-    );
-  });
+  it.each([{ latitude: 91 }, { latitude: -91 }, { longitude: 181 }, { longitude: -181 }])(
+    "rejects invalid geographic coordinates: %o",
+    (coordinates) => {
+      expect(roofDrawingMediaSchema.safeParse([{ ...aerialMedia, ...coordinates }]).success).toBe(
+        false,
+      );
+    },
+  );
 
   it("rejects unsafe storage paths while retaining valid location metadata", () => {
     expect(
-      roofDrawingMediaSchema.safeParse([{ ...aerialMedia, path: "../private/aerial.png" }])
-        .success,
+      roofDrawingMediaSchema.safeParse([{ ...aerialMedia, path: "../private/aerial.png" }]).success,
     ).toBe(false);
   });
 });
