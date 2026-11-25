@@ -32,6 +32,7 @@ MIN_ROOF_POINTS = int(os.getenv("MIN_ROOF_POINTS", "80"))
 MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
+CANDIDATE_SEARCH_RADIUS_M = 80.0
 _RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
