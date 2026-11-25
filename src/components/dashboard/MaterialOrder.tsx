@@ -164,7 +164,9 @@ Roofer Masters · 305-942-3093`;
   }
   async function downloadTakeoffPdf() {
     if (!valid.success || !lines.length || takeoffError) {
-      toast.error(takeoffError || "Complete the required measurements before generating the takeoff PDF");
+      toast.error(
+        takeoffError || "Complete the required measurements before generating the takeoff PDF",
+      );
       return;
     }
     try {
@@ -181,7 +183,9 @@ Roofer Masters · 305-942-3093`;
       });
       downloadPdf(bytes, `Material Takeoff - ${title}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not generate material takeoff PDF");
+      toast.error(
+        error instanceof Error ? error.message : "Could not generate material takeoff PDF",
+      );
     }
   }
   function print() {
@@ -435,7 +439,11 @@ Roofer Masters · 305-942-3093`;
         <Button variant="outline" onClick={print} disabled={!lines.length}>
           <Printer /> Print
         </Button>
-        <Button variant="outline" onClick={() => void downloadTakeoffPdf()} disabled={!valid.success || !lines.length || !!takeoffError}>
+        <Button
+          variant="outline"
+          onClick={() => void downloadTakeoffPdf()}
+          disabled={!valid.success || !lines.length || !!takeoffError}
+        >
           <FileDown /> Takeoff PDF
         </Button>
         <Button variant="outline" asChild disabled={!lines.length}>

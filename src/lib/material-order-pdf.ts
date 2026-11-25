@@ -25,7 +25,9 @@ function safeText(value: string) {
 
 export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promise<Uint8Array> {
   if (!input.lines.length) {
-    throw new Error("A material takeoff cannot be generated until the required measurements and product specifications are complete.");
+    throw new Error(
+      "A material takeoff cannot be generated until the required measurements and product specifications are complete.",
+    );
   }
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -43,10 +45,18 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   const drawHeader = () => {
     page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 76, width: PAGE_WIDTH, height: 76, color: NAVY });
     page.drawText("ROOFING MATERIAL TAKEOFF", {
-      x: LEFT, y: PAGE_HEIGHT - 43, size: 16, font: bold, color: rgb(1, 1, 1),
+      x: LEFT,
+      y: PAGE_HEIGHT - 43,
+      size: 16,
+      font: bold,
+      color: rgb(1, 1, 1),
     });
     page.drawText(safeText(input.title).slice(0, 90), {
-      x: LEFT, y: PAGE_HEIGHT - 61, size: 8, font: regular, color: rgb(0.88, 0.92, 0.95),
+      x: LEFT,
+      y: PAGE_HEIGHT - 61,
+      size: 8,
+      font: regular,
+      color: rgb(0.88, 0.92, 0.95),
     });
   };
   const ensureSpace = (height: number) => {
@@ -72,10 +82,10 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   page.drawText("PROJECT DETAILS", { x: LEFT, y, size: 9, font: bold, color: BLUE });
   y -= 18;
   const details = [
-    [ "Roof system", input.report.roof_type ],
-    [ "Report source", input.source ],
-    [ "Measured area", `${input.report.area_sqft.toLocaleString("en-US")} sq ft` ],
-    [ "Waste allowance", `${input.report.waste_pct ?? 0}%` ],
+    ["Roof system", input.report.roof_type],
+    ["Report source", input.source],
+    ["Measured area", `${input.report.area_sqft.toLocaleString("en-US")} sq ft`],
+    ["Waste allowance", `${input.report.waste_pct ?? 0}%`],
   ];
   const colW = (RIGHT - LEFT) / 2;
   details.forEach(([label, value], index) => {
@@ -86,10 +96,18 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   });
   y -= 76;
   if (input.warnings?.length) {
-    const warningLines = input.warnings.flatMap((warning) => wrap(`REVIEW: ${warning}`, RIGHT - LEFT - 20, 8));
+    const warningLines = input.warnings.flatMap((warning) =>
+      wrap(`REVIEW: ${warning}`, RIGHT - LEFT - 20, 8),
+    );
     const warningHeight = warningLines.length * 12 + 18;
     ensureSpace(warningHeight);
-    page.drawRectangle({ x: LEFT, y: y - warningHeight + 5, width: RIGHT - LEFT, height: warningHeight, color: LIGHT });
+    page.drawRectangle({
+      x: LEFT,
+      y: y - warningHeight + 5,
+      width: RIGHT - LEFT,
+      height: warningHeight,
+      color: LIGHT,
+    });
     let wy = y - 10;
     warningLines.forEach((line) => {
       page.drawText(line, { x: LEFT + 10, y: wy, size: 8, font: regular, color: BLUE });
@@ -121,10 +139,22 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
       drawTableHeader();
     }
     if (index % 2 === 0) {
-      page.drawRectangle({ x: LEFT, y: y - rowHeight + 5, width: RIGHT - LEFT, height: rowHeight, color: LIGHT });
+      page.drawRectangle({
+        x: LEFT,
+        y: y - rowHeight + 5,
+        width: RIGHT - LEFT,
+        height: rowHeight,
+        color: LIGHT,
+      });
     }
     itemRows.forEach((row, rowIndex) => {
-      page.drawText(row, { x: itemX, y: y - 9 - rowIndex * 11, size: 8, font: regular, color: INK });
+      page.drawText(row, {
+        x: itemX,
+        y: y - 9 - rowIndex * 11,
+        size: 8,
+        font: regular,
+        color: INK,
+      });
     });
     page.drawText(String(line.qty), { x: qtyX, y: y - 9, size: 8, font: bold, color: INK });
     page.drawText(safeText(line.unit), { x: unitX, y: y - 9, size: 8, font: regular, color: INK });
@@ -132,7 +162,8 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   });
   ensureSpace(68);
   y -= 12;
-  const note = "Planning quantities only - not a purchase order. Verify field dimensions, product coverage, manufacturer instructions, packaging, fastening schedules, code requirements and supplier quantities before ordering. Missing or unverified inputs must be resolved by the roofing contractor.";
+  const note =
+    "Planning quantities only - not a purchase order. Verify field dimensions, product coverage, manufacturer instructions, packaging, fastening schedules, code requirements and supplier quantities before ordering. Missing or unverified inputs must be resolved by the roofing contractor.";
   const noteRows = wrap(note, RIGHT - LEFT, 8);
   noteRows.forEach((line) => {
     ensureSpace(12);
@@ -140,10 +171,22 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
     y -= 12;
   });
   pages.forEach((p, index) => {
-    p.drawLine({ start: { x: LEFT, y: 38 }, end: { x: RIGHT, y: 38 }, thickness: 0.5, color: rgb(0.82, 0.85, 0.88) });
-    p.drawText(`Generated ${new Date().toLocaleDateString("en-US")}  |  Page ${index + 1} of ${pages.length}`, {
-      x: LEFT, y: 24, size: 7, font: regular, color: MUTED,
+    p.drawLine({
+      start: { x: LEFT, y: 38 },
+      end: { x: RIGHT, y: 38 },
+      thickness: 0.5,
+      color: rgb(0.82, 0.85, 0.88),
     });
+    p.drawText(
+      `Generated ${new Date().toLocaleDateString("en-US")}  |  Page ${index + 1} of ${pages.length}`,
+      {
+        x: LEFT,
+        y: 24,
+        size: 7,
+        font: regular,
+        color: MUTED,
+      },
+    );
   });
   return pdf.save();
 }
