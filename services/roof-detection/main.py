@@ -161,6 +161,8 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     raw_candidates: list[tuple[Polygon, dict[str, Any]]] = []
     provider_errors: list[str] = []
     providers_succeeded = 0
+    arcgis_feature_count = 0
+    overpass_element_count = 0
 
     arcgis_url = (
         "https://services2.arcgis.com/VNo0ht0YPXJoI4oE/"
@@ -188,7 +190,9 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             if payload.get("error"):
                 raise ValueError(str(payload["error"]))
             providers_succeeded += 1
-            for feature in payload.get("features", []):
+            arcgis_features = payload.get("features", [])
+            arcgis_feature_count = len(arcgis_features)
+            for feature in arcgis_features:
                 geometry = feature.get("geometry")
                 if not geometry:
                     continue
@@ -245,7 +249,9 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 response.raise_for_status()
                 payload = response.json()
                 providers_succeeded += 1
-                for element in payload.get("elements", []):
+                overpass_elements = payload.get("elements", [])
+                overpass_element_count = len(overpass_elements)
+                for element in overpass_elements:
                     coords = element.get("geometry") or []
                     if len(coords) < 4:
                         continue
@@ -361,6 +367,10 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 "providers_checked": ["ArcGIS USA Structures", "OpenStreetMap Overpass"],
                 "candidate_search_radius_m": CANDIDATE_SEARCH_RADIUS_M,
                 "provider_feature_count": len(raw_candidates),
+                "arcgis_feature_count": arcgis_feature_count,
+                "overpass_element_count": overpass_element_count,
+                "geocoded_location": {"lat": round(lat, 7), "lon": round(lon, 7)},
+                "provider_errors": provider_errors,
                 "rejected_by_area_filter": rejected_by_area,
                 "rejected_by_distance_filter": rejected_by_distance,
                 "nearest_provider_feature": nearest_provider_feature,
