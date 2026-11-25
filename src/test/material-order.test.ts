@@ -3,6 +3,7 @@ import {
   materialOrder,
   escapeMaterialOrderHtml,
   materialOrderWarnings,
+  materialOrderForTransfer,
 } from "@/lib/material-order";
 const base = {
   area_sqft: 2000,
@@ -113,5 +114,38 @@ describe("material order source tracking", () => {
     expect(resolveMaterialOrderSource({ report: base }).source).toBe("legacy");
     expect(resolveMaterialOrderSource({ source: "drawing" }).source).toBe("legacy");
     expect(resolveMaterialOrderSource(null).source).toBe("manual");
+  });
+});
+
+describe("reviewed drawing transfer to material order", () => {
+  it("transfers metal measurements before manufacturer specs are entered", () => {
+    const report = {
+      ...base,
+      roof_type: "Metal Roof" as const,
+      metal_plane_runs: [{ eaveLengthFt: 40, panelRunFt: 18 }],
+    };
+    expect(materialOrderForTransfer(report)).toEqual([]);
+  });
+
+  it("still builds non-metal material lines during transfer", () => {
+    expect(
+      materialOrderForTransfer({ ...base, roof_type: "Shingle Roof" }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("builds the metal cut list when plane runs and product specifications are complete", () => {
+    const report = {
+      ...base,
+      roof_type: "Metal Roof" as const,
+      metal_plane_runs: [{ eaveLengthFt: 40, panelRunFt: 18 }],
+      metal_config: {
+        panelCoverageIn: 16,
+        underlaymentCoverageSqFtPerRoll: 200,
+        fastenersPerPanel: 4,
+        fastenersPerBox: 250,
+        trimStickLengthFt: 10,
+      },
+    };
+    expect(materialOrderForTransfer(report).length).toBeGreaterThan(0);
   });
 });

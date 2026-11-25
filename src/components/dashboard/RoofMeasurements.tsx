@@ -43,7 +43,7 @@ import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { jobsQuery } from "./operations-data";
-import { materialOrder } from "@/lib/material-order";
+import { materialOrderForTransfer } from "@/lib/material-order";
 import { Choice, Field, SectionHeading } from "./CrmControls";
 import { useCrm } from "./CrmContext";
 import type { RoofOrder } from "./roof-orders-data";
@@ -432,7 +432,7 @@ export function RoofMeasurements({
     setBusy(true);
     try {
       const report = toMaterialReport(d);
-      const lines = materialOrder(report);
+      const lines = materialOrderForTransfer(report);
       const { error } = await supabase
         .from("roof_jobs")
         .update({
