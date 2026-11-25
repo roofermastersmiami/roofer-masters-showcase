@@ -415,8 +415,58 @@ export function roofPlaneTakeoff(raw: RoofDrawing) {
   });
 }
 
+/**
+ * Convert a saved drawing into manufacturer-reviewable material inputs.
+ * Metal panel runs are emitted only for simple, rectangular gable facets with
+ * one parallel eave/ridge pair of equal length. Complex facets stay manual.
+ */
+export function measuredMetalPlaneRuns(d: RoofDrawing) {
+  if (d.roof_type !== "Metal Roof") return undefined;
+  const runs: { eaveLengthFt: number; panelRunFt: number }[] = [];
+  for (const plane of d.planes) {
+    const eaves = plane.edges.flatMap((type, index) => (type === "eave" ? [index] : []));
+    const ridges = plane.edges.flatMap((type, index) => (type === "ridge" ? [index] : []));
+    if (eaves.length !== 1 || ridges.length !== 1 || plane.points.length !== 4) return undefined;
+    const eaveIndex = eaves[0];
+    const ridgeIndex = ridges[0];
+    if (eaveIndex === undefined || ridgeIndex === undefined) return undefined;
+    if ((eaveIndex + 2) % 4 !== ridgeIndex) return undefined;
+    const edge = (index: number) => {
+      const a = plane.points[index];
+      const b = plane.points[(index + 1) % plane.points.length];
+      if (!a || !b) return undefined;
+      return { a, b, length: distance(a, b) };
+    };
+    const eave = edge(eaveIndex);
+    const ridge = edge(ridgeIndex);
+    if (!eave || !ridge || eave.length <= 0 || ridge.length <= 0) return undefined;
+    // Equal, parallel eave/ridge edges indicate a constant panel run across the facet.
+    const lengthTolerance = Math.max(0.1, eave.length * 0.01);
+    if (Math.abs(eave.length - ridge.length) > lengthTolerance) return undefined;
+    const ev = { x: eave.b.x - eave.a.x, z: eave.b.z - eave.a.z };
+    const rv = { x: ridge.b.x - ridge.a.x, z: ridge.b.z - ridge.a.z };
+    const cross2d = ev.x * rv.z - ev.z * rv.x;
+    if (Math.abs(cross2d) > eave.length * ridge.length * 0.01) return undefined;
+    const eaveMid = {
+      x: (eave.a.x + eave.b.x) / 2,
+      y: (eave.a.y + eave.b.y) / 2,
+      z: (eave.a.z + eave.b.z) / 2,
+    };
+    const ridgeMid = {
+      x: (ridge.a.x + ridge.b.x) / 2,
+      y: (ridge.a.y + ridge.b.y) / 2,
+      z: (ridge.a.z + ridge.b.z) / 2,
+    };
+    const panelRunFt = distance(eaveMid, ridgeMid);
+    if (!Number.isFinite(panelRunFt) || panelRunFt <= 0) return undefined;
+    runs.push({ eaveLengthFt: eave.length, panelRunFt });
+  }
+  return runs.length === d.planes.length && runs.length > 0 ? runs : undefined;
+}
+
 export function toMaterialReport(d: RoofDrawing) {
   const m = measureDrawing(d);
+  const metalPlaneRuns = measuredMetalPlaneRuns(d);
   return {
     roof_type: d.roof_type,
     area_sqft: m.area,
@@ -429,6 +479,7 @@ export function toMaterialReport(d: RoofDrawing) {
     panel_width_in: 16,
     dominant_pitch: [...m.planes].sort((a, b) => b.area - a.area)[0]?.pitch ?? 0,
     pipes: d.penetrations.filter((p) => p.kind === "pipe" || p.kind === "vent").length,
+    ...(metalPlaneRuns ? { metal_plane_runs: metalPlaneRuns } : {}),
   };
 }
 
