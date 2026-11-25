@@ -13,7 +13,7 @@ export const CRM_THEME_IDS = [
   "sage-stone",
   "cobalt-professional",
   "plum-luxe",
-  "monochrome-pro"
+  "monochrome-pro",
 ] as const;
 
 export type CrmThemeId = "default" | (typeof CRM_THEME_IDS)[number];

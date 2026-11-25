@@ -172,8 +172,7 @@ export function CrmShell({
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-        if (fallbackTheme && isCrmThemeId(fallbackTheme))
-          setTheme(fallbackTheme);
+        if (fallbackTheme && isCrmThemeId(fallbackTheme)) setTheme(fallbackTheme);
         if (
           fallbackSidebar &&
           ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(fallbackSidebar)
@@ -196,8 +195,7 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (isCrmThemeId(data.theme_palette))
-              setTheme(data.theme_palette);
+            if (isCrmThemeId(data.theme_palette)) setTheme(data.theme_palette);
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
                 data.sidebar_appearance,
@@ -470,7 +468,12 @@ export function CrmShell({
                 <span className="block truncate font-display text-sm font-bold">
                   {logoUrl ? "Roofing CRM" : "Add Avatar"}
                 </span>
-                <span className={cn("block truncate text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/65")}>
+                <span
+                  className={cn(
+                    "block truncate text-[10px]",
+                    sidebarIsLight ? "text-muted-foreground" : "text-white/65",
+                  )}
+                >
                   {logoUrl ? "Company logo" : "Add your company logo"}
                 </span>
               </span>
