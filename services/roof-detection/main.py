@@ -544,7 +544,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # Parcel membership is corroborating evidence only; parcels may contain
     # multiple buildings and cannot independently establish the primary roof.
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
-    if street_address and re.search(r"\\bMIRAMAR\\b", street_address, re.IGNORECASE):
+    if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
         parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon)
         if parcel_polygon is not None:
             parcel_candidates = [row for row in candidates
