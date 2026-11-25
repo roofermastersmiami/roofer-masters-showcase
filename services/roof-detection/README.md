@@ -17,13 +17,13 @@ Health: `GET /health`
 Analyze: `POST /v1/roof/analyze`
 
 ```json
-{"street_address":"1600 Pennsylvania Ave NW, Washington, DC"}
+{ "street_address": "1600 Pennsylvania Ave NW, Washington, DC" }
 ```
 
 Or pass coordinates:
 
 ```json
-{"lat":38.8977,"lon":-77.0365}
+{ "lat": 38.8977, "lon": -77.0365 }
 ```
 
 ## Free deployment

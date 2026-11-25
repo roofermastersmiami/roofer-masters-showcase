@@ -25,7 +25,9 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
     }
     const endpoint = endpointUrl();
     if (!endpoint) {
-      setError("The free roof-detection service is not connected. Set VITE_ROOF_DETECTION_API_URL after deploying the service.");
+      setError(
+        "The free roof-detection service is not connected. Set VITE_ROOF_DETECTION_API_URL after deploying the service.",
+      );
       return;
     }
     setLoading(true);
@@ -40,9 +42,10 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = body && typeof body === "object" && "detail" in body && typeof body.detail === "string"
-          ? body.detail
-          : `Roof detection request failed (${response.status}).`;
+        const message =
+          body && typeof body === "object" && "detail" in body && typeof body.detail === "string"
+            ? body.detail
+            : `Roof detection request failed (${response.status}).`;
         throw new Error(message);
       }
       // Parse at the boundary; never allow unchecked API data into editable roof geometry.
@@ -60,7 +63,11 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
     try {
       onApply(detectedFacetsToDrawing(result));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Detected facets could not be added to the drawing.");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Detected facets could not be added to the drawing.",
+      );
     }
   }
 
@@ -69,7 +76,9 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold">Automated public LiDAR roof detection</h3>
-          <p className="text-sm text-muted-foreground">OpenStreetMap footprint + public USGS 3DEP point cloud. No paid API keys.</p>
+          <p className="text-sm text-muted-foreground">
+            OpenStreetMap footprint + public USGS 3DEP point cloud. No paid API keys.
+          </p>
         </div>
         <Button onClick={() => void analyze()} disabled={loading || !address.trim()}>
           {loading ? <Loader2 className="animate-spin" /> : <CloudDownload />}
@@ -78,10 +87,15 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       </div>
       {loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-          <Activity className="size-4" /> Searching public footprint and LiDAR coverage. First request may take longer on a free host.
+          <Activity className="size-4" /> Searching public footprint and LiDAR coverage. First
+          request may take longer on a free host.
         </div>
       )}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       {result && (
         <div className="space-y-3">
           {result.status === "lidar_facets" ? (
@@ -89,7 +103,10 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
               <div>
                 <strong>{result.roof.facet_count} candidate roof facets detected</strong>
-                <p className="text-muted-foreground">{result.roof.total_squares?.toFixed(2)} squares · Dominant pitch {result.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result</p>
+                <p className="text-muted-foreground">
+                  {result.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
+                  {result.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
+                </p>
               </div>
             </div>
           ) : (
@@ -98,21 +115,34 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               <div>
                 <strong>Footprint found; roof facets were not measurable</strong>
                 <p className="text-muted-foreground">{result.fallback.message}</p>
-                <p className="mt-1">Ground footprint: {result.fallback.footprint_area_sqft.toLocaleString()} sq ft. This is not roof surface area.</p>
+                <p className="mt-1">
+                  Ground footprint: {result.fallback.footprint_area_sqft.toLocaleString()} sq ft.
+                  This is not roof surface area.
+                </p>
               </div>
             </div>
           )}
           {result.roof.facets.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead><tr className="border-b text-muted-foreground"><th className="py-2 pr-3">Facet</th><th className="py-2 pr-3">Area SF</th><th className="py-2 pr-3">Squares</th><th className="py-2 pr-3">Pitch</th><th className="py-2">Azimuth</th></tr></thead>
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="py-2 pr-3">Facet</th>
+                    <th className="py-2 pr-3">Area SF</th>
+                    <th className="py-2 pr-3">Squares</th>
+                    <th className="py-2 pr-3">Pitch</th>
+                    <th className="py-2">Azimuth</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {result.roof.facets.map((facet) => (
                     <tr key={facet.id} className="border-b border-border/60">
                       <td className="py-2 pr-3">{facet.id}</td>
                       <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                       <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
-                      <td className="py-2 pr-3 tabular-nums">{facet.pitch_rise_per_12.toFixed(1)}:12</td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {facet.pitch_rise_per_12.toFixed(1)}:12
+                      </td>
                       <td className="py-2 tabular-nums">{facet.azimuth_degrees.toFixed(0)}°</td>
                     </tr>
                   ))}
@@ -120,9 +150,14 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               </table>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">{result.disclaimer} Edge classifications are left unclassified until reviewed in the measurement editor.</p>
+          <p className="text-xs text-muted-foreground">
+            {result.disclaimer} Edge classifications are left unclassified until reviewed in the
+            measurement editor.
+          </p>
           {result.roof.facets.length > 0 && (
-            <Button variant="outline" onClick={apply}>Load candidate facets into roof editor</Button>
+            <Button variant="outline" onClick={apply}>
+              Load candidate facets into roof editor
+            </Button>
           )}
         </div>
       )}

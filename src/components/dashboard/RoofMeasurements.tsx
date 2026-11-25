@@ -1739,7 +1739,8 @@ export function RoofMeasurements({
             !confirm(
               "Replace the current roof planes with public LiDAR candidates? Existing planes and penetrations will be removed. You can undo immediately afterward.",
             )
-          ) return;
+          )
+            return;
           try {
             const nextDrawing: RoofDrawing = {
               ...detectedDrawing,
@@ -1757,7 +1758,9 @@ export function RoofMeasurements({
             );
           } catch (cause) {
             toast.error(
-              cause instanceof Error ? cause.message : "LiDAR facets failed roof geometry validation.",
+              cause instanceof Error
+                ? cause.message
+                : "LiDAR facets failed roof geometry validation.",
             );
           }
         }}
