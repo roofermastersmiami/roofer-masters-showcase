@@ -38,7 +38,13 @@ import { CRM_ALL_THEME_COLORS } from "@/lib/crm-accent";
 const dateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 type DashboardPanelId = "revenue" | "sales" | "tasks" | "inspections" | "activity";
-const DASHBOARD_PANEL_IDS: DashboardPanelId[] = ["revenue", "sales", "tasks", "inspections", "activity"];
+const DASHBOARD_PANEL_IDS: DashboardPanelId[] = [
+  "revenue",
+  "sales",
+  "tasks",
+  "inspections",
+  "activity",
+];
 export function CrmOverview() {
   const { leads, go, onOpen } = useCrm();
   const invoices = useQuery(invoicesQuery),
@@ -129,13 +135,30 @@ export function CrmOverview() {
       try {
         localStorage.setItem(
           "crm-dashboard-layout",
-          JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels, panelOrder }),
+          JSON.stringify({
+            accent,
+            density,
+            cardStyle,
+            cardOrder,
+            hiddenCards,
+            hiddenPanels,
+            panelOrder,
+          }),
         );
       } catch {
         // Storage can be disabled or full; dashboard customization still works for this session.
       }
     }
-  }, [accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels, panelOrder, preferencesLoaded]);
+  }, [
+    accent,
+    density,
+    cardStyle,
+    cardOrder,
+    hiddenCards,
+    hiddenPanels,
+    panelOrder,
+    preferencesLoaded,
+  ]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
@@ -271,14 +294,30 @@ export function CrmOverview() {
     const visible = DASHBOARD_PANEL_IDS.filter((item) => !hiddenPanels.includes(item));
     const index = visible.indexOf(id);
     return (
-      <span className="inline-flex shrink-0 items-center gap-0.5" aria-label={"Reorder " + id + " panel"}>
-        <Button size="icon" variant="ghost" className="size-7" aria-label={"Move " + id + " panel earlier"}
-          title={"Move " + id + " panel earlier"} disabled={index <= 0} onClick={() => movePanelBy(id, -1)}>
+      <span
+        className="inline-flex shrink-0 items-center gap-0.5"
+        aria-label={"Reorder " + id + " panel"}
+      >
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          aria-label={"Move " + id + " panel earlier"}
+          title={"Move " + id + " panel earlier"}
+          disabled={index <= 0}
+          onClick={() => movePanelBy(id, -1)}
+        >
           <ArrowUp className="size-3.5" />
         </Button>
-        <Button size="icon" variant="ghost" className="size-7" aria-label={"Move " + id + " panel later"}
-          title={"Move " + id + " panel later"} disabled={index < 0 || index >= visible.length - 1}
-          onClick={() => movePanelBy(id, 1)}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          aria-label={"Move " + id + " panel later"}
+          title={"Move " + id + " panel later"}
+          disabled={index < 0 || index >= visible.length - 1}
+          onClick={() => movePanelBy(id, 1)}
+        >
           <ArrowDown className="size-3.5" />
         </Button>
         <GripVertical className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -372,8 +411,8 @@ export function CrmOverview() {
             <div>
               <h2 className="font-semibold">Your workspace, your way</h2>
               <p className="text-sm text-muted-foreground">
-                Drag cards or dashboard sections to reorder them on desktop, or use the up/down controls on
-                touchscreens and keyboards. Preferences are saved on this device.
+                Drag cards or dashboard sections to reorder them on desktop, or use the up/down
+                controls on touchscreens and keyboards. Preferences are saved on this device.
               </p>
             </div>
             <Button
@@ -645,8 +684,14 @@ export function CrmOverview() {
       {DASHBOARD_PANEL_IDS.some((id) => !hiddenPanels.includes(id)) && (
         <div className="mt-8 grid grid-cols-1 gap-8 border-b border-border pb-8 md:grid-cols-2 xl:grid-cols-6">
           {!hiddenPanels.includes("revenue") && (
-            <div {...panelDragProps("revenue")} style={{ order: panelOrder.indexOf("revenue") }}
-              className={"min-w-0 cursor-grab xl:col-span-4 " + (draggedPanel === "revenue" ? "opacity-50" : "")}>
+            <div
+              {...panelDragProps("revenue")}
+              style={{ order: panelOrder.indexOf("revenue") }}
+              className={
+                "min-w-0 cursor-grab xl:col-span-4 " +
+                (draggedPanel === "revenue" ? "opacity-50" : "")
+              }
+            >
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">Revenue collected</h2>
@@ -709,8 +754,14 @@ export function CrmOverview() {
             </div>
           )}
           {!hiddenPanels.includes("sales") && (
-            <div {...panelDragProps("sales")} style={{ order: panelOrder.indexOf("sales") }}
-              className={"cursor-grab border-t border-border pt-6 xl:col-span-2 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0 " + (draggedPanel === "sales" ? "opacity-50" : "")}>
+            <div
+              {...panelDragProps("sales")}
+              style={{ order: panelOrder.indexOf("sales") }}
+              className={
+                "cursor-grab border-t border-border pt-6 xl:col-span-2 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0 " +
+                (draggedPanel === "sales" ? "opacity-50" : "")
+              }
+            >
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-xl font-bold">Sales snapshot</h2>
                 {panelControls("sales")}
@@ -738,99 +789,116 @@ export function CrmOverview() {
             </div>
           )}
 
-        {!hiddenPanels.includes("tasks") && (
-          <section {...panelDragProps("tasks")} style={{ order: panelOrder.indexOf("tasks") }}
-            className={"cursor-grab xl:col-span-2 " + (draggedPanel === "tasks" ? "opacity-50" : "")}>
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-lg font-bold">
-                  <Clock className="size-4 text-primary" /> Tasks requiring attention
-                </h2>
-                {panelControls("tasks")}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                title="View follow-ups"
-                aria-label="View follow-ups"
-                onClick={() => go("followups")}
-              >
-                <ArrowRight className="size-4" />
-              </Button>
-            </div>
-            {due.slice(0, 5).map((t) => (
-              <div key={t.id} className="border-b border-border py-3">
-                <p className="text-sm font-semibold">{t.title}</p>
-                <p
-                  className={`mt-1 text-xs ${Date.parse(t.due_at) < Date.now() ? "text-destructive" : "text-muted-foreground"}`}
+          {!hiddenPanels.includes("tasks") && (
+            <section
+              {...panelDragProps("tasks")}
+              style={{ order: panelOrder.indexOf("tasks") }}
+              className={
+                "cursor-grab xl:col-span-2 " + (draggedPanel === "tasks" ? "opacity-50" : "")
+              }
+            >
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="flex items-center gap-2 text-lg font-bold">
+                    <Clock className="size-4 text-primary" /> Tasks requiring attention
+                  </h2>
+                  {panelControls("tasks")}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="View follow-ups"
+                  aria-label="View follow-ups"
+                  onClick={() => go("followups")}
                 >
-                  {formatWhen(t.due_at)}
-                </p>
+                  <ArrowRight className="size-4" />
+                </Button>
               </div>
-            ))}
-            {!due.length && <p className="text-sm text-muted-foreground">No pending tasks.</p>}
-          </section>
-        )}
-        {!hiddenPanels.includes("inspections") && (
-          <section {...panelDragProps("inspections")} style={{ order: panelOrder.indexOf("inspections") }}
-            className={"cursor-grab xl:col-span-2 " + (draggedPanel === "inspections" ? "opacity-50" : "")}>
-            <div className="mb-5 flex items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 text-lg font-bold">
-                <CalendarDays className="size-4 text-primary" /> Upcoming inspections
-              </h2>
-              {panelControls("inspections")}
-            </div>
-            {upcoming.slice(0, 5).map((j) => (
-              <Button
-                key={j.id}
-                variant="ghost"
-                className="h-auto w-full items-start justify-start border-b border-border py-3 text-left"
-                onClick={() => go("jobs")}
-              >
-                <div>
-                  <p className="text-sm font-semibold">{j.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {formatWhen(j.inspection_at ?? "")}
+              {due.slice(0, 5).map((t) => (
+                <div key={t.id} className="border-b border-border py-3">
+                  <p className="text-sm font-semibold">{t.title}</p>
+                  <p
+                    className={`mt-1 text-xs ${Date.parse(t.due_at) < Date.now() ? "text-destructive" : "text-muted-foreground"}`}
+                  >
+                    {formatWhen(t.due_at)}
                   </p>
                 </div>
-              </Button>
-            ))}
-            {!upcoming.length && (
-              <p className="text-sm text-muted-foreground">No inspections scheduled.</p>
-            )}
-          </section>
-        )}
-        {!hiddenPanels.includes("activity") && (
-          <section {...panelDragProps("activity")} style={{ order: panelOrder.indexOf("activity") }}
-            className={"cursor-grab xl:col-span-2 " + (draggedPanel === "activity" ? "opacity-50" : "")}>
-            <div className="mb-5 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-bold">Recent customer activity</h2>
-              {panelControls("activity")}
-            </div>
-            {activity.data?.slice(0, 5).map((a) => {
-              const lead = leads.find((l) => l.id === a.lead_id);
-              return (
+              ))}
+              {!due.length && <p className="text-sm text-muted-foreground">No pending tasks.</p>}
+            </section>
+          )}
+          {!hiddenPanels.includes("inspections") && (
+            <section
+              {...panelDragProps("inspections")}
+              style={{ order: panelOrder.indexOf("inspections") }}
+              className={
+                "cursor-grab xl:col-span-2 " + (draggedPanel === "inspections" ? "opacity-50" : "")
+              }
+            >
+              <div className="mb-5 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <CalendarDays className="size-4 text-primary" /> Upcoming inspections
+                </h2>
+                {panelControls("inspections")}
+              </div>
+              {upcoming.slice(0, 5).map((j) => (
                 <Button
-                  key={a.id}
+                  key={j.id}
                   variant="ghost"
-                  className="h-auto w-full justify-start border-b border-border py-3 text-left"
-                  disabled={!lead}
-                  onClick={() => {
-                    if (lead) onOpen(lead);
-                  }}
+                  className="h-auto w-full items-start justify-start border-b border-border py-3 text-left"
+                  onClick={() => go("jobs")}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{a.body}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatWhen(a.created_at)}</p>
+                  <div>
+                    <p className="text-sm font-semibold">{j.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatWhen(j.inspection_at ?? "")}
+                    </p>
                   </div>
                 </Button>
-              );
-            })}
-            {!activity.data?.length && (
-              <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
-            )}
-          </section>
-        )}
+              ))}
+              {!upcoming.length && (
+                <p className="text-sm text-muted-foreground">No inspections scheduled.</p>
+              )}
+            </section>
+          )}
+          {!hiddenPanels.includes("activity") && (
+            <section
+              {...panelDragProps("activity")}
+              style={{ order: panelOrder.indexOf("activity") }}
+              className={
+                "cursor-grab xl:col-span-2 " + (draggedPanel === "activity" ? "opacity-50" : "")
+              }
+            >
+              <div className="mb-5 flex items-center justify-between gap-2">
+                <h2 className="text-lg font-bold">Recent customer activity</h2>
+                {panelControls("activity")}
+              </div>
+              {activity.data?.slice(0, 5).map((a) => {
+                const lead = leads.find((l) => l.id === a.lead_id);
+                return (
+                  <Button
+                    key={a.id}
+                    variant="ghost"
+                    className="h-auto w-full justify-start border-b border-border py-3 text-left"
+                    disabled={!lead}
+                    onClick={() => {
+                      if (lead) onOpen(lead);
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{a.body}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatWhen(a.created_at)}
+                      </p>
+                    </div>
+                  </Button>
+                );
+              })}
+              {!activity.data?.length && (
+                <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
+              )}
+            </section>
+          )}
         </div>
       )}
     </div>
