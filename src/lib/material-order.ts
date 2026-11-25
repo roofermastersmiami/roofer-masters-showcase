@@ -48,11 +48,21 @@ export type MaterialLine = {
   category?: string;
 };
 const up = (n: number) => Math.max(0, Math.ceil(n - 1e-9));
+
+/** Return the exact waste allowance used by material quantities and customer-facing summaries. */
+export function effectiveMaterialWastePct(input: RoofReport): number {
+  const report = reportSchema.parse(input);
+  if (report.waste_pct !== undefined) return report.waste_pct;
+  if (report.roof_type === "Flat Roof") return 10;
+  const complexityRatio =
+    (report.hips_lf + report.valleys_lf) / Math.max(report.area_sqft / 100, 1);
+  return complexityRatio > 12 ? 15 : 12;
+}
 /** Material takeoff from a roof measurement report. 1 square = 100 sq ft. */
 export function materialOrder(input: RoofReport): MaterialLine[] {
   const r = reportSchema.parse(input);
   const boots = { item: "Pipe boots / flashings", qty: r.pipes, unit: "pcs" };
-  const wastePct = r.waste_pct ?? (r.roof_type === "Flat Roof" ? 10 : 12);
+  const wastePct = effectiveMaterialWastePct(r);
   const area = r.area_sqft * (1 + wastePct / 100);
   const sq = area / 100;
   const edges = r.eaves_lf + r.rakes_lf;
@@ -78,7 +88,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
         ...(system === "flat_modbit" ? { flatInstallationMethod: r.flat_installation_method } : {}),
       },
       system,
-      r.waste_pct,
+      wastePct,
     );
     return takeoff.lineItems.map((line) => ({
       item: line.name,
@@ -125,7 +135,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
           metalConfig: r.metal_config as MetalTakeoffConfig,
         },
         "architectural_metal",
-        r.waste_pct,
+        wastePct,
       );
       return takeoff.lineItems.map((line) => ({
         item: line.name,

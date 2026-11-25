@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import type { MaterialLine, RoofReport } from "./material-order";
+import { effectiveMaterialWastePct, type MaterialLine, type RoofReport } from "./material-order";
 
 export type MaterialTakeoffPdfInput = {
   title: string;
@@ -85,7 +85,7 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
     ["Roof system", input.report.roof_type],
     ["Report source", input.source],
     ["Measured area", `${input.report.area_sqft.toLocaleString("en-US")} sq ft`],
-    ["Waste allowance", `${input.report.waste_pct ?? 0}%`],
+    ["Waste allowance", `${effectiveMaterialWastePct(input.report)}%`],
   ];
   const colW = (RIGHT - LEFT) / 2;
   details.forEach(([label, value], index) => {
