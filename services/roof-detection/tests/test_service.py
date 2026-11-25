@@ -746,3 +746,18 @@ def test_explicit_candidate_selection_is_not_filtered_by_parcel_evidence():
     # The explicit-selection path intentionally bypasses the parcel filter.
     assert selected[1].intersection(parcel).area == 0
     assert selected[2]["candidate_id"] == "explicit"
+
+
+@pytest.mark.parametrize(
+    ("evidence", "requires_selection"),
+    [
+        ({"status": "matched", "building_candidates_intersecting_parcel": 0}, True),
+        ({"status": "matched", "building_candidates_intersecting_parcel": 1}, False),
+        ({"status": "matched", "building_candidates_intersecting_parcel": 2}, False),
+        ({"status": "provider_error"}, False),
+        ({"status": "not_found"}, False),
+        ({"status": "ambiguous"}, False),
+    ],
+)
+def test_verified_parcel_mismatch_blocks_distance_auto_selection(evidence, requires_selection):
+    assert roof_service._parcel_requires_explicit_candidate_selection(evidence) is requires_selection
