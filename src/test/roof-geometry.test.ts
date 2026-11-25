@@ -30,6 +30,20 @@ describe("roof geometry", () => {
     expect(m.area).toBe(1200);
     expect(m.withWaste).toBe(1320);
   });
+  it("counts a near-coincident shared ridge once in totals and excludes it from perimeter", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const east = drawing.planes.find((plane) => plane.id === "East plane");
+    if (!east) throw new Error("Missing east gable facet");
+
+    // Independent facet fitting can move the same ridge endpoints slightly.
+    east.points[0]!.y += 0.02;
+    east.points[3]!.y += 0.02;
+
+    const measured = measureDrawing(drawing);
+    expect(measured.edges.ridge).toBeCloseTo(30, 5);
+    expect(measured.perimeter).toBeCloseTo(140, 5);
+  });
+
   it("rejects overlapping roof planes", () => {
     const d = roofPreset("flat");
     const p = d.planes[0];
