@@ -99,7 +99,7 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     ])
 
     async def fake_geocode(_address):
-        return 25.00005, -79.99995, "Endpoint test address"
+        return 25.00005, -79.99995, "Endpoint test address", {"source": "Test geocoder"}
 
     async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
         return polygon, {
@@ -109,7 +109,7 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
             "address_to_footprint_distance_m": 3.27,
         }
 
-    monkeypatch.setattr(roof_service, "geocode", fake_geocode)
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
     monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
     monkeypatch.setattr(
         roof_service,
@@ -126,7 +126,7 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     payload = response.json()
     assert payload["footprint"]["address_point_inside_footprint"] is False
     assert payload["footprint"]["address_to_footprint_distance_m"] == 3.27
-    assert payload["status"] == "footprint_only"
+    assert payload["status"] == "footprint_only"\n    assert payload["address_match"] == {"source": "Test geocoder"}
 
 
 
@@ -301,7 +301,7 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
     selected = {}
 
     async def fake_geocode(_address):
-        return 25.00005, -79.99995, "Candidate selection test address"
+        return 25.00005, -79.99995, "Candidate selection test address", {"source": "Test geocoder"}
 
     async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
         selected["candidate_id"] = _selected_candidate_id
@@ -524,3 +524,119 @@ def test_vertical_unit_to_meters_rejects_non_up_axis():
     crs = SimpleNamespace(axis_info=[axis])
     header = SimpleNamespace(parse_crs=lambda: crs)
     assert roof_service._vertical_unit_to_meters(header) is None
+
+
+
+def test_geocode_with_provenance_preserves_official_broward_folio_without_second_lookup(monkeypatch):
+    import asyncio
+
+    calls = {"county": 0}
+
+    async def fake_county(_address):
+        calls["county"] += 1
+        return (
+            25.9804,
+            -80.3995,
+            "3062 SW 189TH AVE",
+            {
+                "source": "Broward County Address Points",
+                "folio_number": "5141-02-00-0010",
+                "city": "MIRAMAR",
+                "zip_code": "33029",
+            },
+        )
+
+    monkeypatch.setattr(roof_service, "resolve_broward_address_point", fake_county)
+    result = asyncio.run(
+        roof_service.geocode_with_provenance(
+            "3062 Southwest 189th Avenue, Miramar, FL 33029"
+        )
+    )
+    assert result == (
+        25.9804,
+        -80.3995,
+        "3062 SW 189TH AVE",
+        {
+            "source": "Broward County Address Points",
+            "folio_number": "5141-02-00-0010",
+            "city": "MIRAMAR",
+            "zip_code": "33029",
+        },
+    )
+    assert calls["county"] == 1
+
+
+def test_geocode_with_provenance_labels_nominatim_fallback(monkeypatch):
+    import asyncio
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [{"lat": "25.98", "lon": "-80.39", "display_name": "Matched address"}]
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    async def no_county_match(_address):
+        return None
+
+    monkeypatch.setattr(roof_service, "resolve_broward_address_point", no_county_match)
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    assert asyncio.run(roof_service.geocode_with_provenance("100 Main Street")) == (
+        25.98,
+        -80.39,
+        "Matched address",
+        {"source": "OpenStreetMap Nominatim"},
+    )
+
+
+def test_geocode_with_provenance_labels_census_fallback(monkeypatch):
+    import asyncio
+
+    async def no_county_match(_address):
+        return None
+
+    async def census(_address):
+        return 25.9, -80.3, "Census matched address"
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return []
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(roof_service, "resolve_broward_address_point", no_county_match)
+    monkeypatch.setattr(roof_service, "_geocode_census", census)
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    assert asyncio.run(roof_service.geocode_with_provenance("100 Main Street")) == (
+        25.9,
+        -80.3,
+        "Census matched address",
+        {"source": "US Census Geocoder"},
+    )
