@@ -241,3 +241,27 @@ def test_ransac_does_not_create_facets_from_small_spatial_noise_clusters():
     facets = _fit_facets(np.vstack((roof, noise)))
     assert len(facets) == 1
     assert facets[0]["point_count"] == len(roof)
+
+
+
+def test_vertical_unit_to_meters_reads_metric_vertical_crs():
+    from pyproj import CRS
+    from types import SimpleNamespace
+
+    header = SimpleNamespace(parse_crs=lambda: CRS.from_epsg(5703))
+    assert roof_service._vertical_unit_to_meters(header) == pytest.approx(1.0)
+
+
+def test_vertical_unit_to_meters_converts_us_survey_feet():
+    from pyproj import CRS
+    from types import SimpleNamespace
+
+    header = SimpleNamespace(parse_crs=lambda: CRS.from_epsg(6360))
+    assert roof_service._vertical_unit_to_meters(header) == pytest.approx(0.30480060960121924)
+
+
+def test_vertical_unit_to_meters_rejects_missing_or_ambiguous_crs():
+    from types import SimpleNamespace
+
+    assert roof_service._vertical_unit_to_meters(SimpleNamespace(parse_crs=lambda: None)) is None
+    assert roof_service._vertical_unit_to_meters(SimpleNamespace()) is None
