@@ -176,7 +176,7 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
     const edge = edges[index];
     if (!edge) continue;
     const center = midpoint(edge);
-    const cell = center.toString ? cellKey(center) : "";
+    const cell = cellKey(center);
     const [cx, cy, cz] = cell.split(",").map(Number);
     const candidates: number[] = [];
     for (let dx = -1; dx <= 1; dx++)
