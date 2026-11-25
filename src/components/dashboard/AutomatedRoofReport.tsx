@@ -23,10 +23,17 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const [loadingAddress, setLoadingAddress] = useState("");
   const [roofType, setRoofType] = useState<RoofDrawing["roof_type"] | "">("");
   const requestId = useRef(0);
+  const activeController = useRef<AbortController | null>(null);
 
-  // Prevent a previous property response from being applied to a newly selected address.
+  // Cancel work for the previous property and prevent stale responses or loading state.
   useEffect(() => {
     requestId.current += 1;
+    activeController.current?.abort();
+    activeController.current = null;
+    setLoading(false);
+    return () => {
+      activeController.current?.abort();
+    };
   }, [address]);
 
   const currentAddress = address.trim();
@@ -48,6 +55,10 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       setErrorAddress(currentAddress);
       return;
     }
+    activeController.current?.abort();
+    const controller = new AbortController();
+    activeController.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 90000);
     const activeRequest = ++requestId.current;
     const requestedAddress = address.trim();
     setLoading(true);
@@ -61,7 +72,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ street_address: requestedAddress }),
-        signal: AbortSignal.timeout(90000),
+        signal: controller.signal,
       });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -81,7 +92,11 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       setError(cause instanceof Error ? cause.message : "Roof detection could not be completed.");
       setErrorAddress(requestedAddress);
     } finally {
-      if (activeRequest === requestId.current) setLoading(false);
+      window.clearTimeout(timeoutId);
+      if (activeRequest === requestId.current) {
+        setLoading(false);
+        if (activeController.current === controller) activeController.current = null;
+      }
     }
   }
 
