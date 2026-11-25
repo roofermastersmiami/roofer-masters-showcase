@@ -85,6 +85,30 @@ def test_ransac_rejects_near_vertical_building_walls():
 
 
 
+
+def test_footprint_match_fields_preserve_address_mismatch_evidence():
+    from main import _footprint_match_fields
+
+    fields = _footprint_match_fields({
+        "address_point_inside_footprint": False,
+        "address_to_footprint_distance_m": 3.27,
+    })
+    assert fields == {
+        "address_point_inside_footprint": False,
+        "address_to_footprint_distance_m": 3.27,
+    }
+
+
+def test_footprint_match_fields_omit_invalid_distance_values():
+    from main import _footprint_match_fields
+
+    fields = _footprint_match_fields({
+        "address_point_inside_footprint": True,
+        "address_to_footprint_distance_m": float("nan"),
+    })
+    assert fields == {"address_point_inside_footprint": True}
+
+
 def test_footprint_match_distance_uses_meters_and_accepts_roof_point():
     polygon = Polygon([
         (-80.0, 25.0),
