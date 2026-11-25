@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   materialOrder,
   escapeMaterialOrderHtml,
-  materialOrderWarnings,\n  materialOrderForTransfer,
+  materialOrderWarnings,
+  materialOrderForTransfer,
 } from "@/lib/material-order";
 const base = {
   area_sqft: 2000,
