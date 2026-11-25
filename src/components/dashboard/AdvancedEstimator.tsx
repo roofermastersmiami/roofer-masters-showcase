@@ -139,8 +139,8 @@ export function AdvancedEstimator() {
           }),
       });
       toast.success("Measured quantities added; review all unit prices");
-    } catch {
-      toast.error("Drawing measurements are invalid");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not calculate measured material quantities");
     }
   }
   async function proposal() {
