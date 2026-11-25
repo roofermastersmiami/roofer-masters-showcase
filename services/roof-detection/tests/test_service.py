@@ -312,7 +312,7 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
             "address_to_footprint_distance_m": 0.0,
         }
 
-    monkeypatch.setattr(roof_service, "geocode", fake_geocode)
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
     monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
     monkeypatch.setattr(
         roof_service,
