@@ -15,13 +15,25 @@ describe("AutomatedRoofReport automatic analysis", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows a clear setup error when automatic analysis has no service URL", async () => {
+  it("uses the published Render service when no frontend environment override is configured", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: "Service temporarily unavailable" }),
+    } as Response);
+
     render(<AutomatedRoofReport address="123 Main Street, Miami, FL" onApply={vi.fn()} />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "The free roof-detection service is not connected",
-    );
-    expect(fetch).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ street_address: "123 Main Street, Miami, FL" }),
+        }),
+      );
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Service temporarily unavailable");
   });
 
   it("starts analysis automatically when an address and service URL are available", async () => {
