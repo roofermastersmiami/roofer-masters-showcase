@@ -27,6 +27,36 @@ def test_polygon_area_is_projected_to_square_feet():
     assert np.isfinite(area)
 
 
+
+def test_polygon_projection_preserves_interior_courtyard_rings():
+    footprint = Polygon(
+        [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001)],
+        [[(0.0004, 0.0004), (0.0006, 0.0004), (0.0006, 0.0006), (0.0004, 0.0006)]],
+    )
+    projected, _, _ = _project_polygon(footprint, 4326)
+    assert len(projected.interiors) == 1
+    assert projected.area == pytest.approx(footprint.area)
+
+
+def test_local_polygon_transform_preserves_interior_courtyard_rings():
+    from pyproj import Transformer
+    from main import _transform_polygon
+
+    footprint = Polygon(
+        [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001)],
+        [[(0.0004, 0.0004), (0.0006, 0.0004), (0.0006, 0.0006), (0.0004, 0.0006)]],
+    )
+    transformed = _transform_polygon(
+        footprint,
+        Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True),
+    )
+    assert len(transformed.interiors) == 1
+    assert transformed.area < Polygon(
+        [Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True).transform(x, y)
+         for x, y in footprint.exterior.coords]
+    ).area
+
+
 def test_ransac_recovers_candidate_plane_pitch_and_area():
     x, y = np.meshgrid(np.linspace(0, 20, 25), np.linspace(0, 10, 15))
     z = 0.5 * x + 12.0
