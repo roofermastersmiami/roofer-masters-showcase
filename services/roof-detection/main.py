@@ -197,14 +197,12 @@ async def resolve_broward_address_point(address: str) -> tuple[float, float, str
         return None
 
 
-async def geocode(address: str) -> tuple[float, float, str]:
-    # Broward's official situs-address point is preferred when it provides
-    # exactly one normalized address match. Other counties retain existing
-    # Nominatim/Census behavior.
+async def geocode_with_provenance(address: str) -> tuple[float, float, str, dict[str, Any]]:
+    """Resolve an address once and retain the provider evidence for diagnostics."""
     county_match = await resolve_broward_address_point(address)
     if county_match:
-        lat, lon, matched_address, _provenance = county_match
-        return lat, lon, matched_address
+        lat, lon, matched_address, provenance = county_match
+        return lat, lon, matched_address, dict(provenance)
 
     headers = {"User-Agent": USER_AGENT}
     try:
@@ -212,19 +210,32 @@ async def geocode(address: str) -> tuple[float, float, str]:
             response = await client.get(NOMINATIM_URL, params={"q": address, "format": "jsonv2", "limit": 1})
             response.raise_for_status()
             results = response.json()
-        if not results:
-            return await _geocode_census(address)
-        item = results[0]
-        return float(item["lat"]), float(item["lon"]), str(item.get("display_name", address))
+        if results:
+            item = results[0]
+            return (
+                float(item["lat"]),
+                float(item["lon"]),
+                str(item.get("display_name", address)),
+                {"source": "OpenStreetMap Nominatim"},
+            )
+        lat, lon, matched = await _geocode_census(address)
+        return lat, lon, matched, {"source": "US Census Geocoder"}
     except httpx.HTTPStatusError as exc:
         # Nominatim may return 429/629 when public rate limits or anti-abuse controls
         # are reached. Use the free US Census geocoder for US street addresses.
         if exc.response.status_code not in {429, 500, 502, 503, 504, 629}:
             raise
-        return await _geocode_census(address)
+        lat, lon, matched = await _geocode_census(address)
+        return lat, lon, matched, {"source": "US Census Geocoder"}
     except (httpx.TimeoutException, httpx.ConnectError):
-        return await _geocode_census(address)
+        lat, lon, matched = await _geocode_census(address)
+        return lat, lon, matched, {"source": "US Census Geocoder"}
 
+
+async def geocode(address: str) -> tuple[float, float, str]:
+    """Backward-compatible coordinate-only geocoder."""
+    lat, lon, matched_address, _provenance = await geocode_with_provenance(address)
+    return lat, lon, matched_address
 
 def _normalize_street_address(value: str | None) -> str:
     """Normalize a street line for conservative exact address-attribute matching."""
