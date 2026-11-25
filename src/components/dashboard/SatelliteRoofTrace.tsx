@@ -366,6 +366,7 @@ export function SatelliteRoofTrace({
   const [address, setAddress] = useState("");
   const [location, setLocation] = useState<GeocodeResult | null>(null);
   const [targetLocation, setTargetLocation] = useState<TracePoint | null>(null);
+  const [targetConfirmed, setTargetConfirmed] = useState(false);
   const [mapCenter, setMapCenter] = useState<TracePoint | null>(null);
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [points, setPoints] = useState<TracePoint[]>([]);
@@ -467,6 +468,7 @@ export function SatelliteRoofTrace({
     const addressPoint = { lat: Number(result.lat), lon: Number(result.lon) };
     targetLocationRef.current = addressPoint;
     setTargetLocation(addressPoint);
+    setTargetConfirmed(false);
     setMapCenter(addressPoint);
     setPoints([]);
     setSelectedBuildingCenter(null);
@@ -489,6 +491,7 @@ export function SatelliteRoofTrace({
     setLocation(null);
     targetLocationRef.current = null;
     setTargetLocation(null);
+    setTargetConfirmed(false);
     setMapCenter(null);
     setPoints([]);
     setAutoTraced(false);
@@ -503,13 +506,17 @@ export function SatelliteRoofTrace({
     void (async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&countrycodes=us&q=${encodeURIComponent(query)}`,
           { signal: controller.signal, headers: { Accept: "application/json" } },
         );
         if (!response.ok) throw new Error("Address lookup unavailable");
         const matches = (await response.json()) as GeocodeResult[];
-        if (matches[0]) selectLocation(matches[0]);
-        else
+        if (matches.length) {
+          // Never silently accept the first geocoder result: rooftop addresses can
+          // resolve to a neighboring parcel or a street interpolation point.
+          setResults(matches);
+          setError("Choose the exact property address below, then drag the red target onto the correct roof before tracing.");
+        } else
           setError("No map location was found for this report address. Search it manually below.");
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError"))
@@ -686,14 +693,7 @@ export function SatelliteRoofTrace({
           placeholder="Enter property address"
           aria-label="Property address"
         />
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!results.length}
-          onClick={() => selectLocation(results[0]!)}
-        >
-          <Search className="h-4 w-4" /> Use first match
-        </Button>
+
       </div>
       {results.length > 0 && (
         <div className="max-h-40 overflow-auto rounded-md border border-border">
@@ -716,13 +716,14 @@ export function SatelliteRoofTrace({
               type="button"
               size="sm"
               variant="outline"
-              disabled={autoTraceBusy}
+              disabled={autoTraceBusy || !targetConfirmed}
               onClick={autoTraceBuildingFootprint}
             >
               <Satellite className="h-4 w-4" />{" "}
-              {autoTraceBusy ? "Finding footprint…" : "Auto trace building"}
+              {autoTraceBusy ? "Finding footprint…" : targetConfirmed ? "Auto trace building" : "Drag red target onto correct roof"}
             </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
+            {!targetConfirmed && <p className="w-full text-xs text-amber-700">Address pins can land between neighboring houses. Select the matching address, zoom in, and drag the red target onto the exact roof. Tracing stays disabled until you reposition it.</p>}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
                 type="button"
@@ -939,6 +940,7 @@ export function SatelliteRoofTrace({
                   if (point) {
                     targetLocationRef.current = point;
                     setTargetLocation(point);
+                    setTargetConfirmed(true);
                     setAutoTraced(false);
                     setSelectedBuildingCenter(null);
                     setPoints([]);
