@@ -137,15 +137,40 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
     # A tight 80 m search radius is used; candidate polygons are ranked by address-point containment
     # and distance. OSM footprints are ground/building outlines, not roof-plane geometry.
     query = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:20];
     way(around:80,{lat},{lon})[building];
     out geom;
     """
     headers = {"User-Agent": USER_AGENT, "Content-Type": "application/x-www-form-urlencoded"}
-    async with httpx.AsyncClient(timeout=35, headers=headers) as client:
-        response = await client.post(OVERPASS_URL, data={"data": query})
-        response.raise_for_status()
-        data = response.json()
+    # Public Overpass instances are intermittently unreachable from cloud hosts.
+    # Try independent community mirrors before declaring the footprint unavailable.
+    endpoints = (
+        OVERPASS_URL,
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+    )
+    data = None
+    failures: list[str] = []
+    async with httpx.AsyncClient(timeout=httpx.Timeout(18.0, connect=6.0), headers=headers) as client:
+        for endpoint in endpoints:
+            try:
+                response = await client.post(endpoint, data={"data": query})
+                response.raise_for_status()
+                data = response.json()
+                break
+            except (httpx.HTTPError, ValueError) as exc:
+                failures.append(f"{endpoint}: {type(exc).__name__}")
+    if data is None:
+        # Return an actionable service error rather than an unhandled ASGI 500.
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "building_footprint_provider_unavailable",
+                "message": "Free OpenStreetMap building-footprint services are temporarily unreachable. No roof measurement was generated; retry later or use the CRM's manual footprint tracing tool.",
+                "providers_tried": len(endpoints),
+                "provider_errors": failures,
+            },
+        )
     address_point = Point(lon, lat)
     candidates: list[tuple[float, Polygon, dict[str, Any]]] = []
     for element in data.get("elements", []):
