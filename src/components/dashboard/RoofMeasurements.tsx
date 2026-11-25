@@ -1093,6 +1093,38 @@ export function RoofMeasurements({
               </Button>
             ))}
           </div>
+          <div className="mb-3 rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Geometry-based edge suggestions</p>
+                <p className="text-xs text-muted-foreground">
+                  {sharedEdgeSuggestions.length} suggested classifications. Review highlighted edges in the drawing before applying.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={sharedEdgeSuggestions.length === 0}
+                onClick={() => {
+                  const nextPlanes = d.planes.map((roofPlane) => ({
+                    ...roofPlane,
+                    edges: roofPlane.edges.map((edge, edgeIndex) => {
+                      const suggestion = sharedEdgeSuggestions.find(
+                        (item) => item.planeId === roofPlane.id && item.edgeIndex === edgeIndex,
+                      );
+                      return suggestion?.type ?? edge;
+                    }),
+                  }));
+                  edit({ ...d, planes: nextPlanes });
+                  toast.success(
+                    `Applied ${sharedEdgeSuggestions.length} geometry-based edge suggestions. Review before using the takeoff.`,
+                  );
+                }}
+              >
+                Apply suggestions
+              </Button>
+            </div>
+          </div>
           <Button
             size="sm"
             variant="outline"
