@@ -1720,6 +1720,7 @@ export function RoofMeasurements({
       </section>
       <AutomatedRoofReport
         address={workspaceAddress}
+        roofType={d.roof_type}
         onApply={(detectedDrawing) => {
           const hasExistingWork =
             Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1;
