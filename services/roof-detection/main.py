@@ -935,10 +935,11 @@ async def analyze_roof(request: AnalyzeRequest):
     if cached and cached[0] > monotonic():
         return cached[1]
     if request.street_address:
-        lat, lon, matched_address = await geocode(request.street_address)
+        lat, lon, matched_address, address_provenance = await geocode_with_provenance(request.street_address)
     else:
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
+        address_provenance = {"source": "User-provided coordinates"}
     footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
     footprint_sqft = _polygon_area_sqft(footprint)
     try:
@@ -952,6 +953,7 @@ async def analyze_roof(request: AnalyzeRequest):
         "status": status,
         "verification": "unverified_public_data",
         "matched_address": matched_address,
+        "address_match": address_provenance,
         "location": {"lat": lat, "lon": lon},
         "footprint": {
             "source": footprint_meta.get("provider", "Unknown public footprint source"),
