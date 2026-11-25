@@ -8,10 +8,6 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
   Hand,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -257,7 +253,7 @@ export function RoofImageTrace({
       {photo.data ? (
         <div className="relative w-full overflow-hidden rounded-md border border-border">
           <div className="absolute left-2 top-2 z-20 rounded-md bg-background/95 px-2 py-1 text-xs font-semibold shadow">
-            Red pin = photo target · drag it onto the house
+            Drag the red pin with your mouse to position it
           </div>
           <div className="absolute right-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 rounded-md border bg-background/95 p-1 shadow">
             <Button
@@ -295,42 +291,6 @@ export function RoofImageTrace({
               onClick={() => setPhotoZoom((v) => Math.min(5, Number((v * 1.25).toFixed(2))))}
             >
               <ZoomIn />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Move photo up"
-              onClick={() => setPhotoPan((p) => ({ ...p, y: p.y - 48 }))}
-            >
-              <ArrowUp />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Move photo down"
-              onClick={() => setPhotoPan((p) => ({ ...p, y: p.y + 48 }))}
-            >
-              <ArrowDown />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Move photo left"
-              onClick={() => setPhotoPan((p) => ({ ...p, x: p.x - 48 }))}
-            >
-              <ArrowLeft />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label="Move photo right"
-              onClick={() => setPhotoPan((p) => ({ ...p, x: p.x + 48 }))}
-            >
-              <ArrowRight />
             </Button>
             <Button
               type="button"
@@ -544,18 +504,14 @@ export function RoofImageTrace({
               role="button"
               aria-label="Drag photo target"
               tabIndex={0}
-              onKeyDown={(event) => {
-                const step = event.shiftKey ? 25 : 5;
-                if (event.key === "ArrowUp") setPhotoTarget((p) => ({ ...p, y: Math.max(0, p.y - step) }));
-                else if (event.key === "ArrowDown") setPhotoTarget((p) => ({ ...p, y: Math.min(dimensions.height, p.y + step) }));
-                else if (event.key === "ArrowLeft") setPhotoTarget((p) => ({ ...p, x: Math.max(0, p.x - step) }));
-                else if (event.key === "ArrowRight") setPhotoTarget((p) => ({ ...p, x: Math.min(dimensions.width, p.x + step) }));
-                else return;
-                event.preventDefault();
-              }}
             >
-              <circle cx={photoTarget.x} cy={photoTarget.y} r={Math.max(18, w / 45)} fill="transparent" />
-              <circle cx={photoTarget.x} cy={photoTarget.y} r={Math.max(12, w / 75)} fill="transparent" stroke="transparent" />
+              <circle
+                cx={photoTarget.x}
+                cy={photoTarget.y}
+                r={Math.max(34, w / 24)}
+                fill="transparent"
+                pointerEvents="all"
+              />
             </g>
             {reference.map((p, i) => (
               <circle
