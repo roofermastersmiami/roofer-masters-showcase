@@ -227,9 +227,28 @@ export function RoofImageTrace({
           disabled={!calibration.ok}
           onClick={() => setMode("trace")}
         >
-          Trace roof plane
+          {mode === "trace" ? "Tracing mode active" : "Trace roof plane"}
         </Button>
       </div>
+      {mode === "trace" ? (
+        <div className="mb-3 rounded-md border border-primary/40 bg-primary/5 p-3 text-sm" role="status" aria-live="polite">
+          <strong>Roof tracing mode is active.</strong>
+          <p className="mt-1">
+            Click the roof perimeter on the photo to place corners in order. Place at least 3 corners,
+            then use <strong>Add traced plane</strong> below the photo to save this plane. The mode
+            button only activates drawing; it does not trace the roof automatically.
+          </p>
+          <p className="mt-1 font-medium">
+            {points.length < 3
+              ? `${points.length} of 3 minimum corners placed.`
+              : `${points.length} corners placed — review the outline and add the plane below.`}
+          </p>
+        </div>
+      ) : (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Calibration mode: click the two ends of a real, measured distance on this photo.
+        </p>
+      )}
       <p
         className={`mb-3 text-sm ${calibration.ok ? "text-muted-foreground" : "text-destructive"}`}
       >
@@ -245,8 +264,10 @@ export function RoofImageTrace({
       </p>
       {photo.data ? (
         <div className="relative w-full overflow-hidden rounded-md border border-border">
-          <div className="absolute left-2 top-2 z-20 rounded-md bg-background/95 px-2 py-1 text-xs font-semibold shadow">
-            Drag the red pin with your mouse to position it
+          <div className="absolute left-2 top-2 z-20 max-w-[calc(100%-1rem)] rounded-md bg-background/95 px-2 py-1 text-xs font-semibold shadow">
+            {mode === "calibrate"
+              ? `Calibration: click two ends of your known ${reference.length}/2 points`
+              : `Roof tracing: click each roof corner · ${points.length} corner${points.length === 1 ? "" : "s"} placed`}
           </div>
           <div className="absolute right-2 top-2 z-20 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 rounded-md border bg-background/95 p-1 shadow">
             <Button
