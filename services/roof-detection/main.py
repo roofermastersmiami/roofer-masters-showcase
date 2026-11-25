@@ -116,7 +116,96 @@ async def _geocode_census(address: str) -> tuple[float, float, str]:
     return float(coordinates["y"]), float(coordinates["x"]), str(match.get("matchedAddress", address))
 
 
+async def resolve_broward_address_point(address: str) -> tuple[float, float, str, dict[str, Any]] | None:
+    """Resolve a street address against Broward County's official site-address points.
+
+    The query is deliberately narrow and the returned address is normalized and
+    checked locally before its coordinates can replace a general geocoder result.
+    """
+    street_line = address.split(",", 1)[0].strip()
+    tokens = re.findall(r"[A-Za-z0-9]+", street_line.upper())
+    if len(tokens) < 3 or not tokens[0].isdigit():
+        return None
+
+    house_number = tokens[0]
+    # Use a distinctive street-name token as a coarse server-side filter;
+    # full normalized-address equality is the actual acceptance condition.
+    street_tokens = [token for token in tokens[1:] if token not in {
+        "N", "S", "E", "W", "NE", "NW", "SE", "SW",
+        "NORTH", "SOUTH", "EAST", "WEST", "NORTHEAST",
+        "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+        "ST", "STREET", "AVE", "AVENUE", "RD", "ROAD",
+        "DR", "DRIVE", "BLVD", "BOULEVARD", "CT", "COURT",
+        "LN", "LANE", "PL", "PLACE", "TRL", "TRAIL",
+        "PKWY", "PARKWAY", "HWY", "HIGHWAY",
+    }]
+    if not street_tokens:
+        return None
+    street_token = street_tokens[0].replace("'", "''")
+    url = (
+        "https://services.arcgis.com/JMAJrTsHNLrSsWf5/"
+        "ArcGIS/rest/services/ZoningApp/FeatureServer/0/query"
+    )
+    params = {
+        "where": (
+            f"SITUS_HOUSE_NUMBER = '{house_number}' "
+            f"AND FULL_SITE_ADDRESS LIKE '%{street_token}%'"
+        ),
+        "outFields": "FULL_SITE_ADDRESS,Address,FOLIO_NUMBER,CITY_NAME,ZIP_CODE,X_COORD,Y_COORD",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "returnGeometry": "true",
+        "resultRecordCount": "10",
+        "f": "json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0), headers={"User-Agent": USER_AGENT}) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        if payload.get("error"):
+            return None
+        requested = _normalize_street_address(street_line)
+        matches = []
+        for feature in payload.get("features", []):
+            attrs = feature.get("attributes") or {}
+            candidate_address = attrs.get("FULL_SITE_ADDRESS") or attrs.get("Address") or ""
+            if _normalize_street_address(str(candidate_address)) != requested:
+                continue
+            geometry = feature.get("geometry") or {}
+            x = geometry.get("x", attrs.get("X_COORD"))
+            y = geometry.get("y", attrs.get("Y_COORD"))
+            if x is None or y is None:
+                continue
+            try:
+                lon, lat = float(x), float(y)
+            except (TypeError, ValueError):
+                continue
+            if not (-80.95 <= lon <= -80.05 and 25.0 <= lat <= 26.5):
+                continue
+            matches.append((lat, lon, str(candidate_address), {
+                "source": "Broward County Address Points",
+                "folio_number": attrs.get("FOLIO_NUMBER"),
+                "city": attrs.get("CITY_NAME"),
+                "zip_code": attrs.get("ZIP_CODE"),
+            }))
+        # Multiple exact records (for example, unit/address duplicates) are
+        # not silently collapsed into one coordinate.
+        return matches[0] if len(matches) == 1 else None
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        # County GIS is an enhancement, never a single point of failure.
+        return None
+
+
 async def geocode(address: str) -> tuple[float, float, str]:
+    # Broward's official situs-address point is preferred when it provides
+    # exactly one normalized address match. Other counties retain existing
+    # Nominatim/Census behavior.
+    county_match = await resolve_broward_address_point(address)
+    if county_match:
+        lat, lon, matched_address, _provenance = county_match
+        return lat, lon, matched_address
+
     headers = {"User-Agent": USER_AGENT}
     try:
         async with httpx.AsyncClient(timeout=25, headers=headers) as client:
