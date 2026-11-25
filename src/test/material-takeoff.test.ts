@@ -116,9 +116,7 @@ describe("South Florida material takeoff", () => {
       },
       "architectural_metal",
     );
-    const planePanels = result.lineItems.filter((item) =>
-      item.code.startsWith("MTL-PANEL-PLANE-"),
-    );
+    const planePanels = result.lineItems.filter((item) => item.code.startsWith("MTL-PANEL-PLANE-"));
     expect(planePanels.map((item) => item.quantity)).toEqual([34, 34]);
     expect(planePanels.reduce((sum, item) => sum + item.quantity, 0)).toBe(68);
     expect(result.lineItems.find((item) => item.code === "MTL-FASTENER-CUSTOM")?.quantity).toBe(6);
