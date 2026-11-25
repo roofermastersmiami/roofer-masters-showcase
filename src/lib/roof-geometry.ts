@@ -121,11 +121,6 @@ function ringArea(r: number[][]) {
   }
   return Math.abs(area) / 2;
 }
-function edgeKey(a: Point, b: Point) {
-  const key = (p: Point) => [p.x, p.y, p.z].map((n) => Math.round(n * 100)).join(",");
-  return [key(a), key(b)].sort().join("|");
-}
-
 export type SharedEdgeSuggestion = {
   planeId: string;
   edgeIndex: number;
@@ -296,8 +291,21 @@ export function measureDrawing(raw: RoofDrawing) {
     valley: 0,
     other: 0,
   };
-  const seen = new Map<string, EdgeType>();
-  const edgeOccurrences = new Map<string, number>();
+  type MeasuredEdge = {
+    a: Point;
+    b: Point;
+    length: number;
+    type: EdgeType;
+    occurrences: number;
+  };
+  const measuredEdges: MeasuredEdge[] = [];
+  const edgeToleranceFt = 0.05;
+  const sameSegment = (a: Point, b: Point, c: Point, d: Point) =>
+    (distance(a, c) <= edgeToleranceFt && distance(b, d) <= edgeToleranceFt) ||
+    (distance(a, d) <= edgeToleranceFt && distance(b, c) <= edgeToleranceFt);
+
+  // Count a shared physical boundary once even when separately fitted facets
+  // have slightly different LiDAR-derived coordinates.
   for (const p of d.planes)
     for (let i = 0; i < p.points.length; i++) {
       const a = p.points[i],
@@ -306,32 +314,24 @@ export function measureDrawing(raw: RoofDrawing) {
       if (!a || !b || !type) continue;
       const length = distance(a, b);
       if (length < 0.01) throw new Error(`${p.name}: roof edges must be at least 0.01 feet long`);
-      const key = edgeKey(a, b);
-      const occurrences = (edgeOccurrences.get(key) ?? 0) + 1;
-      edgeOccurrences.set(key, occurrences);
-      if (occurrences > 2) throw new Error("A roof edge cannot be shared by more than two planes");
-      const existing = seen.get(key);
-      if (existing && existing !== type)
-        throw new Error("Shared edges must have matching classifications");
-      if (!existing) {
+      const matches = measuredEdges.filter((edge) => sameSegment(a, b, edge.a, edge.b));
+      if (matches.length > 1)
+        throw new Error("Roof edge matches multiple nearby boundaries; review the roof geometry");
+      const existing = matches[0];
+      if (existing) {
+        existing.occurrences++;
+        if (existing.occurrences > 2)
+          throw new Error("A roof edge cannot be shared by more than two planes");
+        if (existing.type !== type)
+          throw new Error("Shared edges must have matching classifications");
+      } else {
+        measuredEdges.push({ a, b, length, type, occurrences: 1 });
         edges[type] += length;
-        seen.set(key, type);
       }
     }
-  const exterior = new Map<string, { length: number; count: number }>();
-  for (const p of d.planes)
-    for (let i = 0; i < p.points.length; i++) {
-      const a = p.points[i],
-        b = p.points[(i + 1) % p.points.length];
-      if (!a || !b) continue;
-      const key = edgeKey(a, b),
-        existing = exterior.get(key);
-      if (existing) existing.count++;
-      else exterior.set(key, { length: distance(a, b), count: 1 });
-    }
-  const perimeter = [...exterior.values()]
-    .filter((e) => e.count === 1)
-    .reduce((sum, e) => sum + e.length, 0);
+  const perimeter = measuredEdges
+    .filter((edge) => edge.occurrences === 1)
+    .reduce((sum, edge) => sum + edge.length, 0);
   const area = planes.reduce((sum, p) => sum + p.area, 0);
   return {
     area,
