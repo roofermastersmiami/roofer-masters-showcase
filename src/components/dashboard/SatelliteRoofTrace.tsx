@@ -107,8 +107,8 @@ const TILE_SPAN = 0.0015;
 const METERS_TO_FEET = 1 / 0.3048;
 
 export function nextSatelliteZoom(current: number, direction: "in" | "out"): number {
-  const factor = direction === "in" ? 1.5 : 1 / 1.5;
-  return Math.max(0.5, Math.min(8, Number((current * factor).toFixed(3))));
+  const factor = direction === "in" ? 1.4 : 1 / 1.4;
+  return Math.max(0.5, Math.min(64, Number((current * factor).toFixed(3))));
 }
 
 export function zoomSatelliteByPinch(
@@ -126,7 +126,7 @@ export function zoomSatelliteByPinch(
   }
   return Math.max(
     0.5,
-    Math.min(8, Number((startZoom * (currentDistance / startDistance)).toFixed(3))),
+    Math.min(64, Number((startZoom * (currentDistance / startDistance)).toFixed(3))),
   );
 }
 
@@ -375,7 +375,7 @@ export function SatelliteRoofTrace({
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(12);
   const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
   const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
   const [mapViewportElement, setMapViewportElement] = useState<HTMLDivElement | null>(null);
@@ -463,7 +463,7 @@ export function SatelliteRoofTrace({
     setResults([]);
     setPoints([]);
     setAutoTraced(false);
-    setZoom(1);
+    setZoom(12);
     setError("");
   }
   useEffect(() => {

@@ -214,19 +214,19 @@ describe("guided satellite gable facet splitting", () => {
 
 describe("satellite map zoom", () => {
   it("zooms in and out in predictable steps", () => {
-    expect(nextSatelliteZoom(1, "in")).toBe(1.5);
-    expect(nextSatelliteZoom(1.5, "out")).toBe(1);
+    expect(nextSatelliteZoom(1, "in")).toBe(1.4);
+    expect(nextSatelliteZoom(1.4, "out")).toBe(1);
   });
 
   it("keeps zoom inside supported bounds", () => {
-    expect(nextSatelliteZoom(8, "in")).toBe(8);
+    expect(nextSatelliteZoom(64, "in")).toBe(64);
     expect(nextSatelliteZoom(0.5, "out")).toBe(0.5);
   });
 
   it("zooms smoothly from two-finger pinch distance and clamps the range", () => {
     expect(zoomSatelliteByPinch(1, 100, 200)).toBe(2);
     expect(zoomSatelliteByPinch(2, 200, 100)).toBe(1);
-    expect(zoomSatelliteByPinch(7, 100, 200)).toBe(8);
+    expect(zoomSatelliteByPinch(48, 100, 200)).toBe(64);
     expect(zoomSatelliteByPinch(0.75, 200, 50)).toBe(0.5);
     expect(() => zoomSatelliteByPinch(1, 0, 100)).toThrow(/pinch/);
   });

@@ -137,10 +137,10 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
         if area_sqft < 150 or area_sqft > 100000:
             continue
         distance_m = _distance_to_footprint_meters(polygon, lat, lon)
-        # Do not silently substitute a neighboring building when geocoding lands
-        # on a road, parcel centroid, or a different structure. A 5 m tolerance
-        # accommodates small geocoder/footprint offsets without guessing across lots.
-        if distance_m > 5.0:
+        # Geocoders frequently place a street address on the curb or driveway.
+        # Permit a conservative 25 m candidate radius, but never guess when two
+        # nearby buildings are similarly plausible. Exact containment still ranks first.
+        if distance_m > 25.0:
             continue
         metadata = {
             "osm_way_id": element.get("id"),
@@ -152,9 +152,20 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
     if not candidates:
         raise HTTPException(
             404,
-            "The geocoded address could not be confidently matched to a building footprint within 5 m. Verify the address or trace the roof manually.",
+            "No mapped building was found within 25 m of the geocoded address point. Zoom in and verify the property pin, or trace the roof manually.",
         )
-    _, polygon, metadata = min(candidates, key=lambda row: row[0])
+    candidates.sort(key=lambda row: (not bool(row[2].get("address_point_inside_footprint")), row[0]))
+    if len(candidates) > 1:
+        nearest_distance = candidates[0][0]
+        next_distance = candidates[1][0]
+        # If the next structure is almost as plausible, fail safely instead of
+        # running LiDAR against a potentially neighboring property.
+        if next_distance - nearest_distance < 8.0 and not candidates[0][2].get("address_point_inside_footprint"):
+            raise HTTPException(
+                409,
+                "Several nearby buildings could match this street-side address pin. Zoom in and select/trace the correct building before running roof detection.",
+            )
+    _, polygon, metadata = candidates[0]
     return polygon, metadata
 
 
