@@ -261,6 +261,28 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
         }
         candidates.append((distance_m, polygon, metadata))
 
+    # Collapse near-identical geometry returned by two public sources so
+    # duplicate representations of one building do not trigger ambiguity.
+    deduplicated: list[tuple[float, Polygon, dict[str, Any]]] = []
+    for candidate in candidates:
+        distance, polygon, metadata = candidate
+        duplicate_index = None
+        for index, existing in enumerate(deduplicated):
+            existing_polygon = existing[1]
+            union_area = polygon.union(existing_polygon).area
+            overlap = polygon.intersection(existing_polygon).area
+            if union_area > 0 and overlap / union_area >= 0.85:
+                duplicate_index = index
+                break
+        if duplicate_index is None:
+            deduplicated.append(candidate)
+        elif (
+            metadata.get("address_point_inside_footprint")
+            and not deduplicated[duplicate_index][2].get("address_point_inside_footprint")
+        ):
+            deduplicated[duplicate_index] = candidate
+    candidates = deduplicated
+
     if not candidates:
         if providers_succeeded == 0:
             raise HTTPException(
