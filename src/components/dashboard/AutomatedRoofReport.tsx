@@ -19,6 +19,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const [error, setError] = useState("");
   const [resultAddress, setResultAddress] = useState("");
   const [errorAddress, setErrorAddress] = useState("");
+  const [loadingAddress, setLoadingAddress] = useState("");
   const requestId = useRef(0);
 
   // Prevent a previous property response from being applied to a newly selected address.
@@ -29,6 +30,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const currentAddress = address.trim();
   const visibleResult = resultAddress === currentAddress ? result : null;
   const visibleError = errorAddress === currentAddress ? error : "";
+  const isLoading = loading && loadingAddress === currentAddress;
 
   async function analyze() {
     if (!address.trim()) {
@@ -45,6 +47,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
     const activeRequest = ++requestId.current;
     const requestedAddress = address.trim();
     setLoading(true);
+    setLoadingAddress(requestedAddress);
     setError("");
     setErrorAddress("");
     setResult(null);
@@ -88,6 +91,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
           ? cause.message
           : "Detected facets could not be added to the drawing.",
       );
+      setErrorAddress(currentAddress);
     }
   }
 
@@ -100,12 +104,12 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             OpenStreetMap footprint + public USGS 3DEP point cloud. No paid API keys.
           </p>
         </div>
-        <Button onClick={() => void analyze()} disabled={loading || !address.trim()}>
-          {loading ? <Loader2 className="animate-spin" /> : <CloudDownload />}
-          {loading ? "Analyzing address…" : "Analyze roof"}
+        <Button onClick={() => void analyze()} disabled={isLoading || !address.trim()}>
+          {isLoading ? <Loader2 className="animate-spin" /> : <CloudDownload />}
+          {isLoading ? "Analyzing address…" : "Analyze roof"}
         </Button>
       </div>
-      {loading && (
+      {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           <Activity className="size-4" /> Searching public footprint and LiDAR coverage. First
           request may take longer on a free host.
@@ -124,7 +128,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               <div>
                 <strong>{visibleResult.roof.facet_count} candidate roof facets detected</strong>
                 <p className="text-muted-foreground">
-                  {result.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
+                  {visibleResult.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
                   {result.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
                 </p>
               </div>
@@ -136,7 +140,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 <strong>Footprint found; roof facets were not measurable</strong>
                 <p className="text-muted-foreground">{visibleResult.fallback.message}</p>
                 <p className="mt-1">
-                  Ground footprint: {result.fallback.footprint_area_sqft.toLocaleString()} sq ft.
+                  Ground footprint: {visibleResult.fallback.footprint_area_sqft.toLocaleString()} sq ft.
                   This is not roof surface area.
                 </p>
               </div>
