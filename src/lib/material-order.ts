@@ -180,6 +180,19 @@ export function escapeMaterialOrderHtml(value: string): string {
 }
 
 /** Explain why aggregate metal takeoffs require roof-plane review. */
+/**
+ * Transfers reviewed geometry into the job's material-order workspace.
+ * Metal reports can be saved before product-specific specifications are known;
+ * their cut list remains empty until those specifications are supplied.
+ */
+export function materialOrderForTransfer(input: RoofReport): MaterialLine[] {
+  const report = reportSchema.parse(input);
+  if (report.roof_type === "Metal Roof" && (!report.metal_plane_runs?.length || !report.metal_config)) {
+    return [];
+  }
+  return materialOrder(report);
+}
+
 export function materialOrderWarnings(input: RoofReport): string[] {
   const parsed = reportSchema.parse(input);
   if (parsed.roof_type !== "Metal Roof") return [];
