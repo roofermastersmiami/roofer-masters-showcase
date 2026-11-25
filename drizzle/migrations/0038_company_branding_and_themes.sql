@@ -30,15 +30,22 @@ CREATE TRIGGER crm_company_branding_updated_at
 BEFORE UPDATE ON public.crm_company_branding
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Public-read logos are intended for CRM headers and customer-facing documents.
--- Upload/update/delete remain restricted to the authenticated account owner path.
+-- Company logos are private. The CRM creates short-lived signed URLs only
+-- after the authenticated user has passed the storage object's SELECT policy.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('crm-company-branding', 'crm-company-branding', true, 2097152,
+VALUES ('crm-company-branding', 'crm-company-branding', false, 2097152,
         ARRAY['image/png', 'image/jpeg', 'image/webp'])
 ON CONFLICT (id) DO UPDATE SET
-  public = EXCLUDED.public,
+  public = false,
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE POLICY "Account owners read company logos"
+ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'crm-company-branding'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
 
 CREATE POLICY "Account owners upload company logos"
 ON storage.objects FOR INSERT TO authenticated
