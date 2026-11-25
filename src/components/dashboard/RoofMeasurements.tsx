@@ -306,6 +306,7 @@ export function RoofMeasurements({
         photos,
         { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
       );
+
       if (report) {
         roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;
         const { error: uploadError } = await supabase.storage
@@ -904,7 +905,8 @@ export function RoofMeasurements({
         </Button>
         <Button
           size="icon"
-          variant="ghost"          title="Redo"
+          variant="ghost"
+          title="Redo"
           aria-label="Redo drawing"
           disabled={!future.length}
           onClick={() => {
@@ -1203,4 +1205,692 @@ export function RoofMeasurements({
                           }),
                         })),
                       };
-                      edit(next);
+                      edit(next);                      toast.success(
+                        "Roof-edge suggestions applied; review every classification before saving",
+                      );
+                    }}
+                  >
+                    Apply shared-edge suggestions
+                  </Button>
+                </div>
+              )}
+              <div className="mt-4 grid gap-2">
+                {plane.edges.map((type, i) => (
+                  <div key={i} className="flex items-end gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="mb-2 h-1.5 w-7 shrink-0 rounded-full"
+                      style={{ backgroundColor: ROOF_EDGE_STYLES[type].color }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <Choice
+                        label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label} · ${distance(plane.points[i]!, plane.points[(i + 1) % plane.points.length]!).toFixed(1)} ft`}
+                        value={type}
+                        onChange={(value) => {
+                          const edge = EDGE_TYPES.find((e) => e === value);
+                          if (edge)
+                            edit({
+                              ...d,
+                              planes: d.planes.map((p) =>
+                                p.id === selected
+                                  ? { ...p, edges: p.edges.map((v, n) => (n === i ? edge : v)) }
+                                  : p,
+                              ),
+                            });
+                        }}
+                        options={EDGE_TYPES.map((e) => ({
+                          value: e,
+                          label: ROOF_EDGE_STYLES[e].label,
+                        }))}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3 text-destructive"
+                disabled={d.planes.length <= 1}
+                onClick={() => {
+                  const next = d.planes.filter((p) => p.id !== selected);
+                  edit({ ...d, planes: next });
+                  setSelected(next[0]?.id ?? "");
+                }}
+              >
+                <Trash2 /> Remove plane
+              </Button>
+            </div>
+          )}
+        </aside>
+      </div>
+      {error && (
+        <p
+          role="alert"
+          className="my-4 border-l-2 border-destructive pl-3 text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
+      {measurement && (
+        <div className="grid grid-cols-2 gap-4 border-b border-border py-5 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Measured roof area</p>
+            <p className="text-xl font-bold">{measurement.area.toFixed(1)} sq ft</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Roofing squares</p>
+            <p className="text-xl font-bold">{measurement.squares.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Ridge / hip / valley</p>
+            <p className="text-sm font-bold">
+              {measurement.edges.ridge.toFixed(1)} / {measurement.edges.hip.toFixed(1)} /{" "}
+              {measurement.edges.valley.toFixed(1)} ft
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Eaves / rakes</p>
+            <p className="text-sm font-bold">
+              {measurement.edges.eave.toFixed(1)} / {measurement.edges.rake.toFixed(1)} ft
+            </p>
+          </div>
+        </div>
+      )}
+      {roofSummary && (
+        <section className="my-5 rounded-lg border border-border p-5">
+          <h3 className="mb-4 text-lg font-bold">Roof Calculator Summary</h3>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Roof area</p>
+              <p className="text-xl font-bold">
+                {roofSummary.facetSurfaceAreaSqFt.toFixed(1)} sq ft
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Waste area</p>
+              <p className="text-xl font-bold">{roofSummary.wasteAreaSqFt.toFixed(1)} sq ft</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Area with waste</p>
+              <p className="text-xl font-bold">
+                {roofSummary.totalAreaWithWasteSqFt.toFixed(1)} sq ft
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Order quantity</p>
+              <p className="text-xl font-bold">{roofSummary.orderSquares.toFixed(2)} squares</p>
+            </div>
+          </div>
+        </section>
+      )}
+      {measurement && (
+        <section className="my-5 rounded-lg border border-border p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-lg font-bold">Live roof plane measurements</h3>
+            <span className="text-xs text-muted-foreground">
+              Updates automatically as the drawing changes
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Roof plane</th>
+                  <th className="py-2 pr-3 text-right font-medium">Pitch</th>
+                  <th className="py-2 pr-3 text-right font-medium">Area (sq ft)</th>
+                  <th className="py-2 text-right font-medium">Squares</th>
+                </tr>
+              </thead>
+              <tbody>
+                {measurement.planes.map((facet) => (
+                  <tr key={facet.id} className="border-b border-border/60">
+                    <td className="py-2 pr-3 font-medium">{facet.name}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">
+                      {facet.pitch.toFixed(2)}:12
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{facet.area.toFixed(1)}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {(facet.area / 100).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td className="py-2 pr-3">Total</td>
+                  <td className="py-2 pr-3 text-right">—</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {measurement.area.toFixed(1)}
+                  </td>
+                  <td className="py-2 text-right tabular-nums">{measurement.squares.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Preliminary geometry-based quantities only. Confirm roof dimensions, pitch, and
+            classifications with field measurements before ordering materials or pricing work.
+          </p>
+        </section>
+      )}
+      <section className="grid gap-6 py-6 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-4 text-lg font-bold">Report details</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Choice
+              label="Roof system"
+              value={d.roof_type}
+              onChange={(v) => edit({ ...d, roof_type: v as RoofDrawing["roof_type"] })}
+              options={["Metal Roof", "Shingle Roof", "Tile Roof", "TPO", "Flat Roof"].map((v) => ({
+                value: v,
+                label: v,
+              }))}
+            />
+            <Field label="Waste (%)">
+              <Input
+                type="number"
+                min={0}
+                max={50}
+                value={d.waste}
+                onChange={(e) => edit({ ...d, waste: Number(e.target.value) })}
+              />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Roof condition">
+                <Input
+                  value={d.condition}
+                  onChange={(e) => edit({ ...d, condition: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Inspection notes">
+                <Textarea value={d.notes} onChange={(e) => edit({ ...d, notes: e.target.value })} />
+              </Field>
+            </div>
+            <label className="flex items-center gap-3 text-sm sm:col-span-2">
+              <Checkbox
+                checked={d.verified}
+                onCheckedChange={(v) => {
+                  setD({ ...d, verified: v === true });
+                  setDirty(true);
+                }}
+              />{" "}
+              Owner reviewed these measurements
+            </label>
+          </div>
+        </div>
+        <div>
+          <h3 className="mb-4 text-lg font-bold">Penetrations</h3>
+          {d.penetrations.map((p) => (
+            <div
+              key={p.id}
+              className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3"
+            >
+              <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: PENETRATION_COLORS[p.kind] }}
+                />
+                {p.kind === "pipe"
+                  ? "Pipe identification"
+                  : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
+              </div>
+              <Choice
+                label="Type"
+                value={p.kind}
+                onChange={(v) =>
+                  edit({
+                    ...d,
+                    penetrations: d.penetrations.map((x) =>
+                      x.id === p.id ? { ...x, kind: v as typeof p.kind } : x,
+                    ),
+                  })
+                }
+                options={["chimney", "skylight", "vent", "pipe", "other"].map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
+              />
+              {(["x", "z", "width", "length"] as const).map((k) => (
+                <Field key={k} label={`${k} (ft)`}>
+                  <Input
+                    type="number"
+                    value={p[k]}
+                    onChange={(e) =>
+                      edit({
+                        ...d,
+                        penetrations: d.penetrations.map((x) =>
+                          x.id === p.id ? { ...x, [k]: Number(e.target.value) } : x,
+                        ),
+                      })
+                    }
+                  />
+                </Field>
+              ))}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="self-end"
+                title="Remove penetration"
+                aria-label="Remove penetration"
+                onClick={() =>
+                  edit({ ...d, penetrations: d.penetrations.filter((x) => x.id !== p.id) })
+                }
+              >
+                <Trash2 />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              edit({
+                ...d,
+                penetrations: [
+                  ...d.penetrations,
+                  { id: crypto.randomUUID(), kind: "pipe", x: 0, z: 0, width: 1, length: 1 },
+                ],
+              })
+            }
+          >
+            <Plus /> Add penetration
+          </Button>
+        </div>
+      </section>
+      <section className="border-t border-border py-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Upload your own overhead roof photo or aerial image, then use the calibrated photo
+              tracer below to draw each roof plane, set its scale and pitch, and classify its edges.
+              You can also load free public aerial imagery in the next section.
+            </p>
+          </div>
+          <Button variant="outline" asChild disabled={busy || !property}>
+            <label>
+              <Upload /> Upload photo to trace
+              <input
+                type="file"
+                className="sr-only"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void upload(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </Button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {media.map((m, i) => (
+            <div key={m.path}>
+              <DrawingImage path={m.path} name={m.name} />
+              {m.source && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {m.source}
+                  {m.matched_address ? ` · Matched: ${m.matched_address}` : ""}
+                  {typeof m.latitude === "number" && typeof m.longitude === "number"
+                    ? ` · ${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`
+                    : ""}
+                </p>
+              )}
+              <Choice
+                label="Photo type"
+                value={m.category}
+                onChange={(v) => {
+                  setMedia(
+                    media.map((x, n) => (n === i ? { ...x, category: v as Media["category"] } : x)),
+                  );
+                  setDirty(true);
+                }}
+                options={["aerial", "before", "after", "diagram"].map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="border-t border-border py-6">
+        <h3 className="mb-2 text-lg font-bold">Free public aerial & accuracy</h3>
+        {aerialError && (
+          <p
+            role="alert"
+            className="mb-3 border-l-2 border-destructive pl-3 text-sm text-destructive"
+          >
+            {aerialError}
+          </p>
+        )}
+        <p className="mb-3 text-sm text-muted-foreground">
+          Looks up the address with the free US Census service and loads public USGS aerial imagery
+          when coverage is available. Image dimensions do not establish ground scale: calibrate
+          against a known measured distance before tracing. Results are estimates, never
+          survey-grade. No paid provider is used.
+        </p>
+        {aerialStatus && (
+          <p
+            className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+            role="status"
+            aria-live="polite"
+          >
+            {aerialStatus}
+          </p>
+        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <Button
+            variant="outline"
+            disabled={busy || !property || !(report?.address?.trim() || propertyRow?.address)}
+            onClick={() => void loadAerial()}
+          >
+            <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}
+          </Button>
+          <div className="w-72">
+            <Choice
+              label="Measurement basis"
+              value={d.accuracy ?? "photo_estimate"}
+              onChange={(v) => {
+                setD({
+                  ...d,
+                  accuracy: v as Accuracy,
+                  verified: v === "site_verified" ? d.verified : d.verified,
+                });
+                setDirty(true);
+              }}
+              options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({ value, label }))}
+            />
+          </div>
+          <Button
+            variant="outline"
+            disabled={
+              footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)
+            }
+            onClick={() => void searchFootprints()}
+          >
+            {footprintBusy ? "Searching footprints…" : "Find mapped building outline"}
+          </Button>
+          {media.length > 1 && (
+            <div className="w-56">
+              <Choice
+                label="Photo to trace"
+                value={String(traceIndex)}
+                onChange={(v) => setTraceIndex(Number(v))}
+                options={media.map((m, i) => ({
+                  value: String(i),
+                  label: `${i + 1}. ${m.category} · ${m.name.slice(0, 30)}`,
+                }))}
+              />
+            </div>
+          )}
+        </div>
+        {footprintMessage && (
+          <p
+            className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+            role="status"
+          >
+            {footprintMessage}{" "}
+            <a
+              className="underline underline-offset-4"
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              OpenStreetMap attribution and license
+            </a>
+          </p>
+        )}
+        {footprints.length > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Choose the matching building if several are listed. These mapped outlines show the
+            building footprint, not verified roof edges or roof planes.
+          </p>
+        )}
+        {footprints.length > 0 && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {footprints.map((footprint) => (
+              <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
+                <p className="font-medium">Mapped building #{footprint.id}</p>
+                <svg
+                  viewBox="0 0 160 100"
+                  role="img"
+                  aria-label={`Approximate mapped ground outline for building ${footprint.id}`}
+                  className="my-2 h-24 w-full rounded bg-muted/40"
+                >
+                  {(() => {
+                    const cos = Math.cos((footprint.center.lat * Math.PI) / 180);
+                    const xy = footprint.points.map((point) => ({
+                      x: point.lon * cos,
+                      y: -point.lat,
+                    }));
+                    const minX = Math.min(...xy.map((point) => point.x));
+                    const maxX = Math.max(...xy.map((point) => point.x));
+                    const minY = Math.min(...xy.map((point) => point.y));
+                    const maxY = Math.max(...xy.map((point) => point.y));
+                    const width = Math.max(maxX - minX, 1e-9);
+                    const height = Math.max(maxY - minY, 1e-9);
+                    const scale = Math.min(140 / width, 80 / height);
+                    const offsetX = (160 - width * scale) / 2;
+                    const offsetY = (100 - height * scale) / 2;
+                    const points = xy
+                      .map(
+                        (point) =>
+                          `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
+                      )
+                      .join(" ");
+                    return (
+                      <polygon
+                        points={points}
+                        fill="currentColor"
+                        fillOpacity="0.12"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    );
+                  })()}
+                </svg>
+                <p className="text-muted-foreground">
+                  Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft ·{" "}
+                  {footprint.containsAddress
+                    ? "Address point is inside this outline"
+                    : `${footprint.distanceMeters} m from nearest outline`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {footprint.points.length} outline corners · OSM building type:{" "}
+                  {footprint.buildingType}
+                </p>
+                <Button
+                  className="mt-3 w-full"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyBuildingFootprint(footprint)}
+                >
+                  Use this preliminary outline
+                </Button>
+                <a
+                  className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
+                  href={`https://www.openstreetmap.org/way/${footprint.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Inspect source outline on OpenStreetMap
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      <AutomatedRoofReport
+        address={workspaceAddress}
+        onApply={(detectedDrawing) => {
+          const hasExistingWork =
+            Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1;
+          if (
+            hasExistingWork &&
+            !confirm(
+              "Replace the current roof planes with public LiDAR candidates? Existing planes and penetrations will be removed. You can undo immediately afterward.",
+            )
+          )
+            return;
+          try {
+            const nextDrawing: RoofDrawing = {
+              ...detectedDrawing,
+              roof_type: d.roof_type,
+              waste: d.waste,
+              condition: d.condition,
+            };
+            // Validate externally sourced geometry before it enters the editable report.
+            measureDrawing(nextDrawing);
+            edit(nextDrawing);
+            setSelected(nextDrawing.planes[0]?.id ?? "");
+            setFit((value) => value + 1);
+            toast.success(
+              "Preliminary LiDAR facets loaded. Review every plane and classify all edges before generating a takeoff.",
+            );
+          } catch (cause) {
+            toast.error(
+              cause instanceof Error
+                ? cause.message
+                : "LiDAR facets failed roof geometry validation.",
+            );
+          }
+        }}
+      />
+      <SatelliteRoofTrace
+        key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
+        initialAddress={report?.address?.trim() || propertyRow?.address || ""}
+        onAdd={(newPlanes, geoReference) => {
+          const canAppendToCurrentFrame = Boolean(d.geo_reference);
+          let nextPlanes = newPlanes;
+          let nextGeoReference = geoReference;
+          let nextPenetrations = d.penetrations;
+          let appendToCurrentFrame = false;
+          if (canAppendToCurrentFrame) {
+            try {
+              nextPlanes = rebaseRoofPlanes(newPlanes, geoReference, d.geo_reference!);
+              nextGeoReference = d.geo_reference!;
+              appendToCurrentFrame = true;
+            } catch {
+              if (
+                !confirm(
+                  "This trace cannot be aligned safely with the saved drawing. Replace the current roof planes and penetrations with this trace instead?",
+                )
+              )
+                return false;
+              nextPenetrations = [];
+              nextGeoReference = geoReference;
+            }
+          } else if (
+            (Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1) &&
+            !confirm(
+              "This drawing has no saved map origin, so the new trace cannot be aligned safely. Replace the current roof planes and penetrations? You can undo immediately afterward.",
+            )
+          ) {
+            return false;
+          }
+          const nextDrawing: RoofDrawing = {
+            ...d,
+            planes: appendToCurrentFrame ? [...d.planes, ...nextPlanes] : nextPlanes,
+            penetrations: nextPenetrations,
+            geo_reference: nextGeoReference,
+            accuracy: "photo_estimate",
+            verified: false,
+          };
+          try {
+            // Validate the complete layout, not just each traced facet. A new
+            // facet may be valid alone but overlap an existing plane in plan.            measureDrawing(nextDrawing);
+          } catch (cause) {
+            toast.error(
+              cause instanceof Error
+                ? cause.message
+                : "The traced plane would make the roof layout invalid.",
+            );
+            return false;
+          }
+          edit(nextDrawing);
+          setSelected(nextPlanes[0]?.id ?? "");
+          setFit((f) => f + 1);
+          return true;
+        }}
+      />
+      {media[traceIndex] ? (
+        <RoofImageTrace
+          key={media[traceIndex].path}
+          path={media[traceIndex].path}
+          onAdd={(p, replace) => {
+            if (replace && !confirm("Replace the current roof with this traced plane?")) return;
+            edit({ ...d, planes: replace ? [p] : [...d.planes, p] });
+            setSelected(p.id);
+            setFit((f) => f + 1);
+          }}
+        />
+      ) : (
+        <section className="rounded-lg border border-dashed border-primary/40 bg-muted/30 p-4">
+          <h3 className="font-semibold">Trace a roof from your own photo</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upload an overhead or elevated roof image above. The photo tracing workspace will appear
+            here so you can calibrate a known distance and draw the roof planes yourself.
+          </p>
+        </section>
+      )}
+      <section className="flex flex-wrap items-end gap-3 border-t border-border pt-5">
+        <Button
+          disabled={busy || dirty || !parent || !d.verified}
+          onClick={() => void toEstimate()}
+        >
+          <ArrowRight /> Send to estimator
+        </Button>
+        <div className="w-64">
+          <Choice
+            label="Customer job"
+            value={jobId || "none"}
+            onChange={(v) => setJobId(v === "none" ? "" : v)}
+            options={[
+              { value: "none", label: "Choose job" },
+              ...matchingJobs.map((j) => ({ value: j.id, label: j.title })),
+            ]}
+          />
+        </div>
+        <Button
+          variant="outline"
+          disabled={busy || dirty || !parent || !jobId || !d.verified}
+          onClick={() => void toJob()}
+        >
+          Transfer material measurements
+        </Button>
+        <Button
+          variant="outline"
+          disabled={busy || dirty || !parent}
+          onClick={() => void exportPdf(true)}
+        >
+          <FileText /> Prepare customer report
+        </Button>
+      </section>
+    </div>
+  );
+}
+function DrawingImage({ path, name }: { path: string; name: string }) {
+  const image = useQuery({
+    queryKey: ["drawing-image", path],
+    queryFn: async () => {
+      const { data, error } = await supabase.storage
+        .from("roof-job-photos")
+        .createSignedUrl(path, 300);
+      if (error || !data) throw error;
+      return data.signedUrl;
+    },
+  });
+  return image.data ? (
+    <img className="mb-2 aspect-[4/3] w-full rounded-md object-cover" src={image.data} alt={name} />
+  ) : (
+    <p className="p-4 text-xs text-muted-foreground">
+      {image.error ? "Image unavailable" : "Loading image…"}
+    </p>
+  );
+}
