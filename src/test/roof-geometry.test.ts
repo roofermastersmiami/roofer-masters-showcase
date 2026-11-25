@@ -7,13 +7,14 @@ import {
   auditRoofReport,
   toMaterialReport,
   suggestSharedEdgeClassifications,
-  addressPinPosition,\n  rebaseRoofPlanes,
+  addressPinPosition,
+  rebaseRoofPlanes,
+  planeInfo,
   drawingSchema,
   type RoofPlane,
 } from "@/lib/roof-geometry";
 describe("roof geometry", () => {
   it("rebases traced facets into an existing drawing coordinate frame", () => {
-    const drawing = roofPreset("flat", 40, 30, 0);
     const source = {
       addressLatitude: 25.47,
       addressLongitude: -80.48,
