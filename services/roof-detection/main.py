@@ -760,6 +760,31 @@ def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> 
     return points[np.sort(indices)]
 
 
+
+def _vertical_unit_to_meters(header: Any) -> float | None:
+    """Return the LAS vertical CRS unit scale; reject missing or ambiguous Z units.
+
+    Horizontal CRS metadata does not establish elevation units. Roof-plane
+    pitch and facet heights must not be calculated from unnormalized Z values.
+    """
+    try:
+        crs = header.parse_crs()
+        if crs is None:
+            return None
+        vertical_axes = [
+            axis for axis in crs.axis_info
+            if str(axis.direction).lower() == "up"
+        ]
+        if len(vertical_axes) != 1:
+            return None
+        factor = float(vertical_axes[0].unit_conversion_factor)
+        if not math.isfinite(factor) or factor <= 0:
+            return None
+        return factor
+    except Exception:
+        return None
+
+
 def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     catalog = Client.open(STAC_URL)
     # Search footprint bbox, not the full city. Multiple COPC tiles may overlap.
@@ -777,6 +802,8 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
     used_items = 0
     used_tile_ids: list[str] = []
     raw_point_count = 0
+    tiles_missing_vertical_units = 0
+    vertical_unit_factors: set[float] = set()
 
     for item in items:
         epsg_value = item.properties.get("proj:epsg")
@@ -804,6 +831,13 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         minx, miny, maxx, maxy = lidar_query_polygon.bounds
         try:
             with laspy.CopcReader.open(href) as reader:
+                z_to_meters = _vertical_unit_to_meters(reader.header)
+                if z_to_meters is None:
+                    # A tile without an explicit vertical unit cannot safely
+                    # contribute elevations to pitch or roof-plane fitting.
+                    tiles_missing_vertical_units += 1
+                    continue
+                vertical_unit_factors.add(round(z_to_meters, 12))
                 cloud = reader.query(
                     bounds=laspy.Bounds(
                         mins=np.array([minx, miny]),
@@ -812,7 +846,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
                 )
             x = np.asarray(cloud.x)
             y = np.asarray(cloud.y)
-            z = np.asarray(cloud.z)
+            z = np.asarray(cloud.z) * z_to_meters
             classifications = np.asarray(cloud.classification)
             # ASPRS class 6 is building. Do not treat generic unclassified points as roof evidence.
             mask = (classifications == 6) & np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
@@ -839,7 +873,12 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             continue
 
     if not tile_points:
-        return [], {"stac_items": len(items), "tiles_used": 0, "building_class_points": 0}
+        return [], {
+            "stac_items": len(items),
+            "tiles_used": 0,
+            "building_class_points": 0,
+            "tiles_missing_vertical_units": tiles_missing_vertical_units,
+        }
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
@@ -865,6 +904,8 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         "building_class_points": len(unique_points),
         "raw_building_class_points": raw_point_count,
         "duplicate_points_removed": raw_point_count - len(unique_points),
+        "tiles_missing_vertical_units": tiles_missing_vertical_units,
+        "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
     }
 
 @app.get("/health")
