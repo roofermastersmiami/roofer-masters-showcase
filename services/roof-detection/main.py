@@ -317,6 +317,14 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         minx, miny, maxx, maxy = lidar_query_polygon.bounds
         try:
             with laspy.CopcReader.open(href) as reader:
+                z_to_meters = _vertical_unit_to_meters(reader.header)
+                if z_to_meters is None:
+                    # Original 3DEP projects may use metres or feet. If the
+                    # LAS vertical CRS is absent/ambiguous, skip this tile
+                    # rather than fit pitch from unnormalized elevations.
+                    tiles_missing_vertical_units += 1
+                    continue
+                vertical_unit_factors.add(round(z_to_meters, 12))
                 cloud = reader.query(
                     bounds=laspy.Bounds(
                         mins=np.array([minx, miny]),
@@ -325,7 +333,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
                 )
             x = np.asarray(cloud.x)
             y = np.asarray(cloud.y)
-            z = np.asarray(cloud.z)
+            z = np.asarray(cloud.z) * z_to_meters
             classifications = np.asarray(cloud.classification)
             # ASPRS class 6 is building. Do not treat generic unclassified points as roof evidence.
             mask = (classifications == 6) & np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
@@ -351,7 +359,12 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             continue
 
     if not tile_points:
-        return [], {"stac_items": len(items), "tiles_used": 0, "building_class_points": 0}
+        return [], {
+            "stac_items": len(items),
+            "tiles_used": 0,
+            "building_class_points": 0,
+            "tiles_missing_vertical_units": tiles_missing_vertical_units,
+        }
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
@@ -376,6 +389,8 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         "building_class_points": len(unique_points),
         "raw_building_class_points": raw_point_count,
         "duplicate_points_removed": raw_point_count - len(unique_points),
+        "tiles_missing_vertical_units": tiles_missing_vertical_units,
+        "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
     }
 
 @app.get("/health")
