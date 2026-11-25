@@ -91,6 +91,36 @@ describe("LiDAR source-data evidence", () => {
     expect(parsed.roof.facets[0]?.point_count).toBe(200);
   });
 
+  it("rejects facets when the fitted elevation plane disagrees with reported pitch", () => {
+    const inconsistent = {
+      ...response,
+      roof: {
+        ...response.roof,
+        facets: response.roof.facets.map((facet) => ({
+          ...facet,
+          plane_model: { z_equals_ax_plus_by_plus_c: [1.0, 0, 10] },
+        })),
+      },
+    };
+    expect(() => detectedFacetsToDrawing(inconsistent, "Metal Roof")).toThrow(
+      /inconsistent elevation and pitch data/,
+    );
+  });
+
+  it("accepts consistent fitted-plane pitch metadata", () => {
+    const consistent = {
+      ...response,
+      roof: {
+        ...response.roof,
+        facets: response.roof.facets.map((facet) => ({
+          ...facet,
+          plane_model: { z_equals_ax_plus_by_plus_c: [0.5, 0, 10] },
+        })),
+      },
+    };
+    expect(() => detectedFacetsToDrawing(consistent, "Metal Roof")).not.toThrow();
+  });
+
   it("accepts legacy responses without LiDAR metadata", () => {
     const { lidar: _lidar, ...legacyResponse } = response;
     const parsed = roofDetectionResponseSchema.parse(legacyResponse);
