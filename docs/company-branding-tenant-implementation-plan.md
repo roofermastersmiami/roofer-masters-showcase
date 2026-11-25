@@ -48,7 +48,19 @@ Use a company-first path such as `<company_uuid>/company-logo.<extension>`. The 
 - Do not allow a user to upload to a different company by supplying an arbitrary path.
 - Keep legacy `<user_uuid>/...` objects readable during transition only by their original owner; do not reinterpret user UUID paths as company UUIDs.
 
-If the bucket must remain public for current UI compatibility, treat public object URLs as intentionally public and do not claim member-only logo privacy. Prefer a private bucket with authenticated reads or short-lived signed URLs if the current UI can support it.
+The required bucket is private. The dashboard must use short-lived signed URLs created only after authenticated storage access; never use `getPublicUrl()` for this bucket. Migration `0038_company_branding_and_themes.sql` provisions the private bucket and an owner-scoped SELECT policy when it is deployed. The migration is repository code only until an authorized administrator applies it to the connected Supabase project. Do not create a public bucket as a workaround.
+
+### Supabase administrator setup
+
+Before uploads can work in the live CRM, an authorized Supabase administrator must verify the project reference and deploy the reviewed branding migration (or apply its equivalent through the approved database deployment process). Confirm all of the following in the Supabase dashboard:
+
+1. Storage bucket ID and name are exactly `crm-company-branding`.
+2. **Public bucket is OFF**.
+3. Maximum file size is 2 MB; allowed MIME types are PNG, JPEG, and WebP.
+4. Authenticated SELECT, INSERT, UPDATE, and DELETE policies constrain the first object-path folder to `auth.uid()::text`.
+5. Test upload, signed-URL display, and cross-user denial using separate test accounts before enabling this for production users.
+
+The current account-scoped storage path is `<auth-user-uuid>/company-logo.<extension>`. Do not replace it with a company UUID path until company membership authorization and a safe branding backfill are implemented.
 
 ## Safe backfill and rollout
 
