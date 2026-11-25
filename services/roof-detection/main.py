@@ -145,11 +145,20 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
     return polygon, metadata
 
 
+def _transform_polygon(polygon: Polygon, transformer: Transformer) -> Polygon:
+    """Transform exterior and interior rings without discarding footprint holes."""
+    exterior = [transformer.transform(x, y) for x, y in polygon.exterior.coords]
+    interiors = [
+        [transformer.transform(x, y) for x, y in ring.coords]
+        for ring in polygon.interiors
+    ]
+    return Polygon(exterior, interiors)
+
+
 def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer, Transformer]:
     to_xy = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
     to_ll = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
-    projected = Polygon([to_xy.transform(x, y) for x, y in polygon.exterior.coords])
-    return projected, to_xy, to_ll
+    return _transform_polygon(polygon, to_xy), to_xy, to_ll
 
 
 def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
@@ -278,6 +287,13 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         except (TypeError, ValueError):
             continue
         projected_polygon, _, _ = _project_polygon(polygon, epsg)
+        projected_crs = CRS.from_epsg(epsg)
+        meters_per_unit = projected_crs.axis_info[0].unit_conversion_factor if projected_crs.axis_info else 1.0
+        if not meters_per_unit or not math.isfinite(meters_per_unit):
+            continue
+        # Include class-6 roof returns just beyond the ground footprint so
+        # ordinary eave overhang is not discarded before facet fitting.
+        lidar_query_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
         asset = item.assets.get("data") or item.assets.get("copc") or next(
             (candidate for candidate in item.assets.values() if "copc" in candidate.href.lower() or candidate.href.lower().endswith(".laz")),
             None,
@@ -285,7 +301,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         if asset is None:
             continue
         href = planetary_computer.sign(asset.href)
-        minx, miny, maxx, maxy = projected_polygon.bounds
+        minx, miny, maxx, maxy = lidar_query_polygon.bounds
         try:
             with laspy.CopcReader.open(href) as reader:
                 cloud = reader.query(
@@ -303,7 +319,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             if not mask.any():
                 continue
             coords = np.column_stack((x[mask], y[mask], z[mask]))
-            inside = np.array([projected_polygon.covers(Point(px, py)) for px, py in coords[:, :2]])
+            inside = np.array([lidar_query_polygon.covers(Point(px, py)) for px, py in coords[:, :2]])
             coords = coords[inside]
             if len(coords) < MIN_ROOF_POINTS:
                 continue
@@ -326,7 +342,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
-    footprint_local = Polygon([to_local.transform(x, y) for x, y in polygon.exterior.coords])
+    footprint_local = _transform_polygon(polygon, to_local)
     all_facets: list[dict[str, Any]] = []
     for facet in _fit_facets(unique_points, footprint_local):
         facet["id"] = f"facet-{len(all_facets) + 1}"
