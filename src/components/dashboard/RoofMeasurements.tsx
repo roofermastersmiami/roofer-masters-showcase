@@ -38,7 +38,7 @@ import {
   type RoofDrawing,
   type RoofShape,
 } from "@/lib/roof-geometry";
-import { calculateRoofSummary } from "@/lib/roof-calculations";
+import { calculateRoofSummary, measuredEdgeTotalsToInputs } from "@/lib/roof-calculations";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
@@ -220,16 +220,7 @@ export function RoofMeasurements({
           surfaceAreaSqFt: p.area,
           pitchRisePer12: p.pitch,
         })),
-        edges: d.planes.flatMap((p) =>
-          p.points.map((point, i) => {
-            const next = p.points[(i + 1) % p.points.length]!;
-            const type = p.edges[i]!;
-            const pointKey = (v: typeof point) =>
-              [v.x, v.y, v.z].map((n) => Math.round(n * 100)).join(",");
-            const id = [pointKey(point), pointKey(next)].sort().join("|");
-            return { id, type, lengthFt: distance(point, next) };
-          }),
-        ),
+        edges: measuredEdgeTotalsToInputs(measurement.edges),
         wastePercent: d.waste,
       })
     : null;
