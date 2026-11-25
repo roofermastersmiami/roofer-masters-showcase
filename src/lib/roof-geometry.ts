@@ -54,10 +54,8 @@ export function rebaseRoofPlanes(
   if (Math.hypot(addressLatDelta, addressLonDelta) > 30) {
     throw new Error("The traced outline belongs to a different address location.");
   }
-  const sourceLonScale =
-    (111320 * Math.cos(from.originLatitude * radians)) / 0.3048;
-  const targetLonScale =
-    (111320 * Math.cos(to.originLatitude * radians)) / 0.3048;
+  const sourceLonScale = (111320 * Math.cos(from.originLatitude * radians)) / 0.3048;
+  const targetLonScale = (111320 * Math.cos(to.originLatitude * radians)) / 0.3048;
   const latitudeScale = 110540 / 0.3048;
   if (Math.abs(sourceLonScale) < 1 || Math.abs(targetLonScale) < 1) {
     throw new Error("The roof drawing is too close to the poles to rebase safely.");

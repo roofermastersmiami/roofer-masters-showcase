@@ -28,10 +28,8 @@ describe("roof geometry", () => {
     };
     const original = roofPreset("flat").planes[0]!;
     const rebased = rebaseRoofPlanes([original], source, target)[0]!;
-    const sourceLonScale =
-      (111320 * Math.cos((source.originLatitude * Math.PI) / 180)) / 0.3048;
-    const targetLonScale =
-      (111320 * Math.cos((target.originLatitude * Math.PI) / 180)) / 0.3048;
+    const sourceLonScale = (111320 * Math.cos((source.originLatitude * Math.PI) / 180)) / 0.3048;
+    const targetLonScale = (111320 * Math.cos((target.originLatitude * Math.PI) / 180)) / 0.3048;
     expect(rebased.points[0]!.x).toBeCloseTo(
       original.points[0]!.x * (targetLonScale / sourceLonScale) -
         (target.originLongitude - source.originLongitude) * targetLonScale,
