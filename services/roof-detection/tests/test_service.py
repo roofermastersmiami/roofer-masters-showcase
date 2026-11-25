@@ -388,3 +388,107 @@ def test_broward_county_footprints_are_used_when_nationwide_provider_has_no_matc
     assert footprint.area == pytest.approx(polygon.area)
     assert metadata["provider"] == "Broward County Building Footprints"
     assert metadata["source_id"] == 77
+
+
+def test_broward_address_point_requires_one_exact_normalized_match(monkeypatch):
+    import asyncio
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"features": [{
+                "attributes": {
+                    "FULL_SITE_ADDRESS": "3062 SW 189TH AVE",
+                    "FOLIO_NUMBER": "5141-02-00-0010",
+                    "CITY_NAME": "MIRAMAR",
+                    "ZIP_CODE": "33029",
+                },
+                "geometry": {"x": -80.3995, "y": 25.9804},
+            }]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None):
+            assert "ZoningApp/FeatureServer/0/query" in url
+            assert "SITUS_HOUSE_NUMBER" in params["where"]
+            return FakeResponse()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    match = asyncio.run(
+        roof_service.resolve_broward_address_point(
+            "3062 Southwest 189th Avenue, Miramar, FL 33029"
+        )
+    )
+    assert match is not None
+    lat, lon, address, provenance = match
+    assert (lat, lon) == pytest.approx((25.9804, -80.3995))
+    assert address == "3062 SW 189TH AVE"
+    assert provenance["folio_number"] == "5141-02-00-0010"
+
+
+def test_broward_address_point_rejects_multiple_exact_records(monkeypatch):
+    import asyncio
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            feature = {
+                "attributes": {"FULL_SITE_ADDRESS": "3062 SW 189TH AVE"},
+                "geometry": {"x": -80.3995, "y": 25.9804},
+            }
+            return {"features": [feature, feature]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    assert asyncio.run(
+        roof_service.resolve_broward_address_point(
+            "3062 Southwest 189th Avenue, Miramar, FL 33029"
+        )
+    ) is None
+
+
+def test_geocode_prefers_exact_broward_county_address_point(monkeypatch):
+    import asyncio
+
+    async def fake_county(_address):
+        return (
+            25.9804,
+            -80.3995,
+            "3062 SW 189TH AVE",
+            {"source": "Broward County Address Points"},
+        )
+
+    async def forbidden_fallback(_address):
+        raise AssertionError("General geocoder should not run after exact county match")
+
+    monkeypatch.setattr(roof_service, "resolve_broward_address_point", fake_county)
+    monkeypatch.setattr(roof_service, "_geocode_census", forbidden_fallback)
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("Nominatim should not run after exact county match")
+    ))
+    result = asyncio.run(roof_service.geocode("3062 Southwest 189th Avenue, Miramar, FL 33029"))
+    assert result == (25.9804, -80.3995, "3062 SW 189TH AVE")
