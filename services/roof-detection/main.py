@@ -254,6 +254,44 @@ def _normalize_street_address(value: str | None) -> str:
     return " ".join(expansions.get(token, token) for token in tokens)
 
 
+async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None, dict[str, Any]]:
+    """Find the unique Miramar parcel containing a resolved address point."""
+    url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
+           "MiramarParcels/FeatureServer/20/query")
+    params = {"where": "1=1", "geometry": f"{lon},{lat}", "geometryType": "esriGeometryPoint",
+              "inSR": "4326", "spatialRel": "esriSpatialRelIntersects", "outFields": "OBJECTID,FOLIO",
+              "returnGeometry": "true", "outSR": "4326", "resultRecordCount": "10", "f": "geojson"}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0),
+                                     headers={"User-Agent": USER_AGENT}) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        if payload.get("error"):
+            return None, {"status": "provider_error", "provider": "City of Miramar GIS"}
+        point, matches = Point(lon, lat), []
+        for feature in payload.get("features", []):
+            geometry = feature.get("geometry")
+            if not geometry:
+                continue
+            try:
+                parsed = make_valid(shape(geometry))
+            except (TypeError, ValueError):
+                continue
+            parts = list(parsed.geoms) if parsed.geom_type == "MultiPolygon" else [parsed]
+            attrs = feature.get("properties") or {}
+            for polygon in parts:
+                if polygon.geom_type == "Polygon" and not polygon.is_empty and polygon.covers(point):
+                    matches.append((polygon, {"object_id": attrs.get("OBJECTID"), "folio": attrs.get("FOLIO")}))
+        if len(matches) != 1:
+            return None, {"status": "not_found" if not matches else "ambiguous",
+                          "provider": "City of Miramar GIS", "match_count": len(matches)}
+        polygon, identity = matches[0]
+        return polygon, {"status": "matched", "provider": "City of Miramar GIS", **identity}
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None, {"status": "provider_error", "provider": "City of Miramar GIS"}
+
+
 async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None) -> tuple[Polygon, dict[str, Any]]:
     # Use a nationwide ArcGIS structures layer first. It is independent of
     # Overpass and covers US building polygons; OSM remains a secondary source.
@@ -502,6 +540,26 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         ):
             deduplicated[duplicate_index] = candidate
     candidates = deduplicated
+
+    # Parcel membership is corroborating evidence only; parcels may contain
+    # multiple buildings and cannot independently establish the primary roof.
+    parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
+    if street_address and re.search(r"\\bMIRAMAR\\b", street_address, re.IGNORECASE):
+        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon)
+        if parcel_polygon is not None:
+            parcel_candidates = [row for row in candidates
+                if parcel_polygon.intersection(row[1]).area / max(row[1].area, 1e-12) >= 0.50]
+            parcel_metadata["building_candidates_intersecting_parcel"] = len(parcel_candidates)
+            if len(parcel_candidates) == 1:
+                parcel_candidates[0][2]["parcel_match"] = dict(parcel_metadata)
+                candidates = parcel_candidates
+            elif len(parcel_candidates) > 1:
+                for row in parcel_candidates:
+                    row[2]["parcel_match"] = dict(parcel_metadata)
+        elif parcel_metadata.get("status") in {"ambiguous", "not_found"}:
+            for row in candidates:
+                row[2]["parcel_match"] = dict(parcel_metadata)
+
 
     if not candidates:
         if providers_succeeded == 0:
