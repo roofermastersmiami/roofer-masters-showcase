@@ -1807,10 +1807,12 @@ export function RoofMeasurements({
           let nextPlanes = newPlanes;
           let nextGeoReference = geoReference;
           let nextPenetrations = d.penetrations;
+          let appendToCurrentFrame = false;
           if (canAppendToCurrentFrame) {
             try {
               nextPlanes = rebaseRoofPlanes(newPlanes, geoReference, d.geo_reference!);
               nextGeoReference = d.geo_reference!;
+              appendToCurrentFrame = true;
             } catch {
               if (
                 !confirm(
@@ -1819,6 +1821,7 @@ export function RoofMeasurements({
               )
                 return false;
               nextPenetrations = [];
+              nextGeoReference = geoReference;
             }
           } else if (
             (Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1) &&
@@ -1830,10 +1833,7 @@ export function RoofMeasurements({
           }
           edit({
             ...d,
-            planes:
-              canAppendToCurrentFrame && nextGeoReference === d.geo_reference
-                ? [...d.planes, ...nextPlanes]
-                : nextPlanes,
+            planes: appendToCurrentFrame ? [...d.planes, ...nextPlanes] : nextPlanes,
             penetrations: nextPenetrations,
             geo_reference: nextGeoReference,
             accuracy: "photo_estimate",
