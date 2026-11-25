@@ -252,22 +252,18 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
     if (!current) throw new Error("Roof report was already deleted or does not exist");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    if (current.file_path) {
-      if (
-        !current.file_path.startsWith(`roof-report/${data.id}/`) ||
-        !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(current.file_path)
-      ) {
-        throw new Error(
-          "The report contains an unexpected file path. Contact an administrator before deleting it.",
-        );
-      }
-      const { error: storageError } = await supabaseAdmin.storage
-        .from("roofing-proposals")
-        .remove([current.file_path]);
-      if (storageError)
-        throw new Error("Could not remove the attached report PDF. Nothing was deleted.");
+    if (
+      current.file_path &&
+      (!current.file_path.startsWith(`roof-report/${data.id}/`) ||
+        !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(current.file_path))
+    ) {
+      throw new Error(
+        "The report contains an unexpected file path. Contact an administrator before deleting it.",
+      );
     }
 
+    // Delete the database record first. Removing the private PDF first could destroy
+    // the only report copy if the subsequent database delete failed.
     const { data: deleted, error } = await supabaseAdmin
       .from("roof_report_orders")
       .delete()
@@ -275,6 +271,14 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
       .select("id")
       .maybeSingle();
     if (error || !deleted)
-      throw new Error("Could not delete the roof report. Refresh and try again.");
-    return { id: deleted.id };
+      throw new Error("Could not delete the roof report. The report PDF was left untouched.");
+
+    let fileCleanupPending = false;
+    if (current.file_path) {
+      const { error: storageError } = await supabaseAdmin.storage
+        .from("roofing-proposals")
+        .remove([current.file_path]);
+      fileCleanupPending = !!storageError;
+    }
+    return { id: deleted.id, fileCleanupPending };
   });

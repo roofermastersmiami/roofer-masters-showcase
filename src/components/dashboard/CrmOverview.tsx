@@ -295,7 +295,7 @@ export function CrmOverview() {
             <div>
               <h2 className="font-semibold">Your workspace, your way</h2>
               <p className="text-sm text-muted-foreground">
-                Drag cards to reorder them. Preferences are saved on this device.
+                Drag cards to reorder them on desktop, or use each card’s up/down controls on touchscreens and keyboards. Preferences are saved on this device.
               </p>
             </div>
             <Button
@@ -455,6 +455,9 @@ export function CrmOverview() {
             .map((card) => (
               <article
                 key={card.label}
+                role="group"
+                aria-label={`Dashboard card: ${card.label}. Use the move earlier and move later buttons to reorder.`}
+                aria-roledescription="reorderable dashboard card"
                 draggable
                 onDragStart={() => setDraggedCard(card.label)}
                 onDragOver={(event) => event.preventDefault()}

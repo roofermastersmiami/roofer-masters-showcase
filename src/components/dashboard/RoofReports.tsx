@@ -97,13 +97,19 @@ export function RoofReports({
     if (!pendingDelete) return;
     setDeleting(true);
     try {
-      await remove({ data: { id: pendingDelete.id } });
+      const result = await remove({ data: { id: pendingDelete.id } });
       await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
       setSwipedReportId(null);
       setPendingDelete(null);
-      toast.success(
-        "Roof report deleted. Saved drawing revisions and customer property were kept.",
-      );
+      if (result.fileCleanupPending) {
+        toast.warning(
+          "Roof report record deleted, but its private PDF could not be cleaned up. Ask an administrator to review storage.",
+        );
+      } else {
+        toast.success(
+          "Roof report deleted. Saved drawing revisions and customer property were kept.",
+        );
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete roof report");
     } finally {
