@@ -60,9 +60,15 @@ function CandidateOutline({ candidate }: { candidate: BuildingCandidate }) {
   );
 }
 
+// Keep the public free detection service reachable in published builds even when
+// the frontend host has not been given a VITE_* build variable. The environment
+// value remains an optional override for staging or a future service migration.
+const DEFAULT_ROOF_DETECTION_API_URL = "https://roofer-masters-roof-detection-w909.onrender.com";
+
 function endpointUrl() {
-  const base = import.meta.env["VITE_ROOF_DETECTION_API_URL"]?.trim().replace(/\/+$/, "");
-  return base ? `${base}/v1/roof/analyze` : "";
+  const configuredBase = import.meta.env["VITE_ROOF_DETECTION_API_URL"]?.trim();
+  const base = (configuredBase || DEFAULT_ROOF_DETECTION_API_URL).replace(/\/+$/, "");
+  return `${base}/v1/roof/analyze`;
 }
 
 export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
@@ -106,13 +112,6 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
         return;
       }
       const endpoint = endpointUrl();
-      if (!endpoint) {
-        setError(
-          "The free roof-detection service is not connected. Set VITE_ROOF_DETECTION_API_URL after deploying the service.",
-        );
-        setErrorAddress(currentAddress);
-        return;
-      }
       activeController.current?.abort();
       const controller = new AbortController();
       activeController.current = controller;
