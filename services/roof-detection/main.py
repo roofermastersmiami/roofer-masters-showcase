@@ -276,9 +276,10 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         if area_sqft < 150 or area_sqft > 100000:
             continue
         distance_m = _distance_to_footprint_meters(polygon, lat, lon)
-        # Geocoders can place an address at the curb or driveway. Retain the
-        # conservative 25 m match limit and never silently choose a distant lot.
-        if distance_m > 25.0:
+        # Keep a wider candidate window for explicit human selection when
+        # geocoders land on a curb/driveway. Candidates beyond 25 m are never
+        # auto-selected; the 60 m cap prevents unrelated distant structures.
+        if distance_m > 60.0:
             continue
         candidate_identity = (
             f"{source_metadata.get('provider', '')}:"
@@ -380,6 +381,32 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             )
         _, selected_polygon, selected_metadata = selected[0]
         return selected_polygon, selected_metadata
+
+    # A candidate outside the trusted 25 m auto-match radius may still be
+    # the correct building when geocoding lands on the street. Surface it for
+    # explicit user confirmation, never silently accept it.
+    if candidates[0][0] > 25.0:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "building_candidate_confirmation_required",
+                "message": "Mapped buildings are more than 25 m from the geocoded address point. Review the outlines and explicitly select the correct building before roof analysis.",
+                "candidate_count": len(candidates),
+                "candidates": [
+                    {
+                        "candidate_id": row[2]["candidate_id"],
+                        "provider": row[2].get("provider"),
+                        "source_id": row[2].get("source_id"),
+                        "area_sqft": row[2]["area_sqft"],
+                        "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                        "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                        "centroid": row[2]["centroid"],
+                        "polygon_geojson": mapping(row[1]),
+                    }
+                    for row in candidates
+                ],
+            },
+        )
 
     # Prefer address-point containment, then nearest footprint. If two nearby
     # structures remain similarly plausible, fail safely instead of using a
