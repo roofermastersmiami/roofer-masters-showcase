@@ -541,21 +541,43 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             deduplicated[duplicate_index] = candidate
     candidates = deduplicated
 
-    # Parcel membership is corroborating evidence only; parcels may contain
+    def _apply_parcel_candidate_evidence(
+    candidates: list[tuple[float, Polygon, dict[str, Any]]],
+    parcel_polygon: Polygon | None,
+    parcel_metadata: dict[str, Any],
+) -> tuple[list[tuple[float, Polygon, dict[str, Any]]], dict[str, Any]]:
+    """Narrow candidates only when exactly one building is substantially inside a verified parcel."""
+    evidence = dict(parcel_metadata)
+    if parcel_polygon is None:
+        return candidates, evidence
+
+    parcel_candidates = [
+        row for row in candidates
+        if parcel_polygon.intersection(row[1]).area / max(row[1].area, 1e-12) >= 0.50
+    ]
+    evidence["building_candidates_intersecting_parcel"] = len(parcel_candidates)
+    for row in candidates:
+        row[2]["parcel_match"] = dict(evidence)
+
+    if len(parcel_candidates) == 1:
+        parcel_candidates[0][2]["parcel_match"] = dict(evidence)
+        return parcel_candidates, evidence
+
+    # Zero or multiple parcel intersections are not decisive. Keep all
+    # candidates so the existing address/distance safeguards can decide or
+    # require explicit user selection; never pick one from parcel evidence.
+    return candidates, evidence
+
+
+# Parcel membership is corroborating evidence only; parcels may contain
     # multiple buildings and cannot independently establish the primary roof.
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
     if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
         parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon)
-        if parcel_polygon is not None and not selected_candidate_id:
-            parcel_candidates = [row for row in candidates
-                if parcel_polygon.intersection(row[1]).area / max(row[1].area, 1e-12) >= 0.50]
-            parcel_metadata["building_candidates_intersecting_parcel"] = len(parcel_candidates)
-            if len(parcel_candidates) == 1:
-                parcel_candidates[0][2]["parcel_match"] = dict(parcel_metadata)
-                candidates = parcel_candidates
-            else:
-                for row in candidates:
-                    row[2]["parcel_match"] = dict(parcel_metadata)
+        if not selected_candidate_id:
+            candidates, parcel_metadata = _apply_parcel_candidate_evidence(
+                candidates, parcel_polygon, parcel_metadata
+            )
         elif parcel_metadata.get("status") in {"ambiguous", "not_found"}:
             for row in candidates:
                 row[2]["parcel_match"] = dict(parcel_metadata)
