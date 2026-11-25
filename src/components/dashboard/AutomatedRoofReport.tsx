@@ -35,6 +35,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   async function analyze() {
     if (!address.trim()) {
       setError("Select a property with a complete street address first.");
+      setErrorAddress(currentAddress);
       return;
     }
     const endpoint = endpointUrl();
@@ -42,6 +43,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       setError(
         "The free roof-detection service is not connected. Set VITE_ROOF_DETECTION_API_URL after deploying the service.",
       );
+      setErrorAddress(currentAddress);
       return;
     }
     const activeRequest = ++requestId.current;
