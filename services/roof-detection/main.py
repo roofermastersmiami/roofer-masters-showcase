@@ -461,8 +461,21 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 status_code=409,
                 detail={
                     "code": "ambiguous_building_match",
-                    "message": "Several nearby buildings could match this address pin. Zoom in and select/trace the correct building before running roof detection.",
+                    "message": "Several nearby buildings could match this address pin. Review the candidate outlines and explicitly select the correct building before running roof detection.",
                     "candidate_count": len(candidates),
+                    "candidates": [
+                        {
+                            "candidate_id": row[2]["candidate_id"],
+                            "provider": row[2].get("provider"),
+                            "source_id": row[2].get("source_id"),
+                            "area_sqft": row[2]["area_sqft"],
+                            "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                            "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                            "centroid": row[2]["centroid"],
+                            "polygon_geojson": mapping(row[1]),
+                        }
+                        for row in candidates
+                    ],
                 },
             )
     _, polygon, metadata = candidates[0]
