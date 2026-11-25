@@ -403,7 +403,7 @@ Roofer Masters · 305-942-3093`;
         </table>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">
-          Enter the roof area to build the order.
+          {takeoffError || "Enter the roof area to build the order."}
         </p>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
