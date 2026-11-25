@@ -641,3 +641,67 @@ def test_geocode_with_provenance_labels_census_fallback(monkeypatch):
         "Census matched address",
         {"source": "US Census Geocoder"},
     )
+
+
+def test_resolve_miramar_parcel_returns_unique_polygon_and_folio(monkeypatch):
+    import asyncio
+
+    polygon = Polygon([(-80.4, 25.9), (-80.3, 25.9), (-80.3, 26.0), (-80.4, 26.0)])
+    class Response:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"features": [{"geometry": mapping(polygon),
+                "properties": {"OBJECTID": 42, "FOLIO": "514102000010"}}]}
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, url, params=None):
+            assert "MiramarParcels/FeatureServer/20/query" in url
+            assert params["geometryType"] == "esriGeometryPoint"
+            assert params["inSR"] == "4326"
+            assert params["spatialRel"] == "esriSpatialRelIntersects"
+            return Response()
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    found, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
+    assert found.equals(polygon)
+    assert evidence == {"status": "matched", "provider": "City of Miramar GIS",
+                        "object_id": 42, "folio": "514102000010"}
+
+
+@pytest.mark.parametrize(("features", "status", "count"), [
+    ([], "not_found", 0),
+    ([1, 2], "ambiguous", 2),
+])
+def test_resolve_miramar_parcel_fails_closed_without_unique_match(monkeypatch, features, status, count):
+    import asyncio
+    polygon = Polygon([(-80.4, 25.9), (-80.3, 25.9), (-80.3, 26.0), (-80.4, 26.0)])
+    class Response:
+        def raise_for_status(self): pass
+        def json(self):
+            rows = [{"geometry": mapping(polygon), "properties": {"OBJECTID": n, "FOLIO": str(n)}}
+                    for n in features]
+            return {"features": rows}
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    found, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
+    assert found is None
+    assert evidence["status"] == status
+    assert evidence["match_count"] == count
+
+
+def test_resolve_miramar_parcel_reports_provider_failure(monkeypatch):
+    import asyncio
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): raise roof_service.httpx.ConnectError("offline")
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    found, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
+    assert found is None
+    assert evidence == {"status": "provider_error", "provider": "City of Miramar GIS"}
