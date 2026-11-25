@@ -75,6 +75,7 @@ describe("LiDAR facet roof-system selection", () => {
       const drawing = detectedFacetsToDrawing(response, roofType);
       expect(drawing.roof_type).toBe(roofType);
       expect(drawing.verified).toBe(false);
+      expect(drawing.accuracy).toBe("public_lidar_estimate");
       expect(drawing.planes).toHaveLength(1);
       expect(drawing.planes[0]?.edges.every((edge) => edge === "other")).toBe(true);
     },
