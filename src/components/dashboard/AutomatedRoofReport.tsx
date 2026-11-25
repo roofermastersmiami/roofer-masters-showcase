@@ -141,7 +141,8 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 The geocoded address point is outside the selected building outline
                 {visibleResult.footprint.address_to_footprint_distance_m !== undefined
                   ? ` by ${visibleResult.footprint.address_to_footprint_distance_m.toFixed(1)} m`
-                  : ""}. The match is approximate; confirm this is the correct property.
+                  : ""}
+                . The match is approximate; confirm this is the correct property.
               </p>
             </div>
           )}
