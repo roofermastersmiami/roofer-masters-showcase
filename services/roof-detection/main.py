@@ -274,6 +274,30 @@ def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> 
     return points[np.sort(indices)]
 
 
+def _vertical_unit_to_meters(header: Any) -> float | None:
+    """Return the LAS vertical CRS unit scale, or None when it is not explicit.
+
+    3DEP source point clouds preserve original units. Horizontal EPSG metadata
+    alone does not establish the Z unit, so never assume Z is metres.
+    """
+    try:
+        crs = header.parse_crs()
+        if crs is None:
+            return None
+        vertical_axes = [
+            axis for axis in crs.axis_info
+            if str(axis.direction).lower() == "up"
+        ]
+        if len(vertical_axes) != 1:
+            return None
+        factor = float(vertical_axes[0].unit_conversion_factor)
+        if not math.isfinite(factor) or factor <= 0:
+            return None
+        return factor
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     catalog = Client.open(STAC_URL)
     # Search footprint bbox, not the full city. Multiple COPC tiles may overlap.
