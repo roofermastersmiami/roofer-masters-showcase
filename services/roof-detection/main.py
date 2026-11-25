@@ -319,6 +319,14 @@ def _apply_parcel_candidate_evidence(
     return candidates, evidence
 
 
+def _parcel_requires_explicit_candidate_selection(parcel_metadata: dict[str, Any]) -> bool:
+    """A verified parcel with no building overlap must never fall back to nearest-building auto-match."""
+    return (
+        parcel_metadata.get("status") == "matched"
+        and parcel_metadata.get("building_candidates_intersecting_parcel") == 0
+    )
+
+
 async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None) -> tuple[Polygon, dict[str, Any]]:
     # Use a nationwide ArcGIS structures layer first. It is independent of
     # Overpass and covers US building polygons; OSM remains a secondary source.
@@ -644,6 +652,33 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             )
         _, selected_polygon, selected_metadata = selected[0]
         return selected_polygon, selected_metadata
+
+    # A verified parcel that contains none of the mapped buildings is
+    # contradictory evidence. Do not let distance heuristics auto-select a
+    # neighboring structure; require an explicit user choice.
+    if _parcel_requires_explicit_candidate_selection(parcel_metadata):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "parcel_building_mismatch_confirmation_required",
+                "message": "The verified address parcel does not contain any mapped building candidate. Review the outlines and explicitly select the correct building before roof analysis.",
+                "candidate_count": len(candidates),
+                "parcel_match": parcel_metadata,
+                "candidates": [
+                    {
+                        "candidate_id": row[2]["candidate_id"],
+                        "provider": row[2].get("provider"),
+                        "source_id": row[2].get("source_id"),
+                        "area_sqft": row[2]["area_sqft"],
+                        "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                        "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                        "centroid": row[2]["centroid"],
+                        "polygon_geojson": mapping(row[1]),
+                    }
+                    for row in candidates
+                ],
+            },
+        )
 
     # A candidate outside the trusted 25 m auto-match radius may still be
     # the correct building when geocoding lands on the street. Surface it for
