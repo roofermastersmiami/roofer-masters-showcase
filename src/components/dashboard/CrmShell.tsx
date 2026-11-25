@@ -521,61 +521,66 @@ export function CrmShell({
       <div className="flex h-full flex-col">
         <div
           className={cn(
-            "flex shrink-0 flex-col items-start gap-2 border-b px-3 py-3",
+            "flex shrink-0 items-start border-b px-3 py-3",
             sidebarIsLight ? "border-border" : "border-white/15",
           )}
         >
-          <Button
-            type="button"
-            variant="ghost"
-            className={cn(
-              "h-auto w-full justify-start rounded-none bg-transparent p-0 hover:bg-transparent",
-              sidebarHover,
+          <div className="group/logo relative inline-flex max-w-full">
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn(
+                "h-auto max-w-full justify-start rounded-none bg-transparent p-0 hover:bg-transparent",
+                sidebarHover,
+              )}
+              title={logoUrl ? "Change company logo" : "Add your company logo"}
+              aria-label={logoUrl ? "Change company logo" : "Add company logo"}
+              disabled={logoUploading}
+              onClick={() => logoInputRef.current?.click()}
+            >
+              {logoUploading ? (
+                <LoaderCircle className="size-6 animate-spin" />
+              ) : logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Company logo"
+                  style={{
+                    width: compact ? Math.min(logoSize, 48) : logoSize,
+                    height: compact ? Math.min(logoSize, 48) : logoSize,
+                  }}
+                  className="max-w-full shrink-0 object-contain"
+                />
+              ) : (
+                <ImagePlus className="size-7" />
+              )}
+            </Button>
+            {!compact && (
+              <div
+                className="pointer-events-none absolute inset-x-1 bottom-1 z-10 flex translate-y-1 items-center rounded-full bg-black/55 px-2 py-1 opacity-0 shadow-sm backdrop-blur-sm transition-all duration-200 group-hover/logo:pointer-events-auto group-hover/logo:translate-y-0 group-hover/logo:opacity-100 group-focus-within/logo:pointer-events-auto group-focus-within/logo:translate-y-0 group-focus-within/logo:opacity-100"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <input
+                  type="range"
+                  min={48}
+                  max={220}
+                  step={4}
+                  value={logoSize}
+                  aria-label="Adjust company logo size"
+                  title={`Logo size: ${logoSize}px`}
+                  className="h-3 w-full cursor-ew-resize accent-white"
+                  onChange={(event) => {
+                    const nextSize = Number(event.currentTarget.value);
+                    setLogoSize(nextSize);
+                    try {
+                      localStorage.setItem("crm-logo-size", String(nextSize));
+                    } catch {
+                      // Keep the selected size for this session if browser storage is unavailable.
+                    }
+                  }}
+                />
+              </div>
             )}
-            title={logoUrl ? "Change company logo" : "Add your company logo"}
-            aria-label={logoUrl ? "Change company logo" : "Add company logo"}
-            disabled={logoUploading}
-            onClick={() => logoInputRef.current?.click()}
-          >
-            {logoUploading ? (
-              <LoaderCircle className="size-6 animate-spin" />
-            ) : logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Company logo"
-                style={{
-                  width: compact ? Math.min(logoSize, 48) : logoSize,
-                  height: compact ? Math.min(logoSize, 48) : logoSize,
-                }}
-                className="max-w-full shrink-0 object-contain"
-              />
-            ) : (
-              <ImagePlus className="size-7" />
-            )}
-          </Button>
-          {!compact && (
-            <label className="flex w-full flex-col gap-1 text-[10px] text-muted-foreground">
-              <span>Logo size: {logoSize}px</span>
-              <input
-                type="range"
-                min={48}
-                max={220}
-                step={4}
-                value={logoSize}
-                aria-label="Company logo size"
-                className="w-full cursor-pointer accent-primary"
-                onChange={(event) => {
-                  const nextSize = Number(event.currentTarget.value);
-                  setLogoSize(nextSize);
-                  try {
-                    localStorage.setItem("crm-logo-size", String(nextSize));
-                  } catch {
-                    // Keep the selected size for this session if browser storage is unavailable.
-                  }
-                }}
-              />
-            </label>
-          )}
+          </div>
         </div>
         <nav aria-label="CRM navigation" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
           {visibleGroups.map((g) => (
