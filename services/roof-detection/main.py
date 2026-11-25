@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 from typing import Any
+from time import monotonic
 
 import httpx
 import laspy
@@ -26,6 +27,9 @@ USER_AGENT = os.getenv("ROOF_SERVICE_USER_AGENT", "RooferMastersCRM/1.0 (roof-re
 MAX_STAC_ITEMS = int(os.getenv("MAX_STAC_ITEMS", "8"))
 MIN_ROOF_POINTS = int(os.getenv("MIN_ROOF_POINTS", "80"))
 MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
+CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
+MAX_RESPONSE_CACHE = 200
+_RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
 origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "*").split(",") if item.strip()]
@@ -147,6 +151,10 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
         a, b = (float(model.coef_[0]), float(model.coef_[1]))
         slope = math.hypot(a, b)
         pitch = math.degrees(math.atan(slope))  # angle from horizontal
+        if pitch > 70:
+            # Class 6 includes walls as well as roofs; reject near-vertical building planes.
+            remaining = remaining[~inliers]
+            continue
         pitch_rise = slope * 12.0
         # The XY convex hull area is horizontal projection; divide by cos(pitch) for true surface area.
         hull = MultiPoint(selected[:, :2]).convex_hull
@@ -248,6 +256,14 @@ def health():
 
 @app.post("/v1/roof/analyze")
 async def analyze_roof(request: AnalyzeRequest):
+    cache_key = (
+        request.street_address.strip().casefold()
+        if request.street_address
+        else f"{float(request.lat):.6f},{float(request.lon):.6f}"
+    )
+    cached = _RESPONSE_CACHE.get(cache_key)
+    if cached and cached[0] > monotonic():
+        return cached[1]
     if request.street_address:
         lat, lon, matched_address = await geocode(request.street_address)
     else:
@@ -262,7 +278,7 @@ async def analyze_roof(request: AnalyzeRequest):
     lidar_area = sum(facet["area_sqft"] for facet in facets)
     status = "lidar_facets" if facets else "footprint_only"
     # Edge classes and intersections are deliberately not inferred from a ground footprint.
-    return {
+    result = {
         "status": status,
         "verification": "unverified_public_data",
         "matched_address": matched_address,
@@ -300,3 +316,8 @@ async def analyze_roof(request: AnalyzeRequest):
             "or site-verified takeoff. Confirm geometry and quantities before ordering materials or submitting permits."
         ),
     }
+    if len(_RESPONSE_CACHE) >= MAX_RESPONSE_CACHE:
+        expired_or_oldest = min(_RESPONSE_CACHE, key=lambda key: _RESPONSE_CACHE[key][0])
+        _RESPONSE_CACHE.pop(expired_or_oldest, None)
+    _RESPONSE_CACHE[cache_key] = (monotonic() + CACHE_TTL_SECONDS, result)
+    return result
