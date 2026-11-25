@@ -202,14 +202,19 @@ export function CrmShell({
           setBrandingUserId(user.id);
           const { data, error: loadError } = await supabase
             .from("crm_company_branding")
-            .select("logo_path, theme_palette, sidebar_appearance")
+            .select("logo_path, theme_palette, theme_accent, sidebar_appearance")
             .eq("owner_user_id", user.id)
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
             if (isCrmThemeId(data.theme_palette)) {
               setTheme(data.theme_palette);
-              setThemeChoice(`theme:${data.theme_palette}`);
+              if (isCrmAccentId(data.theme_accent)) setAccent(data.theme_accent);
+              setThemeChoice(
+                data.theme_palette === "default" && isCrmAccentId(data.theme_accent) && data.theme_accent !== "magenta"
+                  ? `color:${data.theme_accent}`
+                  : `theme:${data.theme_palette}`,
+              );
             }
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
@@ -338,6 +343,7 @@ export function CrmShell({
           owner_user_id: brandingUserId,
           logo_path: logoPath,
           theme_palette: theme,
+          theme_accent: accent,
           sidebar_appearance: sidebarAppearance,
         },
         { onConflict: "owner_user_id" },
@@ -347,7 +353,7 @@ export function CrmShell({
           setBrandingError("Your branding preference could not be saved to your account.");
         else setBrandingError("");
       });
-  }, [brandingLoaded, brandingUserId, logoPath, theme, sidebarAppearance]);
+  }, [brandingLoaded, brandingUserId, logoPath, theme, accent, sidebarAppearance]);
   async function uploadCompanyLogo(file: File) {
     setBrandingError("");
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
