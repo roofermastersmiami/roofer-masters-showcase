@@ -32,7 +32,9 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
     activeController.current = null;
     setLoading(false);
     return () => {
+      requestId.current += 1;
       activeController.current?.abort();
+      activeController.current = null;
     };
   }, [address]);
 
