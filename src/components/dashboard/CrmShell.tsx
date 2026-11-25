@@ -151,7 +151,7 @@ export function CrmShell({
     [themeChoice, setThemeChoice] = useState("theme:default"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
-    [brandingUserId, setBrandingUserId] = useState<string | null>(null),
+    [brandingCompanyId, setBrandingCompanyId] = useState<string | null>(null),
     [brandingLoaded, setBrandingLoaded] = useState(false),
     [logoPath, setLogoPath] = useState<string | null>(null),
     [logoUrl, setLogoUrl] = useState(""),
@@ -199,11 +199,19 @@ export function CrmShell({
         } = await supabase.auth.getUser();
         if (cancelled) return;
         if (user) {
-          setBrandingUserId(user.id);
+          const { data: membership, error: membershipError } = await supabase
+            .from("crm_company_memberships")
+            .select("company_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (membershipError) throw membershipError;
+          if (!membership?.company_id) throw new Error("Your account is not assigned to a company workspace.");
+          const companyId = membership.company_id as string;
+          setBrandingCompanyId(companyId);
           const { data, error: loadError } = await supabase
             .from("crm_company_branding")
             .select("logo_path, theme_palette, theme_accent, sidebar_appearance")
-            .eq("owner_user_id", user.id)
+            .eq("company_id", companyId)
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
@@ -337,25 +345,25 @@ export function CrmShell({
     };
   }, [accent, theme]);
   useEffect(() => {
-    if (!brandingLoaded || !brandingUserId) return;
+    if (!brandingLoaded || !brandingCompanyId) return;
     void supabase
       .from("crm_company_branding")
       .upsert(
         {
-          owner_user_id: brandingUserId,
+          company_id: brandingCompanyId,
           logo_path: logoPath,
           theme_palette: theme,
           theme_accent: accent,
           sidebar_appearance: sidebarAppearance,
         },
-        { onConflict: "owner_user_id" },
+        { onConflict: "company_id" },
       )
       .then(({ error: saveError }) => {
         if (saveError)
           setBrandingError("Your branding preference could not be saved to your account.");
         else setBrandingError("");
       });
-  }, [brandingLoaded, brandingUserId, logoPath, theme, accent, sidebarAppearance]);
+  }, [brandingLoaded, brandingCompanyId, logoPath, theme, accent, sidebarAppearance]);
   async function uploadCompanyLogo(file: File) {
     setBrandingError("");
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
@@ -375,12 +383,13 @@ export function CrmShell({
       if (authError || !user) throw authError ?? new Error("Sign in to upload a company logo.");
       const extension =
         file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-      const path = `${user.id}/company-logo.${extension}`;
+      const companyId = brandingCompanyId;
+      if (!companyId) throw new Error("Company workspace is still loading. Refresh and try again.");
+      const path = `${companyId}/company-logo.${extension}`;
       const { error: uploadError } = await supabase.storage
         .from("crm-company-branding")
         .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
       if (uploadError) throw uploadError;
-      setBrandingUserId(user.id);
       setLogoPath(path);
       const { data: signedLogo, error: signedUrlError } = await supabase.storage
         .from("crm-company-branding")
