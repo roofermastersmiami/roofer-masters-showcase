@@ -1,4 +1,5 @@
 import { useRoles } from "./RolesContext";
+import { isCrmThemeId } from "@/lib/crm-theme";
 import { canOpen } from "@/lib/team-roles";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -76,23 +77,6 @@ const openSectionSchema = {
   additionalProperties: false,
 };
 const readAnnotations = { readOnlyHint: true };
-const THEME_IDS = [
-  "executive-berry",
-  "modern-enterprise",
-  "canyon-corporate",
-  "midnight-teal",
-  "ocean-slate",
-  "royal-indigo",
-  "emerald-ledger",
-  "copperstone",
-  "arctic-blue",
-  "graphite-gold",
-  "crimson-executive",
-  "sage-stone",
-  "cobalt-professional",
-  "plum-luxe",
-  "monochrome-pro",
-];
 const groups = [
   {
     label: "Workspace",
@@ -161,7 +145,7 @@ export function CrmShell({
   const [collapsed, setCollapsed] = useState(false),
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
-    [theme, setTheme] = useState("executive-berry"),
+    [theme, setTheme] = useState("default"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
     [brandingUserId, setBrandingUserId] = useState<string | null>(null),
@@ -188,26 +172,7 @@ export function CrmShell({
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-        if (
-          fallbackTheme &&
-          [
-            "executive-berry",
-            "modern-enterprise",
-            "canyon-corporate",
-            "midnight-teal",
-            "ocean-slate",
-            "royal-indigo",
-            "emerald-ledger",
-            "copperstone",
-            "arctic-blue",
-            "graphite-gold",
-            "crimson-executive",
-            "sage-stone",
-            "cobalt-professional",
-            "plum-luxe",
-            "monochrome-pro",
-          ].includes(fallbackTheme)
-        )
+        if (fallbackTheme && isCrmThemeId(fallbackTheme))
           setTheme(fallbackTheme);
         if (
           fallbackSidebar &&
@@ -231,25 +196,7 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (
-              [
-                "executive-berry",
-                "modern-enterprise",
-                "canyon-corporate",
-                "midnight-teal",
-                "ocean-slate",
-                "royal-indigo",
-                "emerald-ledger",
-                "copperstone",
-                "arctic-blue",
-                "graphite-gold",
-                "crimson-executive",
-                "sage-stone",
-                "cobalt-professional",
-                "plum-luxe",
-                "monochrome-pro",
-              ].includes(data.theme_palette)
-            )
+            if (isCrmThemeId(data.theme_palette))
               setTheme(data.theme_palette);
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
@@ -315,7 +262,7 @@ export function CrmShell({
       "crm-theme-plum-luxe",
       "crm-theme-monochrome-pro",
     );
-    root.classList.add(`crm-theme-${theme}`);
+    if (theme !== "default") root.classList.add(`crm-theme-${theme}`);
     try {
       localStorage.setItem("crm-theme-preset", theme);
     } catch {
@@ -490,20 +437,45 @@ export function CrmShell({
             sidebarIsLight ? "border-border" : "border-white/15",
           )}
         >
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Company logo"
-              className={compact ? "h-9 max-w-12 object-contain" : "h-10 max-w-36 object-contain"}
-            />
-          ) : (
-            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <HardHat className="size-6" />
-            </div>
-          )}
-          {!compact && !logoUrl && (
-            <span className="font-display text-lg font-bold leading-tight">Roofing CRM</span>
-          )}
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn(
+              "h-auto min-w-0 flex-1 justify-start gap-3 rounded-lg p-1 text-left",
+              sidebarHover,
+              compact && "flex-none justify-center",
+            )}
+            title={logoUrl ? "Change company avatar or logo" : "Add your company avatar or logo"}
+            aria-label={logoUrl ? "Change company avatar or logo" : "Add company avatar or logo"}
+            disabled={logoUploading}
+            onClick={() => logoInputRef.current?.click()}
+          >
+            {logoUploading ? (
+              <span className="grid size-11 shrink-0 place-items-center rounded-full border border-dashed border-current/50">
+                <LoaderCircle className="size-5 animate-spin" />
+              </span>
+            ) : logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Company avatar"
+                className="size-11 shrink-0 rounded-full border border-current/20 bg-background object-contain p-1"
+              />
+            ) : (
+              <span className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-dashed border-current/50">
+                <ImagePlus className="size-5" />
+              </span>
+            )}
+            {!compact && (
+              <span className="min-w-0">
+                <span className="block truncate font-display text-sm font-bold">
+                  {logoUrl ? "Roofing CRM" : "Add Avatar"}
+                </span>
+                <span className={cn("block truncate text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/65")}>
+                  {logoUrl ? "Company logo" : "Add your company logo"}
+                </span>
+              </span>
+            )}
+          </Button>
         </div>
         <nav aria-label="CRM navigation" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
           {visibleGroups.map((g) => (
@@ -693,6 +665,7 @@ export function CrmShell({
                 onChange={(event) => setTheme(event.target.value)}
                 className="h-8 max-w-24 bg-transparent text-[11px] outline-none sm:max-w-32 sm:text-xs"
               >
+                <option value="default">Default — Roofer Masters</option>
                 <option value="executive-berry">Executive Berry</option>
                 <option value="modern-enterprise">Modern Enterprise</option>
                 <option value="canyon-corporate">Canyon Corporate</option>
@@ -741,26 +714,6 @@ export function CrmShell({
                 event.currentTarget.value = "";
               }}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0 gap-2 px-2 sm:px-3"
-              title="Upload or change company logo"
-              aria-label="Upload or change company logo"
-              disabled={logoUploading}
-              onClick={() => logoInputRef.current?.click()}
-            >
-              {logoUploading ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : logoUrl ? (
-                <img src={logoUrl} alt="" className="size-6 rounded object-contain" />
-              ) : (
-                <ImagePlus className="size-4" />
-              )}
-              <span className="hidden text-xs sm:inline">
-                {logoUploading ? "Uploading" : logoUrl ? "Company logo" : "Upload logo"}
-              </span>
-            </Button>
             <Button
               variant="ghost"
               size="icon"
