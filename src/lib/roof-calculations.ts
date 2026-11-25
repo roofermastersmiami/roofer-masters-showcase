@@ -45,6 +45,21 @@ export type RoofCalculationResult = {
 };
 
 const SQFT_PER_SQUARE = 100;
+/**
+ * Adapt the canonical, already-deduplicated edge totals from measureDrawing
+ * to the calculation helper. Do not rebuild edge identity from rounded points:
+ * the geometry engine uses a 0.05 ft spatial tolerance for shared boundaries.
+ */
+export function measuredEdgeTotalsToInputs(
+  edges: Record<RoofEdgeType, number>,
+): RoofEdgeInput[] {
+  return (Object.keys(edges) as RoofEdgeType[]).map((type) => ({
+    id: `measured-${type}`,
+    type,
+    lengthFt: edges[type],
+  }));
+}
+
 
 function nonNegative(n: number, label: string) {
   if (!Number.isFinite(n) || n < 0) {
