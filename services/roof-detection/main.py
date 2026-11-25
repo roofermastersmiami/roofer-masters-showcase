@@ -16,6 +16,7 @@ from pyproj import CRS, Transformer
 from pystac_client import Client
 from shapely.geometry import MultiPoint, Point, Polygon, mapping
 from shapely.validation import make_valid
+from sklearn.cluster import DBSCAN
 from sklearn.linear_model import LinearRegression, RANSACRegressor
 
 APP_NAME = "Roofer Masters public-data roof detection"
@@ -155,7 +156,7 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
     remaining = points.copy()
     facets: list[dict[str, Any]] = []
     for plane_index in range(MAX_PLANES):
-        if len(remaining) < MIN_ROOF_POINTS:
+        if len(remaining) < MIN_ROOF_POINTS or len(facets) >= MAX_PLANES:
             break
         estimator = RANSACRegressor(
             estimator=LinearRegression(),
@@ -181,30 +182,46 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
             remaining = remaining[~inliers]
             continue
         pitch_rise = slope * 12.0
-        # The XY convex hull area is horizontal projection; divide by cos(pitch) for true surface area.
-        hull = MultiPoint(selected[:, :2]).convex_hull
-        # A line/point hull cannot produce a valid roof polygon. Skip that
-        # candidate instead of returning an empty boundary that breaks the CRM adapter.
-        if hull.geom_type != "Polygon" or hull.area <= 1e-4:
-            remaining = remaining[~inliers]
-            continue
-        horizontal_area = float(hull.area)
-        surface_area_sqft = horizontal_area / max(math.cos(math.radians(pitch)), 1e-6) * 10.7639104167
         azimuth = (math.degrees(math.atan2(-a, -b)) + 360.0) % 360.0
-        facets.append({
-            "id": f"facet-{plane_index + 1}",
-            "point_count": int(inliers.sum()),
-            "pitch_degrees": round(pitch, 2),
-            "pitch_rise_per_12": round(pitch_rise, 2),
-            "azimuth_degrees": round(azimuth, 1),
-            "area_sqft": round(surface_area_sqft, 1),
-            "squares": round(surface_area_sqft / 100.0, 3),
-            "plane_model": {"z_equals_ax_plus_by_plus_c": [a, b, float(model.intercept_)]},
-            "boundary_xy": [[round(float(x), 3), round(float(y), 3)] for x, y in hull.exterior.coords] if hull.geom_type == "Polygon" else [],
-        })
+
+        # A single RANSAC plane can cover multiple detached structures with the
+        # same pitch. Segment its inliers spatially before computing convex hulls,
+        # otherwise the hull bridges the gap and overstates roof area.
+        labels = DBSCAN(eps=1.5, min_samples=3).fit_predict(selected[:, :2])
+        for label in sorted(set(labels.tolist())):
+            if label < 0 or len(facets) >= MAX_PLANES:
+                continue
+            cluster = selected[labels == label]
+            if len(cluster) < MIN_ROOF_POINTS:
+                continue
+            hull = MultiPoint(cluster[:, :2]).convex_hull
+            # A line/point hull cannot produce a valid roof polygon.
+            if hull.geom_type != "Polygon" or hull.area <= 1e-4:
+                continue
+            horizontal_area = float(hull.area)
+            surface_area_sqft = (
+                horizontal_area
+                / max(math.cos(math.radians(pitch)), 1e-6)
+                * 10.7639104167
+            )
+            facets.append({
+                "id": f"facet-{len(facets) + 1}",
+                "point_count": int(len(cluster)),
+                "pitch_degrees": round(pitch, 2),
+                "pitch_rise_per_12": round(pitch_rise, 2),
+                "azimuth_degrees": round(azimuth, 1),
+                "area_sqft": round(surface_area_sqft, 1),
+                "squares": round(surface_area_sqft / 100.0, 3),
+                "plane_model": {
+                    "z_equals_ax_plus_by_plus_c": [a, b, float(model.intercept_)]
+                },
+                "boundary_xy": [
+                    [round(float(x), 3), round(float(y), 3)]
+                    for x, y in hull.exterior.coords
+                ],
+            })
         remaining = remaining[~inliers]
     return facets
-
 
 def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> np.ndarray:
     """Remove overlapping COPC tile duplicates at 2 cm XYZ precision."""
