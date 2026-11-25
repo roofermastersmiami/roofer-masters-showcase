@@ -515,7 +515,9 @@ export function SatelliteRoofTrace({
           // Never silently accept the first geocoder result: rooftop addresses can
           // resolve to a neighboring parcel or a street interpolation point.
           setResults(matches);
-          setError("Choose the exact property address below, then drag the red target onto the correct roof before tracing.");
+          setError(
+            "Choose the exact property address below, then drag the red target onto the correct roof before tracing.",
+          );
         } else
           setError("No map location was found for this report address. Search it manually below.");
       } catch (e) {
@@ -693,7 +695,6 @@ export function SatelliteRoofTrace({
           placeholder="Enter property address"
           aria-label="Property address"
         />
-
       </div>
       {results.length > 0 && (
         <div className="max-h-40 overflow-auto rounded-md border border-border">
@@ -720,10 +721,20 @@ export function SatelliteRoofTrace({
               onClick={autoTraceBuildingFootprint}
             >
               <Satellite className="h-4 w-4" />{" "}
-              {autoTraceBusy ? "Finding footprint…" : targetConfirmed ? "Auto trace building" : "Drag red target onto correct roof"}
+              {autoTraceBusy
+                ? "Finding footprint…"
+                : targetConfirmed
+                  ? "Auto trace building"
+                  : "Drag red target onto correct roof"}
             </Button>
             <p className="text-xs text-muted-foreground">Zoom: {zoom.toFixed(zoom < 1 ? 2 : 1)}×</p>
-            {!targetConfirmed && <p className="w-full text-xs text-amber-700">Address pins can land between neighboring houses. Select the matching address, zoom in, and drag the red target onto the exact roof. Tracing stays disabled until you reposition it.</p>}
+            {!targetConfirmed && (
+              <p className="w-full text-xs text-amber-700">
+                Address pins can land between neighboring houses. Select the matching address, zoom
+                in, and drag the red target onto the exact roof. Tracing stays disabled until you
+                reposition it.
+              </p>
+            )}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Button
                 type="button"
