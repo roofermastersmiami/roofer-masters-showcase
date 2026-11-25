@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, CloudDownload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
@@ -24,6 +24,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const [roofType, setRoofType] = useState<RoofDrawing["roof_type"] | "">("");
   const requestId = useRef(0);
   const activeController = useRef<AbortController | null>(null);
+  const autoAnalyzedAddress = useRef("");
 
   // Cancel work for the previous property and prevent stale responses or loading state.
   useEffect(() => {
@@ -35,6 +36,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       requestId.current += 1;
       activeController.current?.abort();
       activeController.current = null;
+      autoAnalyzedAddress.current = "";
     };
   }, [address]);
 
@@ -43,7 +45,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const visibleError = errorAddress === currentAddress ? error : "";
   const isLoading = loading && loadingAddress === currentAddress;
 
-  async function analyze() {
+  const analyze = useCallback(async () => {
     if (!address.trim()) {
       setError("Select a property with a complete street address first.");
       setErrorAddress(currentAddress);
@@ -100,7 +102,15 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
         if (activeController.current === controller) activeController.current = null;
       }
     }
-  }
+  }, [address, currentAddress]);
+
+  // Start public-data analysis once when a new property address is loaded.
+  // The manual button remains available for retries; results are never applied automatically.
+  useEffect(() => {
+    if (!currentAddress || autoAnalyzedAddress.current === currentAddress) return;
+    autoAnalyzedAddress.current = currentAddress;
+    void analyze();
+  }, [analyze, currentAddress]);
 
   function apply() {
     if (!visibleResult || resultAddress !== address.trim()) return;
