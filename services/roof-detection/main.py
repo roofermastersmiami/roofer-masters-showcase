@@ -65,7 +65,8 @@ def _polygon_area_sqft(polygon: Polygon) -> float:
         f"+proj=aeqd +lat_0={center.y} +lon_0={center.x} +datum=WGS84 +units=m +no_defs"
     )
     transformer = Transformer.from_crs("EPSG:4326", local, always_xy=True)
-    projected = Polygon([transformer.transform(x, y) for x, y in polygon.exterior.coords])
+    # Preserve interior rings so courtyards and voids are excluded from area.
+    projected = _transform_polygon(polygon, transformer)
     return float(projected.area * 10.7639104167)
 
 
@@ -88,9 +89,8 @@ def _distance_to_footprint_meters(polygon: Polygon, lat: float, lon: float) -> f
         f"+proj=aeqd +lat_0={lat} +lon_0={lon} +datum=WGS84 +units=m +no_defs"
     )
     transformer = Transformer.from_crs("EPSG:4326", local, always_xy=True)
-    projected_polygon = Polygon(
-        [transformer.transform(x, y) for x, y in polygon.exterior.coords]
-    )
+    # A point in a courtyard is outside the building, not inside its outline.
+    projected_polygon = _transform_polygon(polygon, transformer)
     projected_point = Point(*transformer.transform(lon, lat))
     return float(projected_polygon.distance(projected_point))
 
