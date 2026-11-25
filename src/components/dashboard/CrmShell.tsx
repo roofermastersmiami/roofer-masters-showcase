@@ -1,4 +1,5 @@
 import { useRoles } from "./RolesContext";
+import { isCrmThemeId } from "@/lib/crm-theme";
 import { canOpen } from "@/lib/team-roles";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -76,23 +77,6 @@ const openSectionSchema = {
   additionalProperties: false,
 };
 const readAnnotations = { readOnlyHint: true };
-const THEME_IDS = [
-  "executive-berry",
-  "modern-enterprise",
-  "canyon-corporate",
-  "midnight-teal",
-  "ocean-slate",
-  "royal-indigo",
-  "emerald-ledger",
-  "copperstone",
-  "arctic-blue",
-  "graphite-gold",
-  "crimson-executive",
-  "sage-stone",
-  "cobalt-professional",
-  "plum-luxe",
-  "monochrome-pro",
-];
 const groups = [
   {
     label: "Workspace",
@@ -188,7 +172,7 @@ export function CrmShell({
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
-        if (fallbackTheme && ["default", ...THEME_IDS].includes(fallbackTheme))
+        if (fallbackTheme && isCrmThemeId(fallbackTheme))
           setTheme(fallbackTheme);
         if (
           fallbackSidebar &&
@@ -212,7 +196,7 @@ export function CrmShell({
             .maybeSingle();
           if (loadError) throw loadError;
           if (data) {
-            if (["default", ...THEME_IDS].includes(data.theme_palette))
+            if (isCrmThemeId(data.theme_palette))
               setTheme(data.theme_palette);
             if (
               ["navy", "light", "accent", "charcoal", "gradient", "steel"].includes(
