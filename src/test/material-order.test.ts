@@ -56,7 +56,15 @@ describe("material orders from roof report", () => {
 
 describe("automatic material waste", () => {
   it("reports the same complexity-based waste allowance used by default quantities", () => {
-    expect(effectiveMaterialWastePct({ ...base, waste_pct: undefined, roof_type: "Shingle Roof" })).toBe(15);
+    expect(
+      effectiveMaterialWastePct({
+        ...base,
+        hips_lf: 200,
+        valleys_lf: 80,
+        waste_pct: undefined,
+        roof_type: "Shingle Roof",
+      }),
+    ).toBe(15);
     expect(effectiveMaterialWastePct({ ...base, waste_pct: undefined, roof_type: "Flat Roof" })).toBe(10);
     expect(effectiveMaterialWastePct({ ...base, waste_pct: 7, roof_type: "Shingle Roof" })).toBe(7);
   });
