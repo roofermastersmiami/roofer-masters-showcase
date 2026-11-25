@@ -2,22 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { drawingSchema, measureDrawing, toMaterialReport } from "./roof-geometry";
-import { isSafeRoofMediaPath } from "./roof-media";
-const safeStoragePath = z
-  .string()
-  .min(1)
-  .max(300)
-  .refine(isSafeRoofMediaPath, "Invalid media storage path");
-const mediaSchema = z
-  .array(
-    z.object({
-      path: safeStoragePath,
-      name: z.string().trim().min(1).max(200),
-      category: z.enum(["aerial", "before", "after", "diagram"]),
-      feet_per_pixel: z.number().finite().positive().max(10).optional(),
-    }),
-  )
-  .max(30);
+import { roofDrawingMediaSchema } from "./roof-drawing-media";
 export const saveRoofDrawing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) =>
@@ -27,7 +12,7 @@ export const saveRoofDrawing = createServerFn({ method: "POST" })
         title: z.string().trim().min(1).max(180),
         geometry: drawingSchema,
         parent_id: z.string().uuid().nullable(),
-        media: mediaSchema,
+        media: roofDrawingMediaSchema,
         report_order_id: z.string().uuid().optional(),
       })
       .parse(raw),
