@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  restoreRoofDrawingMedia,
-  roofDrawingMediaSchema,
-} from "@/lib/roof-drawing-media";
+import { restoreRoofDrawingMedia, roofDrawingMediaSchema } from "@/lib/roof-drawing-media";
 
 const aerialMedia = {
   path: "roof-media/property-1/aerial.png",
@@ -35,21 +32,17 @@ describe("saved roof drawing media metadata", () => {
     expect(restoreRoofDrawingMedia([photo])).toEqual([photo]);
   });
 
-  it.each([
-    { latitude: 91 },
-    { latitude: -91 },
-    { longitude: 181 },
-    { longitude: -181 },
-  ])("rejects invalid geographic coordinates: %o", (coordinates) => {
-    expect(roofDrawingMediaSchema.safeParse([{ ...aerialMedia, ...coordinates }]).success).toBe(
-      false,
-    );
-  });
+  it.each([{ latitude: 91 }, { latitude: -91 }, { longitude: 181 }, { longitude: -181 }])(
+    "rejects invalid geographic coordinates: %o",
+    (coordinates) => {
+      expect(roofDrawingMediaSchema.safeParse([{ ...aerialMedia, ...coordinates }]).success).toBe(
+        false,
+      );
+    },
+  );
 
   it("ignores out-of-range legacy coordinates when restoring old rows", () => {
-    expect(
-      restoreRoofDrawingMedia([{ ...aerialMedia, latitude: 999, longitude: -999 }]),
-    ).toEqual([
+    expect(restoreRoofDrawingMedia([{ ...aerialMedia, latitude: 999, longitude: -999 }])).toEqual([
       {
         path: aerialMedia.path,
         name: aerialMedia.name,
@@ -62,8 +55,7 @@ describe("saved roof drawing media metadata", () => {
 
   it("rejects unsafe storage paths while retaining valid location metadata", () => {
     expect(
-      roofDrawingMediaSchema.safeParse([{ ...aerialMedia, path: "../private/aerial.png" }])
-        .success,
+      roofDrawingMediaSchema.safeParse([{ ...aerialMedia, path: "../private/aerial.png" }]).success,
     ).toBe(false);
   });
 

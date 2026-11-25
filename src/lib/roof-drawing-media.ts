@@ -15,11 +15,7 @@ export type RoofDrawingMedia = {
 export const roofDrawingMediaSchema = z
   .array(
     z.object({
-      path: z
-        .string()
-        .min(1)
-        .max(300)
-        .refine(isSafeRoofMediaPath, "Invalid media storage path"),
+      path: z.string().min(1).max(300).refine(isSafeRoofMediaPath, "Invalid media storage path"),
       name: z.string().trim().min(1).max(200),
       category: z.enum(["aerial", "before", "after", "diagram"]),
       feet_per_pixel: z.number().finite().positive().max(10).optional(),

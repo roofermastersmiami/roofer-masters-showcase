@@ -40,10 +40,7 @@ import {
 } from "@/lib/roof-geometry";
 import { calculateRoofSummary, measuredEdgeTotalsToInputs } from "@/lib/roof-calculations";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
-import {
-  restoreRoofDrawingMedia,
-  type RoofDrawingMedia,
-} from "@/lib/roof-drawing-media";
+import { restoreRoofDrawingMedia, type RoofDrawingMedia } from "@/lib/roof-drawing-media";
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
@@ -128,9 +125,7 @@ export function RoofMeasurements({
     [length, setLength] = useState(startLength),
     [pitch, setPitch] = useState(startPitch),
     [jobId, setJobId] = useState(""),
-    [media, setMedia] = useState<Media[]>(() =>
-      restoreRoofDrawingMedia(initialDrawing?.media),
-    );
+    [media, setMedia] = useState<Media[]>(() => restoreRoofDrawingMedia(initialDrawing?.media));
   const [aerialImageUrl, setAerialImageUrl] = useState("");
   const aerialGroundImage = media.find(
     (item) =>
