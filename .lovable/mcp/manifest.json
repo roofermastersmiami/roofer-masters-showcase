@@ -5,9 +5,7 @@
   "auth": {
     "type": "oauth",
     "issuer": "https://vufsjizrldukatnhrdem.supabase.co/auth/v1",
-    "accepted_audiences": [
-      "authenticated"
-    ]
+    "accepted_audiences": ["authenticated"]
   },
   "mcp": {
     "server": {
@@ -105,10 +103,7 @@
           "properties": {
             "environment": {
               "type": "string",
-              "enum": [
-                "test",
-                "live"
-              ],
+              "enum": ["test", "live"],
               "description": "Payment environment to read; test and live are never combined."
             },
             "limit": {
@@ -119,9 +114,7 @@
               "description": "Maximum recent invoices to return, from 1 to 50."
             }
           },
-          "required": [
-            "environment"
-          ],
+          "required": ["environment"],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
