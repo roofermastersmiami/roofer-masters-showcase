@@ -41,6 +41,8 @@ export const roofDetectionResponseSchema = z.object({
   footprint: z.object({
     source: z.string(),
     area_sqft: z.number().finite().positive(),
+    address_point_inside_footprint: z.boolean().optional(),
+    address_to_footprint_distance_m: z.number().finite().nonnegative().optional(),
     polygon_geojson: z.object({
       type: z.literal("Polygon"),
       coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()]))),
