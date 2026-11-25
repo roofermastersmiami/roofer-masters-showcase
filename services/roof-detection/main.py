@@ -152,7 +152,7 @@ def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer,
     return projected, to_xy, to_ll
 
 
-def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
+def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
     remaining = points.copy()
     facets: list[dict[str, Any]] = []
     for plane_index in range(MAX_PLANES):
@@ -198,28 +198,48 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
             # A line/point hull cannot produce a valid roof polygon.
             if hull.geom_type != "Polygon" or hull.area <= 1e-4:
                 continue
-            horizontal_area = float(hull.area)
-            surface_area_sqft = (
-                horizontal_area
-                / max(math.cos(math.radians(pitch)), 1e-6)
-                * 10.7639104167
+
+            # Convex hulls can bridge courtyards and concave footprint cutouts.
+            # Clip to a small buffer around the ground outline to retain ordinary
+            # eave overhang while preventing unsupported area across large gaps.
+            bounded = hull.intersection(footprint.buffer(0.75)) if footprint is not None else hull
+            components = (
+                [bounded]
+                if bounded.geom_type == "Polygon"
+                else [part for part in getattr(bounded, "geoms", []) if part.geom_type == "Polygon"]
             )
-            facets.append({
-                "id": f"facet-{len(facets) + 1}",
-                "point_count": int(len(cluster)),
-                "pitch_degrees": round(pitch, 2),
-                "pitch_rise_per_12": round(pitch_rise, 2),
-                "azimuth_degrees": round(azimuth, 1),
-                "area_sqft": round(surface_area_sqft, 1),
-                "squares": round(surface_area_sqft / 100.0, 3),
-                "plane_model": {
-                    "z_equals_ax_plus_by_plus_c": [a, b, float(model.intercept_)]
-                },
-                "boundary_xy": [
-                    [round(float(x), 3), round(float(y), 3)]
-                    for x, y in hull.exterior.coords
-                ],
-            })
+            for component in components:
+                if component.is_empty or component.area <= 1e-4 or len(facets) >= MAX_PLANES:
+                    continue
+                component_points = [
+                    point
+                    for point in cluster
+                    if component.buffer(0.02).covers(Point(float(point[0]), float(point[1])))
+                ]
+                if not component_points:
+                    continue
+                horizontal_area = float(component.area)
+                surface_area_sqft = (
+                    horizontal_area
+                    / max(math.cos(math.radians(pitch)), 1e-6)
+                    * 10.7639104167
+                )
+                facets.append({
+                    "id": f"facet-{len(facets) + 1}",
+                    "point_count": len(component_points),
+                    "pitch_degrees": round(pitch, 2),
+                    "pitch_rise_per_12": round(pitch_rise, 2),
+                    "azimuth_degrees": round(azimuth, 1),
+                    "area_sqft": round(surface_area_sqft, 1),
+                    "squares": round(surface_area_sqft / 100.0, 3),
+                    "plane_model": {
+                        "z_equals_ax_plus_by_plus_c": [a, b, float(model.intercept_)]
+                    },
+                    "boundary_xy": [
+                        [round(float(x), 3), round(float(y), 3)]
+                        for x, y in component.exterior.coords
+                    ],
+                })
         remaining = remaining[~inliers]
     return facets
 
@@ -306,8 +326,9 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
+    footprint_local = Polygon([to_local.transform(x, y) for x, y in polygon.exterior.coords])
     all_facets: list[dict[str, Any]] = []
-    for facet in _fit_facets(unique_points):
+    for facet in _fit_facets(unique_points, footprint_local):
         facet["id"] = f"facet-{len(all_facets) + 1}"
         model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
         facet["boundary_latlon"] = []
