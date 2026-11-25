@@ -46,6 +46,7 @@ export type MaterialLine = {
   unit: string;
   code?: string;
   category?: string;
+  notes?: string;
 };
 const up = (n: number) => Math.max(0, Math.ceil(n - 1e-9));
 
@@ -96,6 +97,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
       unit: line.unit,
       code: line.code,
       category: line.category,
+      ...(line.notes ? { notes: line.notes } : {}),
     }));
   }
   switch (r.roof_type) {
@@ -143,6 +145,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
         unit: line.unit,
         code: line.code,
         category: line.category,
+        ...(line.notes ? { notes: line.notes } : {}),
       }));
     }
     case "Tile Roof":

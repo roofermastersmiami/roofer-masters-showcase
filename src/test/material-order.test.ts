@@ -38,8 +38,29 @@ describe("material orders from roof report", () => {
   it("drip edge from eaves + rakes", () => {
     expect(q(materialOrder({ ...base, ...metal }), "Drip Edge")).toBe(22);
   });
-  it("metal: panel count is calculated from each measured plane and product coverage", () => {
-    expect(q(materialOrder({ ...base, ...metal }), "measured plane cut list")).toBe(100);
+  it("metal: emits a separate panel quantity and cut length for each measured plane", () => {
+    const lines = materialOrder({ ...base, ...metal }).filter((line) =>
+      line.item.includes("measured cut list"),
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines.map((line) => line.qty)).toEqual([50, 50]);
+    expect(lines[0]?.notes).toContain("20-ft measured cut length");
+    expect(lines[1]?.notes).toContain("20-ft measured cut length");
+    expect(lines.reduce((sum, line) => sum + line.qty, 0)).toBe(100);
+  });
+
+  it("metal: keeps different plane cut lengths separate instead of averaging them", () => {
+    const lines = materialOrder({
+      ...base,
+      ...metal,
+      metal_plane_runs: [
+        { eaveLengthFt: 60, panelRunFt: 20 },
+        { eaveLengthFt: 36, panelRunFt: 12 },
+      ],
+    }).filter((line) => line.item.includes("measured cut list"));
+    expect(lines.map((line) => line.qty)).toEqual([50, 30]);
+    expect(lines[0]?.notes).toContain("20-ft measured cut length");
+    expect(lines[1]?.notes).toContain("12-ft measured cut length");
   });
   it("metal: measured valley flashing uses the shared takeoff calculator", () => {
     expect(q(materialOrder({ ...base, ...metal }), "Valley")).toBe(4);

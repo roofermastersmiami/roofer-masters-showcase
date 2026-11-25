@@ -131,7 +131,8 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   drawTableHeader();
   input.lines.forEach((line, index) => {
     const itemRows = wrap(line.item, qtyX - itemX - 16, 8);
-    const rowHeight = Math.max(24, itemRows.length * 11 + 10);
+    const noteRows = line.notes ? wrap(line.notes, qtyX - itemX - 16, 7) : [];
+    const rowHeight = Math.max(24, itemRows.length * 11 + noteRows.length * 9 + 10);
     const pageCountBeforeRow = pages.length;
     ensureSpace(rowHeight + 4);
     if (pages.length > pageCountBeforeRow) {
@@ -154,6 +155,15 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
         size: 8,
         font: regular,
         color: INK,
+      });
+    });
+    noteRows.forEach((row, rowIndex) => {
+      page.drawText(row, {
+        x: itemX,
+        y: y - 9 - itemRows.length * 11 - rowIndex * 9,
+        size: 7,
+        font: regular,
+        color: MUTED,
       });
     });
     page.drawText(String(line.qty), { x: qtyX, y: y - 9, size: 8, font: bold, color: INK });

@@ -138,7 +138,7 @@ export function MaterialOrder({
 Source: ${sourceLabel}
 ${r.roof_type}, ${r.area_sqft} sq ft (+${effectiveMaterialWastePct(r)}% waste)
 ${warnings.length ? `\nREVIEW REQUIRED:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : ""}
-${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}
+${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}${l.notes ? `\n  ${l.notes}` : ""}`).join("\n")}
 
 Roofer Masters · 305-942-3093`;
   async function save() {
@@ -420,7 +420,10 @@ Roofer Masters · 305-942-3093`;
           <tbody>
             {lines.map((l) => (
               <tr key={l.item} className="border-b border-border">
-                <td className="py-2">{l.item}</td>
+                <td className="py-2">
+                  <div>{l.item}</div>
+                  {l.notes && <p className="mt-1 text-xs text-muted-foreground">{l.notes}</p>}
+                </td>
                 <td className="py-2 text-right font-semibold">
                   {l.qty} {l.unit}
                 </td>
