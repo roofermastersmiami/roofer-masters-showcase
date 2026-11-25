@@ -314,6 +314,8 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
     tile_points: list[np.ndarray] = []
     used_items = 0
     raw_point_count = 0
+    tiles_missing_vertical_units = 0
+    vertical_unit_factors: set[float] = set()
 
     for item in items:
         epsg_value = item.properties.get("proj:epsg")
