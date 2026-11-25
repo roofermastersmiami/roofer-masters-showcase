@@ -1098,8 +1098,8 @@ export function RoofMeasurements({
               <div>
                 <p className="text-sm font-medium">Geometry-based edge suggestions</p>
                 <p className="text-xs text-muted-foreground">
-                  {sharedEdgeSuggestions.length} suggested classifications. Review highlighted edges in
-                  the drawing before applying.
+                  {sharedEdgeSuggestions.length} suggested classifications. Review highlighted edges
+                  in the drawing before applying.
                 </p>
               </div>
               <Button

@@ -11,13 +11,15 @@ const response: RoofDetectionResponse = {
     area_sqft: 1200,
     polygon_geojson: {
       type: "Polygon",
-      coordinates: [[
-        [-80.4801, 25.4699],
-        [-80.4799, 25.4699],
-        [-80.4799, 25.4701],
-        [-80.4801, 25.4701],
-        [-80.4801, 25.4699],
-      ]],
+      coordinates: [
+        [
+          [-80.4801, 25.4699],
+          [-80.4799, 25.4699],
+          [-80.4799, 25.4701],
+          [-80.4801, 25.4701],
+          [-80.4801, 25.4699],
+        ],
+      ],
     },
   },
   roof: {
@@ -26,22 +28,24 @@ const response: RoofDetectionResponse = {
     total_squares: 12,
     dominant_pitch_rise_per_12: 6,
     edge_lengths_lf: null,
-    facets: [{
-      id: "facet-1",
-      point_count: 200,
-      pitch_degrees: 26.57,
-      pitch_rise_per_12: 6,
-      azimuth_degrees: 180,
-      area_sqft: 1200,
-      squares: 12,
-      boundary_latlon: [
-        [25.4699, -80.4801, 10],
-        [25.4699, -80.4799, 11],
-        [25.4701, -80.4799, 12],
-        [25.4701, -80.4801, 11],
-        [25.4699, -80.4801, 10],
-      ],
-    }],
+    facets: [
+      {
+        id: "facet-1",
+        point_count: 200,
+        pitch_degrees: 26.57,
+        pitch_rise_per_12: 6,
+        azimuth_degrees: 180,
+        area_sqft: 1200,
+        squares: 12,
+        boundary_latlon: [
+          [25.4699, -80.4801, 10],
+          [25.4699, -80.4799, 11],
+          [25.4701, -80.4799, 12],
+          [25.4701, -80.4801, 11],
+          [25.4699, -80.4801, 10],
+        ],
+      },
+    ],
   },
   fallback: {
     available: false,
