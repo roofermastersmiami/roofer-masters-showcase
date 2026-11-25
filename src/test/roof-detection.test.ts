@@ -96,21 +96,23 @@ describe("LiDAR geometry measurement parity", () => {
         ...response.roof,
         area_sqft: areaSqFt,
         total_squares: areaSqFt / 100,
-        facets: [{
-          ...response.roof.facets[0]!,
-          pitch_degrees: 26.565051,
-          pitch_rise_per_12: 6,
-          area_sqft: areaSqFt,
-          squares: areaSqFt / 100,
-          plane_model: { z_equals_ax_plus_by_plus_c: [0.5, 0, 10] },
-          boundary_latlon: [
-            [lat - latOffset, lon - lonOffset, 7.5],
-            [lat - latOffset, lon + lonOffset, 12.5],
-            [lat + latOffset, lon + lonOffset, 12.5],
-            [lat + latOffset, lon - lonOffset, 7.5],
-            [lat - latOffset, lon - lonOffset, 7.5],
-          ],
-        }],
+        facets: [
+          {
+            ...response.roof.facets[0]!,
+            pitch_degrees: 26.565051,
+            pitch_rise_per_12: 6,
+            area_sqft: areaSqFt,
+            squares: areaSqFt / 100,
+            plane_model: { z_equals_ax_plus_by_plus_c: [0.5, 0, 10] },
+            boundary_latlon: [
+              [lat - latOffset, lon - lonOffset, 7.5],
+              [lat - latOffset, lon + lonOffset, 12.5],
+              [lat + latOffset, lon + lonOffset, 12.5],
+              [lat + latOffset, lon - lonOffset, 7.5],
+              [lat - latOffset, lon - lonOffset, 7.5],
+            ],
+          },
+        ],
       },
     };
 

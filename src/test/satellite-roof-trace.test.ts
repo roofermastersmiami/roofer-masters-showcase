@@ -329,7 +329,9 @@ describe("automatic OpenStreetMap building footprint selection", () => {
       { lat: center.lat + 0.0001, lon: center.lon + 0.0001 },
       { lat: center.lat + 0.0001, lon: center.lon - 0.0001 },
     ];
-    expect(nearestBuildingFootprint([{ type: "way", geometry: building }], streetTarget)).toBeNull();
+    expect(
+      nearestBuildingFootprint([{ type: "way", geometry: building }], streetTarget),
+    ).toBeNull();
   });
 
   it("prefers the building containing the address over a closer neighboring centroid", () => {

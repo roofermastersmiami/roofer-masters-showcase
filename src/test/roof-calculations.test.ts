@@ -278,7 +278,6 @@ describe("Roof calculation helpers", () => {
   });
 });
 
-
 describe("RoofSnap field-report benchmark — 3062 SW 189th Avenue, Miramar FL", () => {
   it("reconciles reported surface area, squares, waste, and measured line totals", () => {
     // RoofSnap page 4: 47.48 actual squares / 4,748 sq ft;

@@ -1,15 +1,6 @@
 import { useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Ruler,
-  Plus,
-  Undo2,
-  Trash2,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Hand,
-} from "lucide-react";
+import { Ruler, Plus, Undo2, Trash2, ZoomIn, ZoomOut, RotateCcw, Hand } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -145,13 +136,15 @@ export function RoofImageTrace({
       setPoints((r) => r.map((q, j) => (j === i ? next : q)));
     }
   };
-  const startDrag = (kind: "ref" | "pt" | "target", i = 0) => (e: RPointerEvent) => {
-    if (panMode) return;
-    e.stopPropagation();
-    drag.current = { kind, i };
-    moved.current = false;
-    svg.current?.setPointerCapture(e.pointerId);
-  };
+  const startDrag =
+    (kind: "ref" | "pt" | "target", i = 0) =>
+    (e: RPointerEvent) => {
+      if (panMode) return;
+      e.stopPropagation();
+      drag.current = { kind, i };
+      moved.current = false;
+      svg.current?.setPointerCapture(e.pointerId);
+    };
 
   let preview: { area: number; perimeter: number } | null = null;
   if (points.length >= 3 && calibration.ok) {

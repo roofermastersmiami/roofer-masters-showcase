@@ -554,7 +554,10 @@ export function SatelliteRoofTrace({
     setAutoTraceBusy(true);
     setError("");
     try {
-      const searchTarget = targetLocationRef.current ?? { lat: Number(location.lat), lon: Number(location.lon) };
+      const searchTarget = targetLocationRef.current ?? {
+        lat: Number(location.lat),
+        lon: Number(location.lon),
+      };
       const lat = searchTarget.lat,
         lon = searchTarget.lon;
       const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out tags geom;`;
@@ -871,7 +874,9 @@ export function SatelliteRoofTrace({
             </div>
           )}
           <div className="rounded-md border border-blue-500/40 bg-blue-500/5 p-3 text-sm">
-            <strong>Confirm the correct building:</strong> the red pin is the geocoded street address. Drag the blue TARGET pin onto the actual house roof before using automatic footprint tracing. The target is separate from the address reference.
+            <strong>Confirm the correct building:</strong> the red pin is the geocoded street
+            address. Drag the blue TARGET pin onto the actual house roof before using automatic
+            footprint tracing. The target is separate from the address reference.
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
             <span className="mr-auto text-sm font-medium">Map interaction</span>
@@ -1087,10 +1092,32 @@ export function SatelliteRoofTrace({
                   role="button"
                   aria-label="Drag target pin onto the correct house"
                 >
-                  <circle r="27" fill="#2563eb" fillOpacity="0.2" stroke="#93c5fd" strokeWidth="3" />
-                  <path d="M0 22 C-4 14 -16 3 -16 -7 A16 16 0 1 1 16 -7 C16 3 4 14 0 22Z" fill="#2563eb" stroke="white" strokeWidth="3" />
+                  <circle
+                    r="27"
+                    fill="#2563eb"
+                    fillOpacity="0.2"
+                    stroke="#93c5fd"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d="M0 22 C-4 14 -16 3 -16 -7 A16 16 0 1 1 16 -7 C16 3 4 14 0 22Z"
+                    fill="#2563eb"
+                    stroke="white"
+                    strokeWidth="3"
+                  />
                   <circle cx="0" cy="-7" r="5" fill="white" />
-                  <text x="24" y="5" fill="white" stroke="#1e3a8a" strokeWidth="5" paintOrder="stroke" fontSize="19" fontWeight="800">TARGET · DRAG ME</text>
+                  <text
+                    x="24"
+                    y="5"
+                    fill="white"
+                    stroke="#1e3a8a"
+                    strokeWidth="5"
+                    paintOrder="stroke"
+                    fontSize="19"
+                    fontWeight="800"
+                  >
+                    TARGET · DRAG ME
+                  </text>
                 </g>
               )}
               {points.length > 2 && (
@@ -1135,8 +1162,13 @@ export function SatelliteRoofTrace({
             </svg>
           </div>
           {imageryLoadError && (
-            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-              Satellite imagery could not be loaded from the free imagery provider. Try again in a moment or use an uploaded overhead photo; the map controls remain available but do not trace against a blank image.
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
+            >
+              Satellite imagery could not be loaded from the free imagery provider. Try again in a
+              moment or use an uploaded overhead photo; the map controls remain available but do not
+              trace against a blank image.
             </p>
           )}
           {drawingMode === "diy" && points.length >= 2 && (
@@ -1255,7 +1287,10 @@ export function SatelliteRoofTrace({
                         ? edgeTypes
                         : drawnPlane.edges,
                   };
-                  const accepted = onAdd([namedPlane], traceGeoReference(points, targetLocation ?? center!));
+                  const accepted = onAdd(
+                    [namedPlane],
+                    traceGeoReference(points, targetLocation ?? center!),
+                  );
                   if (accepted !== false) {
                     setPoints([]);
                     setEdgeTypes([]);

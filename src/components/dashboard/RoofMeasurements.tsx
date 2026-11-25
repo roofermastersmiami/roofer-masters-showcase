@@ -676,9 +676,16 @@ export function RoofMeasurements({
       />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
         <span className="text-muted-foreground">
-          {reportAudit.planeCount} roof plane{reportAudit.planeCount === 1 ? "" : "s"} · {reportAudit.status === "ready" ? "Ready for review" : reportAudit.status === "blocked" ? "Needs correction" : "Review measurements"}
+          {reportAudit.planeCount} roof plane{reportAudit.planeCount === 1 ? "" : "s"} ·{" "}
+          {reportAudit.status === "ready"
+            ? "Ready for review"
+            : reportAudit.status === "blocked"
+              ? "Needs correction"
+              : "Review measurements"}
         </span>
-        <span className={d.verified ? "font-medium text-emerald-700" : "font-medium text-amber-700"}>
+        <span
+          className={d.verified ? "font-medium text-emerald-700" : "font-medium text-amber-700"}
+        >
           {d.verified ? "Reviewed" : "Not yet reviewed"}
         </span>
       </div>
@@ -1312,10 +1319,12 @@ export function RoofMeasurements({
                 label="Roof system"
                 value={d.roof_type}
                 onChange={(v) => edit({ ...d, roof_type: v as RoofDrawing["roof_type"] })}
-                options={["Metal Roof", "Shingle Roof", "Tile Roof", "TPO", "Flat Roof"].map((v) => ({
-                  value: v,
-                  label: v,
-                }))}
+                options={["Metal Roof", "Shingle Roof", "Tile Roof", "TPO", "Flat Roof"].map(
+                  (v) => ({
+                    value: v,
+                    label: v,
+                  }),
+                )}
               />
               <Field label="Waste (%)">
                 <Input
@@ -1336,7 +1345,10 @@ export function RoofMeasurements({
               </div>
               <div className="sm:col-span-2">
                 <Field label="Inspection notes">
-                  <Textarea value={d.notes} onChange={(e) => edit({ ...d, notes: e.target.value })} />
+                  <Textarea
+                    value={d.notes}
+                    onChange={(e) => edit({ ...d, notes: e.target.value })}
+                  />
                 </Field>
               </div>
               <label className="flex items-center gap-3 text-sm sm:col-span-2">
@@ -1431,17 +1443,19 @@ export function RoofMeasurements({
             </Button>
           </div>
         </section>
-        </details>
+      </details>
       <details className="my-4 rounded-lg border border-border p-4">
-        <summary className="cursor-pointer font-semibold">Manual tracing & photos (optional)</summary>
+        <summary className="cursor-pointer font-semibold">
+          Manual tracing & photos (optional)
+        </summary>
         <section className="border-t border-border py-6">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Upload your own overhead roof photo or aerial image, then use the calibrated photo
-                tracer below to draw each roof plane, set its scale and pitch, and classify its edges.
-                You can also load free public aerial imagery in the next section.
+                tracer below to draw each roof plane, set its scale and pitch, and classify its
+                edges. You can also load free public aerial imagery in the next section.
               </p>
             </div>
             <Button variant="outline" asChild disabled={busy || !property}>
@@ -1478,7 +1492,9 @@ export function RoofMeasurements({
                   value={m.category}
                   onChange={(v) => {
                     setMedia(
-                      media.map((x, n) => (n === i ? { ...x, category: v as Media["category"] } : x)),
+                      media.map((x, n) =>
+                        n === i ? { ...x, category: v as Media["category"] } : x,
+                      ),
                     );
                     setDirty(true);
                   }}
@@ -1491,9 +1507,11 @@ export function RoofMeasurements({
             ))}
           </div>
         </section>
-        </details>
+      </details>
       <details className="my-4 rounded-lg border border-border p-4">
-        <summary className="cursor-pointer font-semibold">Aerial map & building outline tools (optional)</summary>
+        <summary className="cursor-pointer font-semibold">
+          Aerial map & building outline tools (optional)
+        </summary>
         <section className="border-t border-border py-6">
           <h3 className="mb-2 text-lg font-bold">Free public aerial & accuracy</h3>
           {aerialError && (
@@ -1505,9 +1523,9 @@ export function RoofMeasurements({
             </p>
           )}
           <p className="mb-3 text-sm text-muted-foreground">
-            Looks up the address with the free US Census service and loads public USGS aerial imagery
-            when coverage is available. Image dimensions do not establish ground scale: calibrate
-            against a known measured distance before tracing. Results are estimates, never
+            Looks up the address with the free US Census service and loads public USGS aerial
+            imagery when coverage is available. Image dimensions do not establish ground scale:
+            calibrate against a known measured distance before tracing. Results are estimates, never
             survey-grade. No paid provider is used.
           </p>
           {aerialStatus && (
@@ -1539,7 +1557,10 @@ export function RoofMeasurements({
                   });
                   setDirty(true);
                 }}
-                options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({ value, label }))}
+                options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
               />
             </div>
             <Button
@@ -1662,7 +1683,7 @@ export function RoofMeasurements({
             </div>
           )}
         </section>
-        </details>
+      </details>
       <AutomatedRoofReport
         address={workspaceAddress}
         roofType={d.roof_type}
