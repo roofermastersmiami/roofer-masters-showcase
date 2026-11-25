@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, CloudDownload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
@@ -17,6 +17,18 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const [result, setResult] = useState<RoofDetectionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resultAddress, setResultAddress] = useState("");
+  const [errorAddress, setErrorAddress] = useState("");
+  const requestId = useRef(0);
+
+  // Prevent a previous property response from being applied to a newly selected address.
+  useEffect(() => {
+    requestId.current += 1;
+  }, [address]);
+
+  const currentAddress = address.trim();
+  const visibleResult = resultAddress === currentAddress ? result : null;
+  const visibleError = errorAddress === currentAddress ? error : "";
 
   async function analyze() {
     if (!address.trim()) {
@@ -30,14 +42,18 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       );
       return;
     }
+    const activeRequest = ++requestId.current;
+    const requestedAddress = address.trim();
     setLoading(true);
     setError("");
+    setErrorAddress("");
     setResult(null);
+    setResultAddress("");
     try {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ street_address: address.trim() }),
+        body: JSON.stringify({ street_address: requestedAddress }),
         signal: AbortSignal.timeout(90000),
       });
       const body: unknown = await response.json().catch(() => null);
@@ -50,18 +66,22 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       }
       // Parse at the boundary; never allow unchecked API data into editable roof geometry.
       const { roofDetectionResponseSchema } = await import("@/lib/roof-detection");
+      if (activeRequest !== requestId.current) return;
       setResult(roofDetectionResponseSchema.parse(body));
+      setResultAddress(requestedAddress);
     } catch (cause) {
+      if (activeRequest !== requestId.current) return;
       setError(cause instanceof Error ? cause.message : "Roof detection could not be completed.");
+      setErrorAddress(requestedAddress);
     } finally {
-      setLoading(false);
+      if (activeRequest === requestId.current) setLoading(false);
     }
   }
 
   function apply() {
-    if (!result) return;
+    if (!visibleResult || resultAddress !== address.trim()) return;
     try {
-      onApply(detectedFacetsToDrawing(result));
+      onApply(detectedFacetsToDrawing(visibleResult));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -91,18 +111,18 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
           request may take longer on a free host.
         </div>
       )}
-      {error && (
+      {visibleError && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      {result && (
+      {visibleResult && (
         <div className="space-y-3">
-          {result.status === "lidar_facets" ? (
+          {visibleResult.status === "lidar_facets" ? (
             <div className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
               <div>
-                <strong>{result.roof.facet_count} candidate roof facets detected</strong>
+                <strong>{visibleResult.roof.facet_count} candidate roof facets detected</strong>
                 <p className="text-muted-foreground">
                   {result.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
                   {result.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
@@ -114,7 +134,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               <AlertTriangle className="mt-0.5 size-4 text-amber-600" />
               <div>
                 <strong>Footprint found; roof facets were not measurable</strong>
-                <p className="text-muted-foreground">{result.fallback.message}</p>
+                <p className="text-muted-foreground">{visibleResult.fallback.message}</p>
                 <p className="mt-1">
                   Ground footprint: {result.fallback.footprint_area_sqft.toLocaleString()} sq ft.
                   This is not roof surface area.
@@ -151,7 +171,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {result.disclaimer} Edge classifications are left unclassified until reviewed in the
+            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in the
             measurement editor.
           </p>
           {result.roof.facets.length > 0 && (
