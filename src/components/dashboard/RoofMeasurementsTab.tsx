@@ -49,7 +49,7 @@ export function RoofMeasurementsTab({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
-  const [mapZoom, setMapZoom] = useState(80);
+  const [mapZoom, setMapZoom] = useState(250);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
   const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
   const [addressError, setAddressError] = useState("");
@@ -119,7 +119,7 @@ export function RoofMeasurementsTab({
         return;
       }
       setLocatedAddress(result);
-      setMapZoom(80);
+      setMapZoom(250);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
     } catch (error) {
@@ -194,7 +194,7 @@ export function RoofMeasurementsTab({
                 });
                 setOriginalCrmAddress("");
                 setLocatedAddress(null);
-                setMapZoom(1);
+                setMapZoom(250);
                 setAddressError("");
                 setAdding(true);
               }}
@@ -266,7 +266,7 @@ export function RoofMeasurementsTab({
               });
               setOriginalCrmAddress("");
               setLocatedAddress(null);
-              setMapZoom(1);
+              setMapZoom(250);
               setAddressError("");
               setAdding(true);
             }}
@@ -386,7 +386,7 @@ export function RoofMeasurementsTab({
                       size="icon"
                       variant="outline"
                       aria-label="Zoom map in"
-                      onClick={() => setMapZoom((z) => Math.min(240, z * 1.7))}
+                      onClick={() => setMapZoom((z) => Math.min(2000, z * 1.7))}
                     >
                       +
                     </Button>
@@ -399,7 +399,7 @@ export function RoofMeasurementsTab({
                     >
                       −
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setMapZoom(1)}>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setMapZoom(250)}>
                       Reset
                     </Button>
                   </div>
