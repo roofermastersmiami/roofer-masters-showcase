@@ -101,7 +101,7 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     async def fake_geocode(_address):
         return 25.00005, -79.99995, "Endpoint test address"
 
-    async def fake_get_footprint(_lat, _lon):
+    async def fake_get_footprint(_lat, _lon, _street_address=None):
         return polygon, {
             "osm_way_id": 123,
             "building_tags": {"building": "house"},
@@ -271,3 +271,20 @@ def test_ransac_separates_two_adjacent_roof_slopes_sharing_a_ridge():
     # Each half is 9.5 m × 19.5 m in plan; at 6/12 pitch the
     # sloped surface is approximately 2,225 sq ft per facet.
     assert all(2100 < facet["area_sqft"] < 2350 for facet in facets)
+
+
+
+def test_street_address_normalization_matches_directional_and_suffix_variants():
+    from main import _normalize_street_address
+
+    assert _normalize_street_address("3062 Southwest 189th Avenue, Miramar, FL 33029") == (
+        _normalize_street_address("3062 SW 189th Ave")
+    )
+
+
+def test_street_address_normalization_does_not_match_different_house_numbers():
+    from main import _normalize_street_address
+
+    assert _normalize_street_address("3062 SW 189th Ave") != (
+        _normalize_street_address("3064 SW 189th Ave")
+    )
