@@ -277,3 +277,36 @@ describe("Roof calculation helpers", () => {
     ).toThrow("unsupported type");
   });
 });
+
+
+describe("RoofSnap field-report benchmark — 3062 SW 189th Avenue, Miramar FL", () => {
+  it("reconciles reported surface area, squares, waste, and measured line totals", () => {
+    // RoofSnap page 4: 47.48 actual squares / 4,748 sq ft;
+    // 14.16% suggested shingle waste / 5,420 sq ft.
+    const result = calculateRoofSummary({
+      facets: [
+        { id: "main-6-12", surfaceAreaSqFt: 4735, pitchRisePer12: 6 },
+        { id: "small-3-12", surfaceAreaSqFt: 13, pitchRisePer12: 3 },
+      ],
+      edges: measuredEdgeTotalsToInputs({
+        eave: 343.3,
+        rake: 7.9,
+        ridge: 68.9,
+        hip: 269.3,
+        valley: 102.1,
+        other: 46.2, // Step 37.9 + wall 6.7 + pitch change 1.6
+      }),
+      wastePercent: 14.16,
+    });
+
+    expect(result.facetSurfaceAreaSqFt).toBeCloseTo(4748, 6);
+    expect(result.exactSquares).toBeCloseTo(47.48, 6);
+    expect(result.totalAreaWithWasteSqFt).toBeCloseTo(5420.3168, 3);
+    expect(result.linearFeet.eave).toBeCloseTo(343.3, 6);
+    expect(result.linearFeet.rake).toBeCloseTo(7.9, 6);
+    expect(result.linearFeet.ridge).toBeCloseTo(68.9, 6);
+    expect(result.linearFeet.hip).toBeCloseTo(269.3, 6);
+    expect(result.linearFeet.valley).toBeCloseTo(102.1, 6);
+    expect(result.linearFeet.other).toBeCloseTo(46.2, 6);
+  });
+});
