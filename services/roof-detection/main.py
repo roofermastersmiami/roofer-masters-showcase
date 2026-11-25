@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 from pyproj import CRS, Transformer
 from pystac_client import Client
-from shapely.geometry import MultiPoint, Point, Polygon, mapping
+from shapely.geometry import MultiPoint, Point, Polygon, mapping, shape
 from shapely.validation import make_valid
 from sklearn.cluster import DBSCAN
 from sklearn.linear_model import LinearRegression, RANSACRegressor
@@ -134,87 +134,174 @@ async def geocode(address: str) -> tuple[float, float, str]:
 
 
 async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]]:
-    # A tight 80 m search radius is used; candidate polygons are ranked by address-point containment
-    # and distance. OSM footprints are ground/building outlines, not roof-plane geometry.
-    query = f"""
-    [out:json][timeout:20];
-    way(around:80,{lat},{lon})[building];
-    out geom;
-    """
-    headers = {"User-Agent": USER_AGENT, "Content-Type": "application/x-www-form-urlencoded"}
-    # Public Overpass instances are intermittently unreachable from cloud hosts.
-    # Try independent community mirrors before declaring the footprint unavailable.
-    endpoints = (
-        OVERPASS_URL,
-        "https://overpass.kumi.systems/api/interpreter",
-        "https://overpass.private.coffee/api/interpreter",
+    # Use a nationwide ArcGIS structures layer first. It is independent of
+    # Overpass and covers US building polygons; OSM remains a secondary source.
+    address_point = Point(lon, lat)
+    raw_candidates: list[tuple[Polygon, dict[str, Any]]] = []
+    provider_errors: list[str] = []
+    providers_succeeded = 0
+
+    arcgis_url = (
+        "https://services2.arcgis.com/VNo0ht0YPXJoI4oE/"
+        "ArcGIS/rest/services/USA_Buildings/FeatureServer/0/query"
     )
-    data = None
-    failures: list[str] = []
-    async with httpx.AsyncClient(timeout=httpx.Timeout(18.0, connect=6.0), headers=headers) as client:
+    arcgis_params = {
+        "where": "1=1",
+        "geometry": f"{lon},{lat}",
+        "geometryType": "esriGeometryPoint",
+        "inSR": "4326",
+        "spatialRel": "esriSpatialRelIntersects",
+        "distance": "80",
+        "units": "esriSRUnit_Meter",
+        "outFields": "OBJECTID,OCC_CLS,PROP_ADDR,PROP_CITY,PROP_ST,PROP_ZIP,SQFEET,SQMETERS,SOURCE,PROD_DATE",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    headers = {"User-Agent": USER_AGENT}
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=7.0), headers=headers) as client:
+        try:
+            response = await client.get(arcgis_url, params=arcgis_params)
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("error"):
+                raise ValueError(str(payload["error"]))
+            providers_succeeded += 1
+            for feature in payload.get("features", []):
+                geometry = feature.get("geometry")
+                if not geometry:
+                    continue
+                try:
+                    parsed = shape(geometry)
+                except (TypeError, ValueError):
+                    continue
+                parts = (
+                    list(parsed.geoms)
+                    if parsed.geom_type == "MultiPolygon"
+                    else [parsed]
+                )
+                properties = feature.get("properties") or {}
+                for polygon in parts:
+                    if polygon.geom_type != "Polygon" or polygon.is_empty:
+                        continue
+                    raw_candidates.append((polygon, {
+                        "provider": "ArcGIS USA Structures",
+                        "source_id": properties.get("OBJECTID"),
+                        "building_tags": {
+                            key: properties.get(key)
+                            for key in ("OCC_CLS", "PROP_ADDR", "PROP_CITY", "PROP_ST", "PROP_ZIP", "SOURCE", "PROD_DATE")
+                            if properties.get(key) is not None
+                        },
+                    }))
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            provider_errors.append(f"ArcGIS USA Structures: {type(exc).__name__}")
+
+        # Query independent OSM Overpass endpoints as a fallback and to fill
+        # coverage gaps in the nationwide structures layer.
+        query = f"""
+        [out:json][timeout:20];
+        way(around:80,{lat},{lon})[building];
+        out geom;
+        """
+        overpass_headers = {
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        endpoints = (
+            OVERPASS_URL,
+            "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+        )
         for endpoint in endpoints:
             try:
-                response = await client.post(endpoint, data={"data": query})
+                response = await client.post(endpoint, data={"data": query}, headers=overpass_headers)
                 response.raise_for_status()
-                data = response.json()
+                payload = response.json()
+                providers_succeeded += 1
+                for element in payload.get("elements", []):
+                    coords = element.get("geometry") or []
+                    if len(coords) < 4:
+                        continue
+                    ring = [(float(point["lon"]), float(point["lat"])) for point in coords]
+                    polygon = make_valid(Polygon(ring))
+                    parts = (
+                        list(polygon.geoms)
+                        if polygon.geom_type == "MultiPolygon"
+                        else [polygon]
+                    )
+                    for part in parts:
+                        if part.geom_type == "Polygon" and not part.is_empty:
+                            raw_candidates.append((part, {
+                                "provider": "OpenStreetMap",
+                                "source_id": element.get("id"),
+                                "building_tags": element.get("tags", {}),
+                            }))
+                # One healthy Overpass endpoint is enough; avoid duplicate
+                # requests and unnecessary latency.
                 break
-            except (httpx.HTTPError, ValueError) as exc:
-                failures.append(f"{endpoint}: {type(exc).__name__}")
-    if data is None:
-        # Return an actionable service error rather than an unhandled ASGI 500.
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "building_footprint_provider_unavailable",
-                "message": "Free OpenStreetMap building-footprint services are temporarily unreachable. No roof measurement was generated; retry later or use the CRM's manual footprint tracing tool.",
-                "providers_tried": len(endpoints),
-                "provider_errors": failures,
-            },
-        )
-    address_point = Point(lon, lat)
+            except (httpx.HTTPError, ValueError, KeyError) as exc:
+                provider_errors.append(f"{endpoint}: {type(exc).__name__}")
+
     candidates: list[tuple[float, Polygon, dict[str, Any]]] = []
-    for element in data.get("elements", []):
-        coords = element.get("geometry") or []
-        if len(coords) < 4:
+    for polygon, source_metadata in raw_candidates:
+        if polygon.is_empty or polygon.area <= 0:
             continue
-        ring = [(float(p["lon"]), float(p["lat"])) for p in coords]
-        polygon = make_valid(Polygon(ring))
-        if polygon.geom_type == "MultiPolygon":
-            polygon = max(polygon.geoms, key=lambda p: p.area)
-        if polygon.geom_type != "Polygon" or polygon.is_empty or polygon.area <= 0:
-            continue
-        # Local projected area filter avoids selecting large campus/industrial polygons.
         area_sqft = _polygon_area_sqft(polygon)
         if area_sqft < 150 or area_sqft > 100000:
             continue
         distance_m = _distance_to_footprint_meters(polygon, lat, lon)
-        # Geocoders frequently place a street address on the curb or driveway.
-        # Permit a conservative 25 m candidate radius, but never guess when two
-        # nearby buildings are similarly plausible. Exact containment still ranks first.
+        # Geocoders can place an address at the curb or driveway. Retain the
+        # conservative 25 m match limit and never silently choose a distant lot.
         if distance_m > 25.0:
             continue
         metadata = {
-            "osm_way_id": element.get("id"),
-            "building_tags": element.get("tags", {}),
+            **source_metadata,
             "address_point_inside_footprint": polygon.contains(address_point),
             "address_to_footprint_distance_m": round(distance_m, 2),
         }
         candidates.append((distance_m, polygon, metadata))
+
     if not candidates:
+        if providers_succeeded == 0:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "building_footprint_provider_unavailable",
+                    "message": "The free building-footprint providers could not be reached. No roof measurement was generated. Retry later or use the CRM's manual footprint tracing tool.",
+                    "providers_tried": 4,
+                    "provider_errors": provider_errors,
+                },
+            )
         raise HTTPException(
-            404,
-            "No mapped building was found within 25 m of the geocoded address point. Zoom in and verify the property pin, or trace the roof manually.",
+            status_code=404,
+            detail={
+                "code": "building_footprint_not_found",
+                "message": "No mapped building was found within 25 m of the geocoded address point. Verify the property pin or trace the correct building manually.",
+                "providers_checked": ["ArcGIS USA Structures", "OpenStreetMap Overpass"],
+            },
         )
-    candidates.sort(key=lambda row: (not bool(row[2].get("address_point_inside_footprint")), row[0]))
+
+    # Prefer address-point containment, then nearest footprint. If two nearby
+    # structures remain similarly plausible, fail safely instead of using a
+    # neighboring building.
+    candidates.sort(key=lambda row: (
+        not bool(row[2].get("address_point_inside_footprint")),
+        row[0],
+    ))
     if len(candidates) > 1:
         nearest_distance = candidates[0][0]
         next_distance = candidates[1][0]
-        # If the next structure is almost as plausible, fail safely instead of
-        # running LiDAR against a potentially neighboring property.
-        if next_distance - nearest_distance < 8.0 and not candidates[0][2].get("address_point_inside_footprint"):
+        if (
+            next_distance - nearest_distance < 8.0
+            and not candidates[0][2].get("address_point_inside_footprint")
+        ):
             raise HTTPException(
-                409,
-                "Several nearby buildings could match this street-side address pin. Zoom in and select/trace the correct building before running roof detection.",
+                status_code=409,
+                detail={
+                    "code": "ambiguous_building_match",
+                    "message": "Several nearby buildings could match this address pin. Zoom in and select/trace the correct building before running roof detection.",
+                    "candidate_count": len(candidates),
+                },
             )
     _, polygon, metadata = candidates[0]
     return polygon, metadata
@@ -482,8 +569,9 @@ async def analyze_roof(request: AnalyzeRequest):
         "matched_address": matched_address,
         "location": {"lat": lat, "lon": lon},
         "footprint": {
-            "source": "OpenStreetMap",
-            "osm_way_id": footprint_meta.get("osm_way_id"),
+            "source": footprint_meta.get("provider", "Unknown public footprint source"),
+            "source_id": footprint_meta.get("source_id"),
+            "osm_way_id": footprint_meta.get("source_id") if footprint_meta.get("provider") == "OpenStreetMap" else None,
             "area_sqft": round(footprint_sqft, 1),
             **_footprint_match_fields(footprint_meta),
             "polygon_geojson": mapping(footprint),
