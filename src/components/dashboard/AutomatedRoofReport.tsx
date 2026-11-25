@@ -6,6 +6,7 @@ import type { RoofDrawing } from "@/lib/roof-geometry";
 
 type Props = {
   address: string;
+  roofType: RoofDrawing["roof_type"];
   onApply: (drawing: ReturnType<typeof detectedFacetsToDrawing>) => void;
 };
 
@@ -14,17 +15,17 @@ function endpointUrl() {
   return base ? `${base}/v1/roof/analyze` : "";
 }
 
-export function AutomatedRoofReport({ address, onApply }: Props) {
+export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
   const [result, setResult] = useState<RoofDetectionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultAddress, setResultAddress] = useState("");
   const [errorAddress, setErrorAddress] = useState("");
   const [loadingAddress, setLoadingAddress] = useState("");
-  const [roofType, setRoofType] = useState<RoofDrawing["roof_type"] | "">("");
   const requestId = useRef(0);
   const activeController = useRef<AbortController | null>(null);
   const autoAnalyzedAddress = useRef("");
+  const autoAppliedAddress = useRef("");
 
   // Cancel work for the previous property and prevent stale responses or loading state.
   useEffect(() => {
@@ -112,24 +113,23 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
     void analyze();
   }, [analyze, currentAddress]);
 
-  function apply() {
-    if (!visibleResult || resultAddress !== address.trim()) return;
+  // Load valid LiDAR facets into a fresh measurement automatically.
+  // Existing drawings are protected by the parent workflow's replacement confirmation.
+  useEffect(() => {
+    if (
+      !visibleResult ||
+      visibleResult.status !== "lidar_facets" ||
+      visibleResult.roof.facets.length === 0 ||
+      autoAppliedAddress.current === currentAddress
+    ) return;
+    autoAppliedAddress.current = currentAddress;
     try {
-      if (!roofType) {
-        setError("Choose the roof system before loading the detected measurements.");
-        setErrorAddress(currentAddress);
-        return;
-      }
       onApply(detectedFacetsToDrawing(visibleResult, roofType));
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Detected facets could not be added to the drawing.",
-      );
+      setError(cause instanceof Error ? cause.message : "Detected facets could not be added.");
       setErrorAddress(currentAddress);
     }
-  }
+  }, [visibleResult, currentAddress, roofType, onApply]);
 
   return (
     <section className="space-y-3 rounded-lg border border-border bg-card p-4">
@@ -261,27 +261,10 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             the measurement editor.
           </p>
           {visibleResult.roof.facets.length > 0 && (
-            <div className="space-y-2">
-              <label htmlFor="lidar-roof-system" className="text-sm font-medium">
-                Roof system for this measurement
-              </label>
-              <select
-                id="lidar-roof-system"
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={roofType}
-                onChange={(event) => setRoofType(event.target.value as RoofDrawing["roof_type"])}
-              >
-                <option value="">Select roof system…</option>
-                <option value="Metal Roof">Architectural / metal roof</option>
-                <option value="Shingle Roof">Shingle roof</option>
-                <option value="Tile Roof">Concrete / clay tile roof</option>
-                <option value="TPO">TPO</option>
-                <option value="Flat Roof">Flat / modified bitumen roof</option>
-              </select>
-              <Button variant="outline" onClick={apply} disabled={!roofType}>
-                Load candidate facets into roof editor
-              </Button>
-            </div>
+            <p className="text-sm text-muted-foreground" role="status">
+              Candidate facets are being loaded into the measurement workspace automatically.
+              Review the imported planes and verify the roof system before saving.
+            </p>
           )}
         </div>
       )}
