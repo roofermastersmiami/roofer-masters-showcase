@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import re
@@ -48,6 +49,7 @@ class AnalyzeRequest(BaseModel):
     street_address: str | None = Field(default=None, min_length=5, max_length=300)
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
+    footprint_candidate_id: str | None = Field(default=None, min_length=8, max_length=128)
 
     @model_validator(mode="after")
     def validate_location(self):
@@ -151,7 +153,7 @@ def _normalize_street_address(value: str | None) -> str:
     return " ".join(expansions.get(token, token) for token in tokens)
 
 
-async def get_footprint(lat: float, lon: float, street_address: str | None = None) -> tuple[Polygon, dict[str, Any]]:
+async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None) -> tuple[Polygon, dict[str, Any]]:
     # Use a nationwide ArcGIS structures layer first. It is independent of
     # Overpass and covers US building polygons; OSM remains a secondary source.
     address_point = Point(lon, lat)
@@ -274,14 +276,27 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         if area_sqft < 150 or area_sqft > 100000:
             continue
         distance_m = _distance_to_footprint_meters(polygon, lat, lon)
-        # Geocoders can place an address at the curb or driveway. Retain the
-        # conservative 25 m match limit and never silently choose a distant lot.
-        if distance_m > 25.0:
+        # Keep a wider candidate window for explicit human selection when
+        # geocoders land on a curb/driveway. Candidates beyond 25 m are never
+        # auto-selected; the 60 m cap prevents unrelated distant structures.
+        if distance_m > 60.0:
             continue
+        candidate_identity = (
+            f"{source_metadata.get('provider', '')}:"
+            f"{source_metadata.get('source_id', '')}:"
+            f"{hashlib.sha256(polygon.wkb).hexdigest()[:16]}"
+        )
+        candidate_id = hashlib.sha256(candidate_identity.encode("utf-8")).hexdigest()[:24]
         metadata = {
             **source_metadata,
+            "candidate_id": candidate_id,
             "address_point_inside_footprint": polygon.contains(address_point),
             "address_to_footprint_distance_m": round(distance_m, 2),
+            "area_sqft": round(area_sqft, 1),
+            "centroid": {
+                "lat": round(float(polygon.centroid.y), 7),
+                "lon": round(float(polygon.centroid.x), 7),
+            },
         }
         candidates.append((distance_m, polygon, metadata))
 
@@ -331,6 +346,65 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 "code": "building_footprint_not_found",
                 "message": "No mapped building was found within 25 m of the geocoded address point. Verify the property pin or trace the correct building manually.",
                 "providers_checked": ["ArcGIS USA Structures", "OpenStreetMap Overpass"],
+            },
+        )
+
+    # A user can resolve ambiguous addresses by choosing one of the exact
+    # candidates returned in the 409 response. The identifier is tied to the
+    # provider, source record, and polygon geometry so stale selections fail closed.
+    if selected_candidate_id:
+        selected = [
+            candidate for candidate in candidates
+            if candidate[2].get("candidate_id") == selected_candidate_id
+        ]
+        if len(selected) != 1:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "building_candidate_selection_stale",
+                    "message": "The selected building candidate is no longer available. Refresh candidates and choose again.",
+                    "candidate_count": len(candidates),
+                    "candidates": [
+                        {
+                            "candidate_id": row[2]["candidate_id"],
+                            "provider": row[2].get("provider"),
+                            "source_id": row[2].get("source_id"),
+                            "area_sqft": row[2]["area_sqft"],
+                            "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                            "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                            "centroid": row[2]["centroid"],
+                            "polygon_geojson": mapping(row[1]),
+                        }
+                        for row in candidates
+                    ],
+                },
+            )
+        _, selected_polygon, selected_metadata = selected[0]
+        return selected_polygon, selected_metadata
+
+    # A candidate outside the trusted 25 m auto-match radius may still be
+    # the correct building when geocoding lands on the street. Surface it for
+    # explicit user confirmation, never silently accept it.
+    if min(row[0] for row in candidates) > 25.0:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "building_candidate_confirmation_required",
+                "message": "Mapped buildings are more than 25 m from the geocoded address point. Review the outlines and explicitly select the correct building before roof analysis.",
+                "candidate_count": len(candidates),
+                "candidates": [
+                    {
+                        "candidate_id": row[2]["candidate_id"],
+                        "provider": row[2].get("provider"),
+                        "source_id": row[2].get("source_id"),
+                        "area_sqft": row[2]["area_sqft"],
+                        "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                        "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                        "centroid": row[2]["centroid"],
+                        "polygon_geojson": mapping(row[1]),
+                    }
+                    for row in candidates
+                ],
             },
         )
 
@@ -615,7 +689,7 @@ async def analyze_roof(request: AnalyzeRequest):
         request.street_address.strip().casefold()
         if request.street_address
         else f"{float(request.lat):.6f},{float(request.lon):.6f}"
-    )
+    ) + (f":candidate:{request.footprint_candidate_id}" if request.footprint_candidate_id else "")
     cached = _RESPONSE_CACHE.get(cache_key)
     if cached and cached[0] > monotonic():
         return cached[1]
@@ -624,7 +698,7 @@ async def analyze_roof(request: AnalyzeRequest):
     else:
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
-    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address)
+    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
     footprint_sqft = _polygon_area_sqft(footprint)
     try:
         facets, lidar_meta = _read_lidar_facets(footprint)

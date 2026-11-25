@@ -101,7 +101,7 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     async def fake_geocode(_address):
         return 25.00005, -79.99995, "Endpoint test address"
 
-    async def fake_get_footprint(_lat, _lon, _street_address=None):
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
         return polygon, {
             "osm_way_id": 123,
             "building_tags": {"building": "house"},
@@ -288,3 +288,46 @@ def test_street_address_normalization_does_not_match_different_house_numbers():
     assert _normalize_street_address("3062 SW 189th Ave") != (
         _normalize_street_address("3064 SW 189th Ave")
     )
+
+
+
+def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+    selected = {}
+
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Candidate selection test address"
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        selected["candidate_id"] = _selected_candidate_id
+        return polygon, {
+            "provider": "test",
+            "source_id": "candidate-1",
+            "address_point_inside_footprint": True,
+            "address_to_footprint_distance_m": 0.0,
+        }
+
+    monkeypatch.setattr(roof_service, "geocode", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(
+        roof_service,
+        "_read_lidar_facets",
+        lambda _polygon: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
+    )
+    roof_service._RESPONSE_CACHE.clear()
+
+    response = TestClient(roof_service.app).post(
+        "/v1/roof/analyze",
+        json={
+            "street_address": "Candidate selection endpoint test address",
+            "footprint_candidate_id": "candidate-id-123456",
+        },
+    )
+
+    assert response.status_code == 200
+    assert selected["candidate_id"] == "candidate-id-123456"
