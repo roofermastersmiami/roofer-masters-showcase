@@ -72,7 +72,10 @@ const METERS_PER_LON_DEGREE = 111320;
 /** Convert validated LiDAR facets into the CRM's local-feet roof drawing model.
  * All perimeter edges remain "other" until the estimator confirms their roles.
  */
-export function detectedFacetsToDrawing(raw: unknown): RoofDrawing {
+export function detectedFacetsToDrawing(
+  raw: unknown,
+  roofType: RoofDrawing["roof_type"],
+): RoofDrawing {
   const result = roofDetectionResponseSchema.parse(raw);
   if (result.status !== "lidar_facets" || result.roof.facets.length === 0) {
     throw new Error(
@@ -109,7 +112,7 @@ export function detectedFacetsToDrawing(raw: unknown): RoofDrawing {
     planes,
     penetrations: [],
     waste: 10,
-    roof_type: "Shingle Roof",
+    roof_type: roofType,
     notes:
       "Preliminary roof facets from public USGS 3DEP LiDAR. Verify all facet boundaries, pitch, edge types, and material system before use.",
     condition: "",
