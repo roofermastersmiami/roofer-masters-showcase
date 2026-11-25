@@ -528,7 +528,10 @@ export function CrmShell({
           <Button
             type="button"
             variant="ghost"
-            className={cn("h-auto w-full justify-start rounded-none bg-transparent p-0 hover:bg-transparent", sidebarHover)}
+            className={cn(
+              "h-auto w-full justify-start rounded-none bg-transparent p-0 hover:bg-transparent",
+              sidebarHover,
+            )}
             title={logoUrl ? "Change company logo" : "Add your company logo"}
             aria-label={logoUrl ? "Change company logo" : "Add company logo"}
             disabled={logoUploading}
