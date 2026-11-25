@@ -117,7 +117,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       )}
       {visibleError && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {visibleError}
         </p>
       )}
       {visibleResult && (
@@ -129,7 +129,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 <strong>{visibleResult.roof.facet_count} candidate roof facets detected</strong>
                 <p className="text-muted-foreground">
                   {visibleResult.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
-                  {result.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
+                  {visibleResult.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
                 </p>
               </div>
             </div>
@@ -146,7 +146,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               </div>
             </div>
           )}
-          {result.roof.facets.length > 0 && (
+          {visibleResult.roof.facets.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -159,7 +159,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {result.roof.facets.map((facet) => (
+                  {visibleResult.roof.facets.map((facet) => (
                     <tr key={facet.id} className="border-b border-border/60">
                       <td className="py-2 pr-3">{facet.id}</td>
                       <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
@@ -178,7 +178,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in the
             measurement editor.
           </p>
-          {result.roof.facets.length > 0 && (
+          {visibleResult.roof.facets.length > 0 && (
             <Button variant="outline" onClick={apply}>
               Load candidate facets into roof editor
             </Button>
