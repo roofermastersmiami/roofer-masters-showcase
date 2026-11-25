@@ -692,15 +692,17 @@ export function CrmShell({
       }}
     >
       <div className="flex min-h-dvh bg-background text-foreground">
-        {sidebarVisible && <aside
-          className={cn(
-            "sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block",
-            sidebarSurface,
-            collapsed ? "w-20" : "w-60",
-          )}
-        >
-          {navigation(collapsed)}
-        </aside>}
+        {sidebarVisible && (
+          <aside
+            className={cn(
+              "sticky top-0 hidden h-dvh shrink-0 border-r transition-colors lg:block",
+              sidebarSurface,
+              collapsed ? "w-20" : "w-60",
+            )}
+          >
+            {navigation(collapsed)}
+          </aside>
+        )}
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-card px-4 sm:px-7">
             <Button
