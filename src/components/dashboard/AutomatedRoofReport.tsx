@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, CloudDownload, Loader2, MapPin } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  CloudDownload,
+  Loader2,
+  MapPin,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
 import type { RoofDrawing } from "@/lib/roof-geometry";
@@ -26,11 +33,31 @@ function CandidateOutline({ candidate }: { candidate: BuildingCandidate }) {
   const xs = ring.map(([x]) => x).filter(Number.isFinite);
   const ys = ring.map(([, y]) => y).filter(Number.isFinite);
   if (xs.length < 3 || ys.length < 3) return <div className="h-20 rounded bg-muted" />;
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const width = Math.max(maxX - minX, 1e-8), height = Math.max(maxY - minY, 1e-8);
-  const points = ring.map(([x, y]) => `${10 + ((x - minX) / width) * 80},${60 - ((y - minY) / height) * 50}`).join(" ");
-  return <svg viewBox="0 0 100 70" role="img" aria-label="Building outline preview" className="h-20 w-full rounded bg-muted/50"><polygon points={points} fill="currentColor" fillOpacity="0.14" stroke="currentColor" strokeWidth="1.5" /></svg>;
+  const minX = Math.min(...xs),
+    maxX = Math.max(...xs);
+  const minY = Math.min(...ys),
+    maxY = Math.max(...ys);
+  const width = Math.max(maxX - minX, 1e-8),
+    height = Math.max(maxY - minY, 1e-8);
+  const points = ring
+    .map(([x, y]) => `${10 + ((x - minX) / width) * 80},${60 - ((y - minY) / height) * 50}`)
+    .join(" ");
+  return (
+    <svg
+      viewBox="0 0 100 70"
+      role="img"
+      aria-label="Building outline preview"
+      className="h-20 w-full rounded bg-muted/50"
+    >
+      <polygon
+        points={points}
+        fill="currentColor"
+        fillOpacity="0.14"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
 }
 
 function endpointUrl() {
@@ -71,75 +98,97 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
   const visibleCandidates = errorAddress === currentAddress ? candidates : [];
   const isLoading = loading && loadingAddress === currentAddress;
 
-  const analyze = useCallback(async (candidateId?: string) => {
-    if (!address.trim()) {
-      setError("Select a property with a complete street address first.");
-      setErrorAddress(currentAddress);
-      return;
-    }
-    const endpoint = endpointUrl();
-    if (!endpoint) {
-      setError(
-        "The free roof-detection service is not connected. Set VITE_ROOF_DETECTION_API_URL after deploying the service.",
-      );
-      setErrorAddress(currentAddress);
-      return;
-    }
-    activeController.current?.abort();
-    const controller = new AbortController();
-    activeController.current = controller;
-    const timeoutId = window.setTimeout(() => controller.abort(), 90000);
-    const activeRequest = ++requestId.current;
-    const requestedAddress = address.trim();
-    setLoading(true);
-    setLoadingAddress(requestedAddress);
-    setError("");
-    setErrorAddress("");
-    setCandidates([]);
-    setResult(null);
-    setResultAddress("");
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ street_address: requestedAddress, ...(candidateId ? { footprint_candidate_id: candidateId } : {}) }),
-        signal: controller.signal,
-      });
-      const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
-        if (!candidateId && detail && typeof detail === "object" && "candidates" in detail && Array.isArray(detail.candidates)) {
-          const available = detail.candidates as BuildingCandidate[];
-          if (available.length > 0 && activeRequest === requestId.current) {
-            setCandidates(available);
-            setError(typeof detail.message === "string" ? detail.message : "Select the correct building outline before running roof analysis.");
-            setErrorAddress(requestedAddress);
-            return;
-          }
-        }
-        const message = typeof detail === "string" ? detail :
-          detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string"
-            ? detail.message : `Roof detection request failed (${response.status}).`;
-        throw new Error(message);
+  const analyze = useCallback(
+    async (candidateId?: string) => {
+      if (!address.trim()) {
+        setError("Select a property with a complete street address first.");
+        setErrorAddress(currentAddress);
+        return;
       }
-      // Parse at the boundary; never allow unchecked API data into editable roof geometry.
-      const { roofDetectionResponseSchema } = await import("@/lib/roof-detection");
-      if (activeRequest !== requestId.current) return;
+      const endpoint = endpointUrl();
+      if (!endpoint) {
+        setError(
+          "The free roof-detection service is not connected. Set VITE_ROOF_DETECTION_API_URL after deploying the service.",
+        );
+        setErrorAddress(currentAddress);
+        return;
+      }
+      activeController.current?.abort();
+      const controller = new AbortController();
+      activeController.current = controller;
+      const timeoutId = window.setTimeout(() => controller.abort(), 90000);
+      const activeRequest = ++requestId.current;
+      const requestedAddress = address.trim();
+      setLoading(true);
+      setLoadingAddress(requestedAddress);
+      setError("");
+      setErrorAddress("");
       setCandidates([]);
-      setResult(roofDetectionResponseSchema.parse(body));
-      setResultAddress(requestedAddress);
-    } catch (cause) {
-      if (activeRequest !== requestId.current) return;
-      setError(cause instanceof Error ? cause.message : "Roof detection could not be completed.");
-      setErrorAddress(requestedAddress);
-    } finally {
-      window.clearTimeout(timeoutId);
-      if (activeRequest === requestId.current) {
-        setLoading(false);
-        if (activeController.current === controller) activeController.current = null;
+      setResult(null);
+      setResultAddress("");
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            street_address: requestedAddress,
+            ...(candidateId ? { footprint_candidate_id: candidateId } : {}),
+          }),
+          signal: controller.signal,
+        });
+        const body: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
+          if (
+            !candidateId &&
+            detail &&
+            typeof detail === "object" &&
+            "candidates" in detail &&
+            Array.isArray(detail.candidates)
+          ) {
+            const available = detail.candidates as BuildingCandidate[];
+            if (available.length > 0 && activeRequest === requestId.current) {
+              setCandidates(available);
+              setError(
+                typeof detail.message === "string"
+                  ? detail.message
+                  : "Select the correct building outline before running roof analysis.",
+              );
+              setErrorAddress(requestedAddress);
+              return;
+            }
+          }
+          const message =
+            typeof detail === "string"
+              ? detail
+              : detail &&
+                  typeof detail === "object" &&
+                  "message" in detail &&
+                  typeof detail.message === "string"
+                ? detail.message
+                : `Roof detection request failed (${response.status}).`;
+          throw new Error(message);
+        }
+        // Parse at the boundary; never allow unchecked API data into editable roof geometry.
+        const { roofDetectionResponseSchema } = await import("@/lib/roof-detection");
+        if (activeRequest !== requestId.current) return;
+        setCandidates([]);
+        setResult(roofDetectionResponseSchema.parse(body));
+        setResultAddress(requestedAddress);
+      } catch (cause) {
+        if (activeRequest !== requestId.current) return;
+        setError(cause instanceof Error ? cause.message : "Roof detection could not be completed.");
+        setErrorAddress(requestedAddress);
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (activeRequest === requestId.current) {
+          setLoading(false);
+          if (activeController.current === controller) activeController.current = null;
+        }
       }
-    }
-  }, [address, currentAddress]);
+    },
+    [address, currentAddress],
+  );
 
   // Start public-data analysis once when a new property address is loaded.
   // The manual button remains available for retries; valid LiDAR facets are applied once per address.
@@ -194,16 +243,34 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
       )}
       {visibleCandidates.length > 0 && (
         <div className="space-y-3 rounded-md border border-amber-500/40 p-3">
-          <div className="flex items-center gap-2 text-sm font-medium"><MapPin className="size-4" /> Choose the correct building</div>
-          <p className="text-xs text-muted-foreground">Review each outline and distance. Selecting confirms only the building footprint; LiDAR must still detect the roof planes.</p>
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <MapPin className="size-4" /> Choose the correct building
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Review each outline and distance. Selecting confirms only the building footprint; LiDAR
+            must still detect the roof planes.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {visibleCandidates.map((candidate, index) => (
-              <div key={candidate.candidate_id} className="space-y-2 rounded-md border border-border p-3">
+              <div
+                key={candidate.candidate_id}
+                className="space-y-2 rounded-md border border-border p-3"
+              >
                 <CandidateOutline candidate={candidate} />
                 <div className="text-sm font-medium">Building option {index + 1}</div>
-                <div className="text-xs text-muted-foreground">{candidate.area_sqft.toLocaleString()} sq ft ground footprint · {candidate.address_to_footprint_distance_m.toFixed(1)} m from address pin</div>
-                {candidate.address_point_inside_footprint && <div className="text-xs text-emerald-700">Address pin is inside this outline</div>}
-                <Button className="w-full" size="sm" onClick={() => void analyze(candidate.candidate_id)} disabled={isLoading}>
+                <div className="text-xs text-muted-foreground">
+                  {candidate.area_sqft.toLocaleString()} sq ft ground footprint ·{" "}
+                  {candidate.address_to_footprint_distance_m.toFixed(1)} m from address pin
+                </div>
+                {candidate.address_point_inside_footprint && (
+                  <div className="text-xs text-emerald-700">Address pin is inside this outline</div>
+                )}
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() => void analyze(candidate.candidate_id)}
+                  disabled={isLoading}
+                >
                   {isLoading ? <Loader2 className="animate-spin" /> : null} Select this building
                 </Button>
               </div>
