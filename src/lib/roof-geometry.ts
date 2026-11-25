@@ -121,11 +121,6 @@ function ringArea(r: number[][]) {
   }
   return Math.abs(area) / 2;
 }
-function edgeKey(a: Point, b: Point) {
-  const key = (p: Point) => [p.x, p.y, p.z].map((n) => Math.round(n * 100)).join(",");
-  return [key(a), key(b)].sort().join("|");
-}
-
 export type SharedEdgeSuggestion = {
   planeId: string;
   edgeIndex: number;
