@@ -285,7 +285,7 @@ export function CrmShell({
   useEffect(() => {
     const selected = getCrmAccent(accent);
     const root = document.documentElement;
-    if (selected) {
+    if (theme === "default" && selected) {
       root.style.setProperty("--primary", selected.value);
       root.style.setProperty("--primary-glow", selected.value);
       root.style.setProperty("--ring", selected.value);
@@ -304,7 +304,7 @@ export function CrmShell({
       root.style.removeProperty("--accent");
       root.style.removeProperty("--accent-foreground");
     };
-  }, [accent]);
+  }, [accent, theme]);
   useEffect(() => {
     if (!brandingLoaded || !brandingUserId) return;
     void supabase
@@ -712,6 +712,7 @@ export function CrmShell({
                   if (value.startsWith("accent:")) {
                     const accentId = value.slice("accent:".length);
                     if (isCrmAccentId(accentId)) {
+                      setTheme("default");
                       setAccent(accentId);
                       setThemeChoice(value);
                     }
