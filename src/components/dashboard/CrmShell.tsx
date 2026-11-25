@@ -700,12 +700,12 @@ export function CrmShell({
             </div>
             <label
               className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 sm:gap-1.5 sm:px-2"
-              title="Choose a CRM theme or accent color"
+              title="Choose one of 35 CRM appearances"
             >
               <Palette className="size-4 text-muted-foreground" />
-              <span className="sr-only">CRM theme and accent color</span>
+              <span className="sr-only">CRM appearance</span>
               <select
-                aria-label="CRM theme and accent color"
+                aria-label="CRM appearance"
                 value={themeChoice}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -725,31 +725,27 @@ export function CrmShell({
                 }}
                 className="h-8 max-w-28 bg-transparent text-[11px] outline-none sm:max-w-40 sm:text-xs"
               >
-                <optgroup label="Full themes">
-                  <option value="theme:default">Default — Roofer Masters</option>
-                  <option value="theme:executive-berry">Executive Berry</option>
-                  <option value="theme:modern-enterprise">Modern Enterprise</option>
-                  <option value="theme:canyon-corporate">Canyon Corporate</option>
-                  <option value="theme:midnight-teal">Midnight Teal</option>
-                  <option value="theme:ocean-slate">Ocean Slate</option>
-                  <option value="theme:royal-indigo">Royal Indigo</option>
-                  <option value="theme:emerald-ledger">Emerald Ledger</option>
-                  <option value="theme:copperstone">Copperstone</option>
-                  <option value="theme:arctic-blue">Arctic Blue</option>
-                  <option value="theme:graphite-gold">Graphite Gold</option>
-                  <option value="theme:crimson-executive">Crimson Executive</option>
-                  <option value="theme:sage-stone">Sage & Stone</option>
-                  <option value="theme:cobalt-professional">Cobalt Professional</option>
-                  <option value="theme:plum-luxe">Plum Luxe</option>
-                  <option value="theme:monochrome-pro">Monochrome Pro</option>
-                </optgroup>
-                <optgroup label="Accent colors">
-                  {CRM_ACCENT_COLORS.map((color) => (
-                    <option key={color.id} value={`accent:${color.id}`}>
-                      {color.label}
-                    </option>
-                  ))}
-                </optgroup>
+                <option value="theme:default">Default — Roofer Masters</option>
+                <option value="theme:executive-berry">Executive Berry</option>
+                <option value="theme:modern-enterprise">Modern Enterprise</option>
+                <option value="theme:canyon-corporate">Canyon Corporate</option>
+                <option value="theme:midnight-teal">Midnight Teal</option>
+                <option value="theme:ocean-slate">Ocean Slate</option>
+                <option value="theme:royal-indigo">Royal Indigo</option>
+                <option value="theme:emerald-ledger">Emerald Ledger</option>
+                <option value="theme:copperstone">Copperstone</option>
+                <option value="theme:arctic-blue">Arctic Blue</option>
+                <option value="theme:graphite-gold">Graphite Gold</option>
+                <option value="theme:crimson-executive">Crimson Executive</option>
+                <option value="theme:sage-stone">Sage & Stone</option>
+                <option value="theme:cobalt-professional">Cobalt Professional</option>
+                <option value="theme:plum-luxe">Plum Luxe</option>
+                <option value="theme:monochrome-pro">Monochrome Pro</option>
+                {CRM_ACCENT_COLORS.map((color) => (
+                  <option key={color.id} value={`accent:${color.id}`}>
+                    {color.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label
