@@ -41,7 +41,7 @@ describe("roof geometry", () => {
 
     const measured = measureDrawing(drawing);
     expect(measured.edges.ridge).toBeCloseTo(30, 5);
-    expect(measured.perimeter).toBeCloseTo(140, 5);
+    expect(measured.perimeter).toBeCloseTo(60 + 4 * Math.hypot(20, 10), 5);
   });
 
   it("rejects overlapping roof planes", () => {
