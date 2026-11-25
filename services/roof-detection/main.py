@@ -686,6 +686,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
     from_local = Transformer.from_crs(local_crs, "EPSG:4326", always_xy=True)
     tile_points: list[np.ndarray] = []
     used_items = 0
+    used_tile_ids: list[str] = []
     raw_point_count = 0
 
     for item in items:
@@ -743,6 +744,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             tile_points.append(np.column_stack((local_x, local_y, coords[:, 2])))
             raw_point_count += len(coords)
             used_items += 1
+            used_tile_ids.append(str(item.id))
         except Exception:
             # One unavailable/corrupt tile must not prevent other intersecting tiles being used.
             continue
@@ -770,6 +772,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
     return all_facets, {
         "stac_items": len(items),
         "tiles_used": used_items,
+        "tile_ids_used": used_tile_ids,
         "building_class_points": len(unique_points),
         "raw_building_class_points": raw_point_count,
         "duplicate_points_removed": raw_point_count - len(unique_points),

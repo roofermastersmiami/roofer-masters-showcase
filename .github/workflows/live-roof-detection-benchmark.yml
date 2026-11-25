@@ -7,6 +7,11 @@ on:
         description: Property address to analyze
         required: true
         default: "3062 Southwest 189th Avenue, Miramar, FL 33029"
+      footprint_candidate_id:
+        description: Reviewed candidate ID from the previous diagnostic artifact (leave blank to list candidates)
+        required: false
+        type: string
+        default: ""
   push:
     branches: [main]
     paths:
@@ -36,9 +41,10 @@ jobs:
           echo "Backend did not become healthy within 10 minutes."
           exit 1
 
-      - name: Analyze exact property and safely resolve footprint candidate
+      - name: Analyze exact property and resolve reviewed footprint candidate
         env:
           PROPERTY_ADDRESS: ${{ inputs.address || '3062 Southwest 189th Avenue, Miramar, FL 33029' }}
+          FOOTPRINT_CANDIDATE_ID: ${{ inputs.footprint_candidate_id || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -52,6 +58,7 @@ jobs:
 
           endpoint = "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze"
           address = os.environ["PROPERTY_ADDRESS"]
+          selected_id = os.environ.get("FOOTPRINT_CANDIDATE_ID", "").strip()
           headers = {"Content-Type": "application/json", "User-Agent": "RooferMasters-GitHub-Benchmark/1.0"}
 
           def post(payload):
@@ -68,35 +75,42 @@ jobs:
                   return error.code, body
 
           status, body = post({"street_address": address})
-          print(f"Initial analysis HTTP {status}")
-          if status == 409:
-              detail = body.get("detail", body)
-              candidates = detail.get("candidates", []) if isinstance(detail, dict) else []
-              print("Candidate selection required. Candidates:")
-              print(json.dumps(candidates, indent=2))
-              # Only automatically select a single polygon that contains the
-              # geocoded address point. Never choose the nearest neighbor.
-              safe = [candidate for candidate in candidates if candidate.get("address_point_inside_footprint") is True]
-              if len(safe) != 1:
-                  result = {
-                      "requested_address": address,
-                      "http_status": status,
-                      "blocker": "No unique candidate contains the geocoded address point; human outline selection is required.",
-                      "candidate_selection_code": detail.get("code") if isinstance(detail, dict) else None,
-                      "candidate_count": len(candidates),
-                      "candidates": candidates,
-                      "raw_error": body,
-                  }
-                  Path("roof-analysis-summary.json").write_text(json.dumps(result, indent=2))
-                  print(json.dumps(result, indent=2))
+          detail = body.get("detail", body)
+          candidates = detail.get("candidates", []) if isinstance(detail, dict) else []
+          chosen = None
+
+          if status == 409 and candidates:
+              Path("roof-analysis-summary.json").write_text(json.dumps({
+                  "requested_address": address,
+                  "http_status": status,
+                  "blocker": "Human review required: select the correct building outline before LiDAR analysis.",
+                  "candidate_selection_code": detail.get("code"),
+                  "candidate_count": len(candidates),
+                  "candidates": candidates,
+                  "next_step": "Rerun this workflow with footprint_candidate_id set to the candidate_id for the reviewed property outline."
+              }, indent=2))
+              if not selected_id:
+                  print("Candidate selection is required. Diagnostic artifact contains candidate IDs and polygon outlines.")
+                  print(json.dumps(candidates, indent=2))
                   sys.exit(2)
-              chosen = safe[0]
-              print(f"Selecting unique containing candidate {chosen.get('candidate_id')} from {chosen.get('provider')} source {chosen.get('source_id')}")
-              status, body = post({"street_address": address, "footprint_candidate_id": chosen["candidate_id"]})
+              matches = [candidate for candidate in candidates if candidate.get("candidate_id") == selected_id]
+              if len(matches) != 1:
+                  print(f"Selected candidate ID {selected_id!r} is not present exactly once in the fresh candidate response.")
+                  print(json.dumps(candidates, indent=2))
+                  sys.exit(2)
+              chosen = matches[0]
+              print(f"Using explicitly reviewed candidate {selected_id} ({chosen.get('provider')}, source {chosen.get('source_id')}).")
+              status, body = post({"street_address": address, "footprint_candidate_id": selected_id})
               print(f"Selected-footprint analysis HTTP {status}")
 
           if not 200 <= status < 300:
-              result = {"requested_address": address, "http_status": status, "raw_error": body}
+              result = {
+                  "requested_address": address,
+                  "http_status": status,
+                  "selected_candidate_id": selected_id or None,
+                  "selected_candidate": chosen,
+                  "raw_error": body,
+              }
               Path("roof-analysis-summary.json").write_text(json.dumps(result, indent=2))
               print(json.dumps(result, indent=2))
               sys.exit(1)
@@ -111,6 +125,8 @@ jobs:
               "verification": body.get("verification"),
               "matched_address": body.get("matched_address"),
               "location": body.get("location"),
+              "selected_candidate_id": selected_id or None,
+              "selected_candidate": chosen,
               "footprint": {
                   "source": footprint.get("source"),
                   "source_id": footprint.get("source_id"),
@@ -146,8 +162,9 @@ jobs:
               }
           Path("roof-analysis-summary.json").write_text(json.dumps(summary, indent=2))
           print(json.dumps(summary, indent=2))
-          if body.get("status") != "lidar_facets":
-              print("Analysis returned no fitted LiDAR roof facets; no surface measurements will be inferred from the footprint.")
+          if body.get("status") != "lidar_facets" or not roof.get("facets"):
+              print("Building footprint was selected, but no fitted LiDAR roof facets were returned. No roof surface area or pitch will be inferred.")
+              sys.exit(3)
           PY
 
       - name: Save benchmark response and candidate diagnostics

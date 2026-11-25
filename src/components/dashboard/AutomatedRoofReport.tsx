@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -103,6 +103,10 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
   const visibleError = errorAddress === currentAddress ? error : "";
   const visibleCandidates = errorAddress === currentAddress ? candidates : [];
   const isLoading = loading && loadingAddress === currentAddress;
+  const isMiramarBenchmark =
+    currentAddress.toLowerCase().includes("3062") &&
+    currentAddress.toLowerCase().includes("189") &&
+    currentAddress.toLowerCase().includes("miramar");
 
   const analyze = useCallback(
     async (candidateId?: string) => {
@@ -328,8 +332,8 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                 <strong>Source-data coverage</strong>
                 <p className="mt-1 text-muted-foreground">
                   {visibleResult.lidar.building_class_points !== undefined
-                    ? `${visibleResult.lidar.building_class_points.toLocaleString()} unique building-class points`
-                    : "Point total unavailable"}
+                    ? `${visibleResult.lidar.building_class_points.toLocaleString()} unique ASPRS class-6 building points${visibleResult.lidar.raw_building_class_points !== undefined ? ` from ${visibleResult.lidar.raw_building_class_points.toLocaleString()} raw tile returns` : ""}`
+                    : "Classified building-point total unavailable"}
                   {visibleResult.lidar.tiles_used !== undefined
                     ? ` · ${visibleResult.lidar.tiles_used} LiDAR tiles used`
                     : ""}
@@ -337,6 +341,14 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                     ? ` · ${visibleResult.lidar.stac_items} coverage records searched`
                     : ""}
                 </p>
+                {visibleResult.lidar.tile_ids_used && visibleResult.lidar.tile_ids_used.length > 0 && (
+                  <div className="mt-2 text-xs">
+                    <strong>USGS 3DEP COPC tiles actually read</strong>
+                    <ul className="mt-1 list-inside list-disc break-all text-muted-foreground">
+                      {visibleResult.lidar.tile_ids_used.map((tileId) => <li key={tileId}>{tileId}</li>)}
+                    </ul>
+                  </div>
+                )}
                 {visibleResult.lidar.duplicate_points_removed !== undefined &&
                   visibleResult.lidar.duplicate_points_removed > 0 && (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -365,7 +377,8 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                   </thead>
                   <tbody>
                     {visibleResult.roof.facets.map((facet) => (
-                      <tr key={facet.id} className="border-b border-border/60">
+                      <Fragment key={facet.id}>
+                      <tr className="border-b border-border/60">
                         <td className="py-2 pr-3">{facet.id}</td>
                         <td className="py-2 pr-3 tabular-nums">
                           {facet.point_count.toLocaleString()}
@@ -378,16 +391,47 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                         <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                         <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
                         <td className="py-2 pr-3 tabular-nums">
-                          {facet.pitch_rise_per_12.toFixed(1)}:12
+                          {facet.pitch_rise_per_12.toFixed(1)}:12 ({facet.pitch_degrees.toFixed(1)}°)
                         </td>
                         <td className="py-2 tabular-nums">{facet.azimuth_degrees.toFixed(0)}°</td>
                       </tr>
+                      <tr className="border-b border-border/60">
+                        <td colSpan={7} className="pb-3 pt-1">
+                          <details className="text-xs">
+                            <summary className="cursor-pointer text-muted-foreground">
+                              View measured facet boundary geometry (latitude, longitude, elevation m)
+                            </summary>
+                            <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-[11px]">{JSON.stringify(facet.boundary_latlon, null, 2)}</pre>
+                          </details>
+                        </td>
+                      </tr>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
           </details>
+          {isMiramarBenchmark && (
+            <div className="rounded-md border border-border p-3 text-sm">
+                <strong>RoofSnap benchmark comparison</strong>
+              <p className="mt-1 text-muted-foreground">
+                RoofSnap reference: 4,748 sq ft (47.48 squares), main pitch 6/12.
+              </p>
+              {visibleResult.status === "lidar_facets" &&
+              visibleResult.roof.area_sqft !== null &&
+              visibleResult.roof.dominant_pitch_rise_per_12 !== null ? (
+                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                  <p>LiDAR: <strong>{visibleResult.roof.area_sqft.toLocaleString()} sq ft</strong></p>
+                  <p>Area difference: <strong>{(visibleResult.roof.area_sqft - 4748).toLocaleString(undefined, { maximumFractionDigits: 1 })} sq ft ({(((visibleResult.roof.area_sqft - 4748) / 4748) * 100).toFixed(2)}%)</strong></p>
+                  <p>LiDAR dominant pitch: <strong>{visibleResult.roof.dominant_pitch_rise_per_12.toFixed(1)}:12</strong></p>
+                  <p>Pitch difference: <strong>{(visibleResult.roof.dominant_pitch_rise_per_12 - 6).toFixed(1)} rise/12</strong></p>
+                </div>
+              ) : (
+                <p className="mt-2 text-amber-700">Comparison pending: actual LiDAR facets and roof surface area are not available for this run.</p>
+              )}
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
             the measurement editor.

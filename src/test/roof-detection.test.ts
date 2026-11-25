@@ -15,6 +15,7 @@ const response: RoofDetectionResponse = {
     source: "Microsoft Planetary Computer / USGS 3DEP COPC",
     stac_items: 3,
     tiles_used: 2,
+    tile_ids_used: ["USGS_LPC_FL_South_2020_19R_1234", "USGS_LPC_FL_South_2020_19R_1235"],
     building_class_points: 420,
     raw_building_class_points: 450,
     duplicate_points_removed: 30,
@@ -130,6 +131,7 @@ describe("LiDAR source-data evidence", () => {
     const parsed = roofDetectionResponseSchema.parse(response);
     expect(parsed.lidar?.building_class_points).toBe(420);
     expect(parsed.lidar?.tiles_used).toBe(2);
+    expect(parsed.lidar?.tile_ids_used).toEqual(["USGS_LPC_FL_South_2020_19R_1234", "USGS_LPC_FL_South_2020_19R_1235"]);
     expect(parsed.lidar?.duplicate_points_removed).toBe(30);
     expect(parsed.roof.facets[0]?.point_count).toBe(200);
   });
