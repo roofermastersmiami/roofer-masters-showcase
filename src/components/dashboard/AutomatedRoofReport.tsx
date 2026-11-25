@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, CloudDownload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
+import type { RoofDrawing } from "@/lib/roof-geometry";
 
 type Props = {
   address: string;
@@ -20,6 +21,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const [resultAddress, setResultAddress] = useState("");
   const [errorAddress, setErrorAddress] = useState("");
   const [loadingAddress, setLoadingAddress] = useState("");
+  const [roofType, setRoofType] = useState<RoofDrawing["roof_type"] | "">("");
   const requestId = useRef(0);
 
   // Prevent a previous property response from being applied to a newly selected address.
@@ -86,7 +88,12 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   function apply() {
     if (!visibleResult || resultAddress !== address.trim()) return;
     try {
-      onApply(detectedFacetsToDrawing(visibleResult));
+      if (!roofType) {
+        setError("Choose the roof system before loading the detected measurements.");
+        setErrorAddress(currentAddress);
+        return;
+      }
+      onApply(detectedFacetsToDrawing(visibleResult, roofType));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -124,14 +131,6 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       )}
       {visibleResult && (
         <div className="space-y-3">
-          {visibleResult.footprint.address_point_inside_footprint === false && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800">
-              Address match is approximate: the geocoded point is{" "}
-              {visibleResult.footprint.address_to_footprint_distance_m?.toFixed(1)} m from the
-              selected building outline. Confirm the correct building before using these
-              measurements.
-            </p>
-          )}
           {visibleResult.status === "lidar_facets" ? (
             <div className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
