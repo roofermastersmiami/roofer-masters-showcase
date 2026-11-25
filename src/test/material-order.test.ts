@@ -4,6 +4,7 @@ import {
   escapeMaterialOrderHtml,
   materialOrderWarnings,
   materialOrderForTransfer,
+  effectiveMaterialWastePct,
 } from "@/lib/material-order";
 const base = {
   area_sqft: 2000,
@@ -54,6 +55,12 @@ describe("material orders from roof report", () => {
 });
 
 describe("automatic material waste", () => {
+  it("reports the same complexity-based waste allowance used by default quantities", () => {
+    expect(effectiveMaterialWastePct({ ...base, waste_pct: undefined, roof_type: "Shingle Roof" })).toBe(15);
+    expect(effectiveMaterialWastePct({ ...base, waste_pct: undefined, roof_type: "Flat Roof" })).toBe(10);
+    expect(effectiveMaterialWastePct({ ...base, waste_pct: 7, roof_type: "Shingle Roof" })).toBe(7);
+  });
+
   it("uses the complexity-based default for shingle when no override is supplied", () => {
     const lines = materialOrder({ ...base, waste_pct: undefined, roof_type: "Shingle Roof" });
     expect(q(lines, "Architectural")).toBe(68);
