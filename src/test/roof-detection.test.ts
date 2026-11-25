@@ -10,6 +10,14 @@ const response: RoofDetectionResponse = {
   verification: "unverified_public_data",
   matched_address: "100 Main Street",
   location: { lat: 25.47, lon: -80.48 },
+  lidar: {
+    source: "Microsoft Planetary Computer / USGS 3DEP COPC",
+    stac_items: 3,
+    tiles_used: 2,
+    building_class_points: 420,
+    raw_building_class_points: 450,
+    duplicate_points_removed: 30,
+  },
   footprint: {
     source: "OpenStreetMap",
     area_sqft: 1200,
@@ -71,6 +79,22 @@ describe("LiDAR facet roof-system selection", () => {
       expect(drawing.planes[0]?.edges.every((edge) => edge === "other")).toBe(true);
     },
   );
+});
+
+describe("LiDAR source-data evidence", () => {
+  it("validates point and tile counts returned by the public-data service", () => {
+    const parsed = roofDetectionResponseSchema.parse(response);
+    expect(parsed.lidar?.building_class_points).toBe(420);
+    expect(parsed.lidar?.tiles_used).toBe(2);
+    expect(parsed.lidar?.duplicate_points_removed).toBe(30);
+    expect(parsed.roof.facets[0]?.point_count).toBe(200);
+  });
+
+  it("accepts legacy responses without LiDAR metadata", () => {
+    const { lidar: _lidar, ...legacyResponse } = response;
+    const parsed = roofDetectionResponseSchema.parse(legacyResponse);
+    expect(parsed.lidar).toBeUndefined();
+  });
 });
 
 describe("LiDAR address-to-footprint confidence metadata", () => {
