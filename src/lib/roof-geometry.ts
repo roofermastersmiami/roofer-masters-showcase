@@ -294,9 +294,19 @@ export function measureDrawing(raw: RoofDrawing) {
   const sameSegment = (a: Point, b: Point, c: Point, d: Point) =>
     (distance(a, c) <= edgeToleranceFt && distance(b, d) <= edgeToleranceFt) ||
     (distance(a, d) <= edgeToleranceFt && distance(b, c) <= edgeToleranceFt);
+  const midpoint = (a: Point, b: Point): Point => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+    z: (a.z + b.z) / 2,
+  });
+  const cellKey = (point: Point) =>
+    [point.x, point.y, point.z].map((value) => Math.floor(value / edgeToleranceFt)).join(",");
+  const edgeBuckets = new Map<string, number[]>();
 
   // Count a shared physical boundary once even when separately fitted facets
-  // have slightly different LiDAR-derived coordinates.
+  // have slightly different LiDAR-derived coordinates. A midpoint spatial
+  // index limits candidate comparisons to nearby cells instead of scanning
+  // every previously measured edge for every new edge.
   for (const p of d.planes)
     for (let i = 0; i < p.points.length; i++) {
       const a = p.points[i],
@@ -305,7 +315,20 @@ export function measureDrawing(raw: RoofDrawing) {
       if (!a || !b || !type) continue;
       const length = distance(a, b);
       if (length < 0.01) throw new Error(`${p.name}: roof edges must be at least 0.01 feet long`);
-      const matches = measuredEdges.filter((edge) => sameSegment(a, b, edge.a, edge.b));
+
+      const center = midpoint(a, b);
+      const [cx, cy, cz] = cellKey(center).split(",").map(Number);
+      const candidates: number[] = [];
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dz = -1; dz <= 1; dz++) {
+            const key = [cx! + dx, cy! + dy, cz! + dz].join(",");
+            candidates.push(...(edgeBuckets.get(key) ?? []));
+          }
+      const matches = candidates.flatMap((index) => {
+        const edge = measuredEdges[index];
+        return edge && sameSegment(a, b, edge.a, edge.b) ? [edge] : [];
+      });
       if (matches.length > 1)
         throw new Error("Roof edge matches multiple nearby boundaries; review the roof geometry");
       const existing = matches[0];
@@ -316,7 +339,11 @@ export function measureDrawing(raw: RoofDrawing) {
         if (existing.type !== type)
           throw new Error("Shared edges must have matching classifications");
       } else {
-        measuredEdges.push({ a, b, length, type, occurrences: 1 });
+        const index = measuredEdges.push({ a, b, length, type, occurrences: 1 }) - 1;
+        const key = cellKey(center);
+        const bucket = edgeBuckets.get(key) ?? [];
+        bucket.push(index);
+        edgeBuckets.set(key, bucket);
         edges[type] += length;
       }
     }

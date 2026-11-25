@@ -45,6 +45,22 @@ describe("roof geometry", () => {
     expect(measured.perimeter).toBeLessThan(149.6);
   });
 
+  it("measures many spatially separated planes without losing edge totals", () => {
+    const template = roofPreset("flat", 10, 10).planes[0];
+    if (!template) throw new Error("Missing template plane");
+    const planes = Array.from({ length: 40 }, (_, index) => ({
+      ...template,
+      id: `section-${index}`,
+      name: `Section ${index}`,
+      points: template.points.map((point) => ({ ...point, x: point.x + index * 20 })),
+    }));
+    const drawing = { ...roofPreset("flat", 10, 10), planes };
+    const measured = measureDrawing(drawing);
+    expect(measured.area).toBeCloseTo(4000, 5);
+    expect(measured.edges.eave).toBeCloseTo(1600, 5);
+    expect(measured.perimeter).toBeCloseTo(1600, 5);
+  });
+
   it("rejects overlapping roof planes", () => {
     const d = roofPreset("flat");
     const p = d.planes[0];
