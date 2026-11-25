@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasPrivilegedPattern, isReviewed } from "../../scripts/check-tenant-security-diff.mjs";
+import { hasPrivilegedPattern, isReviewed } from "@/lib/tenant-security-audit";
 
 describe("tenant security diff audit", () => {
   it("detects new SECURITY DEFINER SQL functions", () => {
