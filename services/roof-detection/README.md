@@ -26,15 +26,17 @@ Or pass coordinates:
 { "lat": 38.8977, "lon": -77.0365 }
 ```
 
-## Free deployment
+## Free deployment with Render
 
-1. Push this repository to GitHub.
-2. Create a free web service on Render and connect this repository.
-3. Set **Root Directory** to `services/roof-detection`.
-4. Choose **Docker** as the runtime. Render will build the included Dockerfile.
-5. Set `CORS_ORIGINS` to the exact CRM origin (for example, your Lovable production domain); do not leave `*` for production.
-6. Deploy and verify `https://YOUR-SERVICE.onrender.com/health`.
-7. Set the CRM environment variable `VITE_ROOF_DETECTION_API_URL` to the service origin.
+The repository includes a `render.yaml` Blueprint for the roof-detection service.
+
+1. In Render, choose **New → Blueprint** and connect this GitHub repository.
+2. Select the `render.yaml` Blueprint. It creates the Docker web service on Render's free plan.
+3. When prompted, set `CORS_ORIGINS` to the exact public origin of the CRM frontend (scheme + hostname, no trailing path). Do not use `*` in production.
+4. Deploy. Wait for the service health check to pass, then open `https://YOUR-SERVICE.onrender.com/health`.
+5. Copy the service origin (without `/health`) into the frontend host's `VITE_ROOF_DETECTION_API_URL` environment variable and redeploy the frontend.
+
+The CRM environment variable is configured in the frontend hosting provider, not in the Render service. A service URL cannot be supplied until Render creates the service. No API keys or paid data APIs are required.
 
 The free host may sleep and cold-start; public data providers can throttle requests. This API intentionally returns `footprint_only` when LiDAR coverage or sufficient building-classified points are unavailable. It does not manufacture pitch or edge quantities from a 2D footprint.
 
@@ -45,5 +47,4 @@ The free host may sleep and cold-start; public data providers can throttle reque
 - RANSAC fits local planes to the available building-classified points. Small, occluded, complex, or low-density facets may be missed.
 - Facet surface area is derived from the fitted plane and point-cloud convex hull. It remains preliminary until checked against imagery and/or on-site measurements.
 - Ridge/hip/valley/eave/rake linework is not returned as verified because a building footprint and disconnected plane hulls cannot reliably distinguish those edge classes without shared-boundary topology and manual/imagery review.
-- Public services have fair-use limits. Cache completed address analyses in the CRM and avoid repeated requests while editing a report.
-- No API keys or paid APIs are required.
+- Public services have fair-use limits. The service currently caches completed responses in process memory; restarts clear that cache.
