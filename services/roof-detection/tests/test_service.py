@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
-from main import AnalyzeRequest, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft
+from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft
 from shapely.geometry import Polygon
 
 
@@ -74,3 +74,20 @@ def test_footprint_match_distance_rejects_neighboring_building_scale_offset():
     ])
     # Roughly 11 m north of the footprint, beyond the 5 m match tolerance.
     assert _distance_to_footprint_meters(polygon, 25.0002, -79.99995) > 5
+
+
+
+def test_overlapping_lidar_tiles_are_deduplicated_before_plane_fitting():
+    points = np.array([
+        [1.000, 2.000, 3.000],
+        [1.004, 2.003, 3.002],
+        [4.000, 5.000, 6.000],
+    ])
+    unique = _deduplicate_lidar_points(points, precision_m=0.02)
+    assert len(unique) == 2
+    assert any(np.allclose(row, points[0]) for row in unique)
+    assert any(np.allclose(row, points[2]) for row in unique)
+
+
+def test_lidar_deduplication_keeps_empty_input_shape():
+    assert _deduplicate_lidar_points(np.empty((0, 3))).shape == (0, 3)
