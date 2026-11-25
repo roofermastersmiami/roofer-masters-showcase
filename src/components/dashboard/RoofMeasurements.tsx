@@ -1810,7 +1810,7 @@ export function RoofMeasurements({
             try {
               nextPlanes = rebaseRoofPlanes(newPlanes, geoReference, d.geo_reference!);
               nextGeoReference = d.geo_reference!;
-            } catch (error) {
+            } catch {
               if (
                 !confirm(
                   "This trace cannot be aligned safely with the saved drawing. Replace the current roof planes and penetrations with this trace instead?",
@@ -1829,9 +1829,10 @@ export function RoofMeasurements({
           }
           edit({
             ...d,
-            planes: canAppendToCurrentFrame && nextGeoReference === d.geo_reference
-              ? [...d.planes, ...nextPlanes]
-              : nextPlanes,
+            planes:
+              canAppendToCurrentFrame && nextGeoReference === d.geo_reference
+                ? [...d.planes, ...nextPlanes]
+                : nextPlanes,
             penetrations: nextPenetrations,
             geo_reference: nextGeoReference,
             accuracy: "photo_estimate",
