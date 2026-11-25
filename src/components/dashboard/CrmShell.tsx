@@ -264,9 +264,12 @@ export function CrmShell({
         .createSignedUrl(logoPath, 60 * 60);
       if (!cancelled && !signedUrlError && data?.signedUrl) setLogoUrl(data.signedUrl);
     };
-    const interval = window.setInterval(() => {
-      void refreshSignedLogoUrl();
-    }, 45 * 60 * 1000);
+    const interval = window.setInterval(
+      () => {
+        void refreshSignedLogoUrl();
+      },
+      45 * 60 * 1000,
+    );
     return () => {
       cancelled = true;
       window.clearInterval(interval);
