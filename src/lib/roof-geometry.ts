@@ -139,28 +139,78 @@ export type SharedEdgeSuggestion = {
  * when the facet has measurable pitch. Suggestions never mutate the drawing.
  */
 export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSuggestion[] {
-  const occurrences = new Map<
-    string,
-    { plane: RoofPlane; edgeIndex: number; a: Point; b: Point }[]
-  >();
+  type EdgeOccurrence = { plane: RoofPlane; edgeIndex: number; a: Point; b: Point };
+  const edges: EdgeOccurrence[] = [];
   for (const plane of d.planes) {
     for (let edgeIndex = 0; edgeIndex < plane.points.length; edgeIndex++) {
       const a = plane.points[edgeIndex];
       const b = plane.points[(edgeIndex + 1) % plane.points.length];
-      if (!a || !b) continue;
-      const key = edgeKey(a, b);
-      const list = occurrences.get(key) ?? [];
-      list.push({ plane, edgeIndex, a, b });
-      occurrences.set(key, list);
+      if (a && b) edges.push({ plane, edgeIndex, a, b });
     }
   }
 
-  const suggestions: SharedEdgeSuggestion[] = [];
+  // Independently detected LiDAR facets can describe the same physical boundary
+  // with slightly different coordinates. Match segment endpoints within 0.05 ft
+  // rather than requiring identical rounded vertex keys.
   const toleranceFt = 0.05;
-  for (const shared of occurrences.values()) {
-    if (shared.length === 1) {
-      const edge = shared[0];
-      if (!edge) continue;
+  const cellKey = (point: Point) =>
+    [point.x, point.y, point.z].map((value) => Math.floor(value / toleranceFt)).join(",");
+  const midpoint = (edge: EdgeOccurrence): Point => ({
+    x: (edge.a.x + edge.b.x) / 2,
+    y: (edge.a.y + edge.b.y) / 2,
+    z: (edge.a.z + edge.b.z) / 2,
+  });
+  const endpointMatch = (first: EdgeOccurrence, second: EdgeOccurrence) => {
+    const direct =
+      distance(first.a, second.a) <= toleranceFt &&
+      distance(first.b, second.b) <= toleranceFt;
+    const reversed =
+      distance(first.a, second.b) <= toleranceFt &&
+      distance(first.b, second.a) <= toleranceFt;
+    return direct || reversed;
+  };
+  const buckets = new Map<string, number[]>();
+  const matches = new Map<number, number[]>();
+
+  for (let index = 0; index < edges.length; index++) {
+    const edge = edges[index];
+    if (!edge) continue;
+    const center = midpoint(edge);
+    const cell = cellKey(center);
+    const [cx, cy, cz] = cell.split(",").map(Number);
+    const candidates: number[] = [];
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dz = -1; dz <= 1; dz++) {
+          const key = [cx! + dx, cy! + dy, cz! + dz].join(",");
+          candidates.push(...(buckets.get(key) ?? []));
+        }
+
+    for (const candidateIndex of candidates) {
+      const candidate = edges[candidateIndex];
+      if (
+        !candidate ||
+        candidate.plane.id === edge.plane.id ||
+        !endpointMatch(edge, candidate)
+      )
+        continue;
+      matches.set(index, [...(matches.get(index) ?? []), candidateIndex]);
+      matches.set(candidateIndex, [...(matches.get(candidateIndex) ?? []), index]);
+    }
+
+    const list = buckets.get(cell) ?? [];
+    list.push(index);
+    buckets.set(cell, list);
+  }
+
+  const suggestions: SharedEdgeSuggestion[] = [];
+  const suggestedPairs = new Set<string>();
+  for (let index = 0; index < edges.length; index++) {
+    const edge = edges[index];
+    if (!edge) continue;
+    const linked = matches.get(index) ?? [];
+
+    if (linked.length === 0) {
       let pitch = 0;
       try {
         pitch = planeInfo(edge.plane).pitch;
@@ -171,25 +221,31 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
       if (pitch < 0.25) continue;
       const type = Math.abs(edge.a.y - edge.b.y) <= toleranceFt ? "eave" : "rake";
       if (edge.plane.edges[edge.edgeIndex] !== type) {
-        suggestions.push({
-          planeId: edge.plane.id,
-          edgeIndex: edge.edgeIndex,
-          type,
-        });
+        suggestions.push({ planeId: edge.plane.id, edgeIndex: edge.edgeIndex, type });
       }
       continue;
     }
-    if (shared.length !== 2) continue;
-    const first = shared[0];
-    const second = shared[1];
-    if (!first || !second || first.plane.id === second.plane.id) continue;
+
+    // More than one nearby facet edge is ambiguous; never guess which surface
+    // is truly adjacent. Require a one-to-one match in both directions.
+    if (linked.length !== 1) continue;
+    const otherIndex = linked[0];
+    if (otherIndex === undefined || index > otherIndex) continue;
+    const reciprocal = matches.get(otherIndex) ?? [];
+    if (reciprocal.length !== 1 || reciprocal[0] !== index) continue;
+    const other = edges[otherIndex];
+    if (!other) continue;
+
+    const pairKey = [index, otherIndex].sort((a, b) => a - b).join(":");
+    if (suggestedPairs.has(pairKey)) continue;
+    suggestedPairs.add(pairKey);
 
     const firstCenter =
-      first.plane.points.reduce((sum, point) => sum + point.y, 0) / first.plane.points.length;
+      edge.plane.points.reduce((sum, point) => sum + point.y, 0) / edge.plane.points.length;
     const secondCenter =
-      second.plane.points.reduce((sum, point) => sum + point.y, 0) / second.plane.points.length;
-    const edgeLow = Math.min(first.a.y, first.b.y);
-    const edgeHigh = Math.max(first.a.y, first.b.y);
+      other.plane.points.reduce((sum, point) => sum + point.y, 0) / other.plane.points.length;
+    const edgeLow = Math.min(edge.a.y, edge.b.y, other.a.y, other.b.y);
+    const edgeHigh = Math.max(edge.a.y, edge.b.y, other.a.y, other.b.y);
     const isRidge = edgeLow > firstCenter + toleranceFt && edgeLow > secondCenter + toleranceFt;
     const isValley = edgeHigh < firstCenter - toleranceFt && edgeHigh < secondCenter - toleranceFt;
     const isHip =
@@ -200,16 +256,23 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
     if (!isRidge && !isValley && !isHip) continue;
 
     const type = isRidge ? "ridge" : isValley ? "valley" : "hip";
-    if (shared.every((occurrence) => occurrence.plane.edges[occurrence.edgeIndex] === type))
+    if (
+      edge.plane.edges[edge.edgeIndex] === type &&
+      other.plane.edges[other.edgeIndex] === type
+    )
       continue;
-    for (const occurrence of shared) {
-      suggestions.push({
-        planeId: occurrence.plane.id,
-        edgeIndex: occurrence.edgeIndex,
-        type,
-        sharedWith: occurrence === first ? second.plane.id : first.plane.id,
-      });
-    }
+    suggestions.push({
+      planeId: edge.plane.id,
+      edgeIndex: edge.edgeIndex,
+      type,
+      sharedWith: other.plane.id,
+    });
+    suggestions.push({
+      planeId: other.plane.id,
+      edgeIndex: other.edgeIndex,
+      type,
+      sharedWith: edge.plane.id,
+    });
   }
   return suggestions;
 }

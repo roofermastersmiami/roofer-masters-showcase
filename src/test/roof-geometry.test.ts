@@ -186,6 +186,24 @@ describe("reviewable roof-edge classification suggestions", () => {
     ]);
   });
 
+  it("matches a shared ridge when independently traced facet vertices differ within tolerance", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const west = drawing.planes.find((plane) => plane.id === "West plane");
+    const east = drawing.planes.find((plane) => plane.id === "East plane");
+    if (!west || !east) throw new Error("Missing gable facets");
+
+    // Simulate small independent LiDAR/facet-fitting differences along the same ridge.
+    east.points[0]!.y += 0.02;
+    east.points[3]!.y += 0.02;
+    west.edges[1] = "other";
+    east.edges[3] = "other";
+
+    expect(suggestSharedEdgeClassifications(drawing)).toEqual([
+      { planeId: "West plane", edgeIndex: 1, type: "ridge", sharedWith: "East plane" },
+      { planeId: "East plane", edgeIndex: 3, type: "ridge", sharedWith: "West plane" },
+    ]);
+  });
+
   it("does not suggest an edge already classified consistently", () => {
     expect(suggestSharedEdgeClassifications(roofPreset("gable", 40, 30, 6))).toEqual([]);
   });
