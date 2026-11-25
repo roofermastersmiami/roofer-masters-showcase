@@ -54,6 +54,7 @@ export const roofDetectionResponseSchema = z.object({
       source: z.string(),
       stac_items: z.number().int().nonnegative().optional(),
       tiles_used: z.number().int().nonnegative().optional(),
+      tile_ids_used: z.array(z.string().min(1)).optional(),
       building_class_points: z.number().int().nonnegative().optional(),
       raw_building_class_points: z.number().int().nonnegative().optional(),
       duplicate_points_removed: z.number().int().nonnegative().optional(),
