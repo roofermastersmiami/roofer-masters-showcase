@@ -437,20 +437,45 @@ export function CrmShell({
             sidebarIsLight ? "border-border" : "border-white/15",
           )}
         >
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Company logo"
-              className={compact ? "h-9 max-w-12 object-contain" : "h-10 max-w-36 object-contain"}
-            />
-          ) : (
-            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <HardHat className="size-6" />
-            </div>
-          )}
-          {!compact && !logoUrl && (
-            <span className="font-display text-lg font-bold leading-tight">Roofing CRM</span>
-          )}
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn(
+              "h-auto min-w-0 flex-1 justify-start gap-3 rounded-lg p-1 text-left",
+              sidebarHover,
+              compact && "flex-none justify-center",
+            )}
+            title={logoUrl ? "Change company avatar or logo" : "Add your company avatar or logo"}
+            aria-label={logoUrl ? "Change company avatar or logo" : "Add company avatar or logo"}
+            disabled={logoUploading}
+            onClick={() => logoInputRef.current?.click()}
+          >
+            {logoUploading ? (
+              <span className="grid size-11 shrink-0 place-items-center rounded-full border border-dashed border-current/50">
+                <LoaderCircle className="size-5 animate-spin" />
+              </span>
+            ) : logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Company avatar"
+                className="size-11 shrink-0 rounded-full border border-current/20 bg-background object-contain p-1"
+              />
+            ) : (
+              <span className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-dashed border-current/50">
+                <ImagePlus className="size-5" />
+              </span>
+            )}
+            {!compact && (
+              <span className="min-w-0">
+                <span className="block truncate font-display text-sm font-bold">
+                  {logoUrl ? "Roofing CRM" : "Add Avatar"}
+                </span>
+                <span className={cn("block truncate text-[10px]", sidebarIsLight ? "text-muted-foreground" : "text-white/65")}>
+                  {logoUrl ? "Company logo" : "Add your company logo"}
+                </span>
+              </span>
+            )}
+          </Button>
         </div>
         <nav aria-label="CRM navigation" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
           {visibleGroups.map((g) => (
@@ -689,26 +714,6 @@ export function CrmShell({
                 event.currentTarget.value = "";
               }}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0 gap-2 px-2 sm:px-3"
-              title="Upload or change company logo"
-              aria-label="Upload or change company logo"
-              disabled={logoUploading}
-              onClick={() => logoInputRef.current?.click()}
-            >
-              {logoUploading ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : logoUrl ? (
-                <img src={logoUrl} alt="" className="size-6 rounded object-contain" />
-              ) : (
-                <ImagePlus className="size-4" />
-              )}
-              <span className="hidden text-xs sm:inline">
-                {logoUploading ? "Uploading" : logoUrl ? "Company logo" : "Upload logo"}
-              </span>
-            </Button>
             <Button
               variant="ghost"
               size="icon"
