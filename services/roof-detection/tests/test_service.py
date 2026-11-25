@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 
 def test_request_requires_address_or_complete_coordinates():
@@ -106,6 +106,35 @@ def test_ransac_splits_detached_coplanar_roof_surfaces_before_area_calculation()
     assert all(facet["point_count"] >= 80 for facet in facets)
     assert all(facet["area_sqft"] == pytest.approx(2405, rel=0.03) for facet in facets)
     assert sum(facet["area_sqft"] for facet in facets) < 5000
+
+
+
+def test_ransac_clips_convex_facet_hulls_to_concave_building_footprints():
+    # An L-shaped building has a large courtyard/cutout that a convex hull
+    # would incorrectly fill when all roof points share one fitted plane.
+    footprint = Polygon([
+        (0, 0), (20, 0), (20, 5), (5, 5), (5, 20), (0, 20)
+    ])
+    points_xy = [
+        (float(x), float(y))
+        for x in np.arange(0.25, 20, 0.5)
+        for y in np.arange(0.25, 20, 0.5)
+        if footprint.covers(Point(float(x), float(y)))
+    ]
+    x = np.array([point[0] for point in points_xy])
+    y = np.array([point[1] for point in points_xy])
+    z = 0.5 * x + 12.0
+    points = np.column_stack((x, y, z))
+
+    unbounded = _fit_facets(points)
+    bounded = _fit_facets(points, footprint)
+
+    assert len(unbounded) == 1
+    assert len(bounded) == 1
+    assert bounded[0]["area_sqft"] < unbounded[0]["area_sqft"] * 0.8
+    # A 0.75 m buffer preserves ordinary roof overhang around the footprint.
+    assert bounded[0]["area_sqft"] > 1500
+    assert bounded[0]["point_count"] == len(points)
 
 
 def test_ransac_does_not_create_facets_from_small_spatial_noise_clusters():
