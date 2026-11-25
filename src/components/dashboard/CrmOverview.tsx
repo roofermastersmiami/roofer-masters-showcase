@@ -268,10 +268,7 @@ export function CrmOverview() {
     if (index >= 0 && target) movePanel(id, target);
   };
   const panelControls = (id: DashboardPanelId) => {
-    const group: DashboardPanelId[] = id === "revenue" || id === "sales"
-      ? ["revenue", "sales"]
-      : ["tasks", "inspections", "activity"];
-    const visible = group.filter((item) => !hiddenPanels.includes(item));
+    const visible = DASHBOARD_PANEL_IDS.filter((item) => !hiddenPanels.includes(item));
     const index = visible.indexOf(id);
     return (
       <span className="inline-flex shrink-0 items-center gap-0.5" aria-label={"Reorder " + id + " panel"}>
@@ -375,7 +372,7 @@ export function CrmOverview() {
             <div>
               <h2 className="font-semibold">Your workspace, your way</h2>
               <p className="text-sm text-muted-foreground">
-                Drag cards to reorder them on desktop, or use each card’s up/down controls on
+                Drag cards or dashboard sections to reorder them on desktop, or use the up/down controls on
                 touchscreens and keyboards. Preferences are saved on this device.
               </p>
             </div>
