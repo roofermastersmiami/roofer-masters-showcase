@@ -36,6 +36,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       requestId.current += 1;
       activeController.current?.abort();
       activeController.current = null;
+      autoAnalyzedAddress.current = "";
     };
   }, [address]);
 
