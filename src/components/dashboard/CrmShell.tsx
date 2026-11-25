@@ -207,12 +207,15 @@ export function CrmShell({
             )
               setSidebarAppearance(data.sidebar_appearance);
             setLogoPath(data.logo_path);
-            setLogoUrl(
-              data.logo_path
-                ? supabase.storage.from("crm-company-branding").getPublicUrl(data.logo_path).data
-                    .publicUrl
-                : "",
-            );
+            if (data.logo_path) {
+              const { data: signedLogo, error: signedUrlError } = await supabase.storage
+                .from("crm-company-branding")
+                .createSignedUrl(data.logo_path, 60 * 60);
+              if (signedUrlError) throw signedUrlError;
+              if (!cancelled) setLogoUrl(signedLogo.signedUrl);
+            } else {
+              setLogoUrl("");
+            }
           }
         }
       } catch {
@@ -339,9 +342,11 @@ export function CrmShell({
       if (uploadError) throw uploadError;
       setBrandingUserId(user.id);
       setLogoPath(path);
-      setLogoUrl(
-        `${supabase.storage.from("crm-company-branding").getPublicUrl(path).data.publicUrl}?v=${Date.now()}`,
-      );
+      const { data: signedLogo, error: signedUrlError } = await supabase.storage
+        .from("crm-company-branding")
+        .createSignedUrl(path, 60 * 60);
+      if (signedUrlError) throw signedUrlError;
+      setLogoUrl(signedLogo.signedUrl);
       setBrandingLoaded(true);
     } catch (error) {
       const message =
@@ -474,8 +479,8 @@ export function CrmShell({
               sidebarHover,
               compact && "flex-none justify-center",
             )}
-            title={logoUrl ? "Change company avatar or logo" : "Add your company avatar or logo"}
-            aria-label={logoUrl ? "Change company avatar or logo" : "Add company avatar or logo"}
+            title={logoUrl ? "Change company logo" : "Add your company logo"}
+            aria-label={logoUrl ? "Change company logo" : "Add company logo"}
             disabled={logoUploading}
             onClick={() => logoInputRef.current?.click()}
           >
@@ -486,7 +491,7 @@ export function CrmShell({
             ) : logoUrl ? (
               <img
                 src={logoUrl}
-                alt="Company avatar"
+                alt="Company logo"
                 className="size-11 shrink-0 rounded-full border border-current/20 bg-background object-contain p-1"
               />
             ) : (
