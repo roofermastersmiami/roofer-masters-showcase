@@ -3,6 +3,8 @@ import {
   roofPreset,
   measureDrawing,
   roofPlaneTakeoff,
+  measuredMetalPlaneRuns,
+  toMaterialReport,
   auditRoofReport,
   toMaterialReport,
   suggestSharedEdgeClassifications,
@@ -385,5 +387,30 @@ describe("per-plane roof report takeoff", () => {
     const rows = roofPlaneTakeoff(drawing);
     expect(rows.map((row) => row.name)).toEqual(drawing.planes.map((plane) => plane.name));
     expect(new Set(rows.map((row) => row.id)).size).toBe(4);
+  });
+});
+
+describe("automatic metal plane runs from measured roof geometry", () => {
+  it("transfers eave lengths and sloped panel runs for simple gable facets", () => {
+    const drawing = roofPreset("gable", 40, 30, 6);
+    const runs = measuredMetalPlaneRuns(drawing);
+    expect(runs).toHaveLength(2);
+    expect(runs?.[0]?.eaveLengthFt).toBeCloseTo(30, 5);
+    expect(runs?.[0]?.panelRunFt).toBeCloseTo(Math.hypot(20, 10), 5);
+    expect(toMaterialReport(drawing)).toMatchObject({ metal_plane_runs: runs });
+  });
+
+  it("does not fabricate complete panel runs for hip or unclassified facets", () => {
+    expect(measuredMetalPlaneRuns(roofPreset("hip", 40, 30, 6))).toBeUndefined();
+    const drawing = roofPreset("gable");
+    drawing.planes[0]!.edges[1] = "other";
+    expect(measuredMetalPlaneRuns(drawing)).toBeUndefined();
+  });
+
+  it("does not attach metal panel runs to non-metal roof reports", () => {
+    const drawing = roofPreset("gable");
+    drawing.roof_type = "Shingle Roof";
+    expect(measuredMetalPlaneRuns(drawing)).toBeUndefined();
+    expect(toMaterialReport(drawing)).not.toHaveProperty("metal_plane_runs");
   });
 });
