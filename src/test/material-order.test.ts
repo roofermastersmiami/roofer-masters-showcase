@@ -65,7 +65,9 @@ describe("automatic material waste", () => {
         roof_type: "Shingle Roof",
       }),
     ).toBe(15);
-    expect(effectiveMaterialWastePct({ ...base, waste_pct: undefined, roof_type: "Flat Roof" })).toBe(10);
+    expect(
+      effectiveMaterialWastePct({ ...base, waste_pct: undefined, roof_type: "Flat Roof" }),
+    ).toBe(10);
     expect(effectiveMaterialWastePct({ ...base, waste_pct: 7, roof_type: "Shingle Roof" })).toBe(7);
   });
 
