@@ -567,7 +567,7 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }
-  function useBuildingFootprint(
+  function applyBuildingFootprint(
     candidate: BuildingFootprint,
     addressCoordinates = footprintAddressCoordinates,
   ) {
@@ -618,7 +618,7 @@ export function RoofMeasurements({
       setFootprintAddressCoordinates(result.addressCoordinates);
       const candidate = result.footprints[0];
       if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
-        useBuildingFootprint(candidate, result.addressCoordinates);
+        applyBuildingFootprint(candidate, result.addressCoordinates);
       }
       setFootprintMessage(
         result.footprints.length
@@ -1712,7 +1712,7 @@ export function RoofMeasurements({
                   className="mt-3 w-full"
                   size="sm"
                   variant="outline"
-                  onClick={() => useBuildingFootprint(footprint)}
+                  onClick={() => applyBuildingFootprint(footprint)}
                 >
                   Use this preliminary outline
                 </Button>
