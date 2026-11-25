@@ -268,4 +268,6 @@ def test_ransac_separates_two_adjacent_roof_slopes_sharing_a_ridge():
     assert pitches == pytest.approx([6.0, 6.0], abs=0.2)
     assert all(facet["point_count"] >= 500 for facet in facets)
     assert all(0 < facet["fit_rmse_m"] < 0.12 for facet in facets)
-    assert all(1200 < facet["area_sqft"] < 1500 for facet in facets)
+    # Each half is 9.5 m × 19.5 m in plan; at 6/12 pitch the
+    # sloped surface is approximately 2,225 sq ft per facet.
+    assert all(2100 < facet["area_sqft"] < 2350 for facet in facets)
