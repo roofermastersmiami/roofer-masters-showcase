@@ -18,9 +18,9 @@ describe("AutomatedRoofReport automatic analysis", () => {
   it("shows a clear setup error when automatic analysis has no service URL", async () => {
     render(<AutomatedRoofReport address="123 Main Street, Miami, FL" onApply={vi.fn()} />);
 
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent("The free roof-detection service is not connected");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The free roof-detection service is not connected",
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 
