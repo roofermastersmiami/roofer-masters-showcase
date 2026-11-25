@@ -188,12 +188,39 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
               </div>
             </div>
           )}
+          {visibleResult.lidar && (
+            <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
+              <strong>Source-data coverage</strong>
+              <p className="mt-1 text-muted-foreground">
+                {visibleResult.lidar.building_class_points !== undefined
+                  ? `${visibleResult.lidar.building_class_points.toLocaleString()} unique building-class points`
+                  : "Point total unavailable"}
+                {visibleResult.lidar.tiles_used !== undefined
+                  ? ` · ${visibleResult.lidar.tiles_used} LiDAR tiles used`
+                  : ""}
+                {visibleResult.lidar.stac_items !== undefined
+                  ? ` · ${visibleResult.lidar.stac_items} coverage records searched`
+                  : ""}
+              </p>
+              {visibleResult.lidar.duplicate_points_removed !== undefined &&
+                visibleResult.lidar.duplicate_points_removed > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {visibleResult.lidar.duplicate_points_removed.toLocaleString()} overlapping tile
+                    duplicates removed before plane fitting
+                  </p>
+                )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Point counts describe available source data, not a measurement-confidence score.
+              </p>
+            </div>
+          )}
           {visibleResult.roof.facets.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
                     <th className="py-2 pr-3">Facet</th>
+                    <th className="py-2 pr-3">LiDAR points</th>
                     <th className="py-2 pr-3">Area SF</th>
                     <th className="py-2 pr-3">Squares</th>
                     <th className="py-2 pr-3">Pitch</th>
@@ -204,6 +231,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                   {visibleResult.roof.facets.map((facet) => (
                     <tr key={facet.id} className="border-b border-border/60">
                       <td className="py-2 pr-3">{facet.id}</td>
+                      <td className="py-2 pr-3 tabular-nums">{facet.point_count.toLocaleString()}</td>
                       <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                       <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
                       <td className="py-2 pr-3 tabular-nums">
