@@ -135,20 +135,19 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
     <section className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Automated public LiDAR roof detection</h3>
+          <h3 className="font-semibold">Automatic roof measurement</h3>
           <p className="text-sm text-muted-foreground">
-            OpenStreetMap footprint + public USGS 3DEP point cloud. No paid API keys.
+            Checking free public elevation data for this address.
           </p>
         </div>
         <Button onClick={() => void analyze()} disabled={isLoading || !address.trim()}>
           {isLoading ? <Loader2 className="animate-spin" /> : <CloudDownload />}
-          {isLoading ? "Analyzing address…" : "Analyze roof"}
+          {isLoading ? "Measuring…" : "Retry"}
         </Button>
       </div>
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-          <Activity className="size-4" /> Searching public footprint and LiDAR coverage. First
-          request may take longer on a free host.
+          <Activity className="size-4" /> Finding available roof data…
         </div>
       )}
       {visibleError && (
@@ -198,72 +197,74 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
               </div>
             </div>
           )}
-          {visibleResult.lidar && (
-            <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
-              <strong>Source-data coverage</strong>
-              <p className="mt-1 text-muted-foreground">
-                {visibleResult.lidar.building_class_points !== undefined
-                  ? `${visibleResult.lidar.building_class_points.toLocaleString()} unique building-class points`
-                  : "Point total unavailable"}
-                {visibleResult.lidar.tiles_used !== undefined
-                  ? ` · ${visibleResult.lidar.tiles_used} LiDAR tiles used`
-                  : ""}
-                {visibleResult.lidar.stac_items !== undefined
-                  ? ` · ${visibleResult.lidar.stac_items} coverage records searched`
-                  : ""}
-              </p>
-              {visibleResult.lidar.duplicate_points_removed !== undefined &&
-                visibleResult.lidar.duplicate_points_removed > 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {visibleResult.lidar.duplicate_points_removed.toLocaleString()} overlapping tile
-                    duplicates removed before plane fitting
-                  </p>
-                )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                Point counts describe available source data, not a measurement-confidence score.
-              </p>
-            </div>
-          )}
-          {visibleResult.roof.facets.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="py-2 pr-3">Facet</th>
-                    <th className="py-2 pr-3">LiDAR points</th>
-                    <th className="py-2 pr-3">Area SF</th>
-                    <th className="py-2 pr-3">Squares</th>
-                    <th className="py-2 pr-3">Pitch</th>
-                    <th className="py-2">Azimuth</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleResult.roof.facets.map((facet) => (
-                    <tr key={facet.id} className="border-b border-border/60">
-                      <td className="py-2 pr-3">{facet.id}</td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {facet.point_count.toLocaleString()}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
-                      <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {facet.pitch_rise_per_12.toFixed(1)}:12
-                      </td>
-                      <td className="py-2 tabular-nums">{facet.azimuth_degrees.toFixed(0)}°</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <details className="rounded-md border border-border px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">View technical detection details</summary>
+                      {visibleResult.lidar && (
+                        <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
+                          <strong>Source-data coverage</strong>
+                          <p className="mt-1 text-muted-foreground">
+                            {visibleResult.lidar.building_class_points !== undefined
+                              ? `${visibleResult.lidar.building_class_points.toLocaleString()} unique building-class points`
+                              : "Point total unavailable"}
+                            {visibleResult.lidar.tiles_used !== undefined
+                              ? ` · ${visibleResult.lidar.tiles_used} LiDAR tiles used`
+                              : ""}
+                            {visibleResult.lidar.stac_items !== undefined
+                              ? ` · ${visibleResult.lidar.stac_items} coverage records searched`
+                              : ""}
+                          </p>
+                          {visibleResult.lidar.duplicate_points_removed !== undefined &&
+                            visibleResult.lidar.duplicate_points_removed > 0 && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {visibleResult.lidar.duplicate_points_removed.toLocaleString()} overlapping tile
+                                duplicates removed before plane fitting
+                              </p>
+                            )}
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Point counts describe available source data, not a measurement-confidence score.
+                          </p>
+                        </div>
+                      )}
+                      {visibleResult.roof.facets.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead>
+                              <tr className="border-b text-muted-foreground">
+                                <th className="py-2 pr-3">Facet</th>
+                                <th className="py-2 pr-3">LiDAR points</th>
+                                <th className="py-2 pr-3">Area SF</th>
+                                <th className="py-2 pr-3">Squares</th>
+                                <th className="py-2 pr-3">Pitch</th>
+                                <th className="py-2">Azimuth</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {visibleResult.roof.facets.map((facet) => (
+                                <tr key={facet.id} className="border-b border-border/60">
+                                  <td className="py-2 pr-3">{facet.id}</td>
+                                  <td className="py-2 pr-3 tabular-nums">
+                                    {facet.point_count.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
+                                  <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
+                                  <td className="py-2 pr-3 tabular-nums">
+                                    {facet.pitch_rise_per_12.toFixed(1)}:12
+                                  </td>
+                                  <td className="py-2 tabular-nums">{facet.azimuth_degrees.toFixed(0)}°</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      </details>
           <p className="text-xs text-muted-foreground">
             {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
             the measurement editor.
           </p>
           {visibleResult.roof.facets.length > 0 && (
             <p className="text-sm text-muted-foreground" role="status">
-              Candidate facets are being loaded into the measurement workspace automatically.
-              Review the imported planes and verify the roof system before saving.
+              Preliminary roof planes added. Review the drawing before saving.
             </p>
           )}
         </div>
