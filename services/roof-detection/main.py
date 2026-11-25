@@ -206,15 +206,32 @@ def _fit_facets(points: np.ndarray) -> list[dict[str, Any]]:
     return facets
 
 
+def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> np.ndarray:
+    """Remove overlapping COPC tile duplicates at 2 cm XYZ precision."""
+    if points.size == 0:
+        return points.reshape((0, 3))
+    quantized = np.round(points / precision_m).astype(np.int64)
+    _, indices = np.unique(quantized, axis=0, return_index=True)
+    return points[np.sort(indices)]
+
+
 def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     catalog = Client.open(STAC_URL)
-    # Search footprint bbox, not the full city. The point cloud items are UTM-reprojected.
+    # Search footprint bbox, not the full city. Multiple COPC tiles may overlap.
     items = list(catalog.search(collections=[STAC_COLLECTION], bbox=list(polygon.bounds), max_items=MAX_STAC_ITEMS).items())
     if not items:
         return [], {"stac_items": 0, "reason": "No 3DEP COPC coverage intersected the building footprint."}
-    all_facets: list[dict[str, Any]] = []
+
+    center = polygon.representative_point()
+    local_crs = CRS.from_proj4(
+        f"+proj=aeqd +lat_0={center.y} +lon_0={center.x} +datum=WGS84 +units=m +no_defs"
+    )
+    to_local = Transformer.from_crs("EPSG:4326", local_crs, always_xy=True)
+    from_local = Transformer.from_crs(local_crs, "EPSG:4326", always_xy=True)
+    tile_points: list[np.ndarray] = []
     used_items = 0
-    roof_point_count = 0
+    raw_point_count = 0
+
     for item in items:
         epsg_value = item.properties.get("proj:epsg")
         if not epsg_value:
@@ -223,7 +240,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             epsg = int(str(epsg_value).split(":")[-1])
         except (TypeError, ValueError):
             continue
-        projected_polygon, to_xy, to_ll = _project_polygon(polygon, epsg)
+        projected_polygon, _, _ = _project_polygon(polygon, epsg)
         asset = item.assets.get("data") or item.assets.get("copc") or next(
             (candidate for candidate in item.assets.values() if "copc" in candidate.href.lower() or candidate.href.lower().endswith(".laz")),
             None,
@@ -253,26 +270,46 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             coords = coords[inside]
             if len(coords) < MIN_ROOF_POINTS:
                 continue
-            roof_point_count += len(coords)
+
+            # Convert every tile into one local metric coordinate system before
+            # combining. This lets overlapping tiles be deduplicated and avoids
+            # counting the same roof facet once per COPC tile.
+            to_wgs84 = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
+            lon, lat = to_wgs84.transform(coords[:, 0], coords[:, 1])
+            local_x, local_y = to_local.transform(lon, lat)
+            tile_points.append(np.column_stack((local_x, local_y, coords[:, 2])))
+            raw_point_count += len(coords)
             used_items += 1
-            for facet in _fit_facets(coords):
-                # Plane ids must be unique across all intersecting LiDAR tiles.
-                facet["id"] = f"facet-{len(all_facets) + 1}"
-                model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
-                facet["boundary_latlon"] = [
-                    [
-                        round(to_ll.transform(xy[0], xy[1])[1], 7),
-                        round(to_ll.transform(xy[0], xy[1])[0], 7),
-                        round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
-                    ]
-                    for xy in facet.pop("boundary_xy")
-                ]
-                all_facets.append(facet)
         except Exception:
             # One unavailable/corrupt tile must not prevent other intersecting tiles being used.
             continue
-    return all_facets, {"stac_items": len(items), "tiles_used": used_items, "building_class_points": roof_point_count}
 
+    if not tile_points:
+        return [], {"stac_items": len(items), "tiles_used": 0, "building_class_points": 0}
+
+    combined = np.vstack(tile_points)
+    unique_points = _deduplicate_lidar_points(combined)
+    all_facets: list[dict[str, Any]] = []
+    for facet in _fit_facets(unique_points):
+        facet["id"] = f"facet-{len(all_facets) + 1}"
+        model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        facet["boundary_latlon"] = []
+        for xy in facet.pop("boundary_xy"):
+            lon, lat = from_local.transform(xy[0], xy[1])
+            facet["boundary_latlon"].append([
+                round(lat, 7),
+                round(lon, 7),
+                round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
+            ])
+        all_facets.append(facet)
+
+    return all_facets, {
+        "stac_items": len(items),
+        "tiles_used": used_items,
+        "building_class_points": len(unique_points),
+        "raw_building_class_points": raw_point_count,
+        "duplicate_points_removed": raw_point_count - len(unique_points),
+    }
 
 @app.get("/health")
 def health():
