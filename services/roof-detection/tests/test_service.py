@@ -705,3 +705,44 @@ def test_resolve_miramar_parcel_reports_provider_failure(monkeypatch):
     found, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
     assert found is None
     assert evidence == {"status": "provider_error", "provider": "City of Miramar GIS"}
+
+
+@pytest.mark.parametrize(
+    ("parcel_polygon", "expected_count", "expected_intersections"),
+    [
+        (Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]), 1, 1),
+        (Polygon([(0, 0), (4, 0), (4, 2), (0, 2)]), 2, 2),
+        (Polygon([(10, 10), (12, 10), (12, 12), (10, 12)]), 2, 0),
+    ],
+)
+def test_parcel_evidence_narrows_only_one_building_candidate(
+    parcel_polygon, expected_count, expected_intersections
+):
+    first = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "first"})
+    second = (2.0, Polygon([(3, 0), (4, 0), (4, 1), (3, 1)]), {"candidate_id": "second"})
+    candidates, evidence = roof_service._apply_parcel_candidate_evidence(
+        [first, second], parcel_polygon, {"status": "matched", "folio": "verified-folio"}
+    )
+    assert len(candidates) == expected_count
+    assert evidence["building_candidates_intersecting_parcel"] == expected_intersections
+    if expected_intersections == 1:
+        assert candidates[0][2]["candidate_id"] == "first"
+    else:
+        assert {row[2]["candidate_id"] for row in candidates} == {"first", "second"}
+
+
+def test_parcel_evidence_is_non_destructive_without_verified_polygon():
+    candidate = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "chosen"})
+    candidates, evidence = roof_service._apply_parcel_candidate_evidence(
+        [candidate], None, {"status": "provider_error"}
+    )
+    assert candidates == [candidate]
+    assert evidence["status"] == "provider_error"
+
+
+def test_explicit_candidate_selection_is_not_filtered_by_parcel_evidence():
+    selected = (8.0, Polygon([(5, 5), (6, 5), (6, 6), (5, 6)]), {"candidate_id": "explicit"})
+    parcel = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    # The explicit-selection path intentionally bypasses the parcel filter.
+    assert selected[1].intersection(parcel).area == 0
+    assert selected[2]["candidate_id"] == "explicit"
