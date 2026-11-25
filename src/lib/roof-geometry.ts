@@ -32,6 +32,51 @@ export function addressPinPosition(reference: GeoReference) {
     z: (reference.originLatitude - reference.addressLatitude) * latitudeScale,
   };
 }
+/**
+ * Rebase satellite-traced roof facets into an existing drawing's local feet
+ * coordinate frame. The geocoded address anchors must identify the same
+ * property; otherwise combining the coordinate systems would corrupt geometry.
+ */
+export function rebaseRoofPlanes(
+  planes: RoofPlane[],
+  source: GeoReference,
+  target: GeoReference,
+): RoofPlane[] {
+  const from = geoReferenceSchema.parse(source);
+  const to = geoReferenceSchema.parse(target);
+  if (!planes.length) throw new Error("At least one traced roof plane is required.");
+  const radians = Math.PI / 180;
+  const addressLatDelta = (to.addressLatitude - from.addressLatitude) * 110540;
+  const addressLonDelta =
+    (to.addressLongitude - from.addressLongitude) *
+    111320 *
+    Math.cos(((from.addressLatitude + to.addressLatitude) * Math.PI) / 360);
+  if (Math.hypot(addressLatDelta, addressLonDelta) > 30) {
+    throw new Error("The traced outline belongs to a different address location.");
+  }
+  const sourceLonScale =
+    (111320 * Math.cos(from.originLatitude * radians)) / 0.3048;
+  const targetLonScale =
+    (111320 * Math.cos(to.originLatitude * radians)) / 0.3048;
+  const latitudeScale = 110540 / 0.3048;
+  if (Math.abs(sourceLonScale) < 1 || Math.abs(targetLonScale) < 1) {
+    throw new Error("The roof drawing is too close to the poles to rebase safely.");
+  }
+  return planes.map((rawPlane) => {
+    const plane = planeSchema.parse(rawPlane);
+    const points = plane.points.map((point) => {
+      const latitude = from.originLatitude - point.z / latitudeScale;
+      const longitude = from.originLongitude + point.x / sourceLonScale;
+      return {
+        ...point,
+        x: (longitude - to.originLongitude) * targetLonScale,
+        z: (to.originLatitude - latitude) * latitudeScale,
+      };
+    });
+    return planeSchema.parse({ ...plane, points });
+  });
+}
+
 export const drawingSchema = z.object({
   planes: z.array(planeSchema).min(1).max(100),
   penetrations: z

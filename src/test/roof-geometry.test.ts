@@ -8,10 +8,59 @@ import {
   toMaterialReport,
   suggestSharedEdgeClassifications,
   addressPinPosition,
+  rebaseRoofPlanes,
+  planeInfo,
   drawingSchema,
   type RoofPlane,
 } from "@/lib/roof-geometry";
 describe("roof geometry", () => {
+  it("rebases traced facets into an existing drawing coordinate frame", () => {
+    const source = {
+      addressLatitude: 25.47,
+      addressLongitude: -80.48,
+      originLatitude: 25.4701,
+      originLongitude: -80.4801,
+    };
+    const target = {
+      ...source,
+      originLatitude: 25.4702,
+      originLongitude: -80.4802,
+    };
+    const original = roofPreset("flat").planes[0]!;
+    const rebased = rebaseRoofPlanes([original], source, target)[0]!;
+    const sourceLonScale =
+      (111320 * Math.cos((source.originLatitude * Math.PI) / 180)) / 0.3048;
+    const targetLonScale =
+      (111320 * Math.cos((target.originLatitude * Math.PI) / 180)) / 0.3048;
+    expect(rebased.points[0]!.x).toBeCloseTo(
+      original.points[0]!.x * (targetLonScale / sourceLonScale) -
+        (target.originLongitude - source.originLongitude) * targetLonScale,
+      3,
+    );
+    expect(planeInfo(rebased).area).toBeCloseTo(planeInfo(original).area, 2);
+  });
+
+  it("rejects traced facets anchored to a different address", () => {
+    const plane = roofPreset("flat").planes[0]!;
+    expect(() =>
+      rebaseRoofPlanes(
+        [plane],
+        {
+          addressLatitude: 25.47,
+          addressLongitude: -80.48,
+          originLatitude: 25.47,
+          originLongitude: -80.48,
+        },
+        {
+          addressLatitude: 25.471,
+          addressLongitude: -80.48,
+          originLatitude: 25.471,
+          originLongitude: -80.48,
+        },
+      ),
+    ).toThrow(/different address/);
+  });
+
   it("measures a 40 by 30 flat roof as 1200 square feet and 12 squares", () => {
     const m = measureDrawing(roofPreset("flat", 40, 30));
     expect(m.area).toBeCloseTo(1200);

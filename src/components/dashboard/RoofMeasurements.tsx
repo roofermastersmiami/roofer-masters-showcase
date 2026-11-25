@@ -32,6 +32,7 @@ import {
   toMaterialReport,
   distance,
   addressPinPosition,
+  rebaseRoofPlanes,
   EDGE_TYPES,
   suggestSharedEdgeClassifications,
   type RoofDrawing,
@@ -1802,30 +1803,43 @@ export function RoofMeasurements({
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         initialAddress={report?.address?.trim() || propertyRow?.address || ""}
         onAdd={(newPlanes, geoReference) => {
-          // Satellite vertices are converted into a local feet coordinate frame
-          // whose origin is derived from this trace. Mixing them with older planes
-          // from another origin would make the drawing, address pin, and quantities
-          // disagree. Treat an accepted satellite trace as the new roof layout.
-          const hasExistingWork =
-            Boolean(initialDrawing) ||
-            userEditedDrawing.current ||
-            d.planes.some((item) => item.id.startsWith("osm-footprint-"));
-          if (
-            hasExistingWork &&
+          const canAppendToCurrentFrame = Boolean(d.geo_reference);
+          let nextPlanes = newPlanes;
+          let nextGeoReference = geoReference;
+          let nextPenetrations = d.penetrations;
+          let appendToCurrentFrame = false;
+          if (canAppendToCurrentFrame) {
+            try {
+              nextPlanes = rebaseRoofPlanes(newPlanes, geoReference, d.geo_reference!);
+              nextGeoReference = d.geo_reference!;
+              appendToCurrentFrame = true;
+            } catch {
+              if (
+                !confirm(
+                  "This trace cannot be aligned safely with the saved drawing. Replace the current roof planes and penetrations with this trace instead?",
+                )
+              )
+                return false;
+              nextPenetrations = [];
+              nextGeoReference = geoReference;
+            }
+          } else if (
+            (Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1) &&
             !confirm(
-              "Replace the current roof planes with this satellite trace? Existing planes and penetrations will be removed. You can undo immediately afterward.",
+              "This drawing has no saved map origin, so the new trace cannot be aligned safely. Replace the current roof planes and penetrations? You can undo immediately afterward.",
             )
-          )
+          ) {
             return false;
+          }
           edit({
             ...d,
-            planes: newPlanes,
-            penetrations: [],
-            geo_reference: geoReference,
+            planes: appendToCurrentFrame ? [...d.planes, ...nextPlanes] : nextPlanes,
+            penetrations: nextPenetrations,
+            geo_reference: nextGeoReference,
             accuracy: "photo_estimate",
             verified: false,
           });
-          setSelected(newPlanes[0]?.id ?? "");
+          setSelected(nextPlanes[0]?.id ?? "");
           setFit((f) => f + 1);
         }}
       />
