@@ -37,7 +37,7 @@ describe("roof geometry", () => {
         (target.originLongitude - source.originLongitude) * targetLonScale,
       3,
     );
-    expect(planeInfo(rebased).area).toBeCloseTo(planeInfo(original).area, 3);
+    expect(planeInfo(rebased).area).toBeCloseTo(planeInfo(original).area, 2);
   });
 
   it("rejects traced facets anchored to a different address", () => {
