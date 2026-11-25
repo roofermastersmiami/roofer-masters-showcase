@@ -136,7 +136,7 @@ export function MaterialOrder({
   }).label;
   const text = `Material order – ${title}
 Source: ${sourceLabel}
-${r.roof_type}, ${r.area_sqft} sq ft (+${r.waste_pct}% waste)
+${r.roof_type}, ${r.area_sqft} sq ft (+${effectiveMaterialWastePct(r)}% waste)
 ${warnings.length ? `\nREVIEW REQUIRED:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : ""}
 ${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}`).join("\n")}
 
