@@ -205,7 +205,8 @@ export function CrmShell({
             .eq("user_id", user.id)
             .maybeSingle();
           if (membershipError) throw membershipError;
-          if (!membership?.company_id) throw new Error("Your account is not assigned to a company workspace.");
+          if (!membership?.company_id)
+            throw new Error("Your account is not assigned to a company workspace.");
           const companyId = membership.company_id as string;
           setBrandingCompanyId(companyId);
           const { data, error: loadError } = await supabase
