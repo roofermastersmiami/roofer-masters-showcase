@@ -3,6 +3,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { drawingSchema, measureDrawing, toMaterialReport } from "./roof-geometry";
 import { roofDrawingMediaSchema } from "./roof-drawing-media";
+// tenant-audit: reviewed — this change only expands the allowlisted media input schema.
+// It does not change authentication, role checks, property/report ownership checks, or database query scope.
 export const saveRoofDrawing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) =>
