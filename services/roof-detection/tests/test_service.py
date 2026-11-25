@@ -126,7 +126,8 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     payload = response.json()
     assert payload["footprint"]["address_point_inside_footprint"] is False
     assert payload["footprint"]["address_to_footprint_distance_m"] == 3.27
-    assert payload["status"] == "footprint_only"\n    assert payload["address_match"] == {"source": "Test geocoder"}
+    assert payload["status"] == "footprint_only"
+    assert payload["address_match"] == {"source": "Test geocoder"}
 
 
 
