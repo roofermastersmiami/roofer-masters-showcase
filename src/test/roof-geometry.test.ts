@@ -28,8 +28,10 @@ describe("roof geometry", () => {
     };
     const original = drawing.planes[0]!;
     const rebased = rebaseRoofPlanes([original], source, target)[0]!;
-    const sourceLonScale = (111320 * Math.cos((source.originLatitude * Math.PI) / 180)) / 0.3048;
-    const targetLonScale = (111320 * Math.cos((target.originLatitude * Math.PI) / 180)) / 0.3048;
+    const sourceLonScale =
+      (111320 * Math.cos((source.originLatitude * Math.PI) / 180)) / 0.3048;
+    const targetLonScale =
+      (111320 * Math.cos((target.originLatitude * Math.PI) / 180)) / 0.3048;
     expect(rebased.points[0]!.x).toBeCloseTo(
       original.points[0]!.x * (targetLonScale / sourceLonScale) -
         (target.originLongitude - source.originLongitude) * targetLonScale,
@@ -43,8 +45,18 @@ describe("roof geometry", () => {
     expect(() =>
       rebaseRoofPlanes(
         [plane],
-        { addressLatitude: 25.47, addressLongitude: -80.48, originLatitude: 25.47, originLongitude: -80.48 },
-        { addressLatitude: 25.471, addressLongitude: -80.48, originLatitude: 25.471, originLongitude: -80.48 },
+        {
+          addressLatitude: 25.47,
+          addressLongitude: -80.48,
+          originLatitude: 25.47,
+          originLongitude: -80.48,
+        },
+        {
+          addressLatitude: 25.471,
+          addressLongitude: -80.48,
+          originLatitude: 25.471,
+          originLongitude: -80.48,
+        },
       ),
     ).toThrow(/different address/);
   });
