@@ -98,6 +98,11 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
       )}
       {result && (
         <div className="space-y-3">
+          {result.footprint.address_point_inside_footprint === false && (
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800">
+              Address match is approximate: the geocoded point is {result.footprint.address_to_footprint_distance_m?.toFixed(1)} m from the selected building outline. Confirm the correct building before using these measurements.
+            </p>
+          )}
           {result.status === "lidar_facets" ? (
             <div className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />
