@@ -156,6 +156,7 @@ export function CrmShell({
     [logoPath, setLogoPath] = useState<string | null>(null),
     [logoUrl, setLogoUrl] = useState(""),
     [logoUploading, setLogoUploading] = useState(false),
+    [logoSize, setLogoSize] = useState(112),
     [brandingError, setBrandingError] = useState(""),
     [query, setQuery] = useState(""),
     [notifications, setNotifications] = useState(false),
@@ -173,6 +174,9 @@ export function CrmShell({
     const loadBranding = async () => {
       try {
         setDark(localStorage.getItem("crm-theme") === "dark");
+        const savedLogoSize = Number(localStorage.getItem("crm-logo-size"));
+        if (Number.isFinite(savedLogoSize) && savedLogoSize >= 48 && savedLogoSize <= 220)
+          setLogoSize(savedLogoSize);
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
         const fallbackAccent = localStorage.getItem("crm-accent-color");
         if (fallbackAccent && isCrmAccentId(fallbackAccent)) {
@@ -517,35 +521,58 @@ export function CrmShell({
       <div className="flex h-full flex-col">
         <div
           className={cn(
-            "flex h-24 shrink-0 items-center justify-center border-b px-2",
+            "flex shrink-0 flex-col items-start gap-2 border-b px-3 py-3",
             sidebarIsLight ? "border-border" : "border-white/15",
           )}
         >
           <Button
             type="button"
             variant="ghost"
-            className={cn("h-auto w-full justify-center rounded-lg p-1", sidebarHover)}
+            className={cn("h-auto w-full justify-start rounded-none bg-transparent p-0 hover:bg-transparent", sidebarHover)}
             title={logoUrl ? "Change company logo" : "Add your company logo"}
             aria-label={logoUrl ? "Change company logo" : "Add company logo"}
             disabled={logoUploading}
             onClick={() => logoInputRef.current?.click()}
           >
             {logoUploading ? (
-              <span className="grid size-16 shrink-0 place-items-center rounded-xl border border-dashed border-current/50">
-                <LoaderCircle className="size-6 animate-spin" />
-              </span>
+              <LoaderCircle className="size-6 animate-spin" />
             ) : logoUrl ? (
               <img
                 src={logoUrl}
                 alt="Company logo"
-                className="size-16 shrink-0 rounded-xl border border-current/20 bg-background object-contain p-1"
+                style={{
+                  width: compact ? Math.min(logoSize, 48) : logoSize,
+                  height: compact ? Math.min(logoSize, 48) : logoSize,
+                }}
+                className="max-w-full shrink-0 object-contain"
               />
             ) : (
-              <span className="grid size-16 shrink-0 place-items-center rounded-xl border-2 border-dashed border-current/50">
-                <ImagePlus className="size-6" />
-              </span>
+              <ImagePlus className="size-7" />
             )}
           </Button>
+          {!compact && (
+            <label className="flex w-full flex-col gap-1 text-[10px] text-muted-foreground">
+              <span>Logo size: {logoSize}px</span>
+              <input
+                type="range"
+                min={48}
+                max={220}
+                step={4}
+                value={logoSize}
+                aria-label="Company logo size"
+                className="w-full cursor-pointer accent-primary"
+                onChange={(event) => {
+                  const nextSize = Number(event.currentTarget.value);
+                  setLogoSize(nextSize);
+                  try {
+                    localStorage.setItem("crm-logo-size", String(nextSize));
+                  } catch {
+                    // Keep the selected size for this session if browser storage is unavailable.
+                  }
+                }}
+              />
+            </label>
+          )}
         </div>
         <nav aria-label="CRM navigation" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
           {visibleGroups.map((g) => (
