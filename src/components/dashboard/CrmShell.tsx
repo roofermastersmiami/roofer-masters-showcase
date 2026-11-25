@@ -517,51 +517,32 @@ export function CrmShell({
       <div className="flex h-full flex-col">
         <div
           className={cn(
-            "flex h-24 shrink-0 items-center gap-3 border-b px-5",
+            "flex h-24 shrink-0 items-center justify-center border-b px-2",
             sidebarIsLight ? "border-border" : "border-white/15",
           )}
         >
           <Button
             type="button"
             variant="ghost"
-            className={cn(
-              "h-auto min-w-0 flex-1 justify-start gap-3 rounded-lg p-1 text-left",
-              sidebarHover,
-              compact && "flex-none justify-center",
-            )}
+            className={cn("h-auto w-full justify-center rounded-lg p-1", sidebarHover)}
             title={logoUrl ? "Change company logo" : "Add your company logo"}
             aria-label={logoUrl ? "Change company logo" : "Add company logo"}
             disabled={logoUploading}
             onClick={() => logoInputRef.current?.click()}
           >
             {logoUploading ? (
-              <span className="grid size-11 shrink-0 place-items-center rounded-full border border-dashed border-current/50">
-                <LoaderCircle className="size-5 animate-spin" />
+              <span className="grid size-16 shrink-0 place-items-center rounded-xl border border-dashed border-current/50">
+                <LoaderCircle className="size-6 animate-spin" />
               </span>
             ) : logoUrl ? (
               <img
                 src={logoUrl}
                 alt="Company logo"
-                className="size-11 shrink-0 rounded-full border border-current/20 bg-background object-contain p-1"
+                className="size-16 shrink-0 rounded-xl border border-current/20 bg-background object-contain p-1"
               />
             ) : (
-              <span className="grid size-11 shrink-0 place-items-center rounded-full border-2 border-dashed border-current/50">
-                <ImagePlus className="size-5" />
-              </span>
-            )}
-            {!compact && (
-              <span className="min-w-0">
-                <span className="block truncate font-display text-sm font-bold">
-                  {logoUrl ? "Roofing CRM" : "Add Avatar"}
-                </span>
-                <span
-                  className={cn(
-                    "block truncate text-[10px]",
-                    sidebarIsLight ? "text-muted-foreground" : "text-white/65",
-                  )}
-                >
-                  {logoUrl ? "Company logo" : "Add your company logo"}
-                </span>
+              <span className="grid size-16 shrink-0 place-items-center rounded-xl border-2 border-dashed border-current/50">
+                <ImagePlus className="size-6" />
               </span>
             )}
           </Button>
