@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 import main as roof_service
 from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft, _project_polygon
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, mapping
 
 
 def test_request_requires_address_or_complete_coordinates():
@@ -331,3 +331,60 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
 
     assert response.status_code == 200
     assert selected["candidate_id"] == "candidate-id-123456"
+
+
+
+def test_broward_county_footprints_are_used_when_nationwide_provider_has_no_match(monkeypatch):
+    import asyncio
+
+    polygon = Polygon([
+        (-80.39960, 25.98015),
+        (-80.39940, 25.98015),
+        (-80.39940, 25.98030),
+        (-80.39960, 25.98030),
+        (-80.39960, 25.98015),
+    ])
+    feature = {
+        "type": "Feature",
+        "properties": {"OBJECTID": 77, "AREA": 1000, "COUNTY_NAM": "Broward", "capture_dates_range": "2020"},
+        "geometry": mapping(polygon),
+    }
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None):
+            if "USA_Buildings" in url:
+                return FakeResponse({"features": []})
+            if "Broward_BuildingFootPrints" in url:
+                return FakeResponse({"features": [feature]})
+            raise AssertionError(f"Unexpected provider URL: {url}")
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse({"elements": []})
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeAsyncClient)
+    footprint, metadata = asyncio.run(
+        roof_service.get_footprint(25.98021, -80.39952, "3062 Southwest 189th Avenue")
+    )
+
+    assert footprint.area == pytest.approx(polygon.area)
+    assert metadata["provider"] == "Broward County Building Footprints"
+    assert metadata["source_id"] == 77
