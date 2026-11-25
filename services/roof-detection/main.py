@@ -162,6 +162,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     provider_errors: list[str] = []
     providers_succeeded = 0
     arcgis_feature_count = 0
+    broward_feature_count = 0
     overpass_element_count = 0
 
     arcgis_url = (
@@ -226,6 +227,60 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                     }))
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             provider_errors.append(f"ArcGIS USA Structures: {type(exc).__name__}")
+
+        # Broward County publishes its own current building-footprint layer.
+        # Use it as a geographically authoritative fallback for properties
+        # in Broward when the nationwide layer has no coverage.
+        broward_url = (
+            "https://services.arcgis.com/JMAJrTsHNLrSsWf5/"
+            "ArcGIS/rest/services/Broward_BuildingFootPrints/FeatureServer/0/query"
+        )
+        broward_params = {
+            "where": "1=1",
+            "geometry": f"{lon},{lat}",
+            "geometryType": "esriGeometryPoint",
+            "inSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "distance": str(int(CANDIDATE_SEARCH_RADIUS_M)),
+            "units": "esriSRUnit_Meter",
+            "outFields": "OBJECTID,AREA,COUNTY_NAM,capture_dates_range",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "f": "geojson",
+        }
+        try:
+            response = await client.get(broward_url, params=broward_params)
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("error"):
+                raise ValueError(str(payload["error"]))
+            providers_succeeded += 1
+            broward_features = payload.get("features", [])
+            broward_feature_count = len(broward_features)
+            for feature in broward_features:
+                geometry = feature.get("geometry")
+                if not geometry:
+                    continue
+                try:
+                    parsed = shape(geometry)
+                except (TypeError, ValueError):
+                    continue
+                parts = list(parsed.geoms) if parsed.geom_type == "MultiPolygon" else [parsed]
+                properties = feature.get("properties") or {}
+                for polygon in parts:
+                    if polygon.geom_type != "Polygon" or polygon.is_empty:
+                        continue
+                    raw_candidates.append((polygon, {
+                        "provider": "Broward County Building Footprints",
+                        "source_id": properties.get("OBJECTID"),
+                        "building_tags": {
+                            key: properties.get(key)
+                            for key in ("AREA", "COUNTY_NAM", "capture_dates_range")
+                            if properties.get(key) is not None
+                        },
+                    }))
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            provider_errors.append(f"Broward County Building Footprints: {type(exc).__name__}")
 
         # Query independent OSM Overpass endpoints as a fallback and to fill
         # coverage gaps in the nationwide structures layer.
@@ -364,10 +419,11 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             detail={
                 "code": "building_footprint_not_found",
                 "message": "No eligible mapped building was found within the 80 m candidate search radius. Review the geocoded pin or use manual footprint tracing.",
-                "providers_checked": ["ArcGIS USA Structures", "OpenStreetMap Overpass"],
+                "providers_checked": ["ArcGIS USA Structures", "Broward County Building Footprints", "OpenStreetMap Overpass"],
                 "candidate_search_radius_m": CANDIDATE_SEARCH_RADIUS_M,
                 "provider_feature_count": len(raw_candidates),
                 "arcgis_feature_count": arcgis_feature_count,
+                "broward_feature_count": broward_feature_count,
                 "overpass_element_count": overpass_element_count,
                 "geocoded_location": {"lat": round(lat, 7), "lon": round(lon, 7)},
                 "provider_errors": provider_errors,
