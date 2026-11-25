@@ -131,7 +131,10 @@ describe("LiDAR source-data evidence", () => {
     const parsed = roofDetectionResponseSchema.parse(response);
     expect(parsed.lidar?.building_class_points).toBe(420);
     expect(parsed.lidar?.tiles_used).toBe(2);
-    expect(parsed.lidar?.tile_ids_used).toEqual(["USGS_LPC_FL_South_2020_19R_1234", "USGS_LPC_FL_South_2020_19R_1235"]);
+    expect(parsed.lidar?.tile_ids_used).toEqual([
+      "USGS_LPC_FL_South_2020_19R_1234",
+      "USGS_LPC_FL_South_2020_19R_1235",
+    ]);
     expect(parsed.lidar?.duplicate_points_removed).toBe(30);
     expect(parsed.roof.facets[0]?.point_count).toBe(200);
   });
