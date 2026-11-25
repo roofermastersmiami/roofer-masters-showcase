@@ -177,7 +177,7 @@ export function CrmShell({
         const fallbackAccent = localStorage.getItem("crm-accent-color");
         if (fallbackAccent && isCrmAccentId(fallbackAccent)) {
           setAccent(fallbackAccent);
-          if (fallbackAccent !== "magenta") setThemeChoice(`accent:${fallbackAccent}`);
+          if (fallbackAccent !== "magenta") setThemeChoice(`color:${fallbackAccent}`);
         }
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
         if (fallbackTheme && isCrmThemeId(fallbackTheme)) {
@@ -700,7 +700,7 @@ export function CrmShell({
             </div>
             <label
               className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-1.5 sm:gap-1.5 sm:px-2"
-              title="Choose one of 35 CRM appearances"
+              title="Choose one of 35 CRM themes"
             >
               <Palette className="size-4 text-muted-foreground" />
               <span className="sr-only">CRM appearance</span>
@@ -709,8 +709,8 @@ export function CrmShell({
                 value={themeChoice}
                 onChange={(event) => {
                   const value = event.target.value;
-                  if (value.startsWith("accent:")) {
-                    const accentId = value.slice("accent:".length);
+                  if (value.startsWith("color:")) {
+                    const accentId = value.slice("color:".length);
                     if (isCrmAccentId(accentId)) {
                       setTheme("default");
                       setAccent(accentId);
@@ -743,7 +743,7 @@ export function CrmShell({
                 <option value="theme:plum-luxe">Plum Luxe</option>
                 <option value="theme:monochrome-pro">Monochrome Pro</option>
                 {CRM_ACCENT_COLORS.map((color) => (
-                  <option key={color.id} value={`accent:${color.id}`}>
+                  <option key={color.id} value={`color:${color.id}`}>
                     {color.label}
                   </option>
                 ))}
