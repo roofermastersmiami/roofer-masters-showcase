@@ -68,6 +68,7 @@ def test_ransac_recovers_candidate_plane_pitch_and_area():
     assert facets[0]["pitch_rise_per_12"] == pytest.approx(6.0, abs=0.15)
     assert facets[0]["area_sqft"] > 0
     assert facets[0]["point_count"] >= 80
+    assert facets[0]["fit_rmse_m"] == pytest.approx(0, abs=1e-6)
     assert 0 <= facets[0]["azimuth_degrees"] < 360
 
     
