@@ -135,7 +135,7 @@ export function materialOrder(input: RoofReport): MaterialLine[] {
           metalConfig: r.metal_config as MetalTakeoffConfig,
         },
         "architectural_metal",
-        r.waste_pct,
+        wastePct,
       );
       return takeoff.lineItems.map((line) => ({
         item: line.name,
