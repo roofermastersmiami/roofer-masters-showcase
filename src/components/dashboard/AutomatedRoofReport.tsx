@@ -231,7 +231,9 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                   {visibleResult.roof.facets.map((facet) => (
                     <tr key={facet.id} className="border-b border-border/60">
                       <td className="py-2 pr-3">{facet.id}</td>
-                      <td className="py-2 pr-3 tabular-nums">{facet.point_count.toLocaleString()}</td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {facet.point_count.toLocaleString()}
+                      </td>
                       <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                       <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
                       <td className="py-2 pr-3 tabular-nums">
