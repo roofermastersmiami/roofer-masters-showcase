@@ -193,7 +193,10 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
             break
         estimator = RANSACRegressor(
             estimator=LinearRegression(),
-            min_samples=max(3, min(30, int(len(remaining) * 0.08))),
+            # Three non-collinear points are sufficient to hypothesize a
+            # plane. Large random samples can mix both sides of a ridge and
+            # converge on a shallow compromise plane, corrupting pitch.
+            min_samples=3,
             residual_threshold=0.20,
             max_trials=250,
             random_state=plane_index + 13,
@@ -257,9 +260,13 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                     / max(math.cos(math.radians(pitch)), 1e-6)
                     * 10.7639104167
                 )
+                component_array = np.asarray(component_points, dtype=float)
+                residuals = component_array[:, 2] - model.predict(component_array[:, :2])
+                fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
                 facets.append({
                     "id": f"facet-{len(facets) + 1}",
                     "point_count": len(component_points),
+                    "fit_rmse_m": round(fit_rmse_m, 4),
                     "pitch_degrees": round(pitch, 2),
                     "pitch_rise_per_12": round(pitch_rise, 2),
                     "azimuth_degrees": round(azimuth, 1),

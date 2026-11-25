@@ -5,6 +5,7 @@ const facetSchema = z.object({
   id: z.string().min(1),
   point_count: z.number().int().positive(),
   pitch_degrees: z.number().finite().min(0).max(90),
+  fit_rmse_m: z.number().finite().nonnegative().optional(),
   pitch_rise_per_12: z.number().finite().min(0).max(1000),
   azimuth_degrees: z.number().finite().min(0).lt(360),
   area_sqft: z.number().finite().positive(),
@@ -98,6 +99,22 @@ export function detectedFacetsToDrawing(
   const originLon = result.location.lon;
   const longitudeScale = METERS_PER_LON_DEGREE * Math.cos((originLat * Math.PI) / 180);
   const projected = result.roof.facets.map((facet) => {
+    if (facet.plane_model) {
+      const [a, b] = facet.plane_model.z_equals_ax_plus_by_plus_c;
+      const modelPitchDegrees = (Math.atan(Math.hypot(a, b)) * 180) / Math.PI;
+      const pitchDifference = Math.abs(modelPitchDegrees - facet.pitch_degrees);
+      if (pitchDifference > 1.5) {
+        throw new Error(
+          `Facet ${facet.id} has inconsistent elevation and pitch data (${pitchDifference.toFixed(1)}° difference). Retry detection or review manually.`,
+        );
+      }
+      const modelPitchRise = Math.hypot(a, b) * 12;
+      if (Math.abs(modelPitchRise - facet.pitch_rise_per_12) > 0.35) {
+        throw new Error(
+          `Facet ${facet.id} has inconsistent pitch values. Retry detection or review manually.`,
+        );
+      }
+    }
     const points = facet.boundary_latlon.slice(0, -1).map(([lat, lon, elevationMeters]) => ({
       x: (lon - originLon) * longitudeScale * FEET_PER_METER,
       z: (originLat - lat) * METERS_PER_LAT_DEGREE * FEET_PER_METER,
@@ -129,7 +146,7 @@ export function detectedFacetsToDrawing(
       "Preliminary roof facets from public USGS 3DEP LiDAR. Verify all facet boundaries, pitch, edge types, and material system before use.",
     condition: "",
     verified: false,
-    accuracy: "photo_estimate",
+    accuracy: "public_lidar_estimate",
     geo_reference: {
       addressLatitude: originLat,
       addressLongitude: originLon,

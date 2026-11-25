@@ -94,7 +94,7 @@ export const drawingSchema = z.object({
   notes: z.string().max(4000),
   condition: z.string().max(1000),
   verified: z.boolean(),
-  accuracy: z.enum(["photo_estimate", "scaled", "site_verified"]).optional(),
+  accuracy: z.enum(["photo_estimate", "public_lidar_estimate", "scaled", "site_verified"]).optional(),
   image_credit: z.string().max(300).optional(),
   geo_reference: geoReferenceSchema.optional(),
 });

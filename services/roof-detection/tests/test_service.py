@@ -68,6 +68,7 @@ def test_ransac_recovers_candidate_plane_pitch_and_area():
     assert facets[0]["pitch_rise_per_12"] == pytest.approx(6.0, abs=0.15)
     assert facets[0]["area_sqft"] > 0
     assert facets[0]["point_count"] >= 80
+    assert facets[0]["fit_rmse_m"] == pytest.approx(0, abs=1e-6)
     assert 0 <= facets[0]["azimuth_degrees"] < 360
 
     
@@ -241,3 +242,32 @@ def test_ransac_does_not_create_facets_from_small_spatial_noise_clusters():
     facets = _fit_facets(np.vstack((roof, noise)))
     assert len(facets) == 1
     assert facets[0]["point_count"] == len(roof)
+
+def test_ransac_separates_two_adjacent_roof_slopes_sharing_a_ridge():
+    # Two roof planes meet at the same ridge line. This is the critical case
+    # for eliminating manual pitch entry: the point cloud must produce two
+    # distinct facets, not one averaged plane spanning both slopes.
+    x_left, y_left = np.meshgrid(
+        np.linspace(0.25, 9.75, 25), np.linspace(0.25, 19.75, 25)
+    )
+    x_right, y_right = np.meshgrid(
+        np.linspace(10.25, 19.75, 25), np.linspace(0.25, 19.75, 25)
+    )
+    z_left = 10.0 + 0.5 * x_left
+    z_right = 20.0 - 0.5 * x_right
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), z_left.ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), z_right.ravel()))
+    rng = np.random.default_rng(42)
+    left[:, 2] += rng.normal(0, 0.025, len(left))
+    right[:, 2] += rng.normal(0, 0.025, len(right))
+
+    facets = _fit_facets(np.vstack((left, right)))
+
+    assert len(facets) == 2
+    pitches = sorted(facet["pitch_rise_per_12"] for facet in facets)
+    assert pitches == pytest.approx([6.0, 6.0], abs=0.2)
+    assert all(facet["point_count"] >= 500 for facet in facets)
+    assert all(0 < facet["fit_rmse_m"] < 0.12 for facet in facets)
+    # Each half is 9.5 m × 19.5 m in plan; at 6/12 pitch the
+    # sloped surface is approximately 2,225 sq ft per facet.
+    assert all(2100 < facet["area_sqft"] < 2350 for facet in facets)

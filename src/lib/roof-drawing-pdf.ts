@@ -552,6 +552,7 @@ export async function roofDrawingPdf(
   );
   const accuracyLabels = {
     photo_estimate: "Estimated from photo / public aerial",
+    public_lidar_estimate: "Preliminary estimate from public LiDAR elevation data",
     scaled: "Scaled from a known measured distance",
     site_verified: "Verified on site",
   } as const;

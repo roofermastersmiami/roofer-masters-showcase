@@ -573,13 +573,12 @@ export function RoofMeasurements({
       }
       setFootprints(result.footprints);
       setFootprintAddressCoordinates(result.addressCoordinates);
-      const candidate = result.footprints[0];
-      if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
-        applyBuildingFootprint(candidate, result.addressCoordinates);
-      }
+      // Never import the first geocoder/OSM result automatically: an address
+      // point can land on the street and the first footprint may be a neighbor.
+      // Keep every candidate visible and require the estimator to choose it.
       setFootprintMessage(
         result.footprints.length
-          ? `Found ${result.footprints.length} nearby mapped building footprint(s). ${result.attribution}. These are ground outlines only.`
+          ? `Found ${result.footprints.length} nearby mapped building footprint(s). Review the outlines below and choose the correct building explicitly. ${result.attribution}. These are ground outlines only.`
           : `No mapped building outline was found within 100 meters. ${result.attribution}. You can still trace the aerial manually.`,
       );
     } catch {
@@ -675,56 +674,14 @@ export function RoofMeasurements({
           </div>
         }
       />
-      <div
-        className="mb-4 rounded-lg border border-border bg-muted/20 p-4"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="font-semibold">Automated report quality check</h2>
-            <p className="text-xs text-muted-foreground">
-              {reportAudit.planeCount} roof plane(s) · {reportAudit.unclassifiedEdges} unclassified
-              edge(s)
-            </p>
-          </div>
-          <span
-            className={
-              reportAudit.status === "ready"
-                ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800"
-                : reportAudit.status === "blocked"
-                  ? "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800"
-                  : "rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
-            }
-          >
-            {reportAudit.status === "ready"
-              ? "Ready for review"
-              : reportAudit.status === "blocked"
-                ? "Report blocked"
-                : "Review required"}
-          </span>
-        </div>
-        {(reportAudit.blockers.length > 0 || reportAudit.warnings.length > 0) && (
-          <ul className="mt-3 grid gap-1 text-sm">
-            {reportAudit.blockers.map((item) => (
-              <li key={item} className="text-destructive">
-                Blocker: {item}
-              </li>
-            ))}
-            {reportAudit.warnings.map((item) => (
-              <li key={item} className="text-muted-foreground">
-                Review: {item}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          Saving a linked property report automatically refreshes its PDF. Quality checks validate
-          drawing consistency and disclosures; they do not independently certify roof dimensions or
-          pitch.
-        </p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+        <span className="text-muted-foreground">
+          {reportAudit.planeCount} roof plane{reportAudit.planeCount === 1 ? "" : "s"} · {reportAudit.status === "ready" ? "Ready for review" : reportAudit.status === "blocked" ? "Needs correction" : "Review measurements"}
+        </span>
+        <span className={d.verified ? "font-medium text-emerald-700" : "font-medium text-amber-700"}>
+          {d.verified ? "Reviewed" : "Not yet reviewed"}
+        </span>
       </div>
-      \n{" "}
       {workspaceAddress && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
@@ -1291,31 +1248,9 @@ export function RoofMeasurements({
         </div>
       )}
       {roofSummary && (
-        <section className="my-5 rounded-lg border border-border p-5">
-          <h3 className="mb-4 text-lg font-bold">Roof Calculator Summary</h3>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Roof area</p>
-              <p className="text-xl font-bold">
-                {roofSummary.facetSurfaceAreaSqFt.toFixed(1)} sq ft
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Waste area</p>
-              <p className="text-xl font-bold">{roofSummary.wasteAreaSqFt.toFixed(1)} sq ft</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Area with waste</p>
-              <p className="text-xl font-bold">
-                {roofSummary.totalAreaWithWasteSqFt.toFixed(1)} sq ft
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Order quantity</p>
-              <p className="text-xl font-bold">{roofSummary.orderSquares.toFixed(2)} squares</p>
-            </div>
-          </div>
-        </section>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Including {d.waste}% waste: {roofSummary.orderSquares.toFixed(2)} order squares
+        </p>
       )}
       {measurement && (
         <section className="my-5 rounded-lg border border-border p-5">
@@ -1367,360 +1302,370 @@ export function RoofMeasurements({
           </p>
         </section>
       )}
-      <section className="grid gap-6 py-6 lg:grid-cols-2">
-        <div>
-          <h3 className="mb-4 text-lg font-bold">Report details</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Choice
-              label="Roof system"
-              value={d.roof_type}
-              onChange={(v) => edit({ ...d, roof_type: v as RoofDrawing["roof_type"] })}
-              options={["Metal Roof", "Shingle Roof", "Tile Roof", "TPO", "Flat Roof"].map((v) => ({
-                value: v,
-                label: v,
-              }))}
-            />
-            <Field label="Waste (%)">
-              <Input
-                type="number"
-                min={0}
-                max={50}
-                value={d.waste}
-                onChange={(e) => edit({ ...d, waste: Number(e.target.value) })}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Roof condition">
-                <Input
-                  value={d.condition}
-                  onChange={(e) => edit({ ...d, condition: e.target.value })}
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Inspection notes">
-                <Textarea value={d.notes} onChange={(e) => edit({ ...d, notes: e.target.value })} />
-              </Field>
-            </div>
-            <label className="flex items-center gap-3 text-sm sm:col-span-2">
-              <Checkbox
-                checked={d.verified}
-                onCheckedChange={(v) => {
-                  setD({ ...d, verified: v === true });
-                  setDirty(true);
-                }}
-              />{" "}
-              Owner reviewed these measurements
-            </label>
-          </div>
-        </div>
-        <div>
-          <h3 className="mb-4 text-lg font-bold">Penetrations</h3>
-          {d.penetrations.map((p) => (
-            <div
-              key={p.id}
-              className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3"
-            >
-              <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
-                <span
-                  aria-hidden="true"
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: PENETRATION_COLORS[p.kind] }}
-                />
-                {p.kind === "pipe"
-                  ? "Pipe identification"
-                  : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
-              </div>
+      <details className="my-4 rounded-lg border border-border p-4">
+        <summary className="cursor-pointer font-semibold">Additional report settings</summary>
+        <section className="grid gap-6 py-6 lg:grid-cols-2">
+          <div>
+            <h3 className="mb-4 text-lg font-bold">Report details</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
               <Choice
-                label="Type"
-                value={p.kind}
-                onChange={(v) =>
-                  edit({
-                    ...d,
-                    penetrations: d.penetrations.map((x) =>
-                      x.id === p.id ? { ...x, kind: v as typeof p.kind } : x,
-                    ),
-                  })
-                }
-                options={["chimney", "skylight", "vent", "pipe", "other"].map((v) => ({
+                label="Roof system"
+                value={d.roof_type}
+                onChange={(v) => edit({ ...d, roof_type: v as RoofDrawing["roof_type"] })}
+                options={["Metal Roof", "Shingle Roof", "Tile Roof", "TPO", "Flat Roof"].map((v) => ({
                   value: v,
                   label: v,
                 }))}
               />
-              {(["x", "z", "width", "length"] as const).map((k) => (
-                <Field key={k} label={`${k} (ft)`}>
+              <Field label="Waste (%)">
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={d.waste}
+                  onChange={(e) => edit({ ...d, waste: Number(e.target.value) })}
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Roof condition">
                   <Input
-                    type="number"
-                    value={p[k]}
-                    onChange={(e) =>
-                      edit({
-                        ...d,
-                        penetrations: d.penetrations.map((x) =>
-                          x.id === p.id ? { ...x, [k]: Number(e.target.value) } : x,
-                        ),
-                      })
-                    }
+                    value={d.condition}
+                    onChange={(e) => edit({ ...d, condition: e.target.value })}
                   />
                 </Field>
-              ))}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="self-end"
-                title="Remove penetration"
-                aria-label="Remove penetration"
-                onClick={() =>
-                  edit({ ...d, penetrations: d.penetrations.filter((x) => x.id !== p.id) })
-                }
-              >
-                <Trash2 />
-              </Button>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Inspection notes">
+                  <Textarea value={d.notes} onChange={(e) => edit({ ...d, notes: e.target.value })} />
+                </Field>
+              </div>
+              <label className="flex items-center gap-3 text-sm sm:col-span-2">
+                <Checkbox
+                  checked={d.verified}
+                  onCheckedChange={(v) => {
+                    setD({ ...d, verified: v === true });
+                    setDirty(true);
+                  }}
+                />{" "}
+                Owner reviewed these measurements
+              </label>
             </div>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              edit({
-                ...d,
-                penetrations: [
-                  ...d.penetrations,
-                  { id: crypto.randomUUID(), kind: "pipe", x: 0, z: 0, width: 1, length: 1 },
-                ],
-              })
-            }
-          >
-            <Plus /> Add penetration
-          </Button>
-        </div>
-      </section>
-      <section className="border-t border-border py-6">
-        <div className="mb-3 flex items-center justify-between">
+          </div>
           <div>
-            <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Upload your own overhead roof photo or aerial image, then use the calibrated photo
-              tracer below to draw each roof plane, set its scale and pitch, and classify its edges.
-              You can also load free public aerial imagery in the next section.
-            </p>
-          </div>
-          <Button variant="outline" asChild disabled={busy || !property}>
-            <label>
-              <Upload /> Upload photo to trace
-              <input
-                type="file"
-                className="sr-only"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void upload(f);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          </Button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {media.map((m, i) => (
-            <div key={m.path}>
-              <DrawingImage path={m.path} name={m.name} />
-              {m.source && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {m.source}
-                  {m.matched_address ? ` · Matched: ${m.matched_address}` : ""}
-                  {typeof m.latitude === "number" && typeof m.longitude === "number"
-                    ? ` · ${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`
-                    : ""}
-                </p>
-              )}
-              <Choice
-                label="Photo type"
-                value={m.category}
-                onChange={(v) => {
-                  setMedia(
-                    media.map((x, n) => (n === i ? { ...x, category: v as Media["category"] } : x)),
-                  );
-                  setDirty(true);
-                }}
-                options={["aerial", "before", "after", "diagram"].map((v) => ({
-                  value: v,
-                  label: v,
-                }))}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="border-t border-border py-6">
-        <h3 className="mb-2 text-lg font-bold">Free public aerial & accuracy</h3>
-        {aerialError && (
-          <p
-            role="alert"
-            className="mb-3 border-l-2 border-destructive pl-3 text-sm text-destructive"
-          >
-            {aerialError}
-          </p>
-        )}
-        <p className="mb-3 text-sm text-muted-foreground">
-          Looks up the address with the free US Census service and loads public USGS aerial imagery
-          when coverage is available. Image dimensions do not establish ground scale: calibrate
-          against a known measured distance before tracing. Results are estimates, never
-          survey-grade. No paid provider is used.
-        </p>
-        {aerialStatus && (
-          <p
-            className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
-            role="status"
-            aria-live="polite"
-          >
-            {aerialStatus}
-          </p>
-        )}
-        <div className="flex flex-wrap items-end gap-3">
-          <Button
-            variant="outline"
-            disabled={busy || !property || !(report?.address?.trim() || propertyRow?.address)}
-            onClick={() => void loadAerial()}
-          >
-            <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}
-          </Button>
-          <div className="w-72">
-            <Choice
-              label="Measurement basis"
-              value={d.accuracy ?? "photo_estimate"}
-              onChange={(v) => {
-                setD({
-                  ...d,
-                  accuracy: v as Accuracy,
-                  verified: v === "site_verified" ? d.verified : d.verified,
-                });
-                setDirty(true);
-              }}
-              options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({ value, label }))}
-            />
-          </div>
-          <Button
-            variant="outline"
-            disabled={
-              footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)
-            }
-            onClick={() => void searchFootprints()}
-          >
-            {footprintBusy ? "Searching footprints…" : "Find mapped building outline"}
-          </Button>
-          {media.length > 1 && (
-            <div className="w-56">
-              <Choice
-                label="Photo to trace"
-                value={String(traceIndex)}
-                onChange={(v) => setTraceIndex(Number(v))}
-                options={media.map((m, i) => ({
-                  value: String(i),
-                  label: `${i + 1}. ${m.category} · ${m.name.slice(0, 30)}`,
-                }))}
-              />
-            </div>
-          )}
-        </div>
-        {footprintMessage && (
-          <p
-            className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
-            role="status"
-          >
-            {footprintMessage}{" "}
-            <a
-              className="underline underline-offset-4"
-              href="https://www.openstreetmap.org/copyright"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              OpenStreetMap attribution and license
-            </a>
-          </p>
-        )}
-        {footprints.length > 0 && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Choose the matching building if several are listed. These mapped outlines show the
-            building footprint, not verified roof edges or roof planes.
-          </p>
-        )}
-        {footprints.length > 0 && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {footprints.map((footprint) => (
-              <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
-                <p className="font-medium">Mapped building #{footprint.id}</p>
-                <svg
-                  viewBox="0 0 160 100"
-                  role="img"
-                  aria-label={`Approximate mapped ground outline for building ${footprint.id}`}
-                  className="my-2 h-24 w-full rounded bg-muted/40"
-                >
-                  {(() => {
-                    const cos = Math.cos((footprint.center.lat * Math.PI) / 180);
-                    const xy = footprint.points.map((point) => ({
-                      x: point.lon * cos,
-                      y: -point.lat,
-                    }));
-                    const minX = Math.min(...xy.map((point) => point.x));
-                    const maxX = Math.max(...xy.map((point) => point.x));
-                    const minY = Math.min(...xy.map((point) => point.y));
-                    const maxY = Math.max(...xy.map((point) => point.y));
-                    const width = Math.max(maxX - minX, 1e-9);
-                    const height = Math.max(maxY - minY, 1e-9);
-                    const scale = Math.min(140 / width, 80 / height);
-                    const offsetX = (160 - width * scale) / 2;
-                    const offsetY = (100 - height * scale) / 2;
-                    const points = xy
-                      .map(
-                        (point) =>
-                          `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
-                      )
-                      .join(" ");
-                    return (
-                      <polygon
-                        points={points}
-                        fill="currentColor"
-                        fillOpacity="0.12"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    );
-                  })()}
-                </svg>
-                <p className="text-muted-foreground">
-                  Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft ·{" "}
-                  {footprint.containsAddress
-                    ? "Address point is inside this outline"
-                    : `${footprint.distanceMeters} m from nearest outline`}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {footprint.points.length} outline corners · OSM building type:{" "}
-                  {footprint.buildingType}
-                </p>
+            <h3 className="mb-4 text-lg font-bold">Penetrations</h3>
+            {d.penetrations.map((p) => (
+              <div
+                key={p.id}
+                className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3"
+              >
+                <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: PENETRATION_COLORS[p.kind] }}
+                  />
+                  {p.kind === "pipe"
+                    ? "Pipe identification"
+                    : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
+                </div>
+                <Choice
+                  label="Type"
+                  value={p.kind}
+                  onChange={(v) =>
+                    edit({
+                      ...d,
+                      penetrations: d.penetrations.map((x) =>
+                        x.id === p.id ? { ...x, kind: v as typeof p.kind } : x,
+                      ),
+                    })
+                  }
+                  options={["chimney", "skylight", "vent", "pipe", "other"].map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
+                />
+                {(["x", "z", "width", "length"] as const).map((k) => (
+                  <Field key={k} label={`${k} (ft)`}>
+                    <Input
+                      type="number"
+                      value={p[k]}
+                      onChange={(e) =>
+                        edit({
+                          ...d,
+                          penetrations: d.penetrations.map((x) =>
+                            x.id === p.id ? { ...x, [k]: Number(e.target.value) } : x,
+                          ),
+                        })
+                      }
+                    />
+                  </Field>
+                ))}
                 <Button
-                  className="mt-3 w-full"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => applyBuildingFootprint(footprint)}
+                  size="icon"
+                  variant="ghost"
+                  className="self-end"
+                  title="Remove penetration"
+                  aria-label="Remove penetration"
+                  onClick={() =>
+                    edit({ ...d, penetrations: d.penetrations.filter((x) => x.id !== p.id) })
+                  }
                 >
-                  Use this preliminary outline
+                  <Trash2 />
                 </Button>
-                <a
-                  className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
-                  href={`https://www.openstreetmap.org/way/${footprint.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Inspect source outline on OpenStreetMap
-                </a>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                edit({
+                  ...d,
+                  penetrations: [
+                    ...d.penetrations,
+                    { id: crypto.randomUUID(), kind: "pipe", x: 0, z: 0, width: 1, length: 1 },
+                  ],
+                })
+              }
+            >
+              <Plus /> Add penetration
+            </Button>
+          </div>
+        </section>
+        </details>
+      <details className="my-4 rounded-lg border border-border p-4">
+        <summary className="cursor-pointer font-semibold">Manual tracing & photos (optional)</summary>
+        <section className="border-t border-border py-6">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Upload your own overhead roof photo or aerial image, then use the calibrated photo
+                tracer below to draw each roof plane, set its scale and pitch, and classify its edges.
+                You can also load free public aerial imagery in the next section.
+              </p>
+            </div>
+            <Button variant="outline" asChild disabled={busy || !property}>
+              <label>
+                <Upload /> Upload photo to trace
+                <input
+                  type="file"
+                  className="sr-only"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void upload(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </Button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {media.map((m, i) => (
+              <div key={m.path}>
+                <DrawingImage path={m.path} name={m.name} />
+                {m.source && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {m.source}
+                    {m.matched_address ? ` · Matched: ${m.matched_address}` : ""}
+                    {typeof m.latitude === "number" && typeof m.longitude === "number"
+                      ? ` · ${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`
+                      : ""}
+                  </p>
+                )}
+                <Choice
+                  label="Photo type"
+                  value={m.category}
+                  onChange={(v) => {
+                    setMedia(
+                      media.map((x, n) => (n === i ? { ...x, category: v as Media["category"] } : x)),
+                    );
+                    setDirty(true);
+                  }}
+                  options={["aerial", "before", "after", "diagram"].map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
+                />
               </div>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+        </details>
+      <details className="my-4 rounded-lg border border-border p-4">
+        <summary className="cursor-pointer font-semibold">Aerial map & building outline tools (optional)</summary>
+        <section className="border-t border-border py-6">
+          <h3 className="mb-2 text-lg font-bold">Free public aerial & accuracy</h3>
+          {aerialError && (
+            <p
+              role="alert"
+              className="mb-3 border-l-2 border-destructive pl-3 text-sm text-destructive"
+            >
+              {aerialError}
+            </p>
+          )}
+          <p className="mb-3 text-sm text-muted-foreground">
+            Looks up the address with the free US Census service and loads public USGS aerial imagery
+            when coverage is available. Image dimensions do not establish ground scale: calibrate
+            against a known measured distance before tracing. Results are estimates, never
+            survey-grade. No paid provider is used.
+          </p>
+          {aerialStatus && (
+            <p
+              className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+              role="status"
+              aria-live="polite"
+            >
+              {aerialStatus}
+            </p>
+          )}
+          <div className="flex flex-wrap items-end gap-3">
+            <Button
+              variant="outline"
+              disabled={busy || !property || !(report?.address?.trim() || propertyRow?.address)}
+              onClick={() => void loadAerial()}
+            >
+              <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}
+            </Button>
+            <div className="w-72">
+              <Choice
+                label="Measurement basis"
+                value={d.accuracy ?? "photo_estimate"}
+                onChange={(v) => {
+                  setD({
+                    ...d,
+                    accuracy: v as Accuracy,
+                    verified: v === "site_verified" ? d.verified : d.verified,
+                  });
+                  setDirty(true);
+                }}
+                options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({ value, label }))}
+              />
+            </div>
+            <Button
+              variant="outline"
+              disabled={
+                footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)
+              }
+              onClick={() => void searchFootprints()}
+            >
+              {footprintBusy ? "Searching footprints…" : "Find mapped building outline"}
+            </Button>
+            {media.length > 1 && (
+              <div className="w-56">
+                <Choice
+                  label="Photo to trace"
+                  value={String(traceIndex)}
+                  onChange={(v) => setTraceIndex(Number(v))}
+                  options={media.map((m, i) => ({
+                    value: String(i),
+                    label: `${i + 1}. ${m.category} · ${m.name.slice(0, 30)}`,
+                  }))}
+                />
+              </div>
+            )}
+          </div>
+          {footprintMessage && (
+            <p
+              className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+              role="status"
+            >
+              {footprintMessage}{" "}
+              <a
+                className="underline underline-offset-4"
+                href="https://www.openstreetmap.org/copyright"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                OpenStreetMap attribution and license
+              </a>
+            </p>
+          )}
+          {footprints.length > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Choose the matching building if several are listed. These mapped outlines show the
+              building footprint, not verified roof edges or roof planes.
+            </p>
+          )}
+          {footprints.length > 0 && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {footprints.map((footprint) => (
+                <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
+                  <p className="font-medium">Mapped building #{footprint.id}</p>
+                  <svg
+                    viewBox="0 0 160 100"
+                    role="img"
+                    aria-label={`Approximate mapped ground outline for building ${footprint.id}`}
+                    className="my-2 h-24 w-full rounded bg-muted/40"
+                  >
+                    {(() => {
+                      const cos = Math.cos((footprint.center.lat * Math.PI) / 180);
+                      const xy = footprint.points.map((point) => ({
+                        x: point.lon * cos,
+                        y: -point.lat,
+                      }));
+                      const minX = Math.min(...xy.map((point) => point.x));
+                      const maxX = Math.max(...xy.map((point) => point.x));
+                      const minY = Math.min(...xy.map((point) => point.y));
+                      const maxY = Math.max(...xy.map((point) => point.y));
+                      const width = Math.max(maxX - minX, 1e-9);
+                      const height = Math.max(maxY - minY, 1e-9);
+                      const scale = Math.min(140 / width, 80 / height);
+                      const offsetX = (160 - width * scale) / 2;
+                      const offsetY = (100 - height * scale) / 2;
+                      const points = xy
+                        .map(
+                          (point) =>
+                            `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
+                        )
+                        .join(" ");
+                      return (
+                        <polygon
+                          points={points}
+                          fill="currentColor"
+                          fillOpacity="0.12"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      );
+                    })()}
+                  </svg>
+                  <p className="text-muted-foreground">
+                    Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft ·{" "}
+                    {footprint.containsAddress
+                      ? "Address point is inside this outline"
+                      : `${footprint.distanceMeters} m from nearest outline`}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {footprint.points.length} outline corners · OSM building type:{" "}
+                    {footprint.buildingType}
+                  </p>
+                  <Button
+                    className="mt-3 w-full"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => applyBuildingFootprint(footprint)}
+                  >
+                    Use this preliminary outline
+                  </Button>
+                  <a
+                    className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
+                    href={`https://www.openstreetmap.org/way/${footprint.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Inspect source outline on OpenStreetMap
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        </details>
       <AutomatedRoofReport
         address={workspaceAddress}
+        roofType={d.roof_type}
         onApply={(detectedDrawing) => {
           const hasExistingWork =
             Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1;
@@ -1730,7 +1675,7 @@ export function RoofMeasurements({
               "Replace the current roof planes with public LiDAR candidates? Existing planes and penetrations will be removed. You can undo immediately afterward.",
             )
           )
-            return;
+            return false;
           try {
             const nextDrawing: RoofDrawing = {
               ...detectedDrawing,
@@ -1746,12 +1691,14 @@ export function RoofMeasurements({
             toast.success(
               "Preliminary LiDAR facets loaded. Review every plane and classify all edges before generating a takeoff.",
             );
+            return true;
           } catch (cause) {
             toast.error(
               cause instanceof Error
                 ? cause.message
                 : "LiDAR facets failed roof geometry validation.",
             );
+            return false;
           }
         }}
       />

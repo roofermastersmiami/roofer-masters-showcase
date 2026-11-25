@@ -16,6 +16,7 @@ export function aerialBox(lat: number, lon: number, spanMeters: number) {
 }
 export const ACCURACY_LABELS = {
   photo_estimate: "Estimated from photo / public aerial",
+  public_lidar_estimate: "Preliminary estimate from public LiDAR elevation data",
   scaled: "Scaled from a known measured distance",
   site_verified: "Verified on site",
 } as const;
