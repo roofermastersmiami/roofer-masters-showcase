@@ -62,6 +62,7 @@ export type Database = {
           company_name: string | null;
           logo_path: string | null;
           theme_palette: string;
+          theme_accent: string;
           sidebar_appearance: string;
           created_at: string;
           updated_at: string;
@@ -71,6 +72,7 @@ export type Database = {
           company_name?: string | null;
           logo_path?: string | null;
           theme_palette?: string;
+          theme_accent?: string;
           sidebar_appearance?: string;
           created_at?: string;
           updated_at?: string;

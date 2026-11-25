@@ -281,6 +281,13 @@
       "when": 1795655000000,
       "tag": "0039_company_accounts_and_memberships",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795656000000,
+      "tag": "0040_persist_crm_theme_accent",
+      "breakpoints": true
     }
   ]
 }
