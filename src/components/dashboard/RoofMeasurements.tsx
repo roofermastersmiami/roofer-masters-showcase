@@ -1831,16 +1831,30 @@ export function RoofMeasurements({
           ) {
             return false;
           }
-          edit({
+          const nextDrawing: RoofDrawing = {
             ...d,
             planes: appendToCurrentFrame ? [...d.planes, ...nextPlanes] : nextPlanes,
             penetrations: nextPenetrations,
             geo_reference: nextGeoReference,
             accuracy: "photo_estimate",
             verified: false,
-          });
+          };
+          try {
+            // Validate the complete layout, not just each traced facet. A new
+            // facet may be valid alone but overlap an existing plane in plan.
+            measureDrawing(nextDrawing);
+          } catch (cause) {
+            toast.error(
+              cause instanceof Error
+                ? cause.message
+                : "The traced plane would make the roof layout invalid.",
+            );
+            return false;
+          }
+          edit(nextDrawing);
           setSelected(nextPlanes[0]?.id ?? "");
           setFit((f) => f + 1);
+          return true;
         }}
       />
       {media[traceIndex] ? (
