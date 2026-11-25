@@ -9,7 +9,9 @@ describe("tenant security diff audit", () => {
   it("detects role checks and service-role server clients", () => {
     expect(hasPrivilegedPattern('supabase.rpc("has_any_role", args)')).toBe(true);
     expect(hasPrivilegedPattern('supabase.rpc("has_role", args)')).toBe(true);
-    expect(hasPrivilegedPattern("const { supabaseAdmin } = await import('./client.server')")).toBe(true);
+    expect(hasPrivilegedPattern("const { supabaseAdmin } = await import('./client.server')")).toBe(
+      true,
+    );
   });
 
   it("ignores ordinary application code", () => {
