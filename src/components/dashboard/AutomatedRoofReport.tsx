@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, CloudDownload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
+import type { RoofDrawing } from "@/lib/roof-geometry";
 
 type Props = {
   address: string;
@@ -20,6 +21,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   const [resultAddress, setResultAddress] = useState("");
   const [errorAddress, setErrorAddress] = useState("");
   const [loadingAddress, setLoadingAddress] = useState("");
+  const [roofType, setRoofType] = useState<RoofDrawing["roof_type"] | "">("");
   const requestId = useRef(0);
 
   // Prevent a previous property response from being applied to a newly selected address.
@@ -86,7 +88,12 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   function apply() {
     if (!visibleResult || resultAddress !== address.trim()) return;
     try {
-      onApply(detectedFacetsToDrawing(visibleResult));
+      if (!roofType) {
+        setError("Choose the roof system before loading the detected measurements.");
+        setErrorAddress(currentAddress);
+        return;
+      }
+      onApply(detectedFacetsToDrawing(visibleResult, roofType));
     } catch (cause) {
       setError(
         cause instanceof Error
