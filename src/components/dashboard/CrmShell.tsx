@@ -243,6 +243,24 @@ export function CrmShell({
       // Keep the selected appearance for this session when storage is unavailable.
     }
   }, [sidebarAppearance, sidebarPreferencesLoaded]);
+
+  useEffect(() => {
+    if (!logoPath) return;
+    let cancelled = false;
+    const refreshSignedLogoUrl = async () => {
+      const { data, error: signedUrlError } = await supabase.storage
+        .from("crm-company-branding")
+        .createSignedUrl(logoPath, 60 * 60);
+      if (!cancelled && !signedUrlError && data?.signedUrl) setLogoUrl(data.signedUrl);
+    };
+    const interval = window.setInterval(() => {
+      void refreshSignedLogoUrl();
+    }, 45 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [logoPath]);
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove(
