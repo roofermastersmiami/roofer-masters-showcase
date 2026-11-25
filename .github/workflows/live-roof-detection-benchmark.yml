@@ -21,13 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Wait for Render auto-deploy and backend health
+      - name: Wait for Render backend health
         shell: bash
         run: |
           set -euo pipefail
-          # Render deploys the same main-branch push asynchronously; give the image
-          # build/update time to finish before sending the live property request.
-          sleep 90
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error --max-time 15 "https://roofer-masters-roof-detection-w909.onrender.com/health" -o health.json; then
               cat health.json
@@ -39,64 +36,125 @@ jobs:
           echo "Backend did not become healthy within 10 minutes."
           exit 1
 
-      - name: Submit live roof analysis request
+      - name: Analyze exact property and safely resolve footprint candidate
         env:
           PROPERTY_ADDRESS: ${{ inputs.address || '3062 Southwest 189th Avenue, Miramar, FL 33029' }}
         shell: bash
         run: |
           set -euo pipefail
-          printf '{"street_address":"%s"}' "$PROPERTY_ADDRESS" > request.json
-          status=$(curl --silent --show-error --location --max-time 900 \
-            --output response.json --write-out '%{http_code}' \
-            --header 'Content-Type: application/json' \
-            --request POST \
-            --data-binary @request.json \
-            "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze")
-          echo "HTTP status: $status"
-          HTTP_STATUS="$status" python - <<'PY'
+          python - <<'PY'
           import json
           import os
+          import sys
+          import urllib.error
+          import urllib.request
           from pathlib import Path
-          raw = Path("response.json").read_text(errors="replace")
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError:
-              print("Backend returned a non-JSON response:")
-              print(raw[:4000])
-              raise SystemExit(1)
-          status = int(os.environ["HTTP_STATUS"])
+
+          endpoint = "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze"
+          address = os.environ["PROPERTY_ADDRESS"]
+          headers = {"Content-Type": "application/json", "User-Agent": "RooferMasters-GitHub-Benchmark/1.0"}
+
+          def post(payload):
+              request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), headers=headers, method="POST")
+              try:
+                  with urllib.request.urlopen(request, timeout=900) as response:
+                      return response.status, json.loads(response.read().decode())
+              except urllib.error.HTTPError as error:
+                  raw = error.read().decode(errors="replace")
+                  try:
+                      body = json.loads(raw)
+                  except json.JSONDecodeError:
+                      body = {"raw_response": raw[:8000]}
+                  return error.code, body
+
+          status, body = post({"street_address": address})
+          print(f"Initial analysis HTTP {status}")
+          if status == 409:
+              detail = body.get("detail", body)
+              candidates = detail.get("candidates", []) if isinstance(detail, dict) else []
+              print("Candidate selection required. Candidates:")
+              print(json.dumps(candidates, indent=2))
+              # Only automatically select a single polygon that contains the
+              # geocoded address point. Never choose the nearest neighbor.
+              safe = [candidate for candidate in candidates if candidate.get("address_point_inside_footprint") is True]
+              if len(safe) != 1:
+                  result = {
+                      "requested_address": address,
+                      "http_status": status,
+                      "blocker": "No unique candidate contains the geocoded address point; human outline selection is required.",
+                      "candidate_selection_code": detail.get("code") if isinstance(detail, dict) else None,
+                      "candidate_count": len(candidates),
+                      "candidates": candidates,
+                      "raw_error": body,
+                  }
+                  Path("roof-analysis-summary.json").write_text(json.dumps(result, indent=2))
+                  print(json.dumps(result, indent=2))
+                  sys.exit(2)
+              chosen = safe[0]
+              print(f"Selecting unique containing candidate {chosen.get('candidate_id')} from {chosen.get('provider')} source {chosen.get('source_id')}")
+              status, body = post({"street_address": address, "footprint_candidate_id": chosen["candidate_id"]})
+              print(f"Selected-footprint analysis HTTP {status}")
+
           if not 200 <= status < 300:
-              print(json.dumps(data, indent=2))
-              raise SystemExit(f"Roof analysis request failed with HTTP {status}")
+              result = {"requested_address": address, "http_status": status, "raw_error": body}
+              Path("roof-analysis-summary.json").write_text(json.dumps(result, indent=2))
+              print(json.dumps(result, indent=2))
+              sys.exit(1)
+
+          footprint = body.get("footprint") or {}
+          lidar = body.get("lidar") or {}
+          roof = body.get("roof") or {}
           summary = {
-              "status": data.get("status"),
-              "verification": data.get("verification"),
-              "matched_address": data.get("matched_address"),
-              "location": data.get("location"),
+              "requested_address": address,
+              "http_status": status,
+              "status": body.get("status"),
+              "verification": body.get("verification"),
+              "matched_address": body.get("matched_address"),
+              "location": body.get("location"),
               "footprint": {
-                  "area_sqft": data.get("footprint", {}).get("area_sqft"),
-                  "osm_way_id": data.get("footprint", {}).get("osm_way_id"),
-                  "address_point_inside_footprint": data.get("footprint", {}).get("address_point_inside_footprint"),
-                  "address_to_footprint_distance_m": data.get("footprint", {}).get("address_to_footprint_distance_m"),
+                  "source": footprint.get("source"),
+                  "source_id": footprint.get("source_id"),
+                  "area_sqft": footprint.get("area_sqft"),
+                  "address_point_inside_footprint": footprint.get("address_point_inside_footprint"),
+                  "address_to_footprint_distance_m": footprint.get("address_to_footprint_distance_m"),
+                  "polygon_geojson": footprint.get("polygon_geojson"),
               },
-              "lidar": data.get("lidar"),
+              "lidar": lidar,
               "roof": {
-                  "facet_count": data.get("roof", {}).get("facet_count"),
-                  "area_sqft": data.get("roof", {}).get("area_sqft"),
-                  "total_squares": data.get("roof", {}).get("total_squares"),
-                  "dominant_pitch_rise_per_12": data.get("roof", {}).get("dominant_pitch_rise_per_12"),
-                  "facets": data.get("roof", {}).get("facets"),
+                  "facet_count": roof.get("facet_count"),
+                  "area_sqft": roof.get("area_sqft"),
+                  "total_squares": roof.get("total_squares"),
+                  "dominant_pitch_rise_per_12": roof.get("dominant_pitch_rise_per_12"),
+                  "facets": roof.get("facets"),
               },
-              "fallback": data.get("fallback"),
-              "disclaimer": data.get("disclaimer"),
+              "fallback": body.get("fallback"),
+              "disclaimer": body.get("disclaimer"),
+              "roofsnap_reference": {
+                  "area_sqft": 4748,
+                  "total_squares": 47.48,
+                  "main_pitch_rise_per_12": 6,
+              },
           }
-          print(json.dumps(summary, indent=2))
+          if roof.get("area_sqft") is not None:
+              summary["roofsnap_comparison"] = {
+                  "area_difference_sqft": round(roof["area_sqft"] - 4748, 1),
+                  "area_difference_percent": round((roof["area_sqft"] - 4748) / 4748 * 100, 2),
+                  "dominant_pitch_difference_rise_per_12": (
+                      round(roof["dominant_pitch_rise_per_12"] - 6, 2)
+                      if roof.get("dominant_pitch_rise_per_12") is not None else None
+                  ),
+              }
           Path("roof-analysis-summary.json").write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          if body.get("status") != "lidar_facets":
+              print("Analysis returned no fitted LiDAR roof facets; no surface measurements will be inferred from the footprint.")
           PY
 
-      - name: Save benchmark response
+      - name: Save benchmark response and candidate diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: live-roof-analysis-${{ github.run_id }}
           path: roof-analysis-summary.json
+          if-no-files-found: warn
           retention-days: 30
