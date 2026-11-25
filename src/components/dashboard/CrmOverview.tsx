@@ -90,9 +90,12 @@ export function CrmOverview() {
       }
       const allowedPanels = ["revenue", "sales", "tasks", "inspections", "activity"];
       if (Array.isArray(saved.hiddenPanels)) {
-        setHiddenPanels(saved.hiddenPanels.filter(
-          (item: unknown): item is string => typeof item === "string" && allowedPanels.includes(item),
-        ));
+        setHiddenPanels(
+          saved.hiddenPanels.filter(
+            (item: unknown): item is string =>
+              typeof item === "string" && allowedPanels.includes(item),
+          ),
+        );
       }
       if (Array.isArray(saved.hiddenCards)) {
         setHiddenCards(
@@ -384,16 +387,32 @@ export function CrmOverview() {
             <div className="min-w-full">
               <p className="mb-2 text-xs font-semibold text-muted-foreground">DASHBOARD PANELS</p>
               <div className="flex flex-wrap gap-2">
-                {([
-                  ["revenue", "Revenue chart"],
-                  ["sales", "Sales snapshot"],
-                  ["tasks", "Tasks"],
-                  ["inspections", "Inspections"],
-                  ["activity", "Customer activity"],
-                ] as const).map(([id, label]) => (
-                  <Button key={id} size="sm" variant={hiddenPanels.includes(id) ? "outline" : "secondary"}
-                    onClick={() => setHiddenPanels((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])}>
-                    {hiddenPanels.includes(id) ? <EyeOff className="mr-1 size-3" /> : <Eye className="mr-1 size-3" />}
+                {(
+                  [
+                    ["revenue", "Revenue chart"],
+                    ["sales", "Sales snapshot"],
+                    ["tasks", "Tasks"],
+                    ["inspections", "Inspections"],
+                    ["activity", "Customer activity"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <Button
+                    key={id}
+                    size="sm"
+                    variant={hiddenPanels.includes(id) ? "outline" : "secondary"}
+                    onClick={() =>
+                      setHiddenPanels((current) =>
+                        current.includes(id)
+                          ? current.filter((item) => item !== id)
+                          : [...current, id],
+                      )
+                    }
+                  >
+                    {hiddenPanels.includes(id) ? (
+                      <EyeOff className="mr-1 size-3" />
+                    ) : (
+                      <Eye className="mr-1 size-3" />
+                    )}
                     {label}
                   </Button>
                 ))}
@@ -557,166 +576,176 @@ export function CrmOverview() {
         )}
       </div>
       {(!hiddenPanels.includes("revenue") || !hiddenPanels.includes("sales")) && (
-      <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
-        {!hiddenPanels.includes("revenue") && <div className="min-w-0">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Revenue collected</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {year} · {env === "sandbox" ? "Test payments" : "Recorded payments"}
+        <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
+          {!hiddenPanels.includes("revenue") && (
+            <div className="min-w-0">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold">Revenue collected</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {year} · {env === "sandbox" ? "Test payments" : "Recorded payments"}
+                  </p>
+                </div>
+                <p className="text-xl font-bold">{value(yearLedger.collected)}</p>
+              </div>
+              <div className="h-64 w-full min-w-0">
+                {!unavailable ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chart} margin={{ top: 10, right: 5, left: 0, bottom: 0 }}>
+                      <CartesianGrid vertical={false} stroke="var(--border)" />
+                      <XAxis
+                        dataKey="month"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                        tickFormatter={(n) => `$${n >= 1000 ? `${n / 1000}k` : n}`}
+                      />
+                      <Tooltip
+                        formatter={(v) => money(Number(v) * 100)}
+                        contentStyle={{
+                          background: "var(--popover)",
+                          borderColor: "var(--border)",
+                          color: "var(--foreground)",
+                          borderRadius: 8,
+                        }}
+                        cursor={{ fill: "var(--muted)" }}
+                      />
+                      <Bar
+                        dataKey="revenue"
+                        name="Collected"
+                        fill="var(--primary)"
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={28}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="py-20 text-center text-muted-foreground">
+                    Revenue records unavailable.
+                  </p>
+                )}
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {ledger.received.length
+                  ? "Confirmed and manually recorded receipts only."
+                  : "No payments recorded in the selected period."}
               </p>
             </div>
-            <p className="text-xl font-bold">{value(yearLedger.collected)}</p>
-          </div>
-          <div className="h-64 w-full min-w-0">
-            {!unavailable ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chart} margin={{ top: 10, right: 5, left: 0, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke="var(--border)" />
-                  <XAxis
-                    dataKey="month"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                    tickFormatter={(n) => `$${n >= 1000 ? `${n / 1000}k` : n}`}
-                  />
-                  <Tooltip
-                    formatter={(v) => money(Number(v) * 100)}
-                    contentStyle={{
-                      background: "var(--popover)",
-                      borderColor: "var(--border)",
-                      color: "var(--foreground)",
-                      borderRadius: 8,
-                    }}
-                    cursor={{ fill: "var(--muted)" }}
-                  />
-                  <Bar
-                    dataKey="revenue"
-                    name="Collected"
-                    fill="var(--primary)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={28}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="py-20 text-center text-muted-foreground">
-                Revenue records unavailable.
-              </p>
-            )}
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {ledger.received.length
-              ? "Confirmed and manually recorded receipts only."
-              : "No payments recorded in the selected period."}
-          </p>
-        </div>}
-        {!hiddenPanels.includes("sales") && <div className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
-          <h2 className="mb-5 text-xl font-bold">Sales snapshot</h2>
-          <dl className="grid gap-5">
-            {[
-              ["This month collected", value(monthLedger.collected)],
-              ["Issued sales in period", value(ledger.sales)],
-              ["Signed proposals", String(signed.size)],
-              ["Saved estimates", String(estimates.data?.length ?? 0)],
-              ["Unfinished follow-ups", String(due.length)],
-            ].map(([k, v]) => (
-              <div
-                key={k}
-                className="flex justify-between gap-3 border-b border-border pb-3 text-sm"
-              >
-                <dt className="text-muted-foreground">{k}</dt>
-                <dd className="font-bold">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          <Button variant="outline" className="mt-5 w-full" onClick={() => go("sales")}>
-            Sales report <ArrowRight />
-          </Button>
-        </div>}
-      </section>
+          )}
+          {!hiddenPanels.includes("sales") && (
+            <div className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+              <h2 className="mb-5 text-xl font-bold">Sales snapshot</h2>
+              <dl className="grid gap-5">
+                {[
+                  ["This month collected", value(monthLedger.collected)],
+                  ["Issued sales in period", value(ledger.sales)],
+                  ["Signed proposals", String(signed.size)],
+                  ["Saved estimates", String(estimates.data?.length ?? 0)],
+                  ["Unfinished follow-ups", String(due.length)],
+                ].map(([k, v]) => (
+                  <div
+                    key={k}
+                    className="flex justify-between gap-3 border-b border-border pb-3 text-sm"
+                  >
+                    <dt className="text-muted-foreground">{k}</dt>
+                    <dd className="font-bold">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <Button variant="outline" className="mt-5 w-full" onClick={() => go("sales")}>
+                Sales report <ArrowRight />
+              </Button>
+            </div>
+          )}
+        </section>
       )}
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
-        {!hiddenPanels.includes("tasks") && <section>
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <Clock className="size-4 text-primary" /> Tasks requiring attention
-            </h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              title="View follow-ups"
-              aria-label="View follow-ups"
-              onClick={() => go("followups")}
-            >
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-          {due.slice(0, 5).map((t) => (
-            <div key={t.id} className="border-b border-border py-3">
-              <p className="text-sm font-semibold">{t.title}</p>
-              <p
-                className={`mt-1 text-xs ${Date.parse(t.due_at) < Date.now() ? "text-destructive" : "text-muted-foreground"}`}
+        {!hiddenPanels.includes("tasks") && (
+          <section>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <Clock className="size-4 text-primary" /> Tasks requiring attention
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="View follow-ups"
+                aria-label="View follow-ups"
+                onClick={() => go("followups")}
               >
-                {formatWhen(t.due_at)}
-              </p>
+                <ArrowRight className="size-4" />
+              </Button>
             </div>
-          ))}
-          {!due.length && <p className="text-sm text-muted-foreground">No pending tasks.</p>}
-        </section>}
-        {!hiddenPanels.includes("inspections") && <section>
-          <h2 className="mb-5 flex items-center gap-2 text-lg font-bold">
-            <CalendarDays className="size-4 text-primary" /> Upcoming inspections
-          </h2>
-          {upcoming.slice(0, 5).map((j) => (
-            <Button
-              key={j.id}
-              variant="ghost"
-              className="h-auto w-full items-start justify-start border-b border-border py-3 text-left"
-              onClick={() => go("jobs")}
-            >
-              <div>
-                <p className="text-sm font-semibold">{j.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatWhen(j.inspection_at ?? "")}
+            {due.slice(0, 5).map((t) => (
+              <div key={t.id} className="border-b border-border py-3">
+                <p className="text-sm font-semibold">{t.title}</p>
+                <p
+                  className={`mt-1 text-xs ${Date.parse(t.due_at) < Date.now() ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {formatWhen(t.due_at)}
                 </p>
               </div>
-            </Button>
-          ))}
-          {!upcoming.length && (
-            <p className="text-sm text-muted-foreground">No inspections scheduled.</p>
-          )}
-        </section>}
-        {!hiddenPanels.includes("activity") && <section>
-          <h2 className="mb-5 text-lg font-bold">Recent customer activity</h2>
-          {activity.data?.slice(0, 5).map((a) => {
-            const lead = leads.find((l) => l.id === a.lead_id);
-            return (
+            ))}
+            {!due.length && <p className="text-sm text-muted-foreground">No pending tasks.</p>}
+          </section>
+        )}
+        {!hiddenPanels.includes("inspections") && (
+          <section>
+            <h2 className="mb-5 flex items-center gap-2 text-lg font-bold">
+              <CalendarDays className="size-4 text-primary" /> Upcoming inspections
+            </h2>
+            {upcoming.slice(0, 5).map((j) => (
               <Button
-                key={a.id}
+                key={j.id}
                 variant="ghost"
-                className="h-auto w-full justify-start border-b border-border py-3 text-left"
-                disabled={!lead}
-                onClick={() => {
-                  if (lead) onOpen(lead);
-                }}
+                className="h-auto w-full items-start justify-start border-b border-border py-3 text-left"
+                onClick={() => go("jobs")}
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{a.body}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatWhen(a.created_at)}</p>
+                <div>
+                  <p className="text-sm font-semibold">{j.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatWhen(j.inspection_at ?? "")}
+                  </p>
                 </div>
               </Button>
-            );
-          })}
-          {!activity.data?.length && (
-            <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
-          )}
-        </section>}
+            ))}
+            {!upcoming.length && (
+              <p className="text-sm text-muted-foreground">No inspections scheduled.</p>
+            )}
+          </section>
+        )}
+        {!hiddenPanels.includes("activity") && (
+          <section>
+            <h2 className="mb-5 text-lg font-bold">Recent customer activity</h2>
+            {activity.data?.slice(0, 5).map((a) => {
+              const lead = leads.find((l) => l.id === a.lead_id);
+              return (
+                <Button
+                  key={a.id}
+                  variant="ghost"
+                  className="h-auto w-full justify-start border-b border-border py-3 text-left"
+                  disabled={!lead}
+                  onClick={() => {
+                    if (lead) onOpen(lead);
+                  }}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{a.body}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{formatWhen(a.created_at)}</p>
+                  </div>
+                </Button>
+              );
+            })}
+            {!activity.data?.length && (
+              <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
