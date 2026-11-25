@@ -573,13 +573,12 @@ export function RoofMeasurements({
       }
       setFootprints(result.footprints);
       setFootprintAddressCoordinates(result.addressCoordinates);
-      const candidate = result.footprints[0];
-      if (candidate && report && !initialDrawing && !parent && !userEditedDrawing.current) {
-        applyBuildingFootprint(candidate, result.addressCoordinates);
-      }
+      // Never import the first geocoder/OSM result automatically: an address
+      // point can land on the street and the first footprint may be a neighbor.
+      // Keep every candidate visible and require the estimator to choose it.
       setFootprintMessage(
         result.footprints.length
-          ? `Found ${result.footprints.length} nearby mapped building footprint(s). ${result.attribution}. These are ground outlines only.`
+          ? `Found ${result.footprints.length} nearby mapped building footprint(s). Review the outlines below and choose the correct building explicitly. ${result.attribution}. These are ground outlines only.`
           : `No mapped building outline was found within 100 meters. ${result.attribution}. You can still trace the aerial manually.`,
       );
     } catch {
