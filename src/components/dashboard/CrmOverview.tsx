@@ -334,7 +334,10 @@ export function CrmOverview() {
                     className="size-8 rounded-full border-2 border-background transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{
                       backgroundColor: color.value,
-                      outline: accent.toLowerCase() === color.value.toLowerCase() ? `2px solid ${color.value}` : "none",
+                      outline:
+                        accent.toLowerCase() === color.value.toLowerCase()
+                          ? `2px solid ${color.value}`
+                          : "none",
                     }}
                   />
                 ))}
