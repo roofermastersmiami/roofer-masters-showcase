@@ -301,8 +301,15 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         if duplicate_index is None:
             deduplicated.append(candidate)
         elif (
-            metadata.get("address_point_inside_footprint")
-            and not deduplicated[duplicate_index][2].get("address_point_inside_footprint")
+            (
+                metadata.get("address_attribute_match")
+                and not deduplicated[duplicate_index][2].get("address_attribute_match")
+            )
+            or (
+                metadata.get("address_point_inside_footprint")
+                and not deduplicated[duplicate_index][2].get("address_point_inside_footprint")
+                and not deduplicated[duplicate_index][2].get("address_attribute_match")
+            )
         ):
             deduplicated[duplicate_index] = candidate
     candidates = deduplicated
@@ -351,9 +358,12 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         nearest_distance = candidates[0][0]
         next_distance = candidates[1][0]
         if (
-            len(exact_address_matches) != 1
-            and next_distance - nearest_distance < 8.0
-            and not candidates[0][2].get("address_point_inside_footprint")
+            len(exact_address_matches) > 1
+            or (
+                len(exact_address_matches) != 1
+                and next_distance - nearest_distance < 8.0
+                and not candidates[0][2].get("address_point_inside_footprint")
+            )
         ):
             raise HTTPException(
                 status_code=409,
