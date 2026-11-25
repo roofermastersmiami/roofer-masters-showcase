@@ -129,7 +129,7 @@ function metalItems(
       throw new Error(`${label} must be supplied as a positive product-specific value`);
   }
   let panels = 0;
-  let panelLinearFt = 0;
+  const panelCutList: TakeoffLineItem[] = [];
   for (const [index, plane] of planes.entries()) {
     if (
       !Number.isFinite(plane.eaveLengthFt) ||
@@ -145,7 +145,14 @@ function metalItems(
       "Metal panel count",
     );
     panels += planePanels;
-    panelLinearFt += planePanels * plane.panelRunFt;
+    panelCutList.push({
+      code: `MTL-PANEL-PLANE-${index + 1}`,
+      name: `Architectural metal panels — Plane ${index + 1} measured cut list`,
+      category: "Primary",
+      quantity: planePanels,
+      unit: "panels",
+      notes: `${round2(plane.panelRunFt)}-ft measured cut length per panel; ${round2(plane.eaveLengthFt)}-ft eave; ${config.panelCoverageIn}-in net coverage; ${wastePct}% panel allowance`,
+    });
   }
   const trimFt = m.eavesFt + m.rakesFt + m.ridgesFt + m.hipsFt + m.valleysFt;
   const trimSticks = ceilQty(trimFt / config.trimStickLengthFt, "Metal trim sticks");
@@ -154,14 +161,7 @@ function metalItems(
     "Metal fastener boxes",
   );
   return [
-    {
-      code: "MTL-PANEL-CUSTOM",
-      name: "Architectural metal roof panels (measured plane cut list)",
-      category: "Primary",
-      quantity: panels,
-      unit: "panels",
-      notes: `${round2(panelLinearFt)} total panel linear ft; per-plane runs required; ${wastePct}% panel allowance`,
-    },
+    ...panelCutList,
     {
       code: "MTL-UNDERLAYMENT",
       name: "Metal-roof approved underlayment",
