@@ -674,56 +674,14 @@ export function RoofMeasurements({
           </div>
         }
       />
-      <div
-        className="mb-4 rounded-lg border border-border bg-muted/20 p-4"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="font-semibold">Automated report quality check</h2>
-            <p className="text-xs text-muted-foreground">
-              {reportAudit.planeCount} roof plane(s) · {reportAudit.unclassifiedEdges} unclassified
-              edge(s)
-            </p>
-          </div>
-          <span
-            className={
-              reportAudit.status === "ready"
-                ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800"
-                : reportAudit.status === "blocked"
-                  ? "rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800"
-                  : "rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800"
-            }
-          >
-            {reportAudit.status === "ready"
-              ? "Ready for review"
-              : reportAudit.status === "blocked"
-                ? "Report blocked"
-                : "Review required"}
-          </span>
-        </div>
-        {(reportAudit.blockers.length > 0 || reportAudit.warnings.length > 0) && (
-          <ul className="mt-3 grid gap-1 text-sm">
-            {reportAudit.blockers.map((item) => (
-              <li key={item} className="text-destructive">
-                Blocker: {item}
-              </li>
-            ))}
-            {reportAudit.warnings.map((item) => (
-              <li key={item} className="text-muted-foreground">
-                Review: {item}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          Saving a linked property report automatically refreshes its PDF. Quality checks validate
-          drawing consistency and disclosures; they do not independently certify roof dimensions or
-          pitch.
-        </p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
+        <span className="text-muted-foreground">
+          {reportAudit.planeCount} roof plane{reportAudit.planeCount === 1 ? "" : "s"} · {reportAudit.status === "ready" ? "Ready for review" : reportAudit.status === "blocked" ? "Needs correction" : "Review measurements"}
+        </span>
+        <span className={d.verified ? "font-medium text-emerald-700" : "font-medium text-amber-700"}>
+          {d.verified ? "Reviewed" : "Not yet reviewed"}
+        </span>
       </div>
-      \n{" "}
       {workspaceAddress && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
@@ -1290,31 +1248,9 @@ export function RoofMeasurements({
         </div>
       )}
       {roofSummary && (
-        <section className="my-5 rounded-lg border border-border p-5">
-          <h3 className="mb-4 text-lg font-bold">Roof Calculator Summary</h3>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Roof area</p>
-              <p className="text-xl font-bold">
-                {roofSummary.facetSurfaceAreaSqFt.toFixed(1)} sq ft
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Waste area</p>
-              <p className="text-xl font-bold">{roofSummary.wasteAreaSqFt.toFixed(1)} sq ft</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Area with waste</p>
-              <p className="text-xl font-bold">
-                {roofSummary.totalAreaWithWasteSqFt.toFixed(1)} sq ft
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Order quantity</p>
-              <p className="text-xl font-bold">{roofSummary.orderSquares.toFixed(2)} squares</p>
-            </div>
-          </div>
-        </section>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Including {d.waste}% waste: {roofSummary.orderSquares.toFixed(2)} order squares
+        </p>
       )}
       {measurement && (
         <section className="my-5 rounded-lg border border-border p-5">
