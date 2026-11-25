@@ -49,7 +49,7 @@ export function RoofMeasurementsTab({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
-  const [mapZoom, setMapZoom] = useState(1);
+  const [mapZoom, setMapZoom] = useState(80);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
   const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
   const [addressError, setAddressError] = useState("");
@@ -119,7 +119,7 @@ export function RoofMeasurementsTab({
         return;
       }
       setLocatedAddress(result);
-      setMapZoom(1);
+      setMapZoom(80);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
     } catch (error) {
@@ -386,7 +386,7 @@ export function RoofMeasurementsTab({
                       size="icon"
                       variant="outline"
                       aria-label="Zoom map in"
-                      onClick={() => setMapZoom((z) => Math.min(8, z * 1.7))}
+                      onClick={() => setMapZoom((z) => Math.min(240, z * 1.7))}
                     >
                       +
                     </Button>
