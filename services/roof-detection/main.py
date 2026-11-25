@@ -32,6 +32,7 @@ MIN_ROOF_POINTS = int(os.getenv("MIN_ROOF_POINTS", "80"))
 MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
+CANDIDATE_SEARCH_RADIUS_M = 80.0
 _RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
@@ -171,7 +172,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         "geometryType": "esriGeometryPoint",
         "inSR": "4326",
         "spatialRel": "esriSpatialRelIntersects",
-        "distance": "80",
+        "distance": str(int(CANDIDATE_SEARCH_RADIUS_M)),
         "units": "esriSRUnit_Meter",
         "outFields": "OBJECTID,OCC_CLS,PROP_ADDR,PROP_CITY,PROP_ST,PROP_ZIP,SQFEET,SQMETERS,SOURCE,PROD_DATE",
         "returnGeometry": "true",
@@ -226,7 +227,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         # coverage gaps in the nationwide structures layer.
         query = f"""
         [out:json][timeout:20];
-        way(around:80,{lat},{lon})[building];
+        way(around:{int(CANDIDATE_SEARCH_RADIUS_M)},{lat},{lon})[building];
         out geom;
         """
         overpass_headers = {
@@ -269,17 +270,29 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 provider_errors.append(f"{endpoint}: {type(exc).__name__}")
 
     candidates: list[tuple[float, Polygon, dict[str, Any]]] = []
+    rejected_by_area = 0
+    rejected_by_distance = 0
+    nearest_provider_feature: dict[str, Any] | None = None
     for polygon, source_metadata in raw_candidates:
         if polygon.is_empty or polygon.area <= 0:
             continue
         area_sqft = _polygon_area_sqft(polygon)
-        if area_sqft < 150 or area_sqft > 100000:
-            continue
         distance_m = _distance_to_footprint_meters(polygon, lat, lon)
+        if nearest_provider_feature is None or distance_m < nearest_provider_feature["distance_m"]:
+            nearest_provider_feature = {
+                "provider": source_metadata.get("provider"),
+                "source_id": source_metadata.get("source_id"),
+                "distance_m": round(distance_m, 2),
+                "area_sqft": round(area_sqft, 1),
+            }
+        if area_sqft < 150 or area_sqft > 100000:
+            rejected_by_area += 1
+            continue
         # Keep a wider candidate window for explicit human selection when
         # geocoders land on a curb/driveway. Candidates beyond 25 m are never
         # auto-selected; the 60 m cap prevents unrelated distant structures.
-        if distance_m > 60.0:
+        if distance_m > CANDIDATE_SEARCH_RADIUS_M:
+            rejected_by_distance += 1
             continue
         candidate_identity = (
             f"{source_metadata.get('provider', '')}:"
@@ -344,8 +357,13 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             status_code=404,
             detail={
                 "code": "building_footprint_not_found",
-                "message": "No mapped building was found within 25 m of the geocoded address point. Verify the property pin or trace the correct building manually.",
+                "message": "No eligible mapped building was found within the 80 m candidate search radius. Review the geocoded pin or use manual footprint tracing.",
                 "providers_checked": ["ArcGIS USA Structures", "OpenStreetMap Overpass"],
+                "candidate_search_radius_m": CANDIDATE_SEARCH_RADIUS_M,
+                "provider_feature_count": len(raw_candidates),
+                "rejected_by_area_filter": rejected_by_area,
+                "rejected_by_distance_filter": rejected_by_distance,
+                "nearest_provider_feature": nearest_provider_feature,
             },
         )
 
@@ -443,8 +461,21 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 status_code=409,
                 detail={
                     "code": "ambiguous_building_match",
-                    "message": "Several nearby buildings could match this address pin. Zoom in and select/trace the correct building before running roof detection.",
+                    "message": "Several nearby buildings could match this address pin. Review the candidate outlines and explicitly select the correct building before running roof detection.",
                     "candidate_count": len(candidates),
+                    "candidates": [
+                        {
+                            "candidate_id": row[2]["candidate_id"],
+                            "provider": row[2].get("provider"),
+                            "source_id": row[2].get("source_id"),
+                            "area_sqft": row[2]["area_sqft"],
+                            "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                            "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                            "centroid": row[2]["centroid"],
+                            "polygon_geojson": mapping(row[1]),
+                        }
+                        for row in candidates
+                    ],
                 },
             )
     _, polygon, metadata = candidates[0]
