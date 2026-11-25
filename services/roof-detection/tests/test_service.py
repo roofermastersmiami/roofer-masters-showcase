@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
-from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft
+from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft, _project_polygon
 from shapely.geometry import Point, Polygon
 
 
@@ -25,6 +25,36 @@ def test_polygon_area_is_projected_to_square_feet():
     area = _polygon_area_sqft(polygon)
     assert area > 0
     assert np.isfinite(area)
+
+
+
+def test_polygon_projection_preserves_interior_courtyard_rings():
+    footprint = Polygon(
+        [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001)],
+        [[(0.0004, 0.0004), (0.0006, 0.0004), (0.0006, 0.0006), (0.0004, 0.0006)]],
+    )
+    projected, _, _ = _project_polygon(footprint, 4326)
+    assert len(projected.interiors) == 1
+    assert projected.area == pytest.approx(footprint.area)
+
+
+def test_local_polygon_transform_preserves_interior_courtyard_rings():
+    from pyproj import Transformer
+    from main import _transform_polygon
+
+    footprint = Polygon(
+        [(0, 0), (0.001, 0), (0.001, 0.001), (0, 0.001)],
+        [[(0.0004, 0.0004), (0.0006, 0.0004), (0.0006, 0.0006), (0.0004, 0.0006)]],
+    )
+    transformed = _transform_polygon(
+        footprint,
+        Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True),
+    )
+    assert len(transformed.interiors) == 1
+    assert transformed.area < Polygon(
+        [Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True).transform(x, y)
+         for x, y in footprint.exterior.coords]
+    ).area
 
 
 def test_ransac_recovers_candidate_plane_pitch_and_area():
