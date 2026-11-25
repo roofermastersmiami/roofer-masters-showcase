@@ -377,7 +377,7 @@ export function SatelliteRoofTrace({
   const [ridgeAxis, setRidgeAxis] = useState<RidgeAxis>("north-south");
   const [ridgeOffsetPercent, setRidgeOffsetPercent] = useState(0);
   const [ridgeAngleDegrees, setRidgeAngleDegrees] = useState(0);
-  const [zoom, setZoom] = useState(12);
+  const [zoom, setZoom] = useState(18);
   const [mapInteraction, setMapInteraction] = useState<"draw" | "pan">("draw");
   const mapPanStart = useRef<{ x: number; y: number; center: TracePoint } | null>(null);
   const [mapViewportElement, setMapViewportElement] = useState<HTMLDivElement | null>(null);
@@ -424,7 +424,7 @@ export function SatelliteRoofTrace({
   }, [mapViewportElement]);
 
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
+    ? `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
     : "";
 
   useEffect(() => {
@@ -475,7 +475,7 @@ export function SatelliteRoofTrace({
     setResults([]);
     setPoints([]);
     setAutoTraced(false);
-    setZoom(12);
+    setZoom(18);
     setError("");
   }
   useEffect(() => {
@@ -912,6 +912,7 @@ export function SatelliteRoofTrace({
               alt="Satellite aerial imagery of the selected property"
               className="absolute inset-0 h-full w-full object-fill"
               draggable={false}
+              onLoad={() => setImageryLoadError(false)}
               onError={() => setImageryLoadError(true)}
             />
             <svg
