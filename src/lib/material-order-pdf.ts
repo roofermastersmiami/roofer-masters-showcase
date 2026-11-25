@@ -37,7 +37,7 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
   const addPage = () => {
     page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     pages.push(page);
-    y = PAGE_HEIGHT - 52;
+    y = PAGE_HEIGHT - 105;
     drawHeader();
   };
   const drawHeader = () => {
@@ -118,7 +118,6 @@ export async function materialTakeoffPdf(input: MaterialTakeoffPdfInput): Promis
     ensureSpace(rowHeight + 4);
     if (pages.length > pageCountBeforeRow) {
       // Repeat the table heading after moving to a new page.
-      y -= 53;
       drawTableHeader();
     }
     if (index % 2 === 0) {
