@@ -7,7 +7,7 @@ import type { RoofDrawing } from "@/lib/roof-geometry";
 type Props = {
   address: string;
   roofType: RoofDrawing["roof_type"];
-  onApply: (drawing: ReturnType<typeof detectedFacetsToDrawing>) => void;
+  onApply: (drawing: ReturnType<typeof detectedFacetsToDrawing>) => boolean;
 };
 
 function endpointUrl() {
@@ -123,8 +123,8 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
       autoAppliedAddress.current === currentAddress
     ) return;
     try {
-      onApply(detectedFacetsToDrawing(visibleResult, roofType));
-      autoAppliedAddress.current = currentAddress;
+      const accepted = onApply(detectedFacetsToDrawing(visibleResult, roofType));
+      if (accepted) autoAppliedAddress.current = currentAddress;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Detected facets could not be added.");
       setErrorAddress(currentAddress);
