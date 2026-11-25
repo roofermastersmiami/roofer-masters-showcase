@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { planeInfo } from "@/lib/roof-geometry";
-import { nextSatelliteZoom, satelliteTraceToPlane, zoomSatelliteByPinch } from "./SatelliteRoofTrace";
+import {
+  nextSatelliteZoom,
+  satelliteTraceToPlane,
+  zoomSatelliteByPinch,
+} from "./SatelliteRoofTrace";
 
 describe("satelliteTraceToPlane", () => {
   it("keeps traced perimeter edges unclassified instead of reporting them as eaves", () => {

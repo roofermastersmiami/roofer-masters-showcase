@@ -399,7 +399,12 @@ export function RoofMeasurementsTab({
                     >
                       −
                     </Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setMapZoom(250)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setMapZoom(250)}
+                    >
                       Reset
                     </Button>
                   </div>
