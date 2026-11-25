@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -377,8 +377,8 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                   </thead>
                   <tbody>
                     {visibleResult.roof.facets.map((facet) => (
-                      <>
-                      <tr key={facet.id} className="border-b border-border/60">
+                      <Fragment key={facet.id}>
+                      <tr className="border-b border-border/60">
                         <td className="py-2 pr-3">{facet.id}</td>
                         <td className="py-2 pr-3 tabular-nums">
                           {facet.point_count.toLocaleString()}
@@ -405,7 +405,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                           </details>
                         </td>
                       </tr>
-                      </>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
