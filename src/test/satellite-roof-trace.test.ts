@@ -321,6 +321,17 @@ describe("automatic OpenStreetMap building footprint selection", () => {
     expect(footprint).toHaveLength(4);
     expect(footprint?.[0]).toEqual({ lat: 25.4701, lon: -80.4801 });
   });
+  it("refuses to guess a nearby building when the target pin is on the street", () => {
+    const streetTarget = { lat: center.lat, lon: center.lon - 0.0003 };
+    const building = [
+      { lat: center.lat - 0.0001, lon: center.lon - 0.0001 },
+      { lat: center.lat - 0.0001, lon: center.lon + 0.0001 },
+      { lat: center.lat + 0.0001, lon: center.lon + 0.0001 },
+      { lat: center.lat + 0.0001, lon: center.lon - 0.0001 },
+    ];
+    expect(nearestBuildingFootprint([{ type: "way", geometry: building }], streetTarget)).toBeNull();
+  });
+
   it("prefers the building containing the address over a closer neighboring centroid", () => {
     const containingBuilding = [
       { lat: center.lat - 0.0001, lon: center.lon - 0.0004 },
