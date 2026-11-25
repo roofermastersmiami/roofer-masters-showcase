@@ -492,3 +492,35 @@ def test_geocode_prefers_exact_broward_county_address_point(monkeypatch):
     ))
     result = asyncio.run(roof_service.geocode("3062 Southwest 189th Avenue, Miramar, FL 33029"))
     assert result == (25.9804, -80.3995, "3062 SW 189TH AVE")
+
+
+def test_vertical_unit_to_meters_reads_metric_vertical_crs():
+    from pyproj import CRS
+    from types import SimpleNamespace
+
+    header = SimpleNamespace(parse_crs=lambda: CRS.from_epsg(5703))
+    assert roof_service._vertical_unit_to_meters(header) == pytest.approx(1.0)
+
+
+def test_vertical_unit_to_meters_converts_us_survey_feet():
+    from pyproj import CRS
+    from types import SimpleNamespace
+
+    header = SimpleNamespace(parse_crs=lambda: CRS.from_epsg(6360))
+    assert roof_service._vertical_unit_to_meters(header) == pytest.approx(0.30480060960121924)
+
+
+def test_vertical_unit_to_meters_rejects_missing_or_ambiguous_crs():
+    from types import SimpleNamespace
+
+    assert roof_service._vertical_unit_to_meters(SimpleNamespace(parse_crs=lambda: None)) is None
+    assert roof_service._vertical_unit_to_meters(SimpleNamespace()) is None
+
+
+def test_vertical_unit_to_meters_rejects_non_up_axis():
+    from types import SimpleNamespace
+
+    axis = SimpleNamespace(direction="east", unit_conversion_factor=1.0)
+    crs = SimpleNamespace(axis_info=[axis])
+    header = SimpleNamespace(parse_crs=lambda: crs)
+    assert roof_service._vertical_unit_to_meters(header) is None
