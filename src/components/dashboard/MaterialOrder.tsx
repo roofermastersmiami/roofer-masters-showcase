@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Package, Save, Printer, Mail, FileUp, Plus, Trash2 } from "lucide-react";
+import { Package, Save, Printer, Mail, FileUp, FileDown, Plus, Trash2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { extractRoofReport } from "@/lib/roof-report.functions";
 import { toast } from "sonner";
@@ -160,6 +160,28 @@ Roofer Masters · 305-942-3093`;
     else {
       toast.success("Material order saved");
       await qc.invalidateQueries({ queryKey: ["roof-jobs"] });
+    }
+  }
+  async function downloadTakeoffPdf() {
+    if (!valid.success || !lines.length || takeoffError) {
+      toast.error(takeoffError || "Complete the required measurements before generating the takeoff PDF");
+      return;
+    }
+    try {
+      const [{ materialTakeoffPdf }, { downloadPdf }] = await Promise.all([
+        import("@/lib/material-order-pdf"),
+        import("./proposal-data"),
+      ]);
+      const bytes = await materialTakeoffPdf({
+        title,
+        source: sourceLabel,
+        report: valid.data,
+        lines,
+        warnings,
+      });
+      downloadPdf(bytes, `Material Takeoff - ${title}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate material takeoff PDF");
     }
   }
   function print() {
@@ -412,6 +434,9 @@ Roofer Masters · 305-942-3093`;
         </Button>
         <Button variant="outline" onClick={print} disabled={!lines.length}>
           <Printer /> Print
+        </Button>
+        <Button variant="outline" onClick={() => void downloadTakeoffPdf()} disabled={!valid.success || !lines.length || !!takeoffError}>
+          <FileDown /> Takeoff PDF
         </Button>
         <Button variant="outline" asChild disabled={!lines.length}>
           <a
