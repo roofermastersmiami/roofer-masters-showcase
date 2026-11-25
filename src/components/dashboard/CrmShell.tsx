@@ -211,7 +211,9 @@ export function CrmShell({
               setTheme(data.theme_palette);
               if (isCrmAccentId(data.theme_accent)) setAccent(data.theme_accent);
               setThemeChoice(
-                data.theme_palette === "default" && isCrmAccentId(data.theme_accent) && data.theme_accent !== "magenta"
+                data.theme_palette === "default" &&
+                  isCrmAccentId(data.theme_accent) &&
+                  data.theme_accent !== "magenta"
                   ? `color:${data.theme_accent}`
                   : `theme:${data.theme_palette}`,
               );
