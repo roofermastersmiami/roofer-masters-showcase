@@ -377,6 +377,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                   </thead>
                   <tbody>
                     {visibleResult.roof.facets.map((facet) => (
+                      <>
                       <tr key={facet.id} className="border-b border-border/60">
                         <td className="py-2 pr-3">{facet.id}</td>
                         <td className="py-2 pr-3 tabular-nums">
@@ -404,6 +405,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                           </details>
                         </td>
                       </tr>
+                      </>
                     ))}
                   </tbody>
                 </table>
