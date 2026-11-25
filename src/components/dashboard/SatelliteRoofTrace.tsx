@@ -95,10 +95,11 @@ export function nearestBuildingFootprint(
     const distance = inside ? 0 : minimumEdgeDistance;
     return distance <= 50 ? [{ ring, distance, containsAddress: inside }] : [];
   });
-  candidates.sort(
-    (a, b) => Number(b.containsAddress) - Number(a.containsAddress) || a.distance - b.distance,
-  );
-  return candidates[0]?.ring ?? null;
+  // Never guess the nearest neighboring building when the target is on a
+  // street, driveway, or open space. The user must place the target inside
+  // the intended building footprint before automatic tracing can proceed.
+  candidates.sort((a, b) => a.distance - b.distance);
+  return candidates.find((candidate) => candidate.containsAddress)?.ring ?? null;
 }
 
 const MAP_WIDTH = 2048;
