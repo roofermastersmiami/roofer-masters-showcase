@@ -57,6 +57,7 @@ export function CrmOverview() {
       "New leads",
     ]),
     [hiddenCards, setHiddenCards] = useState<string[]>([]),
+    [hiddenPanels, setHiddenPanels] = useState<string[]>([]),
     [draggedCard, setDraggedCard] = useState<string | null>(null),
     [preferencesLoaded, setPreferencesLoaded] = useState(false);
   useEffect(() => {
@@ -87,6 +88,12 @@ export function CrmOverview() {
         );
         setCardOrder([...unique, ...allowedCards.filter((item) => !unique.includes(item))]);
       }
+      const allowedPanels = ["revenue", "sales", "tasks", "inspections", "activity"];
+      if (Array.isArray(saved.hiddenPanels)) {
+        setHiddenPanels(saved.hiddenPanels.filter(
+          (item: unknown): item is string => typeof item === "string" && allowedPanels.includes(item),
+        ));
+      }
       if (Array.isArray(saved.hiddenCards)) {
         setHiddenCards(
           saved.hiddenCards.filter(
@@ -105,13 +112,13 @@ export function CrmOverview() {
       try {
         localStorage.setItem(
           "crm-dashboard-layout",
-          JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards }),
+          JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels }),
         );
       } catch {
         // Storage can be disabled or full; dashboard customization still works for this session.
       }
     }
-  }, [accent, density, cardStyle, cardOrder, hiddenCards, preferencesLoaded]);
+  }, [accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels, preferencesLoaded]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
@@ -314,6 +321,7 @@ export function CrmOverview() {
                   "New leads",
                 ]);
                 setHiddenCards([]);
+                setHiddenPanels([]);
               }}
             >
               Reset layout
@@ -371,6 +379,24 @@ export function CrmOverview() {
                     </Button>
                   ),
                 )}
+              </div>
+            </div>
+            <div className="min-w-full">
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">DASHBOARD PANELS</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["revenue", "Revenue chart"],
+                  ["sales", "Sales snapshot"],
+                  ["tasks", "Tasks"],
+                  ["inspections", "Inspections"],
+                  ["activity", "Customer activity"],
+                ] as const).map(([id, label]) => (
+                  <Button key={id} size="sm" variant={hiddenPanels.includes(id) ? "outline" : "secondary"}
+                    onClick={() => setHiddenPanels((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])}>
+                    {hiddenPanels.includes(id) ? <EyeOff className="mr-1 size-3" /> : <Eye className="mr-1 size-3" />}
+                    {label}
+                  </Button>
+                ))}
               </div>
             </div>
             <div>
@@ -530,8 +556,9 @@ export function CrmOverview() {
             ))
         )}
       </div>
+      {(!hiddenPanels.includes("revenue") || !hiddenPanels.includes("sales")) && (
       <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
-        <div className="min-w-0">
+        {!hiddenPanels.includes("revenue") && <div className="min-w-0">
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Revenue collected</h2>
@@ -588,8 +615,8 @@ export function CrmOverview() {
               ? "Confirmed and manually recorded receipts only."
               : "No payments recorded in the selected period."}
           </p>
-        </div>
-        <div className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+        </div>}
+        {!hiddenPanels.includes("sales") && <div className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
           <h2 className="mb-5 text-xl font-bold">Sales snapshot</h2>
           <dl className="grid gap-5">
             {[
@@ -611,10 +638,11 @@ export function CrmOverview() {
           <Button variant="outline" className="mt-5 w-full" onClick={() => go("sales")}>
             Sales report <ArrowRight />
           </Button>
-        </div>
+        </div>}
       </section>
+      )}
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
-        <section>
+        {!hiddenPanels.includes("tasks") && <section>
           <div className="mb-5 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold">
               <Clock className="size-4 text-primary" /> Tasks requiring attention
@@ -640,8 +668,8 @@ export function CrmOverview() {
             </div>
           ))}
           {!due.length && <p className="text-sm text-muted-foreground">No pending tasks.</p>}
-        </section>
-        <section>
+        </section>}
+        {!hiddenPanels.includes("inspections") && <section>
           <h2 className="mb-5 flex items-center gap-2 text-lg font-bold">
             <CalendarDays className="size-4 text-primary" /> Upcoming inspections
           </h2>
@@ -663,8 +691,8 @@ export function CrmOverview() {
           {!upcoming.length && (
             <p className="text-sm text-muted-foreground">No inspections scheduled.</p>
           )}
-        </section>
-        <section>
+        </section>}
+        {!hiddenPanels.includes("activity") && <section>
           <h2 className="mb-5 text-lg font-bold">Recent customer activity</h2>
           {activity.data?.slice(0, 5).map((a) => {
             const lead = leads.find((l) => l.id === a.lead_id);
@@ -688,7 +716,7 @@ export function CrmOverview() {
           {!activity.data?.length && (
             <p className="text-sm text-muted-foreground">No recent activity recorded.</p>
           )}
-        </section>
+        </section>}
       </div>
     </div>
   );
