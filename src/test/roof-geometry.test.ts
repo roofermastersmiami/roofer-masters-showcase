@@ -26,7 +26,7 @@ describe("roof geometry", () => {
       originLatitude: 25.4702,
       originLongitude: -80.4802,
     };
-    const original = drawing.planes[0]!;
+    const original = roofPreset("flat").planes[0]!;
     const rebased = rebaseRoofPlanes([original], source, target)[0]!;
     const sourceLonScale =
       (111320 * Math.cos((source.originLatitude * Math.PI) / 180)) / 0.3048;
