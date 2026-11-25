@@ -8,7 +8,7 @@ if (!base) {
   process.exit(0);
 }
 
-const changed = execFileSync("git", ["diff", "--name-only", \`origin/\${base}...HEAD\`], {
+const changed = execFileSync("git", ["diff", "--name-only", `origin/${base}...HEAD`], {
   encoding: "utf8",
 }).split("\n").filter(Boolean);
 
@@ -23,8 +23,8 @@ for (const path of candidates) {
 
 if (findings.length) {
   console.error("Tenant-security review required for newly changed privileged code:");
-  for (const path of findings) console.error(\`- \${path}\`);
+  for (const path of findings) console.error(`- ${path}`);
   console.error("After an explicit security review, add a nearby 'tenant-audit: reviewed' annotation and explain the scope in the PR.");
   process.exit(1);
 }
-console.log(\`Tenant-security diff audit passed (\${candidates.length} changed SQL/server-function files checked).\`);
+console.log(`Tenant-security diff audit passed (${candidates.length} changed SQL/server-function files checked).`);
