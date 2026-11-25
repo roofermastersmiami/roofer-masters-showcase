@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {\n  detectedFacetsToDrawing,\n  roofDetectionResponseSchema,\n  type RoofDetectionResponse,\n} from "@/lib/roof-detection";
+import {
+  detectedFacetsToDrawing,
+  roofDetectionResponseSchema,
+  type RoofDetectionResponse,
+} from "@/lib/roof-detection";
 
 const response: RoofDetectionResponse = {
   status: "lidar_facets",
