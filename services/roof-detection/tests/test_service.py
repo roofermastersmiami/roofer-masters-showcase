@@ -6,7 +6,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
+import main as roof_service
 from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft, _project_polygon
 from shapely.geometry import Point, Polygon
 
@@ -83,6 +85,47 @@ def test_ransac_rejects_near_vertical_building_walls():
     points = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
     assert _fit_facets(points) == []
 
+
+
+
+
+def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Endpoint test address"
+
+    async def fake_get_footprint(_lat, _lon):
+        return polygon, {
+            "osm_way_id": 123,
+            "building_tags": {"building": "house"},
+            "address_point_inside_footprint": False,
+            "address_to_footprint_distance_m": 3.27,
+        }
+
+    monkeypatch.setattr(roof_service, "geocode", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(
+        roof_service,
+        "_read_lidar_facets",
+        lambda _polygon: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
+    )
+
+    response = TestClient(roof_service.app).post(
+        "/v1/roof/analyze",
+        json={"street_address": "Unique endpoint contract test address"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["footprint"]["address_point_inside_footprint"] is False
+    assert payload["footprint"]["address_to_footprint_distance_m"] == 3.27
+    assert payload["status"] == "footprint_only"
 
 
 
