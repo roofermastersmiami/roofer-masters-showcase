@@ -34,7 +34,7 @@ import { activityQuery } from "./foundation-data";
 import { Choice } from "./CrmControls";
 import { useCrm } from "./CrmContext";
 import { formatWhen } from "./data";
-import { CRM_ACCENT_COLORS } from "@/lib/crm-accent";
+import { CRM_ALL_THEME_COLORS } from "@/lib/crm-accent";
 const dateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 export function CrmOverview() {
@@ -304,7 +304,7 @@ export function CrmOverview() {
               size="sm"
               variant="ghost"
               onClick={() => {
-                setAccent("#a81762");
+                setAccent("#b21e63");
                 setDensity("comfortable");
                 setCardStyle("outlined");
                 setCardOrder([
@@ -321,13 +321,13 @@ export function CrmOverview() {
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-5">
             <div>
-              <p className="mb-2 text-xs font-semibold text-muted-foreground">ACCENT COLOR</p>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">THEME COLOR</p>
               <div className="flex max-w-2xl flex-wrap gap-2">
-                {CRM_ACCENT_COLORS.map((color) => (
+                {CRM_ALL_THEME_COLORS.map((color) => (
                   <button
                     key={color.id}
                     type="button"
-                    aria-label={`Set dashboard accent color to ${color.label}`}
+                    aria-label={`Apply ${color.label} theme color to dashboard layout`}
                     title={color.label}
                     aria-pressed={accent.toLowerCase() === color.value.toLowerCase()}
                     onClick={() => setAccent(color.value)}
