@@ -69,6 +69,19 @@ def _polygon_area_sqft(polygon: Polygon) -> float:
     return float(projected.area * 10.7639104167)
 
 
+
+def _footprint_match_fields(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Expose address-to-building match evidence to the CRM without guessing."""
+    fields: dict[str, Any] = {}
+    inside = metadata.get("address_point_inside_footprint")
+    distance = metadata.get("address_to_footprint_distance_m")
+    if isinstance(inside, bool):
+        fields["address_point_inside_footprint"] = inside
+    if isinstance(distance, (int, float)) and math.isfinite(distance) and distance >= 0:
+        fields["address_to_footprint_distance_m"] = round(float(distance), 2)
+    return fields
+
+
 def _distance_to_footprint_meters(polygon: Polygon, lat: float, lon: float) -> float:
     """Measure address-point distance in a local metric projection, not degrees."""
     local = CRS.from_proj4(
@@ -403,6 +416,7 @@ async def analyze_roof(request: AnalyzeRequest):
             "source": "OpenStreetMap",
             "osm_way_id": footprint_meta.get("osm_way_id"),
             "area_sqft": round(footprint_sqft, 1),
+            **_footprint_match_fields(footprint_meta),
             "polygon_geojson": mapping(footprint),
             "building_tags": footprint_meta.get("building_tags", {}),
         },
