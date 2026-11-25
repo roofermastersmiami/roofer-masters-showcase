@@ -189,9 +189,27 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             the measurement editor.
           </p>
           {visibleResult.roof.facets.length > 0 && (
-            <Button variant="outline" onClick={apply}>
-              Load candidate facets into roof editor
-            </Button>
+            <div className="space-y-2">
+              <label htmlFor="lidar-roof-system" className="text-sm font-medium">
+                Roof system for this measurement
+              </label>
+              <select
+                id="lidar-roof-system"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={roofType}
+                onChange={(event) => setRoofType(event.target.value as RoofDrawing["roof_type"])}
+              >
+                <option value="">Select roof system…</option>
+                <option value="Metal Roof">Architectural / metal roof</option>
+                <option value="Shingle Roof">Shingle roof</option>
+                <option value="Tile Roof">Concrete / clay tile roof</option>
+                <option value="TPO">TPO</option>
+                <option value="Flat Roof">Flat / modified bitumen roof</option>
+              </select>
+              <Button variant="outline" onClick={apply} disabled={!roofType}>
+                Load candidate facets into roof editor
+              </Button>
+            </div>
           )}
         </div>
       )}
