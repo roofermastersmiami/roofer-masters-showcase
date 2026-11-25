@@ -107,7 +107,7 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
   // Start public-data analysis once when a new property address is loaded.
   // The manual button remains available for retries; results are never applied automatically.
   useEffect(() => {
-    if (!currentAddress || !endpointUrl() || autoAnalyzedAddress.current === currentAddress) return;
+    if (!currentAddress || autoAnalyzedAddress.current === currentAddress) return;
     autoAnalyzedAddress.current = currentAddress;
     void analyze();
   }, [analyze, currentAddress]);
