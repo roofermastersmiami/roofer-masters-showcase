@@ -1,5 +1,6 @@
 import { useRoles } from "./RolesContext";
 import { isCrmThemeId } from "@/lib/crm-theme";
+import { CRM_ACCENT_COLORS, getCrmAccent, isCrmAccentId } from "@/lib/crm-accent";
 import { canOpen } from "@/lib/team-roles";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -146,6 +147,7 @@ export function CrmShell({
     [mobile, setMobile] = useState(false),
     [dark, setDark] = useState(false),
     [theme, setTheme] = useState("default"),
+    [accent, setAccent] = useState("magenta"),
     [sidebarAppearance, setSidebarAppearance] = useState("navy"),
     [sidebarPreferencesLoaded, setSidebarPreferencesLoaded] = useState(false),
     [brandingUserId, setBrandingUserId] = useState<string | null>(null),
@@ -171,6 +173,8 @@ export function CrmShell({
       try {
         setDark(localStorage.getItem("crm-theme") === "dark");
         const fallbackTheme = localStorage.getItem("crm-theme-preset");
+        const fallbackAccent = localStorage.getItem("crm-accent-color");
+        if (fallbackAccent && isCrmAccentId(fallbackAccent)) setAccent(fallbackAccent);
         const fallbackSidebar = localStorage.getItem("crm-sidebar-appearance");
         if (fallbackTheme && isCrmThemeId(fallbackTheme)) setTheme(fallbackTheme);
         if (
@@ -267,6 +271,29 @@ export function CrmShell({
       // The active theme remains applied to the current session.
     }
   }, [theme]);
+  useEffect(() => {
+    const selected = getCrmAccent(accent);
+    const root = document.documentElement;
+    if (selected) {
+      root.style.setProperty("--primary", selected.value);
+      root.style.setProperty("--primary-glow", selected.value);
+      root.style.setProperty("--ring", selected.value);
+      root.style.setProperty("--accent", "color-mix(in srgb, " + selected.value + " 13%, white)");
+      root.style.setProperty("--accent-foreground", selected.value);
+    }
+    try {
+      localStorage.setItem("crm-accent-color", accent);
+    } catch {
+      // The accent remains active for this session when storage is unavailable.
+    }
+    return () => {
+      root.style.removeProperty("--primary");
+      root.style.removeProperty("--primary-glow");
+      root.style.removeProperty("--ring");
+      root.style.removeProperty("--accent");
+      root.style.removeProperty("--accent-foreground");
+    };
+  }, [accent]);
   useEffect(() => {
     if (!brandingLoaded || !brandingUserId) return;
     void supabase
@@ -684,6 +711,24 @@ export function CrmShell({
                 <option value="cobalt-professional">Cobalt Professional</option>
                 <option value="plum-luxe">Plum Luxe</option>
                 <option value="monochrome-pro">Monochrome Pro</option>
+              </select>
+            </label>
+            <label
+              className="hidden items-center gap-1 rounded-md border border-border bg-background px-2 lg:flex"
+              title="Choose CRM accent color"
+            >
+              <span className="text-[11px] text-muted-foreground">Accent</span>
+              <select
+                aria-label="CRM accent color"
+                value={accent}
+                onChange={(event) => {
+                  if (isCrmAccentId(event.target.value)) setAccent(event.target.value);
+                }}
+                className="h-8 max-w-24 bg-transparent text-xs outline-none"
+              >
+                {CRM_ACCENT_COLORS.map((color) => (
+                  <option key={color.id} value={color.id}>{color.label}</option>
+                ))}
               </select>
             </label>
             <label
