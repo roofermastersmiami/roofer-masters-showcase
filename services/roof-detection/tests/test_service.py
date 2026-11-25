@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
-from main import AnalyzeRequest, _fit_facets, _polygon_area_sqft
+from main import AnalyzeRequest, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft
 from shapely.geometry import Polygon
 
 
@@ -52,3 +52,25 @@ def test_ransac_rejects_near_vertical_building_walls():
     z = 5.0 * x + 12.0
     points = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
     assert _fit_facets(points) == []
+
+
+
+def test_footprint_match_distance_uses_meters_and_accepts_roof_point():
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+    assert _distance_to_footprint_meters(polygon, 25.00005, -79.99995) == pytest.approx(0, abs=0.01)
+
+
+def test_footprint_match_distance_rejects_neighboring_building_scale_offset():
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+    # Roughly 11 m north of the footprint, beyond the 5 m match tolerance.
+    assert _distance_to_footprint_meters(polygon, 25.0002, -79.99995) > 5
