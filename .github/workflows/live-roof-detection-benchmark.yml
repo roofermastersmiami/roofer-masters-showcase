@@ -53,8 +53,9 @@ jobs:
             --data-binary @request.json \
             "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze")
           echo "HTTP status: $status"
-          python - <<'PY'
+          HTTP_STATUS="$status" python - <<'PY'
           import json
+          import os
           from pathlib import Path
           raw = Path("response.json").read_text(errors="replace")
           try:
@@ -63,9 +64,10 @@ jobs:
               print("Backend returned a non-JSON response:")
               print(raw[:4000])
               raise SystemExit(1)
-          if not 200 <= int("${status}") < 300:
+          status = int(os.environ["HTTP_STATUS"])
+          if not 200 <= status < 300:
               print(json.dumps(data, indent=2))
-              raise SystemExit(f"Roof analysis request failed with HTTP ${status}")
+              raise SystemExit(f"Roof analysis request failed with HTTP {status}")
           summary = {
               "status": data.get("status"),
               "verification": data.get("verification"),
