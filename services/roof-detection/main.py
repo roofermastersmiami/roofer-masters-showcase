@@ -12,7 +12,7 @@ import planetary_computer
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
-from pyproj import Transformer
+from pyproj import CRS, Transformer
 from pystac_client import Client
 from shapely.geometry import MultiPoint, Point, Polygon, mapping
 from shapely.validation import make_valid
@@ -68,6 +68,19 @@ def _polygon_area_sqft(polygon: Polygon) -> float:
     return float(projected.area * 10.7639104167)
 
 
+def _distance_to_footprint_meters(polygon: Polygon, lat: float, lon: float) -> float:
+    """Measure address-point distance in a local metric projection, not degrees."""
+    local = CRS.from_proj4(
+        f"+proj=aeqd +lat_0={lat} +lon_0={lon} +datum=WGS84 +units=m +no_defs"
+    )
+    transformer = Transformer.from_crs("EPSG:4326", local, always_xy=True)
+    projected_polygon = Polygon(
+        [transformer.transform(x, y) for x, y in polygon.exterior.coords]
+    )
+    projected_point = Point(*transformer.transform(lon, lat))
+    return float(projected_polygon.distance(projected_point))
+
+
 async def geocode(address: str) -> tuple[float, float, str]:
     headers = {"User-Agent": USER_AGENT}
     async with httpx.AsyncClient(timeout=25, headers=headers) as client:
@@ -109,12 +122,24 @@ async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]
         area_sqft = _polygon_area_sqft(polygon)
         if area_sqft < 150 or area_sqft > 100000:
             continue
-        contains = polygon.buffer(0.00003).contains(address_point)
-        distance = polygon.distance(address_point)
-        score = (0 if contains else 1000) + distance * 100000
-        candidates.append((score, polygon, {"osm_way_id": element.get("id"), "building_tags": element.get("tags", {})}))
+        distance_m = _distance_to_footprint_meters(polygon, lat, lon)
+        # Do not silently substitute a neighboring building when geocoding lands
+        # on a road, parcel centroid, or a different structure. A 5 m tolerance
+        # accommodates small geocoder/footprint offsets without guessing across lots.
+        if distance_m > 5.0:
+            continue
+        metadata = {
+            "osm_way_id": element.get("id"),
+            "building_tags": element.get("tags", {}),
+            "address_point_inside_footprint": polygon.contains(address_point),
+            "address_to_footprint_distance_m": round(distance_m, 2),
+        }
+        candidates.append((distance_m, polygon, metadata))
     if not candidates:
-        raise HTTPException(404, "No suitable OpenStreetMap building footprint was found near this address.")
+        raise HTTPException(
+            404,
+            "The geocoded address could not be confidently matched to a building footprint within 5 m. Verify the address or trace the roof manually.",
+        )
     _, polygon, metadata = min(candidates, key=lambda row: row[0])
     return polygon, metadata
 
