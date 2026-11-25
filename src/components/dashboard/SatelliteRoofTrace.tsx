@@ -391,6 +391,7 @@ export function SatelliteRoofTrace({
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
   const draggingTarget = useRef(false);
+  const targetLocationRef = useRef<TracePoint | null>(null);
   const suppressNextMapClick = useRef(false);
   const pinchStartDistance = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
@@ -464,6 +465,7 @@ export function SatelliteRoofTrace({
     skipNextAddressSearch.current = true;
     setLocation(result);
     const addressPoint = { lat: Number(result.lat), lon: Number(result.lon) };
+    targetLocationRef.current = addressPoint;
     setTargetLocation(addressPoint);
     setMapCenter(addressPoint);
     setPoints([]);
@@ -485,6 +487,7 @@ export function SatelliteRoofTrace({
     // Clear the previous property's pin and trace immediately so they cannot be
     // mistaken for the newly selected address while geocoding is in flight.
     setLocation(null);
+    targetLocationRef.current = null;
     setTargetLocation(null);
     setMapCenter(null);
     setPoints([]);
@@ -551,7 +554,7 @@ export function SatelliteRoofTrace({
     setAutoTraceBusy(true);
     setError("");
     try {
-      const searchTarget = targetLocation ?? { lat: Number(location.lat), lon: Number(location.lon) };
+      const searchTarget = targetLocationRef.current ?? { lat: Number(location.lat), lon: Number(location.lon) };
       const lat = searchTarget.lat,
         lon = searchTarget.lon;
       const query = `[out:json][timeout:20];way(around:50,${lat},${lon})["building"];out tags geom;`;
@@ -928,6 +931,7 @@ export function SatelliteRoofTrace({
                     event.currentTarget.getBoundingClientRect(),
                   );
                   if (point) {
+                    targetLocationRef.current = point;
                     setTargetLocation(point);
                     setAutoTraced(false);
                     setSelectedBuildingCenter(null);
@@ -964,6 +968,13 @@ export function SatelliteRoofTrace({
                 if (draggingTarget.current) {
                   draggingTarget.current = false;
                   suppressNextMapClick.current = true;
+                  // Once the user positions the target over the intended roof,
+                  // immediately look up that building instead of requiring a
+                  // second "Auto trace building" click. The ref holds the final
+                  // pointer coordinate even when React has not rendered yet.
+                  if (targetLocationRef.current && location) {
+                    void autoTraceBuildingFootprint();
+                  }
                 }
                 if (draggingPoint.current !== null) {
                   draggingPoint.current = null;
