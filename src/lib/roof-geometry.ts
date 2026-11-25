@@ -162,11 +162,9 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
   });
   const endpointMatch = (first: EdgeOccurrence, second: EdgeOccurrence) => {
     const direct =
-      distance(first.a, second.a) <= toleranceFt &&
-      distance(first.b, second.b) <= toleranceFt;
+      distance(first.a, second.a) <= toleranceFt && distance(first.b, second.b) <= toleranceFt;
     const reversed =
-      distance(first.a, second.b) <= toleranceFt &&
-      distance(first.b, second.a) <= toleranceFt;
+      distance(first.a, second.b) <= toleranceFt && distance(first.b, second.a) <= toleranceFt;
     return direct || reversed;
   };
   const buckets = new Map<string, number[]>();
@@ -188,11 +186,7 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
 
     for (const candidateIndex of candidates) {
       const candidate = edges[candidateIndex];
-      if (
-        !candidate ||
-        candidate.plane.id === edge.plane.id ||
-        !endpointMatch(edge, candidate)
-      )
+      if (!candidate || candidate.plane.id === edge.plane.id || !endpointMatch(edge, candidate))
         continue;
       matches.set(index, [...(matches.get(index) ?? []), candidateIndex]);
       matches.set(candidateIndex, [...(matches.get(candidateIndex) ?? []), index]);
@@ -256,10 +250,7 @@ export function suggestSharedEdgeClassifications(d: RoofDrawing): SharedEdgeSugg
     if (!isRidge && !isValley && !isHip) continue;
 
     const type = isRidge ? "ridge" : isValley ? "valley" : "hip";
-    if (
-      edge.plane.edges[edge.edgeIndex] === type &&
-      other.plane.edges[other.edgeIndex] === type
-    )
+    if (edge.plane.edges[edge.edgeIndex] === type && other.plane.edges[other.edgeIndex] === type)
       continue;
     suggestions.push({
       planeId: edge.plane.id,
