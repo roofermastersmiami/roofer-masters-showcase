@@ -386,6 +386,7 @@ export function SatelliteRoofTrace({
   const [autoTraced, setAutoTraced] = useState(false);
   const [selectedBuildingCenter, setSelectedBuildingCenter] = useState<TracePoint | null>(null);
   const [error, setError] = useState("");
+  const [imageryLoadError, setImageryLoadError] = useState(false);
   const lastInitialAddress = useRef("");
   const skipNextAddressSearch = useRef(false);
   const draggingPoint = useRef<number | null>(null);
@@ -422,8 +423,12 @@ export function SatelliteRoofTrace({
   }, [mapViewportElement]);
 
   const imageryUrl = bounds
-    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=png32&f=image`
+    ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
     : "";
+
+  useEffect(() => {
+    setImageryLoadError(false);
+  }, [imageryUrl]);
 
   useEffect(() => {
     if (skipNextAddressSearch.current) {
@@ -727,7 +732,7 @@ export function SatelliteRoofTrace({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={zoom >= 8}
+                disabled={zoom >= 64}
                 onClick={() => setZoom((value) => nextSatelliteZoom(value, "in"))}
                 aria-label="Zoom in"
               >
@@ -891,12 +896,19 @@ export function SatelliteRoofTrace({
           </div>
           <div
             ref={setMapViewportElement}
-            className="overflow-hidden rounded-lg border border-border bg-muted overscroll-contain"
+            className="relative aspect-[8/5] overflow-hidden rounded-lg border border-border bg-muted overscroll-contain"
             style={{ touchAction: "none" }}
           >
+            <img
+              src={imageryUrl}
+              alt="Satellite aerial imagery of the selected property"
+              className="absolute inset-0 h-full w-full object-fill"
+              draggable={false}
+              onError={() => setImageryLoadError(true)}
+            />
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-              className={`block aspect-[8/5] w-full touch-none ${mapInteraction === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
+              className={`relative z-10 block h-full w-full touch-none ${mapInteraction === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
               onClick={(event) => {
                 if (mapInteraction === "pan") return;
                 addMapPoint(event);
@@ -998,14 +1010,6 @@ export function SatelliteRoofTrace({
               role="img"
               aria-label="Satellite image. Click around the roof to trace its outline."
             >
-              <image
-                href={imageryUrl}
-                x="0"
-                y="0"
-                width={MAP_WIDTH}
-                height={MAP_HEIGHT}
-                preserveAspectRatio="none"
-              />
               {selectedBuildingCenter && bounds && (
                 <g
                   transform={`translate(${((selectedBuildingCenter.lon - bounds.west) / (bounds.east - bounds.west)) * MAP_WIDTH},${((bounds.north - selectedBuildingCenter.lat) / (bounds.north - bounds.south)) * MAP_HEIGHT})`}
@@ -1119,6 +1123,11 @@ export function SatelliteRoofTrace({
               </text>
             </svg>
           </div>
+          {imageryLoadError && (
+            <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+              Satellite imagery could not be loaded from the free imagery provider. Try again in a moment or use an uploaded overhead photo; the map controls remain available but do not trace against a blank image.
+            </p>
+          )}
           {drawingMode === "diy" && points.length >= 2 && (
             <div className="rounded-md border border-border p-3 space-y-2">
               <h4 className="font-semibold">Classify plane boundary edges</h4>
