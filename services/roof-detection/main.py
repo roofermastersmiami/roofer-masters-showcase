@@ -385,7 +385,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # A candidate outside the trusted 25 m auto-match radius may still be
     # the correct building when geocoding lands on the street. Surface it for
     # explicit user confirmation, never silently accept it.
-    if candidates[0][0] > 25.0:
+    if min(row[0] for row in candidates) > 25.0:
         raise HTTPException(
             status_code=409,
             detail={
