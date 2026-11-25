@@ -138,7 +138,7 @@ export function MaterialOrder({
 Source: ${sourceLabel}
 ${r.roof_type}, ${r.area_sqft} sq ft (+${effectiveMaterialWastePct(r)}% waste)
 ${warnings.length ? `\nREVIEW REQUIRED:\n${warnings.map((warning) => `- ${warning}`).join("\n")}\n` : ""}
-${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}${l.notes ? `\\n  ${l.notes}` : ""}`).join("\\n")}
+${lines.map((l) => `- ${l.item}: ${l.qty} ${l.unit}${l.notes ? `\n  ${l.notes}` : ""}`).join("\n")}
 
 Roofer Masters · 305-942-3093`;
   async function save() {
