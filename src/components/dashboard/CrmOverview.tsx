@@ -262,10 +262,7 @@ export function CrmOverview() {
     });
   };
   const movePanelBy = (id: DashboardPanelId, offset: number) => {
-    const group: DashboardPanelId[] = id === "revenue" || id === "sales"
-      ? ["revenue", "sales"]
-      : ["tasks", "inspections", "activity"];
-    const visible = group.filter((item) => !hiddenPanels.includes(item));
+    const visible = DASHBOARD_PANEL_IDS.filter((item) => !hiddenPanels.includes(item));
     const index = visible.indexOf(id);
     const target = visible[index + offset];
     if (index >= 0 && target) movePanel(id, target);
@@ -648,11 +645,11 @@ export function CrmOverview() {
             ))
         )}
       </div>
-      {(!hiddenPanels.includes("revenue") || !hiddenPanels.includes("sales")) && (
-        <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
+      {DASHBOARD_PANEL_IDS.some((id) => !hiddenPanels.includes(id)) && (
+        <div className="mt-8 grid grid-cols-1 gap-8 border-b border-border pb-8 md:grid-cols-2 xl:grid-cols-6">
           {!hiddenPanels.includes("revenue") && (
             <div {...panelDragProps("revenue")} style={{ order: panelOrder.indexOf("revenue") }}
-              className={"min-w-0 cursor-grab " + (draggedPanel === "revenue" ? "opacity-50" : "")}>
+              className={"min-w-0 cursor-grab xl:col-span-4 " + (draggedPanel === "revenue" ? "opacity-50" : "")}>
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">Revenue collected</h2>
@@ -716,7 +713,7 @@ export function CrmOverview() {
           )}
           {!hiddenPanels.includes("sales") && (
             <div {...panelDragProps("sales")} style={{ order: panelOrder.indexOf("sales") }}
-              className={"cursor-grab border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0 " + (draggedPanel === "sales" ? "opacity-50" : "")}>
+              className={"cursor-grab border-t border-border pt-6 xl:col-span-2 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0 " + (draggedPanel === "sales" ? "opacity-50" : "")}>
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-xl font-bold">Sales snapshot</h2>
                 {panelControls("sales")}
@@ -743,12 +740,10 @@ export function CrmOverview() {
               </Button>
             </div>
           )}
-        </section>
-      )}
-      <div className="mt-8 grid gap-8 lg:grid-cols-3">
+
         {!hiddenPanels.includes("tasks") && (
           <section {...panelDragProps("tasks")} style={{ order: panelOrder.indexOf("tasks") }}
-            className={"cursor-grab " + (draggedPanel === "tasks" ? "opacity-50" : "")}>
+            className={"cursor-grab xl:col-span-2 " + (draggedPanel === "tasks" ? "opacity-50" : "")}>
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-bold">
@@ -781,7 +776,7 @@ export function CrmOverview() {
         )}
         {!hiddenPanels.includes("inspections") && (
           <section {...panelDragProps("inspections")} style={{ order: panelOrder.indexOf("inspections") }}
-            className={"cursor-grab " + (draggedPanel === "inspections" ? "opacity-50" : "")}>
+            className={"cursor-grab xl:col-span-2 " + (draggedPanel === "inspections" ? "opacity-50" : "")}>
             <div className="mb-5 flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 text-lg font-bold">
                 <CalendarDays className="size-4 text-primary" /> Upcoming inspections
@@ -810,7 +805,7 @@ export function CrmOverview() {
         )}
         {!hiddenPanels.includes("activity") && (
           <section {...panelDragProps("activity")} style={{ order: panelOrder.indexOf("activity") }}
-            className={"cursor-grab " + (draggedPanel === "activity" ? "opacity-50" : "")}>
+            className={"cursor-grab xl:col-span-2 " + (draggedPanel === "activity" ? "opacity-50" : "")}>
             <div className="mb-5 flex items-center justify-between gap-2">
               <h2 className="text-lg font-bold">Recent customer activity</h2>
               {panelControls("activity")}
@@ -839,7 +834,8 @@ export function CrmOverview() {
             )}
           </section>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
