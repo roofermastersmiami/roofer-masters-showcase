@@ -131,7 +131,8 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 <strong>{visibleResult.roof.facet_count} candidate roof facets detected</strong>
                 <p className="text-muted-foreground">
                   {visibleResult.roof.total_squares?.toFixed(2)} squares · Dominant pitch{" "}
-                  {visibleResult.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR result
+                  {visibleResult.roof.dominant_pitch_rise_per_12?.toFixed(1)}:12 · Preliminary LiDAR
+                  result
                 </p>
               </div>
             </div>
@@ -142,8 +143,8 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
                 <strong>Footprint found; roof facets were not measurable</strong>
                 <p className="text-muted-foreground">{visibleResult.fallback.message}</p>
                 <p className="mt-1">
-                  Ground footprint: {visibleResult.fallback.footprint_area_sqft.toLocaleString()} sq ft.
-                  This is not roof surface area.
+                  Ground footprint: {visibleResult.fallback.footprint_area_sqft.toLocaleString()} sq
+                  ft. This is not roof surface area.
                 </p>
               </div>
             </div>
@@ -177,8 +178,8 @@ export function AutomatedRoofReport({ address, onApply }: Props) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in the
-            measurement editor.
+            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
+            the measurement editor.
           </p>
           {visibleResult.roof.facets.length > 0 && (
             <Button variant="outline" onClick={apply}>
