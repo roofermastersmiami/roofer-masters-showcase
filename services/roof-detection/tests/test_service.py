@@ -45,3 +45,10 @@ def test_ransac_skips_degenerate_collinear_facet_hulls():
     z = 0.5 * x + 12.0
     points = np.column_stack((x, y, z))
     assert _fit_facets(points) == []
+
+
+def test_ransac_rejects_near_vertical_building_walls():
+    x, y = np.meshgrid(np.linspace(0, 20, 25), np.linspace(0, 10, 15))
+    z = 5.0 * x + 12.0
+    points = np.column_stack((x.ravel(), y.ravel(), z.ravel()))
+    assert _fit_facets(points) == []
