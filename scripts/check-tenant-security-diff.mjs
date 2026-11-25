@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { hasPrivilegedPattern, isReviewed } from "../src/lib/tenant-security-audit.js";
+import { hasPrivilegedPattern, isReviewed } from "./tenant-security-audit-patterns.mjs";
 
 const base = process.env.GITHUB_BASE_REF;
 if (!base) {
