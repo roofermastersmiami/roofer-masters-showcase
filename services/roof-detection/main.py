@@ -95,16 +95,42 @@ def _distance_to_footprint_meters(polygon: Polygon, lat: float, lon: float) -> f
     return float(projected_polygon.distance(projected_point))
 
 
+async def _geocode_census(address: str) -> tuple[float, float, str]:
+    """Free US Census geocoder fallback when the public Nominatim endpoint is throttled."""
+    url = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
+    async with httpx.AsyncClient(timeout=25, headers={"User-Agent": USER_AGENT}) as client:
+        response = await client.get(
+            url,
+            params={"address": address, "benchmark": "Public_AR_Current", "format": "json"},
+        )
+        response.raise_for_status()
+        matches = response.json().get("result", {}).get("addressMatches", [])
+    if not matches:
+        raise HTTPException(404, "Address was not found by the OpenStreetMap or US Census geocoder.")
+    match = matches[0]
+    coordinates = match["coordinates"]
+    return float(coordinates["y"]), float(coordinates["x"]), str(match.get("matchedAddress", address))
+
+
 async def geocode(address: str) -> tuple[float, float, str]:
     headers = {"User-Agent": USER_AGENT}
-    async with httpx.AsyncClient(timeout=25, headers=headers) as client:
-        response = await client.get(NOMINATIM_URL, params={"q": address, "format": "jsonv2", "limit": 1})
-        response.raise_for_status()
-        results = response.json()
-    if not results:
-        raise HTTPException(404, "Address was not found by OpenStreetMap Nominatim.")
-    item = results[0]
-    return float(item["lat"]), float(item["lon"]), str(item.get("display_name", address))
+    try:
+        async with httpx.AsyncClient(timeout=25, headers=headers) as client:
+            response = await client.get(NOMINATIM_URL, params={"q": address, "format": "jsonv2", "limit": 1})
+            response.raise_for_status()
+            results = response.json()
+        if not results:
+            return await _geocode_census(address)
+        item = results[0]
+        return float(item["lat"]), float(item["lon"]), str(item.get("display_name", address))
+    except httpx.HTTPStatusError as exc:
+        # Nominatim may return 429/629 when public rate limits or anti-abuse controls
+        # are reached. Use the free US Census geocoder for US street addresses.
+        if exc.response.status_code not in {429, 500, 502, 503, 504, 629}:
+            raise
+        return await _geocode_census(address)
+    except (httpx.TimeoutException, httpx.ConnectError):
+        return await _geocode_census(address)
 
 
 async def get_footprint(lat: float, lon: float) -> tuple[Polygon, dict[str, Any]]:
