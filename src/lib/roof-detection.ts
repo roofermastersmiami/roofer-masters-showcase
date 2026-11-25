@@ -129,7 +129,7 @@ export function detectedFacetsToDrawing(
       "Preliminary roof facets from public USGS 3DEP LiDAR. Verify all facet boundaries, pitch, edge types, and material system before use.",
     condition: "",
     verified: false,
-    accuracy: "photo_estimate",
+    accuracy: "public_lidar_estimate",
     geo_reference: {
       addressLatitude: originLat,
       addressLongitude: originLon,
