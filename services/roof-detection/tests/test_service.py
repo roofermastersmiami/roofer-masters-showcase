@@ -91,3 +91,27 @@ def test_overlapping_lidar_tiles_are_deduplicated_before_plane_fitting():
 
 def test_lidar_deduplication_keeps_empty_input_shape():
     assert _deduplicate_lidar_points(np.empty((0, 3))).shape == (0, 3)
+
+
+
+def test_ransac_splits_detached_coplanar_roof_surfaces_before_area_calculation():
+    x1, y1 = np.meshgrid(np.linspace(0, 20, 25), np.linspace(0, 10, 15))
+    x2, y2 = np.meshgrid(np.linspace(40, 60, 25), np.linspace(0, 10, 15))
+    x = np.concatenate((x1.ravel(), x2.ravel()))
+    y = np.concatenate((y1.ravel(), y2.ravel()))
+    z = 0.5 * x + 12.0
+    facets = _fit_facets(np.column_stack((x, y, z)))
+
+    assert len(facets) == 2
+    assert all(facet["point_count"] >= 80 for facet in facets)
+    assert all(facet["area_sqft"] == pytest.approx(2405, rel=0.03) for facet in facets)
+    assert sum(facet["area_sqft"] for facet in facets) < 5000
+
+
+def test_ransac_does_not_create_facets_from_small_spatial_noise_clusters():
+    x, y = np.meshgrid(np.linspace(0, 20, 25), np.linspace(0, 10, 15))
+    roof = np.column_stack((x.ravel(), y.ravel(), (0.5 * x + 12.0).ravel()))
+    noise = np.array([[100.0, 100.0, 62.0], [100.2, 100.1, 62.1], [100.1, 100.2, 62.05]])
+    facets = _fit_facets(np.vstack((roof, noise)))
+    assert len(facets) == 1
+    assert facets[0]["point_count"] == len(roof)
