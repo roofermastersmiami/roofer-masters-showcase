@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -37,6 +37,8 @@ import { formatWhen } from "./data";
 import { CRM_ALL_THEME_COLORS } from "@/lib/crm-accent";
 const dateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+type DashboardPanelId = "revenue" | "sales" | "tasks" | "inspections" | "activity";
+const DASHBOARD_PANEL_IDS: DashboardPanelId[] = ["revenue", "sales", "tasks", "inspections", "activity"];
 export function CrmOverview() {
   const { leads, go, onOpen } = useCrm();
   const invoices = useQuery(invoicesQuery),
@@ -58,6 +60,8 @@ export function CrmOverview() {
     ]),
     [hiddenCards, setHiddenCards] = useState<string[]>([]),
     [hiddenPanels, setHiddenPanels] = useState<string[]>([]),
+    [panelOrder, setPanelOrder] = useState<DashboardPanelId[]>(DASHBOARD_PANEL_IDS),
+    [draggedPanel, setDraggedPanel] = useState<DashboardPanelId | null>(null),
     [draggedCard, setDraggedCard] = useState<string | null>(null),
     [preferencesLoaded, setPreferencesLoaded] = useState(false);
   useEffect(() => {
@@ -88,7 +92,17 @@ export function CrmOverview() {
         );
         setCardOrder([...unique, ...allowedCards.filter((item) => !unique.includes(item))]);
       }
-      const allowedPanels = ["revenue", "sales", "tasks", "inspections", "activity"];
+      const allowedPanels = DASHBOARD_PANEL_IDS;
+      if (Array.isArray(saved.panelOrder)) {
+        const restored = saved.panelOrder.filter(
+          (item: unknown): item is DashboardPanelId =>
+            typeof item === "string" && allowedPanels.includes(item as DashboardPanelId),
+        );
+        const unique = restored.filter(
+          (item: DashboardPanelId, index: number) => restored.indexOf(item) === index,
+        );
+        setPanelOrder([...unique, ...allowedPanels.filter((item) => !unique.includes(item))]);
+      }
       if (Array.isArray(saved.hiddenPanels)) {
         setHiddenPanels(
           saved.hiddenPanels.filter(
@@ -115,13 +129,13 @@ export function CrmOverview() {
       try {
         localStorage.setItem(
           "crm-dashboard-layout",
-          JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels }),
+          JSON.stringify({ accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels, panelOrder }),
         );
       } catch {
         // Storage can be disabled or full; dashboard customization still works for this session.
       }
     }
-  }, [accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels, preferencesLoaded]);
+  }, [accent, density, cardStyle, cardOrder, hiddenCards, hiddenPanels, panelOrder, preferencesLoaded]);
   const [period, setPeriod] = useState("month"),
     [fromDate, setFromDate] = useState(
       dateValue(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
@@ -236,6 +250,64 @@ export function CrmOverview() {
       bi = cardOrder.indexOf(b.label);
     return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
   });
+  const movePanel = (from: DashboardPanelId, to: DashboardPanelId) => {
+    setPanelOrder((current) => {
+      const next = [...current];
+      const fromIndex = next.indexOf(from);
+      const toIndex = next.indexOf(to);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, from);
+      return next;
+    });
+  };
+  const movePanelBy = (id: DashboardPanelId, offset: number) => {
+    const group: DashboardPanelId[] = id === "revenue" || id === "sales"
+      ? ["revenue", "sales"]
+      : ["tasks", "inspections", "activity"];
+    const visible = group.filter((item) => !hiddenPanels.includes(item));
+    const index = visible.indexOf(id);
+    const target = visible[index + offset];
+    if (index >= 0 && target) movePanel(id, target);
+  };
+  const panelControls = (id: DashboardPanelId) => {
+    const group: DashboardPanelId[] = id === "revenue" || id === "sales"
+      ? ["revenue", "sales"]
+      : ["tasks", "inspections", "activity"];
+    const visible = group.filter((item) => !hiddenPanels.includes(item));
+    const index = visible.indexOf(id);
+    return (
+      <span className="inline-flex shrink-0 items-center gap-0.5" aria-label={"Reorder " + id + " panel"}>
+        <Button size="icon" variant="ghost" className="size-7" aria-label={"Move " + id + " panel earlier"}
+          title={"Move " + id + " panel earlier"} disabled={index <= 0} onClick={() => movePanelBy(id, -1)}>
+          <ArrowUp className="size-3.5" />
+        </Button>
+        <Button size="icon" variant="ghost" className="size-7" aria-label={"Move " + id + " panel later"}
+          title={"Move " + id + " panel later"} disabled={index < 0 || index >= visible.length - 1}
+          onClick={() => movePanelBy(id, 1)}>
+          <ArrowDown className="size-3.5" />
+        </Button>
+        <GripVertical className="size-4 text-muted-foreground" aria-hidden="true" />
+      </span>
+    );
+  };
+  const panelDragProps = (id: DashboardPanelId) => ({
+    draggable: true,
+    onDragStart: (event: DragEvent<HTMLElement>) => {
+      event.dataTransfer.effectAllowed = "move";
+      setDraggedPanel(id);
+    },
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    },
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      if (draggedPanel && draggedPanel !== id) movePanel(draggedPanel, id);
+      setDraggedPanel(null);
+    },
+    onDragEnd: () => setDraggedPanel(null),
+  });
   const moveCard = (from: string, to: string) => {
     const next = [...cardOrder],
       i = next.indexOf(from),
@@ -325,6 +397,7 @@ export function CrmOverview() {
                 ]);
                 setHiddenCards([]);
                 setHiddenPanels([]);
+                setPanelOrder(DASHBOARD_PANEL_IDS);
               }}
             >
               Reset layout
@@ -578,7 +651,8 @@ export function CrmOverview() {
       {(!hiddenPanels.includes("revenue") || !hiddenPanels.includes("sales")) && (
         <section className="mt-8 grid gap-8 border-b border-border pb-8 xl:grid-cols-[2fr_1fr]">
           {!hiddenPanels.includes("revenue") && (
-            <div className="min-w-0">
+            <div {...panelDragProps("revenue")} style={{ order: panelOrder.indexOf("revenue") }}
+              className={"min-w-0 cursor-grab " + (draggedPanel === "revenue" ? "opacity-50" : "")}>
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">Revenue collected</h2>
@@ -586,7 +660,10 @@ export function CrmOverview() {
                     {year} · {env === "sandbox" ? "Test payments" : "Recorded payments"}
                   </p>
                 </div>
-                <p className="text-xl font-bold">{value(yearLedger.collected)}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xl font-bold">{value(yearLedger.collected)}</p>
+                  {panelControls("revenue")}
+                </div>
               </div>
               <div className="h-64 w-full min-w-0">
                 {!unavailable ? (
@@ -638,8 +715,12 @@ export function CrmOverview() {
             </div>
           )}
           {!hiddenPanels.includes("sales") && (
-            <div className="border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
-              <h2 className="mb-5 text-xl font-bold">Sales snapshot</h2>
+            <div {...panelDragProps("sales")} style={{ order: panelOrder.indexOf("sales") }}
+              className={"cursor-grab border-t border-border pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0 " + (draggedPanel === "sales" ? "opacity-50" : "")}>
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Sales snapshot</h2>
+                {panelControls("sales")}
+              </div>
               <dl className="grid gap-5">
                 {[
                   ["This month collected", value(monthLedger.collected)],
@@ -666,11 +747,15 @@ export function CrmOverview() {
       )}
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         {!hiddenPanels.includes("tasks") && (
-          <section>
+          <section {...panelDragProps("tasks")} style={{ order: panelOrder.indexOf("tasks") }}
+            className={"cursor-grab " + (draggedPanel === "tasks" ? "opacity-50" : "")}>
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-bold">
-                <Clock className="size-4 text-primary" /> Tasks requiring attention
-              </h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <Clock className="size-4 text-primary" /> Tasks requiring attention
+                </h2>
+                {panelControls("tasks")}
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
@@ -695,10 +780,14 @@ export function CrmOverview() {
           </section>
         )}
         {!hiddenPanels.includes("inspections") && (
-          <section>
-            <h2 className="mb-5 flex items-center gap-2 text-lg font-bold">
-              <CalendarDays className="size-4 text-primary" /> Upcoming inspections
-            </h2>
+          <section {...panelDragProps("inspections")} style={{ order: panelOrder.indexOf("inspections") }}
+            className={"cursor-grab " + (draggedPanel === "inspections" ? "opacity-50" : "")}>
+            <div className="mb-5 flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-lg font-bold">
+                <CalendarDays className="size-4 text-primary" /> Upcoming inspections
+              </h2>
+              {panelControls("inspections")}
+            </div>
             {upcoming.slice(0, 5).map((j) => (
               <Button
                 key={j.id}
@@ -720,8 +809,12 @@ export function CrmOverview() {
           </section>
         )}
         {!hiddenPanels.includes("activity") && (
-          <section>
-            <h2 className="mb-5 text-lg font-bold">Recent customer activity</h2>
+          <section {...panelDragProps("activity")} style={{ order: panelOrder.indexOf("activity") }}
+            className={"cursor-grab " + (draggedPanel === "activity" ? "opacity-50" : "")}>
+            <div className="mb-5 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Recent customer activity</h2>
+              {panelControls("activity")}
+            </div>
             {activity.data?.slice(0, 5).map((a) => {
               const lead = leads.find((l) => l.id === a.lead_id);
               return (
