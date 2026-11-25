@@ -344,7 +344,8 @@ export function CrmShell({
       );
       setBrandingLoaded(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "The company logo could not be uploaded.";
+      const message =
+        error instanceof Error ? error.message : "The company logo could not be uploaded.";
       setBrandingError(
         /bucket not found|bucket does not exist/i.test(message)
           ? "Company logo storage is not configured yet. The CRM administrator must create the private 'crm-company-branding' bucket before logos can be uploaded. No public bucket is used."
@@ -730,7 +731,9 @@ export function CrmShell({
                 className="h-8 max-w-24 bg-transparent text-xs outline-none"
               >
                 {CRM_ACCENT_COLORS.map((color) => (
-                  <option key={color.id} value={color.id}>{color.label}</option>
+                  <option key={color.id} value={color.id}>
+                    {color.label}
+                  </option>
                 ))}
               </select>
             </label>

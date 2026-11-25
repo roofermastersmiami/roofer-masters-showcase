@@ -295,7 +295,8 @@ export function CrmOverview() {
             <div>
               <h2 className="font-semibold">Your workspace, your way</h2>
               <p className="text-sm text-muted-foreground">
-                Drag cards to reorder them on desktop, or use each card’s up/down controls on touchscreens and keyboards. Preferences are saved on this device.
+                Drag cards to reorder them on desktop, or use each card’s up/down controls on
+                touchscreens and keyboards. Preferences are saved on this device.
               </p>
             </div>
             <Button
