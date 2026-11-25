@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -39,6 +41,8 @@ jobs:
 
       - name: Validate database migration journal
         run: npm run check:migrations
+      - name: Audit new privileged code for tenant review
+        run: node scripts/check-tenant-security-diff.mjs
       - name: Run lint checks (baseline audit)
         run: npm run lint
         continue-on-error: true
