@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046]
   pull_request:
-    branches: [main, master, feat/company-owned-crm-records-0042]
+    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046]
   workflow_dispatch:
 
 jobs:
