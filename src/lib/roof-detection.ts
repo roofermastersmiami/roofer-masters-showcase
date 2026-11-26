@@ -41,6 +41,8 @@ export const roofDetectionResponseSchema = z.object({
   }),
   footprint: z.object({
     source: z.string(),
+    candidate_id: z.string().min(1).nullable().optional(),
+    parcel_match: z.record(z.string(), z.unknown()).nullable().optional(),
     area_sqft: z.number().finite().positive(),
     address_point_inside_footprint: z.boolean().optional(),
     address_to_footprint_distance_m: z.number().finite().nonnegative().optional(),
