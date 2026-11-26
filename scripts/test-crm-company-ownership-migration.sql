@@ -30,7 +30,7 @@ CREATE TABLE public.crm_customers (
 ALTER TABLE public.leads ADD CONSTRAINT leads_customer_id_fkey
   FOREIGN KEY (customer_id) REFERENCES public.crm_customers(id);
 CREATE TABLE public.crm_properties (
-  id uuid PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id uuid REFERENCES public.crm_customers(id)
 );
 CREATE TABLE public.roof_report_orders (
