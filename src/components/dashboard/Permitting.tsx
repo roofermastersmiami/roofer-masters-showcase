@@ -115,7 +115,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
             </label>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <CalendarClock className="size-4" />
-              {counts.inspections} job inspections scheduled
+              {counts.inspections} inspection dates recorded
             </div>
           </div>
 
