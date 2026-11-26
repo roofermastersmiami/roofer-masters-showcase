@@ -55,7 +55,8 @@ export function Permitting({ leads }: { leads: Lead[] }) {
     submitted: records.filter((job) => job.permit_status === "submitted").length,
     approved: records.filter((job) => job.permit_status === "approved").length,
     inspections: records.filter((job) => !!job.inspection_at).length,
-    nocReview: records.filter((job) => requiresNoticeOfCommencement(job.budget_cents ?? 0).required).length,
+    nocReview: records.filter((job) => requiresNoticeOfCommencement(job.budget_cents).required).length,
+    nocValueMissing: records.filter((job) => requiresNoticeOfCommencement(job.budget_cents).reason === "value_unknown").length,
   }), [records]);
 
   const visible = records.filter((job) => {
@@ -83,12 +84,13 @@ export function Permitting({ leads }: { leads: Lead[] }) {
         </Badge>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <PermitCount title="Roofing jobs" value={counts.total} description="Jobs currently in the CRM" />
         <PermitCount title="Not started" value={counts.notStarted} description="Permit status needs review" />
         <PermitCount title="Submitted" value={counts.submitted} description="Marked submitted in job records" />
         <PermitCount title="Approved" value={counts.approved} description="Marked approved in job records" />
         <PermitCount title="NOC review" value={counts.nocReview} description="Job value exceeds the $5,000 default threshold" />
+        <PermitCount title="Value missing" value={counts.nocValueMissing} description="Cannot assess NOC threshold without a job value" />
       </div>
 
       <Card>
@@ -168,7 +170,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
                       <td className="px-3 py-3">
-                        {requiresNoticeOfCommencement(job.budget_cents ?? 0).required ? (
+                        {requiresNoticeOfCommencement(job.budget_cents).required ? (
                           <Badge variant="outline">Review NOC</Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">Below default threshold</span>
