@@ -116,7 +116,7 @@ export function PermitRecords() {
       if (!cleanReason) throw new Error("Enter the municipality's rejection reason before recording rejection.");
       const existingNotes = String(application.notes ?? "").trim();
       const notes = existingNotes
-        ? `${existingNotes}\\n\\nRejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`
+        ? `${existingNotes}\n\nRejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`
         : `Rejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`;
       return updatePermitApplication({ id, changes: { application_status: "rejected", notes } });
     },
