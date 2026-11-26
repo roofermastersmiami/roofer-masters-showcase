@@ -344,6 +344,13 @@
       "when": 1795733000000,
       "tag": "0048_company_permit_applications_and_inspections",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795733100000,
+      "tag": "0049_company_scoped_permit_document_storage",
+      "breakpoints": true
     }
   ]
 }
