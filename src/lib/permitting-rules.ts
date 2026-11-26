@@ -9,12 +9,16 @@ export const DEFAULT_NOC_THRESHOLD_CENTS = 500_000;
 
 export type NoticeOfCommencementResult =
   | { required: true; reason: "value_exceeds_threshold"; thresholdCents: number }
-  | { required: false; reason: "value_at_or_below_threshold"; thresholdCents: number };
+  | { required: false; reason: "value_at_or_below_threshold"; thresholdCents: number }
+  | { required: false; reason: "value_unknown"; thresholdCents: number };
 
 export function requiresNoticeOfCommencement(
-  contractValueCents: number,
+  contractValueCents: number | null | undefined,
   thresholdCents = DEFAULT_NOC_THRESHOLD_CENTS,
 ): NoticeOfCommencementResult {
+  if (contractValueCents == null) {
+    return { required: false, reason: "value_unknown", thresholdCents };
+  }
   if (!Number.isSafeInteger(contractValueCents) || contractValueCents < 0) {
     throw new RangeError("Contract value must be a non-negative safe integer in cents");
   }
