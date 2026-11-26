@@ -355,6 +355,87 @@ def test_ransac_overlapping_planes_do_not_double_count_shared_area():
     assert combined_area >= single_area * 0.80
 
 
+def test_ransac_tight_threshold_recovers_true_planes_from_noisy_two_face_data():
+    # Heavily noised two-face gable (sigma 0.12 m — dirty LiDAR). At the old
+    # 0.20 m RANSAC tolerance the refit gathers a band of the opposing face
+    # along the ridge and reports compromise facets with RMSE ~0.09 m; the
+    # tight 0.10 m threshold keeps each fit on its own face, so the facets
+    # come back at the true 6/12 with fit RMSE that honestly reflects the
+    # noise on one plane.
+    rng = np.random.default_rng(11)
+    x_left, y_left = np.meshgrid(
+        np.linspace(0.25, 9.75, 28), np.linspace(0.25, 19.75, 40)
+    )
+    x_right, y_right = np.meshgrid(
+        np.linspace(10.25, 19.75, 28), np.linspace(0.25, 19.75, 40)
+    )
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), (10.0 + 0.5 * x_left).ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), (20.0 - 0.5 * x_right).ravel()))
+    points = np.vstack((left, right))
+    points[:, 2] += rng.normal(0, 0.12, len(points))
+
+    facets = _fit_facets(points)
+
+    assert len(facets) == 2
+    for facet in facets:
+        assert facet["pitch_rise_per_12"] == pytest.approx(6.0, abs=0.25)
+        assert facet["fit_rmse_m"] < 0.07
+        assert facet["point_count"] >= 500
+
+
+def test_coverage_completion_tessellates_evidenced_gap_between_facets():
+    # Gable whose face samples stop 1 m short of the ridge; a sparse row of
+    # mixed returns sits in the band at the two planes' average height
+    # (what a LiDAR pulse straddling the ridge reports). Too sparse to fit
+    # and claimed by neither face, but the returns near the intersection
+    # line fit each plane within tolerance, so they evidence the seam. The
+    # hulls alone leave the band unmeasured; coverage completion must
+    # split it between the two facets along their intersection line
+    # (x = 10), with no overlap and no growth into the evidence-free
+    # margin beyond the footprint.
+    rng = np.random.default_rng(23)
+    footprint = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    x_left, y_left = np.meshgrid(
+        np.arange(0.25, 9.0, 0.5), np.arange(0.25, 19.75, 0.5)
+    )
+    x_right, y_right = np.meshgrid(
+        np.arange(11.0, 19.75, 0.5), np.arange(0.25, 19.75, 0.5)
+    )
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), (10.0 + 0.5 * x_left).ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), (20.0 - 0.5 * x_right).ravel()))
+    left[:, 2] += rng.normal(0, 0.02, len(left))
+    right[:, 2] += rng.normal(0, 0.02, len(right))
+    x_band, y_band = np.meshgrid(
+        np.arange(9.25, 10.75, 0.5), np.arange(1.0, 19.0, 2.0)
+    )
+    band = np.column_stack((x_band.ravel(), y_band.ravel(), np.full(len(x_band.ravel()), 15.0)))
+    band[:, 2] += rng.normal(0, 0.05, len(band))
+
+    facets = _fit_facets(np.vstack((left, right, band)), footprint)
+
+    assert len(facets) == 2
+    polygons = [Polygon(facet["boundary_xy"]) for facet in facets]
+    # No double-counting: the tessellated facets are disjoint (a hairline
+    # remainder from the merge tolerance is not double-counted area).
+    assert polygons[0].intersection(polygons[1]).area == pytest.approx(0, abs=1e-3)
+    plan_sqft = sum(
+        facet["area_sqft"] * np.cos(np.radians(facet["pitch_degrees"]))
+        for facet in facets
+    )
+    clip_plan_sqft = footprint.buffer(0.75).area * 10.7639104167
+    # The evidenced band is filled (hulls alone cover ~3,480 plan sq ft),
+    # while the total stays bounded by the clipped footprint region.
+    assert plan_sqft > 3800
+    assert plan_sqft <= clip_plan_sqft
+    # The band is split along the planes' intersection line: points just
+    # left and right of the ridge belong to different facets.
+    left_owner = [i for i, polygon in enumerate(polygons) if polygon.covers(Point(9.5, 10.0))]
+    right_owner = [i for i, polygon in enumerate(polygons) if polygon.covers(Point(10.5, 10.0))]
+    assert len(left_owner) == 1
+    assert len(right_owner) == 1
+    assert left_owner != right_owner
+
+
 def test_street_address_normalization_matches_directional_and_suffix_variants():
     from main import _normalize_street_address
 
