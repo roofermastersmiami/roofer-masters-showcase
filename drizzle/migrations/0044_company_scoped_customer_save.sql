@@ -1,6 +1,8 @@
 -- Company-scope the CRM customer save RPC.
 -- Depends on 0042 company ownership and 0043 company-aware lead sync.
 -- Fails closed when the user has zero or multiple company memberships.
+-- tenant-audit: reviewed — authorization is derived only from auth.uid() membership;
+-- customer and source-lead mutations are constrained to that same company.
 CREATE OR REPLACE FUNCTION public.save_crm_customer(p_customer jsonb)
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -11,13 +13,16 @@ DECLARE
   actor_role text;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
-  SELECT count(*), min(company_id) INTO company_count, actor_company_id
+  SELECT count(*) INTO company_count
   FROM public.crm_company_memberships WHERE user_id = auth.uid();
-  IF company_count <> 1 OR actor_company_id IS NULL THEN
-    RAISE EXCEPTION 'A single active company membership is required';
+  IF company_count <> 1 THEN
+    RAISE EXCEPTION 'A single company membership is required';
   END IF;
-  SELECT role INTO actor_role FROM public.crm_company_memberships
-  WHERE user_id = auth.uid() AND company_id = actor_company_id;
+  SELECT company_id, role INTO actor_company_id, actor_role
+  FROM public.crm_company_memberships WHERE user_id = auth.uid();
+  IF actor_company_id IS NULL THEN
+    RAISE EXCEPTION 'A single company membership is required';
+  END IF;
   IF actor_role NOT IN ('owner','admin','office','sales') THEN
     RAISE EXCEPTION 'Access denied';
   END IF;
