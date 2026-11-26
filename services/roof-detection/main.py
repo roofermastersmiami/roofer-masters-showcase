@@ -4,6 +4,7 @@ import hashlib
 import math
 import os
 import re
+from pathlib import Path
 from typing import Any
 from time import monotonic
 
@@ -16,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 from pyproj import CRS, Transformer
 from pystac_client import Client
+from shapely import contains_xy
 from shapely.geometry import MultiPoint, Point, Polygon, mapping, shape
 from shapely.validation import make_valid
 from sklearn.cluster import DBSCAN
@@ -26,6 +28,10 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
 STAC_COLLECTION = "3dep-lidar-copc"
+TNM_PRODUCTS_URL = "https://tnmaccess.nationalmap.gov/api/v1/products"
+LIDAR_CACHE_DIR = Path(os.getenv("LIDAR_CACHE_DIR", "/tmp/roof-lidar-cache"))
+MAX_TNM_TILES = int(os.getenv("MAX_TNM_TILES", "2"))
+MAX_TNM_TILE_MB = float(os.getenv("MAX_TNM_TILE_MB", "400"))
 USER_AGENT = os.getenv("ROOF_SERVICE_USER_AGENT", "RooferMastersCRM/1.0 (roof-report contact: roofermasters@gmail.com)")
 MAX_STAC_ITEMS = int(os.getenv("MAX_STAC_ITEMS", "8"))
 MIN_ROOF_POINTS = int(os.getenv("MIN_ROOF_POINTS", "80"))
@@ -301,6 +307,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     providers_succeeded = 0
     arcgis_feature_count = 0
     broward_feature_count = 0
+    miamidade_feature_count = 0
     overpass_element_count = 0
 
     arcgis_url = (
@@ -419,6 +426,61 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                     }))
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             provider_errors.append(f"Broward County Building Footprints: {type(exc).__name__}")
+
+        # Miami-Dade County publishes its own LiDAR-derived building
+        # footprints (BuildingFootprint2D). The nationwide structures layer
+        # has no coverage for much of Miami-Dade, so this county layer is the
+        # authoritative source there, mirroring the Broward fallback above.
+        miamidade_url = (
+            "https://services.arcgis.com/8Pc9XBTAsYuxx9Ny/"
+            "ArcGIS/rest/services/BuildingFootprint2D_gdb/FeatureServer/0/query"
+        )
+        miamidade_params = {
+            "where": "1=1",
+            "geometry": f"{lon},{lat}",
+            "geometryType": "esriGeometryPoint",
+            "inSR": "4326",
+            "spatialRel": "esriSpatialRelIntersects",
+            "distance": str(int(CANDIDATE_SEARCH_RADIUS_M)),
+            "units": "esriSRUnit_Meter",
+            "outFields": "OBJECTID,UNIQUEID,SOURCE,YEARUPDATE",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "f": "geojson",
+        }
+        try:
+            response = await client.get(miamidade_url, params=miamidade_params)
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("error"):
+                raise ValueError(str(payload["error"]))
+            providers_succeeded += 1
+            miamidade_features = payload.get("features", [])
+            miamidade_feature_count = len(miamidade_features)
+            for feature in miamidade_features:
+                geometry = feature.get("geometry")
+                if not geometry:
+                    continue
+                try:
+                    parsed = shape(geometry)
+                except (TypeError, ValueError):
+                    continue
+                parts = list(parsed.geoms) if parsed.geom_type == "MultiPolygon" else [parsed]
+                properties = feature.get("properties") or {}
+                for polygon in parts:
+                    if polygon.geom_type != "Polygon" or polygon.is_empty:
+                        continue
+                    raw_candidates.append((polygon, {
+                        "provider": "Miami-Dade County Building Footprints",
+                        "source_id": properties.get("OBJECTID"),
+                        "building_tags": {
+                            key: properties.get(key)
+                            for key in ("UNIQUEID", "SOURCE", "YEARUPDATE")
+                            if properties.get(key) is not None
+                        },
+                    }))
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            provider_errors.append(f"Miami-Dade County Building Footprints: {type(exc).__name__}")
 
         # Query independent OSM Overpass endpoints as a fallback and to fill
         # coverage gaps in the nationwide structures layer.
@@ -568,7 +630,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 detail={
                     "code": "building_footprint_provider_unavailable",
                     "message": "The free building-footprint providers could not be reached. No roof measurement was generated. Retry later or use the CRM's manual footprint tracing tool.",
-                    "providers_tried": 4,
+                    "providers_tried": 5,
                     "provider_errors": provider_errors,
                 },
             )
@@ -577,11 +639,12 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             detail={
                 "code": "building_footprint_not_found",
                 "message": "No eligible mapped building was found within the 80 m candidate search radius. Review the geocoded pin or use manual footprint tracing.",
-                "providers_checked": ["ArcGIS USA Structures", "Broward County Building Footprints", "OpenStreetMap Overpass"],
+                "providers_checked": ["ArcGIS USA Structures", "Broward County Building Footprints", "Miami-Dade County Building Footprints", "OpenStreetMap Overpass"],
                 "candidate_search_radius_m": CANDIDATE_SEARCH_RADIUS_M,
                 "provider_feature_count": len(raw_candidates),
                 "arcgis_feature_count": arcgis_feature_count,
                 "broward_feature_count": broward_feature_count,
+                "miamidade_feature_count": miamidade_feature_count,
                 "overpass_element_count": overpass_element_count,
                 "geocoded_location": {"lat": round(lat, 7), "lon": round(lon, 7)},
                 "provider_errors": provider_errors,
@@ -854,6 +917,187 @@ def _vertical_unit_to_meters(header: Any) -> float | None:
         return None
 
 
+def _line_components(geometry: Any) -> list[Any]:
+    """Flatten a shapely result into its LineString components."""
+    if geometry is None or geometry.is_empty:
+        return []
+    if geometry.geom_type == "LineString":
+        return [geometry]
+    if geometry.geom_type in {"MultiLineString", "GeometryCollection"}:
+        components: list[Any] = []
+        for part in geometry.geoms:
+            components.extend(_line_components(part))
+        return components
+    return []
+
+
+def _compute_edge_lengths(facets: list[dict[str, Any]]) -> dict[str, float] | None:
+    """Derive EagleView-style edge totals from fitted facet geometry.
+
+    Shared boundaries between two planes are classified with a cross-section
+    chord test: if the edge sits above the chord joining the two surfaces it
+    is a peak (ridge when level, hip when sloped); below the chord it is a
+    valley. Unshared boundary is perimeter: segments running across the
+    facet's downslope direction are eaves, segments running along it are
+    rakes. Lengths are true 3D lengths on the facet planes, in feet.
+    """
+    if not facets:
+        return None
+    feet_per_meter = 3.280839895
+    min_segment_m = 0.5
+    polygons: list[Polygon] = []
+    for facet in facets:
+        polygon = Polygon(facet["boundary_xy"])
+        if not polygon.is_valid:
+            fixed = make_valid(polygon)
+            parts = (
+                [fixed] if fixed.geom_type == "Polygon"
+                else [part for part in getattr(fixed, "geoms", []) if part.geom_type == "Polygon"]
+            )
+            if not parts:
+                return None
+            polygon = max(parts, key=lambda part: part.area)
+        polygons.append(polygon)
+
+    def plane_z(index: int, x: float, y: float) -> float:
+        a, b, c = facets[index]["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        return a * x + b * y + c
+
+    totals = {"ridge": 0.0, "hip": 0.0, "valley": 0.0, "eave": 0.0, "rake": 0.0, "pitch_change": 0.0}
+
+    # Shared edges between adjacent facet planes. The true edge is the two
+    # planes' intersection line; measuring boundary coincidence instead
+    # over-counts wherever a third boundary passes near a corner.
+    for i in range(len(facets)):
+        for j in range(i + 1, len(facets)):
+            overlap = polygons[i].intersection(polygons[j].buffer(0.75))
+            if overlap.is_empty or overlap.area <= 1e-6:
+                continue
+            a_i, b_i, c_i = facets[i]["plane_model"]["z_equals_ax_plus_by_plus_c"]
+            a_j, b_j, c_j = facets[j]["plane_model"]["z_equals_ax_plus_by_plus_c"]
+            # Plane normals for z = ax + by + c are (-a, -b, 1); the edge
+            # direction is their cross product.
+            dx = -b_i + b_j
+            dy = a_i - a_j
+            dz = a_i * b_j - a_j * b_i
+            horizontal = math.hypot(dx, dy)
+            flat_pair = facets[i]["pitch_degrees"] < 5.0 and facets[j]["pitch_degrees"] < 5.0
+            if horizontal <= 1e-9:
+                # Parallel planes: no unique intersection line. Only a flat
+                # pair is meaningful here, as a pitch-change seam.
+                if flat_pair:
+                    seam = polygons[i].boundary.intersection(polygons[j].buffer(0.3))
+                    totals["pitch_change"] += seam.length * feet_per_meter
+                continue
+            # A point on the intersection line: both planes satisfy
+            # (a_i - a_j) x + (b_i - b_j) y + (c_i - c_j) = 0, whose
+            # coefficients are (dy, -dx). Fix the coordinate whose
+            # coefficient is smaller and solve for the other.
+            if abs(dx) >= abs(dy):
+                p_x = 0.0
+                p_y = (c_i - c_j) / dx
+            else:
+                p_y = 0.0
+                p_x = (c_i - c_j) / (-dy)
+            p_z = a_i * p_x + b_i * p_y + c_i
+            # Project the overlap region onto the line: s parameterizes
+            # position along it, and |d| converts s back to true 3D length.
+            denom = dx * dx + dy * dy
+            s_values = []
+            for part in [overlap] if overlap.geom_type == "Polygon" else list(getattr(overlap, "geoms", [])):
+                ring = part.exterior if part.geom_type == "Polygon" else None
+                if ring is None:
+                    continue
+                for vx, vy in ring.coords:
+                    s_values.append(((vx - p_x) * dx + (vy - p_y) * dy) / denom)
+            if not s_values:
+                continue
+            s_min, s_max = min(s_values), max(s_values)
+            length_m = (s_max - s_min) * math.sqrt(dx * dx + dy * dy + dz * dz)
+            if length_m < min_segment_m:
+                continue
+            s_mid = (s_min + s_max) / 2.0
+            mid_x, mid_y = p_x + s_mid * dx, p_y + s_mid * dy
+            # Cross-section chord test one meter into each facet.
+            chord_z = 0.0
+            for index in (i, j):
+                center = polygons[index].representative_point()
+                vx, vy = center.x - mid_x, center.y - mid_y
+                norm = math.hypot(vx, vy)
+                if norm <= 1e-9:
+                    chord_z = float("nan")
+                    break
+                chord_z += plane_z(index, mid_x + vx / norm, mid_y + vy / norm) / 2.0
+            edge_z = p_z + s_mid * dz
+            length_ft = length_m * feet_per_meter
+            if flat_pair or not math.isfinite(chord_z) or abs(edge_z - chord_z) <= 0.03:
+                totals["pitch_change"] += length_ft
+            elif edge_z > chord_z:
+                slope_along = abs(dz) / horizontal
+                totals["ridge" if slope_along <= 0.14 else "hip"] += length_ft
+            else:
+                totals["valley"] += length_ft
+
+    # Unshared boundary is roof perimeter: eaves run across the slope,
+    # rakes run along it.
+    for i, facet in enumerate(facets):
+        others = [polygons[j].buffer(0.75) for j in range(len(facets)) if j != i]
+        if others:
+            from shapely.ops import unary_union
+
+            perimeter = polygons[i].boundary.difference(unary_union(others))
+        else:
+            perimeter = polygons[i].boundary
+        a, b, _c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        gradient = math.hypot(a, b)
+        # Classify per straight segment: a perimeter component can turn a
+        # corner (rake into eave), so endpoints alone misclassify it.
+        for component in _line_components(perimeter):
+            coords = list(component.coords)
+            for (x0, y0), (x1, y1) in zip(coords, coords[1:]):
+                span = math.hypot(x1 - x0, y1 - y0)
+                if span < 0.3:
+                    continue
+                ux, uy = (x1 - x0) / span, (y1 - y0) / span
+                slope_along = a * ux + b * uy
+                length_ft = span * math.sqrt(1.0 + slope_along * slope_along) * feet_per_meter
+                if gradient <= 1e-6:
+                    totals["eave"] += length_ft
+                    continue
+                downslope_x, downslope_y = -a / gradient, -b / gradient
+                alignment = abs(ux * downslope_x + uy * downslope_y)
+                totals["eave" if alignment < 0.5 else "rake"] += length_ft
+
+    return {key: round(value, 1) for key, value in totals.items()}
+
+
+def _facets_from_local_points(
+    unique_points: np.ndarray,
+    polygon: Polygon,
+    to_local: Transformer,
+    from_local: Transformer,
+) -> tuple[list[dict[str, Any]], dict[str, float] | None]:
+    """Fit roof planes to deduplicated local-metric points and express each
+    facet boundary back in lat/lon with modeled elevations."""
+    footprint_local = _transform_polygon(polygon, to_local)
+    raw_facets = _fit_facets(unique_points, footprint_local)
+    edge_lengths = _compute_edge_lengths(raw_facets)
+    all_facets: list[dict[str, Any]] = []
+    for facet in raw_facets:
+        facet["id"] = f"facet-{len(all_facets) + 1}"
+        model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        facet["boundary_latlon"] = []
+        for xy in facet.pop("boundary_xy"):
+            lon, lat = from_local.transform(xy[0], xy[1])
+            facet["boundary_latlon"].append([
+                round(lat, 7),
+                round(lon, 7),
+                round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
+            ])
+        all_facets.append(facet)
+    return all_facets, edge_lengths
+
+
 def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     catalog = Client.open(STAC_URL)
     # Search footprint bbox, not the full city. Multiple COPC tiles may overlap.
@@ -951,22 +1195,10 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
-    footprint_local = _transform_polygon(polygon, to_local)
-    all_facets: list[dict[str, Any]] = []
-    for facet in _fit_facets(unique_points, footprint_local):
-        facet["id"] = f"facet-{len(all_facets) + 1}"
-        model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
-        facet["boundary_latlon"] = []
-        for xy in facet.pop("boundary_xy"):
-            lon, lat = from_local.transform(xy[0], xy[1])
-            facet["boundary_latlon"].append([
-                round(lat, 7),
-                round(lon, 7),
-                round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
-            ])
-        all_facets.append(facet)
+    all_facets, edge_lengths = _facets_from_local_points(unique_points, polygon, to_local, from_local)
 
     return all_facets, {
+        "edge_lengths_lf": edge_lengths,
         "stac_items": len(items),
         "tiles_used": used_items,
         "tile_ids_used": used_tile_ids,
@@ -976,6 +1208,202 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         "tiles_missing_vertical_units": tiles_missing_vertical_units,
         "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
     }
+
+async def _download_tile(url: str, dest: Path) -> None:
+    """Stream a LAZ tile into the local cache; a partial file is never kept."""
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(900.0, connect=15.0),
+        follow_redirects=True,
+        headers={"User-Agent": USER_AGENT},
+    ) as client:
+        async with client.stream("GET", url) as response:
+            response.raise_for_status()
+            with open(tmp, "wb") as handle:
+                async for chunk in response.aiter_bytes(1 << 20):
+                    handle.write(chunk)
+    # USGS occasionally answers with an HTML interstitial instead of the
+    # file. A LAZ always starts with the LASF signature; anything else must
+    # never enter the cache.
+    with open(tmp, "rb") as handle:
+        signature = handle.read(4)
+    if signature != b"LASF":
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"Downloaded tile did not have a LASF signature: {url}")
+    tmp.rename(dest)
+
+
+def _tnm_points_local(
+    polygon: Polygon, tile_paths: list[Path]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Read building-class points from downloaded USGS LAZ tiles and fit facets.
+
+    Mirrors the COPC path's discipline: ASPRS class 6 only, explicit vertical
+    units required, points deduplicated across tiles in one local metric CRS.
+    """
+    center = polygon.representative_point()
+    local_crs = CRS.from_proj4(
+        f"+proj=aeqd +lat_0={center.y} +lon_0={center.x} +datum=WGS84 +units=m +no_defs"
+    )
+    to_local = Transformer.from_crs("EPSG:4326", local_crs, always_xy=True)
+    from_local = Transformer.from_crs(local_crs, "EPSG:4326", always_xy=True)
+    tile_points: list[np.ndarray] = []
+    used_items = 0
+    used_tile_ids: list[str] = []
+    raw_point_count = 0
+    tiles_missing_vertical_units = 0
+    vertical_unit_factors: set[float] = set()
+
+    for path in tile_paths:
+        try:
+            with laspy.open(str(path)) as reader:
+                header = reader.header
+                tile_crs = header.parse_crs()
+                if tile_crs is None:
+                    continue
+                z_to_meters = _vertical_unit_to_meters(header)
+                if z_to_meters is None:
+                    tiles_missing_vertical_units += 1
+                    continue
+                vertical_unit_factors.add(round(z_to_meters, 12))
+                meters_per_unit = (
+                    tile_crs.axis_info[0].unit_conversion_factor if tile_crs.axis_info else 1.0
+                )
+                if not meters_per_unit or not math.isfinite(meters_per_unit):
+                    continue
+                to_tile = Transformer.from_crs("EPSG:4326", tile_crs, always_xy=True)
+                projected_polygon = _transform_polygon(polygon, to_tile)
+                query_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
+                q_minx, q_miny, q_maxx, q_maxy = query_polygon.bounds
+                kept: list[np.ndarray] = []
+                for chunk in reader.chunk_iterator(1_000_000):
+                    x = np.asarray(chunk.x)
+                    y = np.asarray(chunk.y)
+                    z = np.asarray(chunk.z) * z_to_meters
+                    classifications = np.asarray(chunk.classification)
+                    mask = (
+                        (classifications == 6)
+                        & np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+                        & (x >= q_minx) & (x <= q_maxx)
+                        & (y >= q_miny) & (y <= q_maxy)
+                    )
+                    if not mask.any():
+                        continue
+                    xs, ys, zs = x[mask], y[mask], z[mask]
+                    inside = contains_xy(query_polygon, xs, ys)
+                    if not inside.any():
+                        continue
+                    kept.append(np.column_stack((xs[inside], ys[inside], zs[inside])))
+            if not kept:
+                continue
+            coords = np.vstack(kept)
+            if len(coords) < MIN_ROOF_POINTS:
+                continue
+            to_wgs84 = Transformer.from_crs(tile_crs, "EPSG:4326", always_xy=True)
+            lon, lat = to_wgs84.transform(coords[:, 0], coords[:, 1])
+            local_x, local_y = to_local.transform(lon, lat)
+            tile_points.append(np.column_stack((local_x, local_y, coords[:, 2])))
+            raw_point_count += len(coords)
+            used_items += 1
+            used_tile_ids.append(path.name)
+        except Exception:
+            # One unavailable/corrupt tile must not prevent other tiles being used.
+            continue
+
+    if not tile_points:
+        return [], {
+            "tiles_used": 0,
+            "building_class_points": 0,
+            "tiles_missing_vertical_units": tiles_missing_vertical_units,
+            "reason": "No USGS LAZ tile yielded enough building-classified points for this footprint.",
+        }
+
+    combined = np.vstack(tile_points)
+    unique_points = _deduplicate_lidar_points(combined)
+    all_facets, edge_lengths = _facets_from_local_points(unique_points, polygon, to_local, from_local)
+    return all_facets, {
+        "edge_lengths_lf": edge_lengths,
+        "tiles_used": used_items,
+        "tile_ids_used": used_tile_ids,
+        "building_class_points": len(unique_points),
+        "raw_building_class_points": raw_point_count,
+        "duplicate_points_removed": raw_point_count - len(unique_points),
+        "tiles_missing_vertical_units": tiles_missing_vertical_units,
+        "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
+    }
+
+
+async def _read_lidar_facets_tnm(
+    polygon: Polygon,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Fallback LiDAR source: USGS Lidar Point Cloud tiles via The National Map.
+
+    Planetary Computer's COPC conversion has no coverage for parts of South
+    Florida (Miami-Dade and Broward included), while the same USGS surveys are
+    published as LAZ tiles through TNM. Tiles are large, so they are cached on
+    disk and reused for every nearby address.
+    """
+    minx, miny, maxx, maxy = polygon.bounds
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(30.0, connect=10.0), headers={"User-Agent": USER_AGENT}
+    ) as client:
+        response = await client.get(
+            TNM_PRODUCTS_URL,
+            params={
+                "datasets": "Lidar Point Cloud (LPC)",
+                "bbox": f"{minx},{miny},{maxx},{maxy}",
+                "max": 12,
+                "outputFormat": "JSON",
+            },
+        )
+        response.raise_for_status()
+        items = response.json().get("items", [])
+    laz_items = [
+        item for item in items
+        if str(item.get("downloadURL", "")).lower().endswith(".laz")
+    ]
+    if not laz_items:
+        return [], {
+            "tnm_products": len(items),
+            "reason": "No USGS Lidar Point Cloud tiles are published for this footprint.",
+        }
+
+    def project_key(item: dict[str, Any]) -> str:
+        parts = str(item.get("title", "")).split()
+        return parts[4] if len(parts) > 4 else ""
+
+    # Prefer the newest survey project; older legacy tiles of the same ground
+    # must not be mixed into one point set.
+    newest = max(laz_items, key=lambda item: str(item.get("dateCreated") or ""))
+    project = project_key(newest)
+    tiles = [
+        item for item in laz_items
+        if project_key(item) == project
+        and float(item.get("sizeInBytes") or 0) <= MAX_TNM_TILE_MB * 1_000_000
+    ][:MAX_TNM_TILES]
+    if not tiles:
+        return [], {
+            "tnm_products": len(items),
+            "reason": "USGS Lidar tiles for this footprint exceed the download size limit.",
+        }
+
+    LIDAR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tile_paths: list[Path] = []
+    for item in tiles:
+        url = str(item["downloadURL"])
+        dest = LIDAR_CACHE_DIR / url.rsplit("/", 1)[-1]
+        if not dest.exists():
+            await _download_tile(url, dest)
+        tile_paths.append(dest)
+
+    facets, meta = _tnm_points_local(polygon, tile_paths)
+    return facets, {
+        "source": "USGS National Map (TNM) Lidar Point Cloud LAZ",
+        "tnm_project": project,
+        "tnm_products": len(items),
+        **meta,
+    }
+
 
 @app.get("/health")
 def health():
@@ -1004,9 +1432,20 @@ async def analyze_roof(request: AnalyzeRequest):
         facets, lidar_meta = _read_lidar_facets(footprint)
     except Exception as exc:
         facets, lidar_meta = [], {"reason": f"3DEP lookup failed: {type(exc).__name__}"}
+    if not facets and lidar_meta.get("stac_items") == 0:
+        # No COPC coverage here (true for Miami-Dade and Broward): fall back
+        # to the same USGS surveys published as LAZ tiles via The National Map.
+        try:
+            tnm_facets, tnm_meta = await _read_lidar_facets_tnm(footprint)
+        except Exception as exc:
+            tnm_facets, tnm_meta = [], {"reason": f"TNM lookup failed: {type(exc).__name__}"}
+        if tnm_facets:
+            facets, lidar_meta = tnm_facets, tnm_meta
+        else:
+            lidar_meta = {**lidar_meta, "tnm_fallback": tnm_meta}
     lidar_area = sum(facet["area_sqft"] for facet in facets)
     status = "lidar_facets" if facets else "footprint_only"
-    # Edge classes and intersections are deliberately not inferred from a ground footprint.
+    edge_lengths_lf = lidar_meta.pop("edge_lengths_lf", None)
     result = {
         "status": status,
         "verification": "unverified_public_data",
@@ -1031,7 +1470,7 @@ async def analyze_roof(request: AnalyzeRequest):
                 max(facets, key=lambda facet: facet["area_sqft"])["pitch_rise_per_12"] if facets else None
             ),
             "facets": facets,
-            "edge_lengths_lf": None,
+            "edge_lengths_lf": edge_lengths_lf if facets else None,
         },
         "fallback": {
             "available": not bool(facets),

@@ -117,6 +117,11 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
         lambda _polygon: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
     )
 
+    async def fake_tnm(_polygon):
+        return [], {"reason": "test stub"}
+
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+
     response = TestClient(roof_service.app).post(
         "/v1/roof/analyze",
         json={"street_address": "Unique endpoint contract test address"},
@@ -320,6 +325,11 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
         "_read_lidar_facets",
         lambda _polygon: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
     )
+
+    async def fake_tnm(_polygon):
+        return [], {"reason": "test stub"}
+
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
     roof_service._RESPONSE_CACHE.clear()
 
     response = TestClient(roof_service.app).post(
@@ -376,6 +386,8 @@ def test_broward_county_footprints_are_used_when_nationwide_provider_has_no_matc
                 return FakeResponse({"features": []})
             if "Broward_BuildingFootPrints" in url:
                 return FakeResponse({"features": [feature]})
+            if "BuildingFootprint2D_gdb" in url:
+                return FakeResponse({"features": []})
             raise AssertionError(f"Unexpected provider URL: {url}")
 
         async def post(self, *args, **kwargs):
@@ -389,6 +401,64 @@ def test_broward_county_footprints_are_used_when_nationwide_provider_has_no_matc
     assert footprint.area == pytest.approx(polygon.area)
     assert metadata["provider"] == "Broward County Building Footprints"
     assert metadata["source_id"] == 77
+
+
+def test_miami_dade_county_footprints_are_used_when_other_providers_have_no_match(monkeypatch):
+    import asyncio
+
+    polygon = Polygon([
+        (-80.34440, 25.74690),
+        (-80.34410, 25.74690),
+        (-80.34410, 25.74720),
+        (-80.34440, 25.74720),
+        (-80.34440, 25.74690),
+    ])
+    feature = {
+        "type": "Feature",
+        "properties": {"OBJECTID": 91246, "UNIQUEID": "D5_Small_Building_707", "SOURCE": "L", "YEARUPDATE": 2018},
+        "geometry": mapping(polygon),
+    }
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None):
+            if "USA_Buildings" in url:
+                return FakeResponse({"features": []})
+            if "Broward_BuildingFootPrints" in url:
+                return FakeResponse({"features": []})
+            if "BuildingFootprint2D_gdb" in url:
+                return FakeResponse({"features": [feature]})
+            raise AssertionError(f"Unexpected provider URL: {url}")
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse({"elements": []})
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeAsyncClient)
+    footprint, metadata = asyncio.run(
+        roof_service.get_footprint(25.74705, -80.34425, "9211 Southwest 24th Terrace")
+    )
+
+    assert footprint.area == pytest.approx(polygon.area)
+    assert metadata["provider"] == "Miami-Dade County Building Footprints"
+    assert metadata["source_id"] == 91246
 
 
 def test_broward_address_point_requires_one_exact_normalized_match(monkeypatch):
@@ -705,3 +775,58 @@ def test_resolve_miramar_parcel_reports_provider_failure(monkeypatch):
     found, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
     assert found is None
     assert evidence == {"status": "provider_error", "provider": "City of Miramar GIS"}
+
+
+def _edge_facet(x0, x1, a, b, c, pitch_degrees=26.57):
+    return {
+        "boundary_xy": [[x0, 0.0], [x1, 0.0], [x1, 10.0], [x0, 10.0], [x0, 0.0]],
+        "plane_model": {"z_equals_ax_plus_by_plus_c": [a, b, c]},
+        "pitch_degrees": pitch_degrees,
+    }
+
+
+def test_edge_lengths_classify_gable_ridge_eaves_and_rakes():
+    from main import _compute_edge_lengths
+
+    facets = [
+        _edge_facet(0.0, 10.0, 0.5, 0.0, 5.0),
+        _edge_facet(10.0, 20.0, -0.5, 0.0, 15.0),
+    ]
+    edges = _compute_edge_lengths(facets)
+
+    assert edges is not None
+    assert edges["ridge"] == pytest.approx(32.8, rel=0.05)
+    assert edges["valley"] == 0.0
+    assert edges["hip"] == 0.0
+    assert edges["eave"] == pytest.approx(65.6, rel=0.05)
+    assert edges["rake"] > 120.0
+
+
+def test_edge_lengths_classify_valley_between_opposing_slopes():
+    from main import _compute_edge_lengths
+
+    facets = [
+        _edge_facet(0.0, 10.0, -0.5, 0.0, 10.0),
+        _edge_facet(10.0, 20.0, 0.5, 0.0, 0.0),
+    ]
+    edges = _compute_edge_lengths(facets)
+
+    assert edges is not None
+    assert edges["valley"] == pytest.approx(32.8, rel=0.05)
+    assert edges["ridge"] == 0.0
+    assert edges["hip"] == 0.0
+
+
+def test_edge_lengths_classify_sloped_peak_as_hip_not_ridge():
+    from main import _compute_edge_lengths
+
+    facets = [
+        _edge_facet(0.0, 10.0, 0.5, 0.3, 5.0),
+        _edge_facet(10.0, 20.0, -0.5, 0.3, 15.0),
+    ]
+    edges = _compute_edge_lengths(facets)
+
+    assert edges is not None
+    assert edges["hip"] == pytest.approx(34.3, rel=0.05)
+    assert edges["ridge"] == 0.0
+    assert edges["valley"] == 0.0

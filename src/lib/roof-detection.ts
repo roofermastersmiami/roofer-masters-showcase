@@ -66,7 +66,16 @@ export const roofDetectionResponseSchema = z.object({
     total_squares: z.number().finite().positive().nullable(),
     dominant_pitch_rise_per_12: z.number().finite().nonnegative().nullable(),
     facets: z.array(facetSchema),
-    edge_lengths_lf: z.null(),
+    edge_lengths_lf: z
+      .object({
+        ridge: z.number().finite().nonnegative(),
+        hip: z.number().finite().nonnegative(),
+        valley: z.number().finite().nonnegative(),
+        eave: z.number().finite().nonnegative(),
+        rake: z.number().finite().nonnegative(),
+        pitch_change: z.number().finite().nonnegative(),
+      })
+      .nullable(),
   }),
   fallback: z.object({
     available: z.boolean(),
