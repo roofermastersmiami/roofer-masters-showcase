@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { createPermitPacketPdf } from "@/lib/permit-packet";
+import { createPermitPacketPdf, displayPermitDate } from "@/lib/permit-packet";
 
 describe("permit summary PDF", () => {
   it("creates a readable PDF containing the supplied permit record", async () => {
@@ -41,5 +41,18 @@ describe("permit summary PDF", () => {
 
     const loaded = await PDFDocument.load(bytes);
     expect(loaded.getPageCount()).toBe(1);
+  });
+});
+
+
+describe("permit expiration date formatting", () => {
+  it("preserves the stored calendar date without timezone conversion", () => {
+    expect(displayPermitDate("2027-11-03")).toBe("November 3, 2027");
+  });
+
+  it("handles missing and malformed date-only values safely", () => {
+    expect(displayPermitDate(null)).toBe("Not recorded");
+    expect(displayPermitDate("not-a-date")).toBe("not-a-date");
+    expect(displayPermitDate("2027-02-30")).toBe("2027-02-30");
   });
 });
