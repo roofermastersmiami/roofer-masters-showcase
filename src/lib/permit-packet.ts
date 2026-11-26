@@ -29,6 +29,29 @@ function display(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+/**
+ * Permit expiration dates are PostgreSQL DATE values, not timestamps.
+ * Parse their calendar components directly so the date cannot shift to the
+ * previous day when a browser is in a timezone west of UTC.
+ */
+export function displayPermitDate(value?: string | null) {
+  if (!value) return "Not recorded";
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), 12);
+  if (
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day)
+  ) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
 export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -83,7 +106,7 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
   write(`CRM status: ${data.status.replaceAll("_", " ")}`);
   write(`Submission recorded: ${display(data.submittedAt)}`);
   write(`Issue date recorded: ${display(data.issuedAt)}`);
-  write(`Expiration date: ${display(data.expiresAt)}`);
+  write(`Expiration date: ${displayPermitDate(data.expiresAt)}`);
   write(`Fee recorded: ${data.feeCents == null ? "Not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(data.feeCents / 100)}`);
   write(`Portal URL entered: ${data.portalUrl || "Not recorded"}`);
   gap();
