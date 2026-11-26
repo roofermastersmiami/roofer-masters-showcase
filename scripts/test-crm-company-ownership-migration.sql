@@ -264,7 +264,7 @@ SELECT public.save_crm_customer(
 
 -- Verify persisted rows with the privileged fixture connection, not the app role.
 RESET ROLE;
-DO $
+DO $$
 DECLARE
   created_customer uuid;
 BEGIN
@@ -279,13 +279,13 @@ BEGIN
       AND company_id='10000000-0000-0000-0000-000000000001') THEN
     RAISE EXCEPTION 'Customer source lead was not linked within Company A';
   END IF;
-END $;
+END $$;
 
 -- Re-enter the restricted role for authorization-negative tests.
 SET ROLE authenticated;
 
 -- A user cannot update a customer owned by another company.
-DO $
+DO $$
 BEGIN
   BEGIN
     PERFORM public.save_crm_customer(jsonb_build_object(
