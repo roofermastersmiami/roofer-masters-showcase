@@ -1254,13 +1254,50 @@ async def _download_tile(url: str, dest: Path) -> None:
     raise last_error if last_error else RuntimeError(f"Tile download failed: {url}")
 
 
+def _select_building_points(
+    coords: np.ndarray,
+    classifications: np.ndarray,
+    ground_z_median: float | None,
+) -> tuple[np.ndarray, str | None]:
+    """Pick roof points from one tile's in-footprint points.
+
+    Prefers ASPRS class 6 (building). Some USGS county deliveries (for
+    example the 2024 Miami-Dade LPC project) ship only ground/unclassified
+    separation and contain no class 6 points at all; for those, fall back
+    to non-ground points at least 2 m above the local ground level inside
+    the footprint. The facet fitter's plane segmentation still has to
+    agree with the selected points before anything is reported.
+    """
+    empty = np.empty((0, 3))
+    if len(coords) == 0:
+        return empty, None
+    building = coords[classifications == 6]
+    if len(building) >= MIN_ROOF_POINTS:
+        return building, "asprs_class_6"
+    pool = coords[~np.isin(classifications, [2, 7, 18])]
+    if len(pool) < MIN_ROOF_POINTS:
+        return empty, None
+    ground = (
+        ground_z_median
+        if ground_z_median is not None
+        else float(np.percentile(pool[:, 2], 5))
+    )
+    elevated = pool[pool[:, 2] >= ground + 2.0]
+    if len(elevated) >= MIN_ROOF_POINTS:
+        return elevated, "elevated_non_ground"
+    return empty, None
+
+
 def _tnm_points_local(
     polygon: Polygon, tile_paths: list[Path]
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Read building-class points from downloaded USGS LAZ tiles and fit facets.
+    """Read roof points from downloaded USGS LAZ tiles and fit facets.
 
-    Mirrors the COPC path's discipline: ASPRS class 6 only, explicit vertical
-    units required, points deduplicated across tiles in one local metric CRS.
+    Mirrors the COPC path's discipline: explicit vertical units required,
+    points deduplicated across tiles in one local metric CRS. Point
+    selection prefers ASPRS class 6 and falls back to elevated non-ground
+    points for county deliveries that carry no building classification
+    (see _select_building_points).
     """
     center = polygon.representative_point()
     local_crs = CRS.from_proj4(
@@ -1274,6 +1311,7 @@ def _tnm_points_local(
     raw_point_count = 0
     tiles_missing_vertical_units = 0
     vertical_unit_factors: set[float] = set()
+    point_sources: set[str] = set()
 
     for path in tile_paths:
         try:
@@ -1296,15 +1334,30 @@ def _tnm_points_local(
                 projected_polygon = _transform_polygon(polygon, to_tile)
                 query_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
                 q_minx, q_miny, q_maxx, q_maxy = query_polygon.bounds
+                ground_polygon = projected_polygon.buffer(10.0 / meters_per_unit)
+                g_minx, g_miny, g_maxx, g_maxy = ground_polygon.bounds
                 kept: list[np.ndarray] = []
+                kept_classes: list[np.ndarray] = []
+                ground_zs: list[np.ndarray] = []
                 for chunk in reader.chunk_iterator(1_000_000):
                     x = np.asarray(chunk.x)
                     y = np.asarray(chunk.y)
                     z = np.asarray(chunk.z) * z_to_meters
                     classifications = np.asarray(chunk.classification)
+                    finite = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+                    ground_mask = (
+                        finite
+                        & (classifications == 2)
+                        & (x >= g_minx) & (x <= g_maxx)
+                        & (y >= g_miny) & (y <= g_maxy)
+                    )
+                    if ground_mask.any():
+                        gx, gy, gz = x[ground_mask], y[ground_mask], z[ground_mask]
+                        g_inside = contains_xy(ground_polygon, gx, gy)
+                        if g_inside.any():
+                            ground_zs.append(gz[g_inside])
                     mask = (
-                        (classifications == 6)
-                        & np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+                        finite
                         & (x >= q_minx) & (x <= q_maxx)
                         & (y >= q_miny) & (y <= q_maxy)
                     )
@@ -1315,11 +1368,20 @@ def _tnm_points_local(
                     if not inside.any():
                         continue
                     kept.append(np.column_stack((xs[inside], ys[inside], zs[inside])))
+                    kept_classes.append(classifications[mask][inside])
             if not kept:
                 continue
-            coords = np.vstack(kept)
-            if len(coords) < MIN_ROOF_POINTS:
+            ground_median = (
+                float(np.median(np.concatenate(ground_zs)))
+                if sum(len(part) for part in ground_zs) >= 10
+                else None
+            )
+            coords, source = _select_building_points(
+                np.vstack(kept), np.concatenate(kept_classes), ground_median
+            )
+            if source is None or len(coords) < MIN_ROOF_POINTS:
                 continue
+            point_sources.add(source)
             to_wgs84 = Transformer.from_crs(tile_crs, "EPSG:4326", always_xy=True)
             lon, lat = to_wgs84.transform(coords[:, 0], coords[:, 1])
             local_x, local_y = to_local.transform(lon, lat)
@@ -1336,7 +1398,7 @@ def _tnm_points_local(
             "tiles_used": 0,
             "building_class_points": 0,
             "tiles_missing_vertical_units": tiles_missing_vertical_units,
-            "reason": "No USGS LAZ tile yielded enough building-classified points for this footprint.",
+            "reason": "No USGS LAZ tile yielded enough building-classified or elevated non-ground points for this footprint.",
         }
 
     combined = np.vstack(tile_points)
@@ -1351,6 +1413,9 @@ def _tnm_points_local(
         "duplicate_points_removed": raw_point_count - len(unique_points),
         "tiles_missing_vertical_units": tiles_missing_vertical_units,
         "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
+        "points_source": (
+            point_sources.pop() if len(point_sources) == 1 else "mixed"
+        ),
     }
 
 

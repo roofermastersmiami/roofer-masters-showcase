@@ -894,3 +894,52 @@ def test_download_tile_retries_after_rate_limit(tmp_path, monkeypatch):
     asyncio_module.run(service._download_tile("https://example.test/tile.laz", dest))
     assert attempts == ["https://example.test/tile.laz"] * 2
     assert dest.read_bytes().startswith(b"LASF")
+
+
+def test_select_building_points_prefers_asprs_class_6():
+    import numpy as np
+
+    from main import _select_building_points
+
+    building = np.column_stack(
+        (np.zeros(120), np.zeros(120), np.full(120, 4.0))
+    )
+    elevated = np.column_stack(
+        (np.ones(400), np.ones(400), np.full(400, 5.0))
+    )
+    coords = np.vstack((building, elevated))
+    classes = np.concatenate((np.full(120, 6), np.full(400, 1)))
+    selected, source = _select_building_points(coords, classes, 0.5)
+    assert source == "asprs_class_6"
+    assert len(selected) == 120
+
+
+def test_select_building_points_falls_back_to_elevated_non_ground():
+    import numpy as np
+
+    from main import _select_building_points
+
+    roof = np.column_stack((np.zeros(300), np.zeros(300), np.full(300, 4.2)))
+    ground_level = np.column_stack(
+        (np.ones(50), np.ones(50), np.full(50, 0.6))
+    )
+    coords = np.vstack((roof, ground_level))
+    classes = np.concatenate((np.full(300, 1), np.full(50, 1)))
+    selected, source = _select_building_points(coords, classes, 0.5)
+    assert source == "elevated_non_ground"
+    assert len(selected) == 300
+
+
+def test_select_building_points_rejects_low_and_ground_points():
+    import numpy as np
+
+    from main import _select_building_points
+
+    low = np.column_stack((np.zeros(300), np.zeros(300), np.full(300, 1.2)))
+    selected, source = _select_building_points(low, np.full(300, 1), 0.5)
+    assert source is None
+    assert len(selected) == 0
+    ground = np.column_stack((np.zeros(300), np.zeros(300), np.full(300, 9.0)))
+    selected, source = _select_building_points(ground, np.full(300, 2), 0.5)
+    assert source is None
+    assert len(selected) == 0

@@ -43,7 +43,7 @@ The free host may sleep and cold-start; public data providers can throttle reque
 ## Accuracy and operating limits
 
 - OSM building geometry is a ground/building footprint, not a roof outline.
-- The service uses ASPRS class 6 building points only; unclassified points are not silently treated as roofs.
+- The COPC path uses ASPRS class 6 building points only. The TNM fallback prefers class 6 too, but some county deliveries (for example the 2024 Miami-Dade LPC project) contain no building classification at all — only ground/unclassified separation. For those tiles the service falls back to non-ground points at least 2 m above the local ground level inside the footprint, and the response metadata reports `points_source` (`asprs_class_6`, `elevated_non_ground`, or `mixed`) so the weaker evidence is never silent. Plane fitting still has to agree with the selected points before any facet is reported.
 - RANSAC fits local planes to the available building-classified points. Small, occluded, complex, or low-density facets may be missed.
 - Facet surface area is derived from the fitted plane and point-cloud convex hull. It remains preliminary until checked against imagery and/or on-site measurements.
 - Ridge/hip/valley/eave/rake totals (`roof.edge_lengths_lf`) are computed from the fitted facets' shared-boundary topology: each pair of adjacent planes contributes their true intersection line, classified by a cross-section chord test (peak = ridge when level, hip when sloped; trough = valley), and unshared facet boundary is split into eaves (across the slope) and rakes (along it). Totals are preliminary like the facet areas — they are estimates from public LiDAR, not verified linework, and remain subject to imagery and on-site review.
