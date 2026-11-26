@@ -37,3 +37,39 @@ export function requiresNoticeOfCommencement(
     ? { required: true, reason: "value_exceeds_threshold", thresholdCents }
     : { required: false, reason: "value_at_or_below_threshold", thresholdCents };
 }
+
+export type PermitApplicationStatus =
+  | "draft" | "ready_to_submit" | "submitted" | "issued" | "rejected" | "expired" | "cancelled";
+export type PermitInspectionStatus = "requested" | "scheduled" | "passed" | "failed" | "cancelled";
+
+const permitTransitions: Record<PermitApplicationStatus, readonly PermitApplicationStatus[]> = {
+  draft: ["ready_to_submit", "cancelled"],
+  ready_to_submit: ["submitted", "cancelled"],
+  submitted: ["issued", "rejected", "cancelled"],
+  issued: ["expired"],
+  rejected: [],
+  expired: [],
+  cancelled: [],
+};
+
+const inspectionTransitions: Record<PermitInspectionStatus, readonly PermitInspectionStatus[]> = {
+  requested: ["scheduled", "cancelled"],
+  scheduled: ["passed", "failed", "cancelled"],
+  passed: [],
+  failed: [],
+  cancelled: [],
+};
+
+export function canTransitionPermitApplication(
+  current: PermitApplicationStatus,
+  next: PermitApplicationStatus,
+): boolean {
+  return current === next || permitTransitions[current].includes(next);
+}
+
+export function canTransitionPermitInspection(
+  current: PermitInspectionStatus,
+  next: PermitInspectionStatus,
+): boolean {
+  return current === next || inspectionTransitions[current].includes(next);
+}
