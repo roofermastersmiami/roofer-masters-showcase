@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { canTransitionPermitApplication, canTransitionPermitInspection } from "@/lib/permitting-rules";
+import { canCreatePermitApplication, canCreatePermitInspection, canTransitionPermitApplication, canTransitionPermitInspection } from "@/lib/permitting-rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const applicationStatuses = [
@@ -83,6 +83,9 @@ export const createPermitApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => applicationInput.parse(raw))
   .handler(async ({ data, context }) => {
+    if (!canCreatePermitApplication(data.application_status)) {
+      throw new Error("New permit applications must start as drafts. Record submission and issuance through the permit workflow.");
+    }
     const { db, companyId } = await permitContext(context.userId);
     const { data: job } = await db.from("roof_jobs").select("id").eq("id", data.roof_job_id).eq("company_id", companyId).maybeSingle();
     if (!job) throw new Error("Select a roofing job belonging to your company.");
@@ -165,6 +168,9 @@ export const createPermitInspection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => inspectionInput.parse(raw))
   .handler(async ({ data, context }) => {
+    if (!canCreatePermitInspection(data.scheduling_status)) {
+      throw new Error("New inspections must start as requested. Confirm an appointment before recording an outcome.");
+    }
     const { db, companyId } = await permitContext(context.userId);
     const { data: application } = await db.from("roof_permit_applications").select("id")
       .eq("id", data.application_id).eq("company_id", companyId).maybeSingle();
