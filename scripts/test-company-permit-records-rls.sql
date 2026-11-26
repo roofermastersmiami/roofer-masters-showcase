@@ -181,4 +181,56 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+
+-- Non-admin company members must not update or delete permit records.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
+DO $ BEGIN
+  UPDATE public.roof_permit_applications
+    SET notes='unauthorized edit'
+    WHERE id='50000000-0000-0000-0000-000000000001';
+  IF EXISTS (SELECT 1 FROM public.roof_permit_applications
+             WHERE id='50000000-0000-0000-0000-000000000001'
+               AND notes='unauthorized edit') THEN
+    RAISE EXCEPTION 'Non-admin member unexpectedly updated a permit application';
+  END IF;
+  DELETE FROM public.roof_permit_inspections
+    WHERE id='60000000-0000-0000-0000-000000000001';
+  IF NOT EXISTS (SELECT 1 FROM public.roof_permit_inspections
+                 WHERE id='60000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'Non-admin member unexpectedly deleted an inspection';
+  END IF;
+END $;
+RESET ROLE;
+
+-- Company A admins must not create an inspection linked to Company B's application.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $ BEGIN
+  BEGIN
+    INSERT INTO public.roof_permit_inspections(
+      company_id,application_id,inspection_type
+    ) VALUES (
+      '10000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000002',
+      'Cross-company test'
+    );
+    RAISE EXCEPTION 'Cross-company inspection/application relationship unexpectedly accepted';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.roof_permit_applications(
+      company_id,roof_job_id,jurisdiction_name,permit_type,application_status
+    ) VALUES (
+      '10000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000001',
+      'City of Miramar','Roof','issued'
+    );
+    RAISE EXCEPTION 'Issued permit without official number/timestamps unexpectedly accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END $;
+RESET ROLE;
+
 \echo 'PASS: company-scoped permit application/inspection RLS and same-company job linkage'
