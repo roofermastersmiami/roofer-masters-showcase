@@ -208,3 +208,139 @@ BEGIN
 END $$;
 
 \echo 'PASS: migration 0042 backfill, NOT NULL ownership, cross-company FK rejection, and source-lead delete semantics'
+
+
+-- Exercise migration 0044's SECURITY DEFINER RPC with authenticated identities.
+DO $roles$
+BEGIN
+  CREATE ROLE anon NOLOGIN;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$roles$;
+DO $roles$
+BEGIN
+  CREATE ROLE authenticated NOLOGIN;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$roles$;
+DO $roles$
+BEGIN
+  CREATE ROLE service_role NOLOGIN;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END
+$roles$;
+
+ALTER TABLE public.crm_customers
+  ADD COLUMN billing_address text NOT NULL DEFAULT '',
+  ADD COLUMN customer_type text NOT NULL DEFAULT 'residential',
+  ADD COLUMN notes text NOT NULL DEFAULT '';
+
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS uuid
+LANGUAGE sql STABLE
+AS $$
+  SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
+$$;
+GRANT USAGE ON SCHEMA auth TO authenticated;
+GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
+
+INSERT INTO public.crm_company_memberships(company_id,user_id,role) VALUES
+ ('10000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000002','crew');
+
+\\ir ../drizzle/migrations/0044_company_scoped_customer_save.sql
+
+-- Company A can create a customer; migration 0043's trigger creates the paired row.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+SELECT public.save_crm_customer(
+  '{"name":"Company A customer","phone":"3055550101","email":"a@example.com","customer_type":"residential"}'::jsonb
+);
+DO $$
+DECLARE
+  created_customer uuid;
+BEGIN
+  SELECT id INTO created_customer FROM public.crm_customers
+  WHERE name='Company A customer'
+    AND company_id='10000000-0000-0000-0000-000000000001';
+  IF created_customer IS NULL THEN
+    RAISE EXCEPTION 'Company A customer was not created under the actor company';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.leads
+    WHERE customer_id=created_customer
+      AND company_id='10000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'Customer source lead was not linked within Company A';
+  END IF;
+END $$;
+
+-- A user cannot update a customer owned by another company.
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.save_crm_customer(jsonb_build_object(
+      'id','30000000-0000-0000-0000-000000000002',
+      'name','Cross tenant attempt','customer_type','residential'
+    ));
+    RAISE EXCEPTION 'Cross-company customer update unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Cross-company customer update unexpectedly succeeded' THEN RAISE; END IF;
+    IF SQLERRM <> 'Customer unavailable' THEN RAISE; END IF;
+  END;
+END $$;
+
+-- A second membership fails closed, even if one membership is otherwise privileged.
+RESET ROLE;
+INSERT INTO public.crm_company_memberships(company_id,user_id,role) VALUES
+ ('10000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000001','owner');
+SET ROLE authenticated;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.save_crm_customer(
+      '{"name":"Multiple membership attempt","customer_type":"residential"}'::jsonb
+    );
+    RAISE EXCEPTION 'Multiple memberships unexpectedly authorized';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Multiple memberships unexpectedly authorized' THEN RAISE; END IF;
+    IF SQLERRM <> 'A single company membership is required' THEN RAISE; END IF;
+  END;
+END $$;
+
+-- A non-CRM crew role cannot use the customer save RPC.
+RESET ROLE;
+DELETE FROM public.crm_company_memberships
+WHERE company_id='10000000-0000-0000-0000-000000000002'
+  AND user_id='00000000-0000-0000-0000-000000000001';
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.save_crm_customer(
+      '{"name":"Crew role attempt","customer_type":"residential"}'::jsonb
+    );
+    RAISE EXCEPTION 'Crew role unexpectedly authorized';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Crew role unexpectedly authorized' THEN RAISE; END IF;
+    IF SQLERRM <> 'Access denied' THEN RAISE; END IF;
+  END;
+END $$;
+RESET ROLE;
+
+-- Anonymous/no-auth execution is denied before any data access.
+SELECT set_config('request.jwt.claim.sub','',false);
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.save_crm_customer(
+      '{"name":"Anonymous attempt","customer_type":"residential"}'::jsonb
+    );
+    RAISE EXCEPTION 'Unauthenticated save unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM = 'Unauthenticated save unexpectedly succeeded' THEN RAISE; END IF;
+    IF SQLERRM <> 'Authentication required' THEN RAISE; END IF;
+  END;
+END $$;
+
+\\echo 'PASS: migration 0044 authenticated company-scoped customer save, cross-company rejection, multiple-membership denial, role denial, and unauthenticated denial'
