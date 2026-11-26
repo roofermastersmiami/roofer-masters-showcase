@@ -16,6 +16,7 @@ import { Customers } from "./Customers";
 import { Properties } from "./Properties";
 import { ChatInbox } from "./ChatInbox";
 import { Proposals } from "./Proposals";
+import { PdfTools } from "./PdfTools";
 import { Estimates } from "./Estimates";
 import { Jobs } from "./Jobs";
 import { Invoices } from "./Invoices";
@@ -98,6 +99,8 @@ export function CrmSection({ section }: { section: string }) {
       );
     case "estimates":
       return <Estimates leads={leads} onOpenProposals={() => openProposals()} />;
+    case "pdf-tools":
+      return <PdfTools />;
     case "jobs":
       return <Jobs leads={leads} />;
     case "invoices":

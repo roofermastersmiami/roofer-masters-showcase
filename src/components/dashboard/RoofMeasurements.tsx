@@ -104,6 +104,10 @@ export function RoofMeasurements({
   const aerialFn = useServerFn(loadPublicAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
+  const [reportTheme, setReportTheme] = useState<"roofsnap" | "navy" | "charcoal" | "emerald">(
+    "roofsnap",
+  );
+  const [logoSize, setLogoSize] = useState("1");
   const userEditedDrawing = useRef(false);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
@@ -296,6 +300,7 @@ export function RoofMeasurements({
         workspaceAddress,
         photos,
         { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
+        { theme: reportTheme, logoScale: Number(logoSize) },
       );
 
       if (report) {
@@ -652,7 +657,30 @@ export function RoofMeasurements({
       <SectionHeading
         title="Roof reports & 3D drawings"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Report theme"
+              className="h-9 rounded border bg-background px-2 text-sm"
+              value={reportTheme}
+              onChange={(event) =>
+                setReportTheme(event.target.value as "roofsnap" | "navy" | "charcoal" | "emerald")
+              }
+            >
+              <option value="roofsnap">Theme: RoofSnap Classic</option>
+              <option value="navy">Theme: Navy</option>
+              <option value="charcoal">Theme: Charcoal &amp; Orange</option>
+              <option value="emerald">Theme: Emerald</option>
+            </select>
+            <select
+              aria-label="Logo size"
+              className="h-9 rounded border bg-background px-2 text-sm"
+              value={logoSize}
+              onChange={(event) => setLogoSize(event.target.value)}
+            >
+              <option value="0.7">Logo: Small</option>
+              <option value="1">Logo: Medium</option>
+              <option value="1.3">Logo: Large</option>
+            </select>
             <Button
               variant="outline"
               disabled={busy || !measurement}

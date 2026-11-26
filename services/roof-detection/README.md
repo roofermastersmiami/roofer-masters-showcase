@@ -1,6 +1,6 @@
 # Roofer Masters public-data roof detection API
 
-A keyless FastAPI service using OpenStreetMap Nominatim/Overpass for address and ground-footprint discovery, and the public Microsoft Planetary Computer `3dep-lidar-copc` STAC collection for USGS 3DEP point clouds.
+A keyless FastAPI service using OpenStreetMap Nominatim/Overpass plus county building-footprint layers (Broward County and Miami-Dade County official ArcGIS services) for address and ground-footprint discovery, and free USGS LiDAR point clouds for roof planes: the Microsoft Planetary Computer `3dep-lidar-copc` STAC collection where it has coverage, with a fallback to the same USGS surveys published as LAZ tiles through The National Map (TNM) where it does not — notably Miami-Dade and Broward, which have no COPC coverage. TNM tiles are large, so they are downloaded once into a disk cache (`LIDAR_CACHE_DIR`, default `/tmp/roof-lidar-cache`; at most `MAX_TNM_TILES` tiles of `MAX_TNM_TILE_MB` MB per lookup) and reused for every nearby address. Downloads are verified against the LAZ `LASF` signature so an HTML error page can never enter the cache.
 
 ## Run locally
 
@@ -46,5 +46,5 @@ The free host may sleep and cold-start; public data providers can throttle reque
 - The service uses ASPRS class 6 building points only; unclassified points are not silently treated as roofs.
 - RANSAC fits local planes to the available building-classified points. Small, occluded, complex, or low-density facets may be missed.
 - Facet surface area is derived from the fitted plane and point-cloud convex hull. It remains preliminary until checked against imagery and/or on-site measurements.
-- Ridge/hip/valley/eave/rake linework is not returned as verified because a building footprint and disconnected plane hulls cannot reliably distinguish those edge classes without shared-boundary topology and manual/imagery review.
+- Ridge/hip/valley/eave/rake totals (`roof.edge_lengths_lf`) are computed from the fitted facets' shared-boundary topology: each pair of adjacent planes contributes their true intersection line, classified by a cross-section chord test (peak = ridge when level, hip when sloped; trough = valley), and unshared facet boundary is split into eaves (across the slope) and rakes (along it). Totals are preliminary like the facet areas — they are estimates from public LiDAR, not verified linework, and remain subject to imagery and on-site review.
 - Public services have fair-use limits. The service currently caches completed responses in process memory; restarts clear that cache.
