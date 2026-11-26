@@ -344,3 +344,14 @@ BEGIN
 END $$;
 
 \\echo 'PASS: migration 0044 authenticated company-scoped customer save, cross-company rejection, multiple-membership denial, role denial, and unauthenticated denial'
+
+DO $$
+BEGIN
+  IF has_function_privilege('anon','public.save_crm_customer(jsonb)','EXECUTE')
+     OR has_function_privilege('service_role','public.save_crm_customer(jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'Anonymous or service_role unexpectedly has customer-save RPC execution';
+  END IF;
+  IF NOT has_function_privilege('authenticated','public.save_crm_customer(jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'Authenticated role is missing customer-save RPC execution';
+  END IF;
+END $$;
