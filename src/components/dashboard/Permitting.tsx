@@ -45,7 +45,7 @@ function PermitCount({ title, value, description }: { title: string; value: numb
 }
 
 export function Permitting({ leads }: { leads: Lead[] }) {
-  const jobs = useQuery(jobsQuery);
+  const jobs = useQuery({ ...jobsQuery, refetchInterval: 30_000 });
   const [filter, setFilter] = useState("active");
   const records = jobs.data ?? [];
   const counts = useMemo(() => ({
