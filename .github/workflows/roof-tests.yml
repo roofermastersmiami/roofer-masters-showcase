@@ -2,9 +2,9 @@ name: Roofer Masters Roof Tests
 
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings]
+    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, feat/company-owned-crm-records-0042]
   workflow_dispatch:
 
 jobs:
