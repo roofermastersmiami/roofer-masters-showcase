@@ -36,12 +36,10 @@ export function PermitRecords() {
   const [jurisdiction, setJurisdiction] = useState("Miami-Dade County");
   const [permitType, setPermitType] = useState("Roof replacement");
   const [portalUrl, setPortalUrl] = useState("");
-  const [permitNumber, setPermitNumber] = useState("");
   const [permitFee, setPermitFee] = useState("");
   const [applicationNotes, setApplicationNotes] = useState("");
   const [applicationId, setApplicationId] = useState("");
   const [inspectionType, setInspectionType] = useState("Roof dry-in");
-  const [inspectionDate, setInspectionDate] = useState("");
   const [inspectionNotes, setInspectionNotes] = useState("");
   const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
   const [issuanceDates, setIssuanceDates] = useState<Record<string, string>>({});
@@ -60,14 +58,12 @@ export function PermitRecords() {
       permit_type: permitType,
       application_status: "draft",
       portal_url: portalUrl.trim() || null,
-      permit_number: permitNumber.trim() || null,
       fee_cents: permitFee.trim() ? Math.round(Number(permitFee) * 100) : null,
       notes: applicationNotes,
     }),
     onSuccess: async () => {
       toast.success("Permit application draft saved.");
       setPortalUrl("");
-      setPermitNumber("");
       setPermitFee("");
       setApplicationNotes("");
       await refresh();
@@ -78,14 +74,12 @@ export function PermitRecords() {
     mutationFn: () => createPermitInspection({
       application_id: applicationId,
       inspection_type: inspectionType,
-      scheduled_at: inspectionDate ? new Date(inspectionDate).toISOString() : null,
       scheduling_status: "requested",
       notes: inspectionNotes,
     }),
     onSuccess: async () => {
       toast.success("Inspection request recorded. It is not marked municipality-confirmed.");
       setInspectionNotes("");
-      setInspectionDate("");
       await refresh();
     },
     onError: (error) => toast.error(error.message || "Could not save inspection."),
@@ -311,7 +305,6 @@ export function PermitRecords() {
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div><label className={labelClass} htmlFor="permit-number">Permit number (if already assigned)</label><Input id="permit-number" value={permitNumber} onChange={(event) => setPermitNumber(event.target.value)} maxLength={120} /></div>
                     <div><label className={labelClass} htmlFor="permit-fee">Permit fee (USD)</label><Input id="permit-fee" type="number" min="0" step="0.01" value={permitFee} onChange={(event) => setPermitFee(event.target.value)} /></div>
                   </div>
                   <div><label className={labelClass} htmlFor="permit-portal">Official portal link (optional)</label><Input id="permit-portal" type="url" placeholder="https://" value={portalUrl} onChange={(event) => setPortalUrl(event.target.value)} /></div>
@@ -336,10 +329,7 @@ export function PermitRecords() {
                       {applications.map((item) => <option key={item.id} value={item.id}>{item.jurisdiction_name} — {item.permit_type}</option>)}
                     </select>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div><label className={labelClass} htmlFor="inspection-type">Inspection type</label><Input id="inspection-type" value={inspectionType} onChange={(event) => setInspectionType(event.target.value)} maxLength={120} required /></div>
-                    <div><label className={labelClass} htmlFor="inspection-date">Requested date/time (optional)</label><Input id="inspection-date" type="datetime-local" value={inspectionDate} onChange={(event) => setInspectionDate(event.target.value)} /></div>
-                  </div>
+                  <div><label className={labelClass} htmlFor="inspection-type">Inspection type</label><Input id="inspection-type" value={inspectionType} onChange={(event) => setInspectionType(event.target.value)} maxLength={120} required /></div>
                   <div><label className={labelClass} htmlFor="inspection-notes">Notes</label><Input id="inspection-notes" value={inspectionNotes} onChange={(event) => setInspectionNotes(event.target.value)} maxLength={5000} /></div>
                   <Button type="submit" disabled={!applicationId || !inspectionType.trim() || createInspection.isPending}>
                     {createInspection.isPending ? "Saving…" : "Record request"}
