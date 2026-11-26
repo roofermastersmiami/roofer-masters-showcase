@@ -1518,9 +1518,13 @@ async def analyze_roof(request: AnalyzeRequest):
         facets, lidar_meta = _read_lidar_facets(footprint)
     except Exception as exc:
         facets, lidar_meta = [], {"reason": f"3DEP lookup failed: {type(exc).__name__}"}
-    if not facets and lidar_meta.get("stac_items") == 0:
-        # No COPC coverage here (true for Miami-Dade and Broward): fall back
-        # to the same USGS surveys published as LAZ tiles via The National Map.
+    if not facets:
+        # The COPC path produced no facets. That covers both "no COPC items
+        # intersect the footprint" (true for most of Miami-Dade) and the
+        # subtler case where an item intersects the search bbox yet yields no
+        # usable roof points (observed in Broward: stac_items=1, tiles_used=0).
+        # Either way, fall back to the same USGS surveys published as LAZ
+        # tiles via The National Map.
         try:
             tnm_facets, tnm_meta = await _read_lidar_facets_tnm(footprint)
         except Exception as exc:
