@@ -829,6 +829,18 @@ def test_parcel_evidence_is_non_destructive_without_verified_polygon():
     assert evidence["status"] == "provider_error"
 
 
+def test_parcel_evidence_cannot_filter_candidates_with_unverified_geometry():
+    candidate = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "chosen"})
+    unrelated_parcel = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])
+
+    for status in ("identity_mismatch", "provider_error", "not_found", "ambiguous"):
+        candidates, evidence = roof_service._apply_parcel_candidate_evidence(
+            [candidate], unrelated_parcel, {"status": status}
+        )
+        assert candidates == [candidate]
+        assert evidence["status"] == status
+
+
 def test_explicit_candidate_selection_is_not_filtered_by_parcel_evidence():
     selected = (8.0, Polygon([(5, 5), (6, 5), (6, 6), (5, 6)]), {"candidate_id": "explicit"})
     other = (2.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "other"})
