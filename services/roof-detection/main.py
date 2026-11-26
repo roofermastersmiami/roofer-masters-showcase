@@ -396,7 +396,11 @@ def _apply_parcel_candidate_evidence(
 ) -> tuple[list[tuple[float, Polygon, dict[str, Any]]], dict[str, Any]]:
     """Narrow candidates only when exactly one building is substantially inside a verified parcel."""
     evidence = dict(parcel_metadata)
-    if parcel_polygon is None:
+    # A geometry is usable for candidate filtering only when its parcel identity
+    # was independently verified. Keep this guard here as defense in depth:
+    # callers must not narrow buildings with stale or contradictory parcel
+    # geometry merely by passing a polygon.
+    if parcel_polygon is None or evidence.get("status") != "matched":
         return candidates, evidence
 
     parcel_candidates = [
