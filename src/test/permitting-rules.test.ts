@@ -23,7 +23,7 @@ describe("Notice of Commencement threshold", () => {
     expect(requiresNoticeOfCommencement(550_000, 550_000).required).toBe(false);
   });
 
-  it("rejects invalid currency inputs instead of silently rounding", () => {
+  it("marks missing contract values as unknown instead of treating them as zero", () => {\n    expect(requiresNoticeOfCommencement(null)).toEqual({\n      required: false,\n      reason: "value_unknown",\n      thresholdCents: 500_000,\n    });\n    expect(requiresNoticeOfCommencement(undefined).reason).toBe("value_unknown");\n  });\n\n  it("rejects invalid currency inputs instead of silently rounding", () => {
     expect(() => requiresNoticeOfCommencement(-1)).toThrow(RangeError);
     expect(() => requiresNoticeOfCommencement(1.5)).toThrow(RangeError);
     expect(() => requiresNoticeOfCommencement(100, -1)).toThrow(RangeError);
