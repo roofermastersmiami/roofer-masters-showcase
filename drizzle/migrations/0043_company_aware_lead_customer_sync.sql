@@ -26,10 +26,10 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE
   SET
-    company_id = EXCLUDED.company_id,
     name = EXCLUDED.name,
     phone = EXCLUDED.phone,
-    email = EXCLUDED.email;
+    email = EXCLUDED.email
+  WHERE public.crm_customers.company_id = EXCLUDED.company_id;
 
   IF NEW.customer_id IS NULL THEN
     UPDATE public.leads
