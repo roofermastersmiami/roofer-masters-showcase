@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { canTransitionPermitApplication, canTransitionPermitInspection } from "@/lib/permitting-rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const applicationStatuses = [
@@ -101,14 +102,10 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
       .select("application_status,permit_number,submitted_at,issued_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Permit application was not found in your company.");
     const nextStatus = data.changes.application_status;
-    const transitions: Record<string, string[]> = {
-      draft: ["ready_to_submit", "cancelled"],
-      ready_to_submit: ["submitted", "cancelled"],
-      submitted: ["issued", "rejected", "cancelled"],
-      issued: ["expired"], rejected: [], expired: [], cancelled: [],
-    };
-    if (nextStatus && nextStatus !== current.application_status &&
-      !transitions[current.application_status]?.includes(nextStatus)) {
+    if (nextStatus && !canTransitionPermitApplication(
+      current.application_status as import("@/lib/permitting-rules").PermitApplicationStatus,
+      nextStatus,
+    )) {
       throw new Error("Invalid permit application status transition.");
     }
     if (nextStatus === "issued" &&
@@ -151,13 +148,10 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
       .select("scheduling_status").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Inspection was not found in your company.");
     const nextStatus = data.changes.scheduling_status;
-    const transitions: Record<string, string[]> = {
-      requested: ["scheduled", "cancelled"],
-      scheduled: ["passed", "failed", "cancelled"],
-      passed: [], failed: [], cancelled: [],
-    };
-    if (nextStatus && nextStatus !== current.scheduling_status &&
-      !transitions[current.scheduling_status]?.includes(nextStatus)) {
+    if (nextStatus && !canTransitionPermitInspection(
+      current.scheduling_status as import("@/lib/permitting-rules").PermitInspectionStatus,
+      nextStatus,
+    )) {
       throw new Error("Invalid inspection status transition.");
     }
     if (nextStatus === "scheduled" && !data.changes.scheduled_at) {
