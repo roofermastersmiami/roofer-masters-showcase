@@ -319,6 +319,15 @@ def _apply_parcel_candidate_evidence(
     return candidates, evidence
 
 
+def _find_explicit_candidate(
+    candidates: list[tuple[float, Polygon, dict[str, Any]]],
+    selected_candidate_id: str,
+) -> tuple[float, Polygon, dict[str, Any]] | None:
+    """Return only one exact candidate-id match; stale or duplicate ids fail closed."""
+    matches = [row for row in candidates if row[2].get("candidate_id") == selected_candidate_id]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _parcel_requires_explicit_candidate_selection(parcel_metadata: dict[str, Any]) -> bool:
     """A verified parcel with no building overlap must never fall back to nearest-building auto-match."""
     return (
@@ -624,11 +633,8 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # candidates returned in the 409 response. The identifier is tied to the
     # provider, source record, and polygon geometry so stale selections fail closed.
     if selected_candidate_id:
-        selected = [
-            candidate for candidate in candidates
-            if candidate[2].get("candidate_id") == selected_candidate_id
-        ]
-        if len(selected) != 1:
+        selected_candidate = _find_explicit_candidate(candidates, selected_candidate_id)
+        if selected_candidate is None:
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -650,7 +656,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                     ],
                 },
             )
-        _, selected_polygon, selected_metadata = selected[0]
+        _, selected_polygon, selected_metadata = selected_candidate
         return selected_polygon, selected_metadata
 
     # A verified parcel that contains none of the mapped buildings is
