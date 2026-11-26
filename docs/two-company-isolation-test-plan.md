@@ -78,3 +78,22 @@ Do not enable company switching, invitations, external-company onboarding, or co
 3. Every Roofer Masters compatibility case passes.
 4. Automated tests run against a real migrated test database using separate authenticated identities.
 5. CI passes on the exact PR head and a reviewer confirms the deployed schema matches the tested migration.
+
+
+## Roof-report workflow isolation gate
+
+The roof-report workflow is a priority blocker because its current server functions combine authenticated user-scoped reads with privileged service-role writes. Do not treat a successful user-scoped read as authorization for a later admin-client mutation.
+
+Before enabling this workflow for multiple companies, verify all of the following against a migrated test database with separate Company A and Company B identities:
+
+- **Create:** replace the address-first `create_roof_report_request` overloads with one unambiguous company-derived entry point. Derive company identity from the authenticated membership, never from browser input. Normalize address deduplication and advisory-lock keys within company scope. Property, customer, lead, and report creation must all use the same company and reject mixed-company relationships.
+- **Read and update:** every report lookup and mutation must enforce the authenticated user's company at the database boundary. A Company A user guessing a Company B report UUID must receive the same not-found/denied behavior and cause no side effect.
+- **PDF attachment:** verify the report belongs to the caller's company before accepting a file path. Storage authorization must resolve the report row and compare its company; the `roof-report/{report-id}/...` prefix alone is not authorization.
+- **Delete and cleanup:** perform a company-scoped delete and ensure the file cleanup can only remove the PDF referenced by that same authorized report. A failed/denied database delete must never trigger storage deletion.
+- **Transfer:** estimate and material handoffs must prove report, customer, lead, property, job, and estimate all belong to the same company. The job relationship must be protected by database constraints/RLS, not only matching IDs in application code.
+- **Overloads and grants:** enumerate every deployed signature of `create_roof_report_request`; test EXECUTE grants separately for PUBLIC, anon, authenticated, and service_role. Remove obsolete overloads only after callers and deployed schema have been reconciled.
+- **Compatibility:** verify current Roofer Masters users can create, update, attach, review, transfer, and delete reports, and that existing PDFs remain accessible to authorized users.
+
+Required negative cases: A creates against B's address/property; A updates B's report; A attaches a PDF to B's report; A lists/signs/downloads/deletes B's PDF; A deletes B's report; A transfers B's report to an A job; and B performs the symmetric attempts against A. Assert zero database and storage side effects for every denial.
+
+**Current implementation finding (reviewed 2026-11-26):** `createRoofOrder` calls the six-argument legacy RPC; `updateRoofOrder`, `attachRoofOrderPdf`, and `deleteRoofOrder` use `supabaseAdmin` for mutations without an explicit company predicate. The legacy create RPC performs address-based property lookup without company scope, and the current report storage policy is not parent-company scoped. These paths remain blocked until schema, RPC, RLS, storage policy, and two-company tests are implemented together.
