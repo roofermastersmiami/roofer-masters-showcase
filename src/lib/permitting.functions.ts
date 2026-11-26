@@ -97,6 +97,26 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => z.object({ id: z.string().uuid(), changes: applicationInput.partial().omit({ roof_job_id: true }) }).parse(raw))
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
+    const { data: current, error: currentError } = await db.from("roof_permit_applications")
+      .select("application_status").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+    if (currentError || !current) throw new Error("Permit application was not found in your company.");
+    const nextStatus = data.changes.application_status;
+    const transitions: Record<string, string[]> = {
+      draft: ["ready_to_submit", "cancelled"],
+      ready_to_submit: ["submitted", "cancelled"],
+      submitted: ["issued", "rejected", "cancelled"],
+      issued: ["expired"], rejected: [], expired: [], cancelled: [],
+    };
+    if (nextStatus && nextStatus !== current.application_status &&
+      !transitions[current.application_status]?.includes(nextStatus)) {
+      throw new Error("Invalid permit application status transition.");
+    }
+    if (nextStatus === "issued" && (!data.changes.permit_number?.trim() || !data.changes.issued_at)) {
+      throw new Error("Issuance requires an official permit number and issue date.");
+    }
+    if (nextStatus === "submitted" && !data.changes.submitted_at) {
+      throw new Error("Submission requires the actual submission timestamp.");
+    }
     const { data: saved, error } = await db.from("roof_permit_applications")
       .update(data.changes).eq("id", data.id).eq("company_id", companyId).select("*").maybeSingle();
     if (error || !saved) throw new Error("Could not update this permit application.");
@@ -123,6 +143,25 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => z.object({ id: z.string().uuid(), changes: inspectionInput.partial().omit({ application_id: true }) }).parse(raw))
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
+    const { data: current, error: currentError } = await db.from("roof_permit_inspections")
+      .select("scheduling_status").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+    if (currentError || !current) throw new Error("Inspection was not found in your company.");
+    const nextStatus = data.changes.scheduling_status;
+    const transitions: Record<string, string[]> = {
+      requested: ["scheduled", "cancelled"],
+      scheduled: ["passed", "failed", "cancelled"],
+      passed: [], failed: [], cancelled: [],
+    };
+    if (nextStatus && nextStatus !== current.scheduling_status &&
+      !transitions[current.scheduling_status]?.includes(nextStatus)) {
+      throw new Error("Invalid inspection status transition.");
+    }
+    if (nextStatus === "scheduled" && !data.changes.scheduled_at) {
+      throw new Error("Scheduling requires the confirmed appointment date and time.");
+    }
+    if ((nextStatus === "passed" || nextStatus === "failed") && !data.changes.completed_at) {
+      throw new Error("An inspection outcome requires its completion timestamp.");
+    }
     const { data: saved, error } = await db.from("roof_permit_inspections")
       .update(data.changes).eq("id", data.id).eq("company_id", companyId).select("*").maybeSingle();
     if (error || !saved) throw new Error("Could not update this inspection.");
