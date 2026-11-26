@@ -42,7 +42,7 @@ BEGIN
   )
   RETURNING id INTO lid;
 
-  IF p_total IS NOT NULL THEN
+  IF p_total > 0 THEN
     INSERT INTO public.roof_estimates(lead_id,title,category,inputs,total_cents)
     VALUES(lid,'Instant roof estimate',p_category,p_qualification,p_total);
   END IF;
