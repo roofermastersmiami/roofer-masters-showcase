@@ -1260,6 +1260,10 @@ async def analyze_roof(request: AnalyzeRequest):
             **_footprint_match_fields(footprint_meta),
             "polygon_geojson": mapping(footprint),
             "building_tags": footprint_meta.get("building_tags", {}),
+            # Preserve the candidate and parcel evidence used to accept this
+            # outline so the CRM can display an auditable match decision.
+            "candidate_id": footprint_meta.get("candidate_id"),
+            "parcel_match": footprint_meta.get("parcel_match"),
         },
         "lidar": {"source": "Microsoft Planetary Computer / USGS 3DEP COPC", **lidar_meta},
         "roof": {
