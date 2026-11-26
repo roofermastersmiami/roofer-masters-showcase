@@ -48,6 +48,8 @@ describe("permit summary PDF", () => {
 describe("permit expiration date formatting", () => {
   it("preserves the stored calendar date without timezone conversion", () => {
     expect(displayPermitDate("2027-11-03")).toBe("November 3, 2027");
+    expect(displayPermitDate("2024-02-29")).toBe("February 29, 2024");
+    expect(displayPermitDate("2025-02-29")).toBe("2025-02-29");
   });
 
   it("handles missing and malformed date-only values safely", () => {
