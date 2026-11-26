@@ -3,6 +3,8 @@ import {
   DEFAULT_NOC_THRESHOLD_CENTS,
   getRecordedBudgetForNocScreening,
   requiresNoticeOfCommencement,
+  canTransitionPermitApplication,
+  canTransitionPermitInspection,
 } from "@/lib/permitting-rules";
 
 describe("Notice of Commencement threshold", () => {
@@ -51,5 +53,36 @@ describe("Notice of Commencement threshold", () => {
       RangeError,
     );
     expect(() => requiresNoticeOfCommencement(null, -1)).toThrow(RangeError);
+  });
+});
+
+describe("permit application status transitions", () => {
+  it("allows only intended forward and cancellation paths", () => {
+    expect(canTransitionPermitApplication("draft", "ready_to_submit")).toBe(true);
+    expect(canTransitionPermitApplication("ready_to_submit", "submitted")).toBe(true);
+    expect(canTransitionPermitApplication("submitted", "issued")).toBe(true);
+    expect(canTransitionPermitApplication("submitted", "rejected")).toBe(true);
+    expect(canTransitionPermitApplication("issued", "expired")).toBe(true);
+    expect(canTransitionPermitApplication("draft", "issued")).toBe(false);
+    expect(canTransitionPermitApplication("issued", "submitted")).toBe(false);
+    expect(canTransitionPermitApplication("rejected", "draft")).toBe(false);
+    expect(canTransitionPermitApplication("cancelled", "submitted")).toBe(false);
+  });
+  it("allows unchanged state when editing details", () => {
+    expect(canTransitionPermitApplication("submitted", "submitted")).toBe(true);
+  });
+});
+
+describe("inspection status transitions", () => {
+  it("requires scheduling before inspection outcomes", () => {
+    expect(canTransitionPermitInspection("requested", "scheduled")).toBe(true);
+    expect(canTransitionPermitInspection("scheduled", "passed")).toBe(true);
+    expect(canTransitionPermitInspection("scheduled", "failed")).toBe(true);
+    expect(canTransitionPermitInspection("requested", "passed")).toBe(false);
+    expect(canTransitionPermitInspection("passed", "failed")).toBe(false);
+    expect(canTransitionPermitInspection("cancelled", "scheduled")).toBe(false);
+  });
+  it("allows unchanged state when saving confirmation details", () => {
+    expect(canTransitionPermitInspection("scheduled", "scheduled")).toBe(true);
   });
 });
