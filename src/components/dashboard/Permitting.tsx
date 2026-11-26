@@ -25,7 +25,7 @@ function permitLabel(status: string) {
   return permitStatuses.find((item) => item.value === status)?.label ?? "Unknown";
 }
 
-function formatDate(value: string | null) {
+function formatCurrency(cents: number | null | undefined) {\n  if (cents == null) return "Value not recorded";\n  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);\n}\n\nfunction formatDate(value: string | null) {
   if (!value) return "Not scheduled";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -93,7 +93,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
           <CardTitle className="text-base">Permit status pipeline</CardTitle>
           <CardDescription>
             This is a view of the existing job-level status only. It does not yet track permit IDs,
-            jurisdiction application records, correction notices, or official portal responses. The NOC flag is a preliminary $5,000 value-threshold reminder only; verify the applicable jurisdiction rule before relying on it.
+            jurisdiction application records, correction notices, or official portal responses. The NOC review uses a preliminary $5,000 value threshold only. A missing job value is flagged for review; confirm the current jurisdiction-specific requirement before relying on this reminder.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
