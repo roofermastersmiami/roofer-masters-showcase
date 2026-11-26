@@ -361,7 +361,7 @@ async def resolve_miramar_situs_folio(address: str) -> tuple[str | None, dict[st
         "TRL", "TRAIL", "PKWY", "PARKWAY", "HWY", "HIGHWAY",
     }
     street_tokens = [
-        re.sub(r"^(\\d+)(?:ST|ND|RD|TH)$", r"\\1", token)
+        token[:-2] if re.fullmatch(r"[0-9]+(?:ST|ND|RD|TH)", token) else token
         for token in tokens[1:]
     ]
     street_token = next((token for token in street_tokens if token not in excluded_tokens), "")
