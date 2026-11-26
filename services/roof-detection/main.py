@@ -44,6 +44,18 @@ MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
 # detection of claimed area rather than a distinct roof plane.
 MIN_FACET_AREA_SQFT = float(os.getenv("MIN_FACET_AREA_SQFT", "25"))
 MIN_FACET_REMAINING_FRACTION = float(os.getenv("MIN_FACET_REMAINING_FRACTION", "0.35"))
+# Pools selected from unclassified tiles (the elevated non-ground fallback
+# in _select_building_points) mix roof returns with above-ground clutter —
+# tree canopy overhanging the eaves, patio structures, multi-surface
+# returns — that shares no plane with the roof and pulls the facet fitter
+# toward shallow compromise planes. Before fitting, such a pool is refined
+# in plan-view cells (see _planar_refine_mask): a cell contributes points
+# only when one plane explains it tightly, and only points close to that
+# plane survive.
+PLANAR_REFINE_CELL_M = float(os.getenv("PLANAR_REFINE_CELL_M", "1.5"))
+PLANAR_REFINE_MIN_POINTS = int(os.getenv("PLANAR_REFINE_MIN_POINTS", "12"))
+PLANAR_REFINE_MAX_RMSE_M = float(os.getenv("PLANAR_REFINE_MAX_RMSE_M", "0.12"))
+PLANAR_REFINE_MAX_RESIDUAL_M = float(os.getenv("PLANAR_REFINE_MAX_RESIDUAL_M", "0.15"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -1362,6 +1374,46 @@ def _select_building_points(
     return empty, None
 
 
+def _planar_refine_mask(points_m: np.ndarray) -> np.ndarray:
+    """Mark points that sit on a locally planar sheet, in metric XYZ.
+
+    The pool is gridded in plan view; each cell with enough points is fit
+    with a single plane. A cell whose fit is loose (high RMSE) mixes two
+    surfaces or clutter — canopy over a roof, a patio cover meeting a
+    wall — and contributes nothing. In a tight cell, only points within
+    PLANAR_REFINE_MAX_RESIDUAL_M of the cell plane are kept, dropping
+    spikes above or below the sheet. Roof faces are locally planar, so
+    they survive; hip/ridge straddle cells and vegetation do not. Cells
+    with too few points to judge are dropped as well: at ordinary survey
+    density they are isolated returns, not measurable roof.
+    """
+    keep = np.zeros(len(points_m), dtype=bool)
+    if len(points_m) < PLANAR_REFINE_MIN_POINTS:
+        return np.ones(len(points_m), dtype=bool)
+    origin_x = float(points_m[:, 0].min())
+    origin_y = float(points_m[:, 1].min())
+    cell_x = ((points_m[:, 0] - origin_x) / PLANAR_REFINE_CELL_M).astype(int)
+    cell_y = ((points_m[:, 1] - origin_y) / PLANAR_REFINE_CELL_M).astype(int)
+    cells: dict[tuple[int, int], list[int]] = {}
+    for index, key in enumerate(zip(cell_x.tolist(), cell_y.tolist())):
+        cells.setdefault(key, []).append(index)
+    for indices in cells.values():
+        if len(indices) < PLANAR_REFINE_MIN_POINTS:
+            continue
+        idx = np.asarray(indices)
+        cell_points = points_m[idx]
+        try:
+            model = LinearRegression().fit(cell_points[:, :2], cell_points[:, 2])
+        except (ValueError, FloatingPointError):
+            continue
+        residuals = cell_points[:, 2] - model.predict(cell_points[:, :2])
+        rmse = float(np.sqrt(np.mean(np.square(residuals))))
+        if rmse > PLANAR_REFINE_MAX_RMSE_M:
+            continue
+        keep[idx[np.abs(residuals) <= PLANAR_REFINE_MAX_RESIDUAL_M]] = True
+    return keep
+
+
 def _tnm_points_local(
     polygon: Polygon, tile_paths: list[Path]
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -1371,7 +1423,10 @@ def _tnm_points_local(
     points deduplicated across tiles in one local metric CRS. Point
     selection prefers ASPRS class 6 and falls back to elevated non-ground
     points for county deliveries that carry no building classification
-    (see _select_building_points).
+    (see _select_building_points). Fallback pools are additionally passed
+    through a local-planarity refinement (see _planar_refine_mask) so
+    canopy and other non-planar clutter cannot pull facet fits off the
+    roof planes; class 6 pools are trusted as delivered.
     """
     center = polygon.representative_point()
     local_crs = CRS.from_proj4(
@@ -1386,6 +1441,7 @@ def _tnm_points_local(
     tiles_missing_vertical_units = 0
     vertical_unit_factors: set[float] = set()
     point_sources: set[str] = set()
+    planar_points_removed = 0
 
     for path in tile_paths:
         try:
@@ -1455,6 +1511,19 @@ def _tnm_points_local(
             )
             if source is None or len(coords) < MIN_ROOF_POINTS:
                 continue
+            if source == "elevated_non_ground":
+                # XY arrive in tile-CRS units; the refinement works in
+                # meters (Z already is). If refinement would starve the
+                # tile below the fitting minimum, keep the unrefined pool
+                # rather than lose the tile entirely.
+                metric = coords * np.array(
+                    [meters_per_unit, meters_per_unit, 1.0]
+                )
+                mask = _planar_refine_mask(metric)
+                if int(mask.sum()) >= MIN_ROOF_POINTS and not bool(mask.all()):
+                    planar_points_removed += int((~mask).sum())
+                    coords = coords[mask]
+                    source = "elevated_non_ground_planar"
             point_sources.add(source)
             to_wgs84 = Transformer.from_crs(tile_crs, "EPSG:4326", always_xy=True)
             lon, lat = to_wgs84.transform(coords[:, 0], coords[:, 1])
@@ -1487,6 +1556,7 @@ def _tnm_points_local(
         "duplicate_points_removed": raw_point_count - len(unique_points),
         "tiles_missing_vertical_units": tiles_missing_vertical_units,
         "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
+        "planar_points_removed": planar_points_removed,
         "points_source": (
             point_sources.pop() if len(point_sources) == 1 else "mixed"
         ),

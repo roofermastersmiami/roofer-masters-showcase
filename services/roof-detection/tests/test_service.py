@@ -1018,3 +1018,79 @@ def test_select_building_points_rejects_low_and_ground_points():
     selected, source = _select_building_points(ground, np.full(300, 2), 0.5)
     assert source is None
     assert len(selected) == 0
+
+
+def _plane_grid(n_side, spacing, slope, base_z, jitter=0.02, seed=7):
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    xs, ys = np.meshgrid(
+        np.arange(n_side) * spacing, np.arange(n_side) * spacing
+    )
+    z = base_z + slope * xs.ravel()
+    if jitter:
+        z = z + rng.normal(0, jitter, len(z))
+    return np.column_stack((xs.ravel(), ys.ravel(), z))
+
+
+def test_planar_refine_removes_canopy_and_keeps_roof_plane():
+    import numpy as np
+
+    from main import _fit_facets, _planar_refine_mask
+
+    roof = _plane_grid(46, 0.3, 0.5, 3.0)  # 6/12 plane, ~2,100 points
+    rng = np.random.default_rng(11)
+    canopy_xy = rng.uniform(4.0, 8.0, size=(240, 2))
+    canopy_z = (
+        3.0 + 0.5 * canopy_xy[:, 0] + rng.uniform(0.8, 2.4, size=240)
+    )
+    canopy = np.column_stack((canopy_xy, canopy_z))
+    pool = np.vstack((roof, canopy))
+
+    mask = _planar_refine_mask(pool)
+    kept = pool[mask]
+    kept_canopy = int(mask[len(roof):].sum())
+    kept_roof = int(mask[: len(roof)].sum())
+    # The rough canopy blob must go; the clean plane must mostly survive.
+    assert kept_canopy <= 12
+    assert kept_roof >= 0.7 * len(roof)
+    facets = _fit_facets(kept)
+    assert facets
+    dominant = max(facets, key=lambda facet: facet["area_sqft"])
+    assert 5.4 <= dominant["pitch_rise_per_12"] <= 6.6
+
+
+def test_planar_refine_keeps_clean_gable_pool():
+    import numpy as np
+
+    from main import _planar_refine_mask
+
+    left = _plane_grid(26, 0.3, 0.25, 3.0, seed=3)
+    right = _plane_grid(26, 0.3, -0.25, 3.0 + 0.25 * 25 * 0.3, seed=4)
+    right[:, 0] += 26 * 0.3
+    pool = np.vstack((left, right))
+    mask = _planar_refine_mask(pool)
+    # Ridge-straddle cells may drop, but the two clean faces survive.
+    assert mask.mean() >= 0.8
+
+
+def test_planar_refine_rejects_non_planar_slab():
+    import numpy as np
+
+    from main import _planar_refine_mask
+
+    rng = np.random.default_rng(5)
+    xy = rng.uniform(0, 12, size=(600, 2))
+    z = rng.uniform(2.0, 5.0, size=600)
+    mask = _planar_refine_mask(np.column_stack((xy, z)))
+    assert mask.mean() <= 0.1
+
+
+def test_planar_refine_passes_small_pools_through():
+    import numpy as np
+
+    from main import _planar_refine_mask
+
+    pool = np.column_stack((np.zeros(10), np.zeros(10), np.full(10, 4.0)))
+    mask = _planar_refine_mask(pool)
+    assert mask.all()
