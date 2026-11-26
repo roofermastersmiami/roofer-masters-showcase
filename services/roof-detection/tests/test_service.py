@@ -981,3 +981,46 @@ def test_resolve_miramar_situs_folio_reports_provider_failure(monkeypatch):
         "status": "provider_error",
         "provider": "City of Miramar Parcel Information",
     }
+
+
+
+def test_geocode_with_provenance_prefers_exact_miramar_address_point_before_nominatim(monkeypatch):
+    import asyncio
+
+    calls = []
+
+    async def no_county_match(_address):
+        calls.append("broward")
+        return None
+
+    async def miramar_match(_address):
+        calls.append("miramar")
+        return (
+            25.98,
+            -80.39,
+            "3062 SW 189 AVE",
+            {
+                "source": "City of Miramar Official Address Points",
+                "parcel_id": "address-layer-id",
+                "address_id": 123,
+                "zip_code": "33029",
+            },
+        )
+
+    async def unexpected_nominatim(_address):
+        calls.append("nominatim")
+        raise AssertionError("Nominatim must not override an exact official Miramar address point")
+
+    monkeypatch.setattr(roof_service, "resolve_broward_address_point", no_county_match)
+    monkeypatch.setattr(roof_service, "resolve_miramar_address_point", miramar_match)
+    monkeypatch.setattr(roof_service, "_geocode_nominatim", unexpected_nominatim, raising=False)
+
+    result = asyncio.run(
+        roof_service.geocode_with_provenance(
+            "3062 Southwest 189th Avenue, Miramar, FL 33029"
+        )
+    )
+
+    assert result[0:3] == (25.98, -80.39, "3062 SW 189 AVE")
+    assert result[3]["source"] == "City of Miramar Official Address Points"
+    assert calls == ["broward", "miramar"]
