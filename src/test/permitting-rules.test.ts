@@ -29,7 +29,9 @@ describe("Notice of Commencement threshold", () => {
     expect(getRecordedBudgetForNocScreening(null)).toBeNull();
     expect(getRecordedBudgetForNocScreening(undefined)).toBeNull();
     expect(getRecordedBudgetForNocScreening(500_001)).toBe(500_001);
-    expect(requiresNoticeOfCommencement(getRecordedBudgetForNocScreening(0)).reason).toBe("value_unknown");
+    expect(requiresNoticeOfCommencement(getRecordedBudgetForNocScreening(0)).reason).toBe(
+      "value_unknown",
+    );
   });
 
   it("marks missing contract values as unknown instead of treating them as zero", () => {
