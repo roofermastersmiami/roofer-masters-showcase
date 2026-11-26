@@ -2,7 +2,7 @@ name: Roofer Masters Roof Tests
 
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042]
+    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046]
   pull_request:
     branches: [main, master, feat/company-owned-crm-records-0042]
   workflow_dispatch:
@@ -59,6 +59,12 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_ownership_test
           psql "postgresql://postgres@localhost:5432/crm_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-crm-company-ownership-migration.sql
+      - name: Run company-scoped customer delete PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_customer_delete_test
+          psql "postgresql://postgres@localhost:5432/crm_customer_delete_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-customer-delete.sql
       - name: Run lint checks (baseline audit)
         run: npm run lint
         continue-on-error: true
