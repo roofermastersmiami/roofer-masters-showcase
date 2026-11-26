@@ -1065,6 +1065,10 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                 component_array = np.asarray(component_points, dtype=float)
                 residuals = component_array[:, 2] - model.predict(component_array[:, :2])
                 fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
+                boundary_perimeter_lf = _facet_boundary_perimeter_lf(
+                    [[float(x), float(y)] for x, y in component.exterior.coords],
+                    [a, b, float(model.intercept_)],
+                )
                 facets.append({
                     "id": f"facet-{len(facets) + 1}",
                     "point_count": len(component_points),
@@ -1081,12 +1085,9 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                         [round(float(x), 3), round(float(y), 3)]
                         for x, y in component.exterior.coords
                     ],
-                    "boundary_perimeter_lf": round(
-                        _facet_boundary_perimeter_lf(
-                            [[float(x), float(y)] for x, y in component.exterior.coords],
-                            [a, b, float(model.intercept_)],
-                        ),
-                        1,
+                    "boundary_perimeter_lf": (
+                        round(boundary_perimeter_lf, 1)
+                        if boundary_perimeter_lf is not None else None
                     ),
                 })
         remaining = remaining[~inliers]
