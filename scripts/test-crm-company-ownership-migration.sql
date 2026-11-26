@@ -33,6 +33,9 @@ CREATE TABLE public.crm_properties (
   id uuid PRIMARY KEY,
   customer_id uuid REFERENCES public.crm_customers(id)
 );
+-- Match the production crm_properties natural-key constraint from migration 0013.
+ALTER TABLE public.crm_properties
+  ADD CONSTRAINT crm_properties_customer_id_address_key UNIQUE (customer_id,address);
 CREATE TABLE public.roof_report_orders (
   id uuid PRIMARY KEY,
   customer_id uuid REFERENCES public.crm_customers(id),
