@@ -8,6 +8,11 @@ describe("trusted public lead company routing", () => {
     expect(resolvePublicLeadCompanyId(COMPANY_ID)).toBe(COMPANY_ID);
   });
 
+  it("accepts uppercase UUID characters", () => {
+    const uppercase = COMPANY_ID.toUpperCase();
+    expect(resolvePublicLeadCompanyId(uppercase)).toBe(uppercase);
+  });
+
   it("trims deployment configuration whitespace", () => {
     expect(resolvePublicLeadCompanyId(` ${COMPANY_ID} `)).toBe(COMPANY_ID);
   });
