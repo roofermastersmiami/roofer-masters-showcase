@@ -326,6 +326,35 @@ def test_ransac_separates_two_adjacent_roof_slopes_sharing_a_ridge():
 
 
 
+def test_ransac_overlapping_planes_do_not_double_count_shared_area():
+    # Two distinct planes whose point regions overlap in plan view (the
+    # classic double-detection: a second plane fitted underneath the first)
+    # produce hulls that stack on the same ground area. Summing both hulls
+    # would count the overlap twice; the largest-first hull subtraction must
+    # keep the combined area at the single-plane size instead.
+    rng = np.random.default_rng(7)
+    x1, y1 = np.meshgrid(np.linspace(0, 20, 26), np.linspace(0, 10, 13))
+    first = np.column_stack((x1.ravel(), y1.ravel(), (0.5 * x1 + 12.0).ravel()))
+    first[:, 2] += rng.normal(0, 0.01, len(first))
+    # Opposing slope crossing the first plane at its ridge; its points span
+    # x in [5, 20], so 75% of its hull overlaps the first plane's hull.
+    x2, y2 = np.meshgrid(np.linspace(5, 20, 16), np.linspace(0, 10, 13))
+    second = np.column_stack((x2.ravel(), y2.ravel(), (-0.5 * x2 + 22.0).ravel()))
+    second[:, 2] += rng.normal(0, 0.01, len(second))
+
+    single = _fit_facets(first)
+    combined = _fit_facets(np.vstack((first, second)))
+
+    assert single
+    single_area = sum(facet["area_sqft"] for facet in single)
+    combined_area = sum(facet["area_sqft"] for facet in combined)
+    # The overlapping detection must not inflate the total beyond the
+    # single-plane measurement (small tolerance for hull edge effects).
+    assert combined_area <= single_area * 1.10
+    # And the resolution must not throw the roof away either.
+    assert combined_area >= single_area * 0.80
+
+
 def test_street_address_normalization_matches_directional_and_suffix_variants():
     from main import _normalize_street_address
 

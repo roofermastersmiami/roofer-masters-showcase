@@ -37,6 +37,13 @@ USER_AGENT = os.getenv("ROOF_SERVICE_USER_AGENT", "RooferMastersCRM/1.0 (roof-re
 MAX_STAC_ITEMS = int(os.getenv("MAX_STAC_ITEMS", "8"))
 MIN_ROOF_POINTS = int(os.getenv("MIN_ROOF_POINTS", "80"))
 MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
+# Facet hulls are resolved largest-first and each hull gives up the area
+# already claimed by earlier facets (see _fit_facets). A remainder below
+# MIN_FACET_AREA_SQFT is a subtraction sliver, and a facet that keeps less
+# than MIN_FACET_REMAINING_FRACTION of its clipped hull is a duplicate
+# detection of claimed area rather than a distinct roof plane.
+MIN_FACET_AREA_SQFT = float(os.getenv("MIN_FACET_AREA_SQFT", "25"))
+MIN_FACET_REMAINING_FRACTION = float(os.getenv("MIN_FACET_REMAINING_FRACTION", "0.35"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -788,9 +795,11 @@ def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer,
 
 def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
     remaining = points.copy()
-    facets: list[dict[str, Any]] = []
+    # Clipped hull components from every fitted plane, resolved into facets
+    # only after the plane loop (see the overlap pass at the end).
+    candidates: list[dict[str, Any]] = []
     for plane_index in range(MAX_PLANES):
-        if len(remaining) < MIN_ROOF_POINTS or len(facets) >= MAX_PLANES:
+        if len(remaining) < MIN_ROOF_POINTS:
             break
         estimator = RANSACRegressor(
             estimator=LinearRegression(),
@@ -826,7 +835,7 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
         # otherwise the hull bridges the gap and overstates roof area.
         labels = DBSCAN(eps=1.5, min_samples=3).fit_predict(selected[:, :2])
         for label in sorted(set(labels.tolist())):
-            if label < 0 or len(facets) >= MAX_PLANES:
+            if label < 0:
                 continue
             cluster = selected[labels == label]
             if len(cluster) < MIN_ROOF_POINTS:
@@ -846,7 +855,7 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                 else [part for part in getattr(bounded, "geoms", []) if part.geom_type == "Polygon"]
             )
             for component in components:
-                if component.is_empty or component.area <= 1e-4 or len(facets) >= MAX_PLANES:
+                if component.is_empty or component.area <= 1e-4:
                     continue
                 component_points = [
                     point
@@ -855,33 +864,98 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                 ]
                 if not component_points:
                     continue
-                horizontal_area = float(component.area)
-                surface_area_sqft = (
-                    horizontal_area
-                    / max(math.cos(math.radians(pitch)), 1e-6)
-                    * 10.7639104167
-                )
-                component_array = np.asarray(component_points, dtype=float)
-                residuals = component_array[:, 2] - model.predict(component_array[:, :2])
-                fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
-                facets.append({
-                    "id": f"facet-{len(facets) + 1}",
+                candidates.append({
+                    "polygon": component,
+                    "cluster": cluster,
                     "point_count": len(component_points),
-                    "fit_rmse_m": round(fit_rmse_m, 4),
-                    "pitch_degrees": round(pitch, 2),
-                    "pitch_rise_per_12": round(pitch_rise, 2),
-                    "azimuth_degrees": round(azimuth, 1),
-                    "area_sqft": round(surface_area_sqft, 1),
-                    "squares": round(surface_area_sqft / 100.0, 3),
-                    "plane_model": {
-                        "z_equals_ax_plus_by_plus_c": [a, b, float(model.intercept_)]
-                    },
-                    "boundary_xy": [
-                        [round(float(x), 3), round(float(y), 3)]
-                        for x, y in component.exterior.coords
-                    ],
+                    "model": model,
+                    "a": a,
+                    "b": b,
+                    "pitch": pitch,
+                    "pitch_rise": pitch_rise,
+                    "azimuth": azimuth,
                 })
         remaining = remaining[~inliers]
+
+    # Hulls of different planes routinely overlap in plan view (a fragmented
+    # near-parallel detection, or a plane fitted across a ridge, extends under
+    # its neighbour), and summing the raw hulls double-counts the overlap —
+    # total facet area can exceed the whole clipped footprint region. Resolve
+    # largest-first: each candidate keeps only the part of its hull that no
+    # earlier (larger) facet has claimed, so the accepted hulls tile the roof
+    # instead of stacking on top of each other.
+    facets: list[dict[str, Any]] = []
+    accepted_union: Any = None
+    for candidate in sorted(candidates, key=lambda item: -item["point_count"]):
+        if len(facets) >= MAX_PLANES:
+            break
+        polygon: Polygon = candidate["polygon"]
+        pitch = float(candidate["pitch"])
+        cos_pitch = max(math.cos(math.radians(pitch)), 1e-6)
+
+        def surface_sqft(part: Polygon) -> float:
+            return float(part.area) / cos_pitch * 10.7639104167
+
+        original_surface_sqft = surface_sqft(polygon)
+        remainder = (
+            polygon if accepted_union is None else polygon.difference(accepted_union)
+        )
+        parts = (
+            [remainder]
+            if remainder.geom_type == "Polygon"
+            else [part for part in getattr(remainder, "geoms", []) if part.geom_type == "Polygon"]
+        )
+        kept = [
+            part
+            for part in parts
+            if not part.is_empty and surface_sqft(part) >= MIN_FACET_AREA_SQFT
+        ]
+        if not kept:
+            continue
+        if (
+            sum(surface_sqft(part) for part in kept)
+            < MIN_FACET_REMAINING_FRACTION * original_surface_sqft
+        ):
+            # What is left is mostly area earlier facets already claimed;
+            # this detection is a duplicate, not another roof plane.
+            continue
+        model = candidate["model"]
+        for part in kept:
+            if len(facets) >= MAX_PLANES:
+                break
+            part_points = [
+                point
+                for point in candidate["cluster"]
+                if part.buffer(0.02).covers(Point(float(point[0]), float(point[1])))
+            ]
+            if not part_points:
+                continue
+            part_array = np.asarray(part_points, dtype=float)
+            residuals = part_array[:, 2] - model.predict(part_array[:, :2])
+            fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
+            surface_area_sqft = surface_sqft(part)
+            facets.append({
+                "id": f"facet-{len(facets) + 1}",
+                "point_count": len(part_points),
+                "fit_rmse_m": round(fit_rmse_m, 4),
+                "pitch_degrees": round(pitch, 2),
+                "pitch_rise_per_12": round(float(candidate["pitch_rise"]), 2),
+                "azimuth_degrees": round(float(candidate["azimuth"]), 1),
+                "area_sqft": round(surface_area_sqft, 1),
+                "squares": round(surface_area_sqft / 100.0, 3),
+                "plane_model": {
+                    "z_equals_ax_plus_by_plus_c": [
+                        float(candidate["a"]),
+                        float(candidate["b"]),
+                        float(model.intercept_),
+                    ]
+                },
+                "boundary_xy": [
+                    [round(float(x), 3), round(float(y), 3)]
+                    for x, y in part.exterior.coords
+                ],
+            })
+            accepted_union = part if accepted_union is None else accepted_union.union(part)
     return facets
 
 def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> np.ndarray:
