@@ -33,7 +33,7 @@ SELECT
   c.id AS company_id,
   c.name AS company_name,
   c.created_by,
-  count(m.user_id) AS membership_count,
+  count(DISTINCT m.user_id) AS membership_count,
   count(*) FILTER (WHERE m.role::text = 'owner') AS owner_count,
   jsonb_object_agg(role_counts.role_name, role_counts.member_count)
     FILTER (WHERE role_counts.role_name IS NOT NULL) AS role_counts
