@@ -190,12 +190,23 @@ export function PermitRecords() {
   };
 
   const openPermitFile = async (path: string) => {
-    const { data, error } = await supabase.storage.from("permit-documents").createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) {
-      toast.error(error?.message || "Could not create a secure document link.");
+    // Open the tab synchronously in the click handler so popup blockers do not
+    // discard it while the signed-URL request is in flight.
+    const documentTab = window.open("about:blank", "_blank");
+    if (!documentTab) {
+      toast.error("Allow pop-ups for this CRM to open permit documents.");
       return;
     }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    documentTab.opener = null;
+    documentTab.document.title = "Opening secure permit document…";
+    try {
+      const { data, error } = await supabase.storage.from("permit-documents").createSignedUrl(path, 60);
+      if (error || !data?.signedUrl) throw error ?? new Error("Could not create a secure document link.");
+      documentTab.location.replace(data.signedUrl);
+    } catch (error) {
+      documentTab.close();
+      toast.error(error instanceof Error ? error.message : "Could not open permit document.");
+    }
   };
 
   const downloadPermitPacket = async (application: (typeof applications)[number]) => {
