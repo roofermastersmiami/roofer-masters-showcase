@@ -1,6 +1,8 @@
 -- Assign unauthenticated public intake to a trusted, server-configured company.
 -- Depends on 0042 company ownership and 0043 lead -> customer/property synchronization.
 -- The company ID is supplied only by server configuration; never trust browser input.
+-- tenant-audit: reviewed — fixed search_path, UUID/existing-company validation,
+-- explicit revocation from PUBLIC/anon/authenticated, service_role-only execution.
 CREATE OR REPLACE FUNCTION public.capture_instant_roof_lead(
   p_lead jsonb,
   p_qualification jsonb,
