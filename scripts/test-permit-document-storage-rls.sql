@@ -80,7 +80,7 @@ RESET ROLE;
 -- Assert the exact authorization predicate independently before exercising RLS.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
-DO $ BEGIN
+DO $$ BEGIN
   IF public.can_manage_permit_document(
     '10000000-0000-0000-0000-000000000002/50000000-0000-0000-0000-000000000002/b.pdf'
   ) THEN
