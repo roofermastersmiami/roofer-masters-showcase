@@ -47,10 +47,11 @@ export function Permitting() {
         <CardHeader>
           <CardTitle className="text-base">Permit records are not connected yet</CardTitle>
           <CardDescription className="max-w-3xl leading-relaxed">
-            This workspace is now part of the existing CRM navigation. It will not display sample
-            permits or claim that packets have been submitted. The permit tables, company-scoped
-            access policies, and private document storage must be provisioned before records can be
-            created or saved.
+            This workspace is owner-only for now because existing roofing-job permit data is not
+            exposed through a team-scoped permitting service. It will not display sample permits or
+            claim that packets have been submitted. Company-scoped permit records, role-checked
+            server access, and private document storage must be provisioned before team workflows
+            or packet saving can be enabled.
           </CardDescription>
         </CardHeader>
       </Card>
