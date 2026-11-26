@@ -421,7 +421,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                           <td className="py-2 tabular-nums">{facet.azimuth_degrees.toFixed(0)}°</td>
                         </tr>
                         <tr className="border-b border-border/60">
-                          <td colSpan={7} className="pb-3 pt-1">
+                          <td colSpan={8} className="pb-3 pt-1">
                             <details className="text-xs">
                               <summary className="cursor-pointer text-muted-foreground">
                                 View measured facet boundary geometry (latitude, longitude,
