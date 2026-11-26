@@ -830,3 +830,8 @@ def test_explicit_candidate_selection_rejects_stale_or_duplicate_ids():
 )
 def test_verified_parcel_mismatch_blocks_distance_auto_selection(evidence, requires_selection):
     assert roof_service._parcel_requires_explicit_candidate_selection(evidence) is requires_selection
+
+
+def test_address_normalization_matches_ordinal_and_non_ordinal_street_numbers():
+    assert roof_service._normalize_street_address("3062 Southwest 189th Avenue") == roof_service._normalize_street_address("3062 SW 189 AVE")
+    assert roof_service._normalize_street_address("3062 Southwest 189th Avenue") != roof_service._normalize_street_address("3062 Southwest 190th Avenue")
