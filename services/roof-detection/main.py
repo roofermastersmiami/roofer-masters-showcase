@@ -20,6 +20,7 @@ from pyproj import CRS, Transformer
 from pystac_client import Client
 from shapely import contains_xy
 from shapely.geometry import MultiPoint, Point, Polygon, mapping, shape
+from shapely.ops import nearest_points
 from shapely.validation import make_valid
 from sklearn.cluster import DBSCAN
 from sklearn.linear_model import LinearRegression, RANSACRegressor
@@ -44,6 +45,19 @@ MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
 # detection of claimed area rather than a distinct roof plane.
 MIN_FACET_AREA_SQFT = float(os.getenv("MIN_FACET_AREA_SQFT", "25"))
 MIN_FACET_REMAINING_FRACTION = float(os.getenv("MIN_FACET_REMAINING_FRACTION", "0.35"))
+# Sequential RANSAC passes can split one physical roof face into several
+# near-parallel fragments: the first pass consumes only part of the face and
+# a later pass fits the rest with a slightly different pitch/offset. Left
+# alone, the fragments' hulls overlap and the resolution pass drops pieces
+# of the face as "duplicates". Candidates whose plane normals agree within
+# MERGE_NORMAL_ANGLE_DEG, whose planes sit within MERGE_PLANE_OFFSET_M of
+# each other (0.107 m ≈ 0.35 ft), and whose clipped hulls overlap or nearly
+# touch (within MERGE_HULL_GAP_M) are therefore merged before resolution:
+# their inlier points are pooled, one plane is refit, and one hull is
+# rebuilt (see _merge_fragmented_candidates).
+MERGE_NORMAL_ANGLE_DEG = float(os.getenv("MERGE_NORMAL_ANGLE_DEG", "4"))
+MERGE_PLANE_OFFSET_M = float(os.getenv("MERGE_PLANE_OFFSET_M", "0.107"))
+MERGE_HULL_GAP_M = float(os.getenv("MERGE_HULL_GAP_M", "1.0"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -793,6 +807,160 @@ def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer,
     return _transform_polygon(polygon, to_xy), to_xy, to_ll
 
 
+def _plane_normal(a: float, b: float) -> np.ndarray:
+    """Unit normal of the plane z = a*x + b*y + c."""
+    normal = np.array([-a, -b, 1.0])
+    return normal / np.linalg.norm(normal)
+
+
+def _candidates_same_face(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    """True when two plane candidates plausibly describe one physical face:
+    near-parallel normals, planes within MERGE_PLANE_OFFSET_M of each other,
+    and clipped hulls that overlap or nearly touch in plan view."""
+    cos_angle = float(np.dot(
+        _plane_normal(first["a"], first["b"]),
+        _plane_normal(second["a"], second["b"]),
+    ))
+    angle_deg = math.degrees(math.acos(max(-1.0, min(1.0, cos_angle))))
+    if angle_deg > MERGE_NORMAL_ANGLE_DEG:
+        return False
+
+    # Two fragments of one face must nearly coincide where they meet, so
+    # the plane separation is measured at the hulls' meeting zone (their
+    # overlap, or the midpoint of the gap between them) — not at each
+    # fragment's own centroid, where two chord fits of one slightly
+    # non-planar face have already diverged by decimetres.
+    intersection = first["polygon"].intersection(second["polygon"])
+    if not intersection.is_empty and intersection.area > 1e-6:
+        anchor = intersection.representative_point()
+    else:
+        near_first, near_second = nearest_points(first["polygon"], second["polygon"])
+        anchor = Point(
+            (near_first.x + near_second.x) / 2.0,
+            (near_first.y + near_second.y) / 2.0,
+        )
+
+    def plane_offset(source: dict[str, Any], target: dict[str, Any]) -> float:
+        # Perpendicular distance from the anchor, lifted onto the source
+        # plane, to the target plane.
+        a, b = target["a"], target["b"]
+        c = float(target["model"].intercept_)
+        z_on_source = (
+            source["a"] * anchor.x + source["b"] * anchor.y
+            + float(source["model"].intercept_)
+        )
+        return abs(a * anchor.x + b * anchor.y + c - z_on_source) / math.sqrt(
+            a * a + b * b + 1.0
+        )
+
+    if max(plane_offset(first, second), plane_offset(second, first)) > MERGE_PLANE_OFFSET_M:
+        return False
+    return first["polygon"].distance(second["polygon"]) <= MERGE_HULL_GAP_M
+
+
+def _candidate_from_points(
+    pooled: np.ndarray,
+    model: LinearRegression,
+    footprint: Polygon | None,
+) -> list[dict[str, Any]]:
+    """Rebuild plane candidates from a pooled point set and one fitted
+    plane, following the same hull/clip/component steps as the RANSAC loop
+    in _fit_facets."""
+    a, b = (float(model.coef_[0]), float(model.coef_[1]))
+    slope = math.hypot(a, b)
+    pitch = math.degrees(math.atan(slope))
+    if pitch > 70:
+        return []
+    hull = MultiPoint(pooled[:, :2]).convex_hull
+    if hull.geom_type != "Polygon" or hull.area <= 1e-4:
+        return []
+    bounded = hull.intersection(footprint.buffer(0.75)) if footprint is not None else hull
+    components = (
+        [bounded]
+        if bounded.geom_type == "Polygon"
+        else [part for part in getattr(bounded, "geoms", []) if part.geom_type == "Polygon"]
+    )
+    rebuilt: list[dict[str, Any]] = []
+    for component in components:
+        if component.is_empty or component.area <= 1e-4:
+            continue
+        component_points = [
+            point
+            for point in pooled
+            if component.buffer(0.02).covers(Point(float(point[0]), float(point[1])))
+        ]
+        if not component_points:
+            continue
+        rebuilt.append({
+            "polygon": component,
+            "cluster": pooled,
+            "point_count": len(component_points),
+            "model": model,
+            "a": a,
+            "b": b,
+            "pitch": pitch,
+            "pitch_rise": slope * 12.0,
+            "azimuth": (math.degrees(math.atan2(-a, -b)) + 360.0) % 360.0,
+        })
+    return rebuilt
+
+
+def _merge_fragmented_candidates(
+    candidates: list[dict[str, Any]],
+    footprint: Polygon | None,
+) -> list[dict[str, Any]]:
+    """Merge plane candidates that are fragments of one physical roof face.
+
+    Candidates linked by _candidates_same_face (transitively) have their
+    inlier points pooled and a single plane refit, so the face enters hull
+    resolution as one candidate spanning the whole face instead of pieces
+    that cannibalize each other as duplicates. Candidates that cannot be
+    refit pass through unchanged.
+    """
+    if len(candidates) < 2:
+        return candidates
+    parent = list(range(len(candidates)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for i in range(len(candidates)):
+        for j in range(i + 1, len(candidates)):
+            if _candidates_same_face(candidates[i], candidates[j]):
+                root_i, root_j = find(i), find(j)
+                if root_i != root_j:
+                    parent[root_j] = root_i
+
+    groups: dict[int, list[int]] = {}
+    for i in range(len(candidates)):
+        groups.setdefault(find(i), []).append(i)
+
+    merged: list[dict[str, Any]] = []
+    for members in groups.values():
+        if len(members) == 1:
+            merged.append(candidates[members[0]])
+            continue
+        pooled = np.unique(
+            np.vstack([candidates[member]["cluster"] for member in members]),
+            axis=0,
+        )
+        rebuilt: list[dict[str, Any]] = []
+        if len(pooled) >= MIN_ROOF_POINTS:
+            try:
+                model = LinearRegression().fit(pooled[:, :2], pooled[:, 2])
+                rebuilt = _candidate_from_points(pooled, model, footprint)
+            except (ValueError, FloatingPointError):
+                rebuilt = []
+        if rebuilt:
+            merged.extend(rebuilt)
+        else:
+            merged.extend(candidates[member] for member in members)
+    return merged
+
+
 def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
     remaining = points.copy()
     # Clipped hull components from every fitted plane, resolved into facets
@@ -876,6 +1044,12 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                     "azimuth": azimuth,
                 })
         remaining = remaining[~inliers]
+
+    # Reunite fragments of one physical face (split across RANSAC passes
+    # into near-parallel candidates) before resolution, so the merged
+    # candidate spans the face instead of its pieces being dropped below
+    # as duplicates of each other.
+    candidates = _merge_fragmented_candidates(candidates, footprint)
 
     # Hulls of different planes routinely overlap in plan view (a fragmented
     # near-parallel detection, or a plane fitted across a ridge, extends under

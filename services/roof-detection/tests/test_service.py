@@ -355,6 +355,74 @@ def test_ransac_overlapping_planes_do_not_double_count_shared_area():
     assert combined_area >= single_area * 0.80
 
 
+def _fragment_candidate(x_range, slope, intercept, y_range=(0.0, 10.0), step=0.5):
+    """Build one plane candidate the way the RANSAC loop in _fit_facets
+    does: a fitted LinearRegression, its inlier grid points, and the convex
+    hull of those points."""
+    from sklearn.linear_model import LinearRegression
+    from shapely.geometry import MultiPoint
+
+    x, y = np.meshgrid(
+        np.arange(x_range[0], x_range[1] + 1e-9, step),
+        np.arange(y_range[0], y_range[1] + 1e-9, step),
+    )
+    points = np.column_stack((x.ravel(), y.ravel(), (slope * x + intercept).ravel()))
+    model = LinearRegression().fit(points[:, :2], points[:, 2])
+    a, b = (float(model.coef_[0]), float(model.coef_[1]))
+    fitted_slope = float(np.hypot(a, b))
+    return {
+        "polygon": MultiPoint(points[:, :2]).convex_hull,
+        "cluster": points,
+        "point_count": len(points),
+        "model": model,
+        "a": a,
+        "b": b,
+        "pitch": float(np.degrees(np.arctan(fitted_slope))),
+        "pitch_rise": fitted_slope * 12.0,
+        "azimuth": (float(np.degrees(np.arctan2(-a, -b))) + 360.0) % 360.0,
+    }
+
+
+def test_merge_fragmented_candidates_reunites_split_face():
+    # One true 6/12 face (z = 0.5x + 12 over x in [0, 20]) detected as two
+    # near-parallel fragments: a later RANSAC pass fit the eastern piece
+    # with a slightly different slope and intercept. The fragments cross
+    # inside their overlap (x in [7, 13]) and their hulls overlap, so they
+    # must merge into ONE candidate spanning the whole face — fed into hull
+    # resolution separately, the smaller fragment's unique territory is
+    # dropped as a "duplicate" and the face loses that area.
+    from main import _merge_fragmented_candidates
+
+    west = _fragment_candidate((0.0, 13.0), 0.50, 12.0)
+    east = _fragment_candidate((7.0, 20.0), 0.47, 12.30)
+
+    merged = _merge_fragmented_candidates([west, east], None)
+
+    assert len(merged) == 1
+    xs = merged[0]["cluster"][:, 0]
+    assert xs.min() == pytest.approx(0.0)
+    assert xs.max() == pytest.approx(20.0)
+    assert merged[0]["point_count"] == merged[0]["cluster"].shape[0]
+    # The refit over the pooled points stays close to the true 6/12 plane.
+    assert merged[0]["pitch_rise"] == pytest.approx(6.0, abs=0.35)
+
+
+def test_merge_fragmented_candidates_keeps_distinct_faces_apart():
+    from main import _merge_fragmented_candidates
+
+    # Opposing slopes of a gable: normals far apart, never one face.
+    left = _fragment_candidate((0.0, 13.0), 0.50, 12.0)
+    right = _fragment_candidate((7.0, 20.0), -0.50, 22.0)
+    assert len(_merge_fragmented_candidates([left, right], None)) == 2
+
+    # Parallel planes half a metre apart (a stepped lower roof section
+    # under the main slope): same normal, but the planes do not coincide
+    # where the hulls overlap, so they stay separate.
+    main_slope = _fragment_candidate((0.0, 13.0), 0.50, 12.0)
+    lower_step = _fragment_candidate((7.0, 20.0), 0.50, 12.50)
+    assert len(_merge_fragmented_candidates([main_slope, lower_step], None)) == 2
+
+
 def test_street_address_normalization_matches_directional_and_suffix_variants():
     from main import _normalize_street_address
 
