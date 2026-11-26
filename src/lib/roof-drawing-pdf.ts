@@ -65,6 +65,46 @@ export async function roofDrawingPdf(
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+  // Shared plan-view mapping for every sketch diagram (cover, pitch,
+  // measurements, area) so all pages draw the same house the same way.
+  const planPoints = d.planes.flatMap((plane) => plane.points);
+  const planMinX = planPoints.length ? Math.min(...planPoints.map((point) => point.x)) : 0;
+  const planMaxX = planPoints.length ? Math.max(...planPoints.map((point) => point.x)) : 1;
+  const planMinZ = planPoints.length ? Math.min(...planPoints.map((point) => point.z)) : 0;
+  const planMaxZ = planPoints.length ? Math.max(...planPoints.map((point) => point.z)) : 1;
+  const makeMapPoint =
+    (box: { x: number; y: number; width: number; height: number }) =>
+    (point: { x: number; z: number }) => {
+      const scale = Math.min(
+        box.width / Math.max(1, planMaxX - planMinX),
+        box.height / Math.max(1, planMaxZ - planMinZ),
+      );
+      return {
+        x: box.x + (point.x - planMinX) * scale + (box.width - (planMaxX - planMinX) * scale) / 2,
+        y: box.y + (point.z - planMinZ) * scale + (box.height - (planMaxZ - planMinZ) * scale) / 2,
+      };
+    };
+  const facetPath = (pts: { x: number; y: number }[]) => {
+    const center = pts.reduce(
+      (acc, point) => ({ x: acc.x + point.x / pts.length, y: acc.y + point.y / pts.length }),
+      { x: 0, y: 0 },
+    );
+    // pdf-lib draws SVG paths with the y axis pointing down, so the y
+    // offsets are negated to keep fills aligned with the PDF-space outlines.
+    const path =
+      pts
+        .map(
+          (point, index) =>
+            `${index === 0 ? "M" : "L"} ${(point.x - center.x).toFixed(2)} ${(-(point.y - center.y)).toFixed(2)}`,
+        )
+        .join(" ") + " Z";
+    return { path, center };
+  };
+  const formatPitch = (pitch: number) => {
+    const rounded = Math.round(pitch * 10) / 10;
+    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}/12`;
+  };
+
   let page: PDFPage;
   let y = 0;
   let pageNumber = 0;
@@ -305,20 +345,20 @@ export async function roofDrawingPdf(
     y -= 20;
   };
 
-  // Branded first-page property cover
+  // First page, RoofSnap-style: the house sketch is the hero. Property and
+  // prepared-by details sit in the header block, a pitch label rides on each
+  // facet, and the company logo sits big at the bottom right.
   const firstPage = addPage();
-  const coverPhoto =
-    photos.find((photo) => /aerial|exterior|property/i.test(photo.category)) ?? photos[0];
-  firstPage.drawText("ROOF MEASUREMENT REPORT", {
+  firstPage.drawText("SKETCH REPORT", {
     x: MARGIN,
-    y: 752,
-    size: 17,
+    y: 748,
+    size: 20,
     font: bold,
     color: NAVY,
   });
-  firstPage.drawText("PROPERTY OVERVIEW  |  MEASUREMENTS", {
+  firstPage.drawText("ROOF MEASUREMENT REPORT", {
     x: MARGIN,
-    y: 733,
+    y: 731,
     size: 8,
     font: bold,
     color: BLUE,
@@ -329,80 +369,85 @@ export async function roofDrawingPdf(
     thickness: 1,
     color: SILVER,
   });
-  let photoBottom = 548;
-  if (coverPhoto) {
-    try {
-      const image =
-        coverPhoto.mime === "image/png"
-          ? await pdf.embedPng(coverPhoto.bytes)
-          : await pdf.embedJpg(coverPhoto.bytes);
-      const fit = image.scaleToFit(PAGE_W - MARGIN * 2, 155);
-      const x = (PAGE_W - fit.width) / 2;
-      const yPhoto = 558 + (155 - fit.height) / 2;
-      firstPage.drawRectangle({
-        x: MARGIN,
-        y: 553,
-        width: PAGE_W - MARGIN * 2,
-        height: 165,
-        color: LIGHT,
-        borderColor: SILVER,
-        borderWidth: 0.8,
-      });
-      firstPage.drawImage(image, { x, y: yPhoto, width: fit.width, height: fit.height });
-      photoBottom = 540;
-    } catch {
-      firstPage.drawText("PROPERTY PHOTO UNAVAILABLE", {
-        x: MARGIN + 12,
-        y: 630,
-        size: 9,
-        font: bold,
-        color: MUTED,
-      });
-    }
-  } else {
-    firstPage.drawRectangle({
-      x: MARGIN,
-      y: 553,
-      width: PAGE_W - MARGIN * 2,
-      height: 165,
-      color: LIGHT,
-      borderColor: SILVER,
-      borderWidth: 0.8,
-    });
-    firstPage.drawText("PROPERTY PHOTO NOT PROVIDED", {
-      x: MARGIN + 12,
-      y: 630,
-      size: 9,
-      font: bold,
-      color: MUTED,
-    });
-  }
-  let coverY = photoBottom - 12;
-  const coverLine = (label: string, value: string) => {
-    firstPage.drawText(safe(label).toUpperCase(), {
-      x: MARGIN,
-      y: coverY,
-      size: 7,
-      font: bold,
-      color: MUTED,
-    });
-    firstPage.drawText(safe(value || "Not provided").slice(0, 76), {
-      x: MARGIN + 112,
-      y: coverY - 1,
-      size: 9,
+  const coverLabel = (label: string, x: number, yTop: number) =>
+    firstPage.drawText(label, { x, y: yTop, size: 7, font: bold, color: MUTED });
+  const coverValue = (value: string, x: number, yTop: number) =>
+    firstPage.drawText(safe(value || "Not provided").slice(0, 58), {
+      x,
+      y: yTop,
+      size: 9.5,
       font: bold,
       color: INK,
     });
-    coverY -= 17;
-  };
-  coverLine("Property address", address);
-  coverLine("Prepared for", customer);
-  coverLine("Prepared by", "ROOFER MASTERS");
-  coverLine(
-    "Report date",
+  coverLabel("PROPERTY", MARGIN, 706);
+  coverValue(customer, MARGIN, 692);
+  coverValue(address, MARGIN, 678);
+  coverLabel("PREPARED BY", 400, 706);
+  coverValue("ROOFER MASTERS", 400, 692);
+  coverLabel("PROJECT DATE", 400, 672);
+  coverValue(
     new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+    400,
+    658,
   );
-  // Keep the cover focused on the property and client details.
+  // The sketch: facet outlines with a pitch label on every facet.
+  firstPage.drawRectangle({
+    x: MARGIN,
+    y: 138,
+    width: PAGE_W - MARGIN * 2,
+    height: 492,
+    color: LIGHT,
+    borderColor: SILVER,
+    borderWidth: 0.8,
+  });
+  const sketchMap = makeMapPoint({
+    x: MARGIN + 14,
+    y: 152,
+    width: PAGE_W - MARGIN * 2 - 28,
+    height: 464,
+  });
+  d.planes.forEach((plane) => {
+    const pts = plane.points.map((point) => sketchMap(point));
+    const { path, center } = facetPath(pts);
+    firstPage.drawSvgPath(path, {
+      x: center.x,
+      y: center.y,
+      color: rgb(0.9, 0.94, 0.98),
+      borderColor: NAVY,
+      borderWidth: 1.1,
+    });
+    pts.forEach((point, index) => {
+      const next = pts[(index + 1) % pts.length];
+      if (next) firstPage.drawLine({ start: point, end: next, thickness: 1.4, color: NAVY });
+    });
+    const pitch = m.planes.find((item) => item.id === plane.id)?.pitch ?? 0;
+    const label = formatPitch(pitch);
+    firstPage.drawText(label, {
+      x: center.x - bold.widthOfTextAtSize(label, 11) / 2,
+      y: center.y - 4,
+      size: 11,
+      font: bold,
+      color: NAVY,
+    });
+  });
+  firstPage.drawText("PRELIMINARY REPORT - VERIFY FIELD CONDITIONS", {
+    x: MARGIN,
+    y: 108,
+    size: 7,
+    font: bold,
+    color: MUTED,
+  });
+  firstPage.drawText(
+    "Pitch labels show each plane's modeled rise over 12. Diagrams and measurements follow inside.",
+    {
+      x: MARGIN,
+      y: 94,
+      size: 7,
+      font,
+      color: MUTED,
+    },
+  );
+  // Company logo, big, at the bottom right of the first page.
   let logoEmbedded = false;
   if (typeof document !== "undefined" && typeof createImageBitmap === "function") {
     try {
@@ -422,10 +467,10 @@ export async function roofDrawingPdf(
         ),
       );
       const logo = await pdf.embedPng(new Uint8Array(await logoBlob.arrayBuffer()));
-      const fit = logo.scaleToFit(150, 48);
+      const fit = logo.scaleToFit(200, 66);
       firstPage.drawImage(logo, {
         x: PAGE_W - MARGIN - fit.width,
-        y: 24,
+        y: 52,
         width: fit.width,
         height: fit.height,
       });
@@ -435,63 +480,102 @@ export async function roofDrawingPdf(
     }
   }
   if (!logoEmbedded) {
-    firstPage.drawText("ROOFER MASTERS", { x: 390, y: 42, size: 12, font: bold, color: NAVY });
-    firstPage.drawText("YOUR ROOF, OUR MASTERPIECE", {
-      x: 390,
-      y: 29,
-      size: 6.5,
+    const brandText = "ROOFER MASTERS";
+    firstPage.drawText(brandText, {
+      x: PAGE_W - MARGIN - bold.widthOfTextAtSize(brandText, 17),
+      y: 84,
+      size: 17,
+      font: bold,
+      color: NAVY,
+    });
+    const taglineText = "YOUR ROOF, OUR MASTERPIECE";
+    firstPage.drawText(taglineText, {
+      x: PAGE_W - MARGIN - font.widthOfTextAtSize(taglineText, 8),
+      y: 68,
+      size: 8,
       font,
       color: MUTED,
     });
   }
-  firstPage.drawText("PRELIMINARY REPORT - VERIFY FIELD CONDITIONS", {
-    x: MARGIN,
-    y: 45,
-    size: 7,
-    font: bold,
-    color: MUTED,
-  });
 
-  // Dedicated pitch diagram page
+  // Dedicated pitch diagram page: facets shaded by pitch, RoofSnap-style.
   addPage();
   drawHeader(page, "SKETCH REPORT | PITCH DIAGRAM");
   y = PAGE_H - 112;
-  section("ROOF PITCH SUMMARY");
+  section("ROOF PITCH DIAGRAM");
   paragraph(
-    "Pitch is calculated from the modeled roof planes. A plane with assumed or preliminary geometry is not a field-verified pitch measurement.",
+    "Each roof plane is shaded by its modeled pitch. Pitch is calculated from the modeled roof planes; a plane with assumed or preliminary geometry is not a field-verified pitch measurement.",
     8,
     false,
     MUTED,
   );
-  const pitchRows = m.planes.map(
-    (plane) =>
-      `${plane.name}: ${plane.pitch.toFixed(1)}:12  |  ${plane.area.toFixed(1)} sq ft  |  ${(plane.area / 100).toFixed(2)} squares`,
+  const pitchPalette = [
+    rgb(0.16, 0.45, 0.75),
+    rgb(0.88, 0.48, 0.12),
+    rgb(0.25, 0.62, 0.35),
+    rgb(0.58, 0.32, 0.72),
+    rgb(0.8, 0.22, 0.27),
+    rgb(0.08, 0.58, 0.62),
+  ];
+  const pitchKey = (pitch: number) => pitch.toFixed(1);
+  const distinctPitches = [...new Set(m.planes.map((plane) => pitchKey(plane.pitch)))].sort(
+    (a, b) => Number(a) - Number(b),
   );
-  pitchRows.forEach((line, index) =>
-    row(line.split(":")[0], line.slice(line.indexOf(":") + 1), index % 2 === 0),
-  );
-  const pitchLabel = m.planes.length ? `${m.planes[0]!.pitch.toFixed(1)}:12` : "Not available";
-  paragraph(`Modeled plane pitch reference: ${pitchLabel}`, 10, true, BLUE);
+  const pitchColor = (pitch: number) =>
+    pitchPalette[distinctPitches.indexOf(pitchKey(pitch)) % pitchPalette.length] ?? BLUE;
+  const pitchBox = { x: MARGIN + 28, y: 300, width: PAGE_W - MARGIN * 2 - 56, height: 320 };
+  const pitchMap = makeMapPoint(pitchBox);
+  d.planes.forEach((plane) => {
+    const measured = m.planes.find((item) => item.id === plane.id);
+    const pts = plane.points.map((point) => pitchMap(point));
+    const { path, center } = facetPath(pts);
+    page.drawSvgPath(path, {
+      x: center.x,
+      y: center.y,
+      color: pitchColor(measured?.pitch ?? 0),
+      borderColor: NAVY,
+      borderWidth: 1.1,
+      opacity: 0.55,
+    });
+    pts.forEach((point, index) => {
+      const next = pts[(index + 1) % pts.length];
+      if (next) page.drawLine({ start: point, end: next, thickness: 1.4, color: NAVY });
+    });
+    const label = formatPitch(measured?.pitch ?? 0);
+    page.drawText(label, {
+      x: center.x - bold.widthOfTextAtSize(label, 11) / 2,
+      y: center.y - 4,
+      size: 11,
+      font: bold,
+      color: INK,
+    });
+  });
+  let pitchLegendY = 268;
+  distinctPitches.forEach((key) => {
+    const planesAtPitch = m.planes.filter((plane) => pitchKey(plane.pitch) === key);
+    const area = planesAtPitch.reduce((sum, plane) => sum + plane.area, 0);
+    page.drawRectangle({
+      x: MARGIN,
+      y: pitchLegendY - 2,
+      width: 14,
+      height: 9,
+      color: pitchColor(Number(key)),
+      opacity: 0.55,
+    });
+    page.drawText(
+      `${formatPitch(Number(key))}  -  ${area.toFixed(1)} sq ft  |  ${(area / 100).toFixed(2)} squares  |  ${planesAtPitch.length} plane${planesAtPitch.length === 1 ? "" : "s"}`,
+      { x: MARGIN + 22, y: pitchLegendY, size: 8.5, font: bold, color: INK },
+    );
+    pitchLegendY -= 18;
+  });
 
   // Dedicated measurements diagram page
   addPage();
   drawHeader(page, "SKETCH REPORT | MEASUREMENTS DIAGRAM");
   y = PAGE_H - 112;
   section("ROOF EDGE CLASSIFICATION DIAGRAM");
-  const allPoints = d.planes.flatMap((plane) => plane.points);
-  const minX = Math.min(...allPoints.map((point) => point.x));
-  const maxX = Math.max(...allPoints.map((point) => point.x));
-  const minZ = Math.min(...allPoints.map((point) => point.z));
-  const maxZ = Math.max(...allPoints.map((point) => point.z));
   const diagram = { x: MARGIN + 28, y: 235, width: PAGE_W - MARGIN * 2 - 56, height: 390 };
-  const scale = Math.min(
-    diagram.width / Math.max(1, maxX - minX),
-    diagram.height / Math.max(1, maxZ - minZ),
-  );
-  const mapPoint = (point: { x: number; z: number }) => ({
-    x: diagram.x + (point.x - minX) * scale + (diagram.width - (maxX - minX) * scale) / 2,
-    y: diagram.y + (point.z - minZ) * scale + (diagram.height - (maxZ - minZ) * scale) / 2,
-  });
+  const mapPoint = makeMapPoint(diagram);
   const edgeColors = {
     eave: rgb(0.1, 0.55, 0.2),
     rake: rgb(0.1, 0.35, 0.85),
@@ -514,6 +598,45 @@ export async function roofDrawingPdf(
       });
     }),
   );
+  // Edge length labels, RoofSnap-style: every unique physical edge is
+  // labeled once at its midpoint with its true 3D length in feet.
+  const labeledSegments = new Map<string, { mid: { x: number; y: number }; length: number }>();
+  d.planes.forEach((plane) =>
+    plane.points.forEach((point, index) => {
+      const next = plane.points[(index + 1) % plane.points.length];
+      if (!next) return;
+      const key = [point, next]
+        .map((p) => `${p.x.toFixed(1)},${p.z.toFixed(1)}`)
+        .sort()
+        .join("|");
+      if (labeledSegments.has(key)) return;
+      const a = mapPoint(point);
+      const b = mapPoint(next);
+      labeledSegments.set(key, {
+        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        length: Math.hypot(next.x - point.x, next.y - point.y, next.z - point.z),
+      });
+    }),
+  );
+  labeledSegments.forEach(({ mid, length }) => {
+    const label = length.toFixed(1);
+    const width = bold.widthOfTextAtSize(label, 6.5) + 5;
+    page.drawRectangle({
+      x: mid.x - width / 2,
+      y: mid.y - 3.5,
+      width,
+      height: 9.5,
+      color: WHITE,
+      opacity: 0.85,
+    });
+    page.drawText(label, {
+      x: mid.x - bold.widthOfTextAtSize(label, 6.5) / 2,
+      y: mid.y - 2.2,
+      size: 6.5,
+      font: bold,
+      color: NAVY,
+    });
+  });
   let legendY = 205;
   (["eave", "rake", "ridge", "hip", "valley", "other"] as const).forEach((type) => {
     const x =
@@ -738,17 +861,7 @@ export async function roofDrawingPdf(
   d.planes.forEach((plane, index) => {
     ensureSpace(30);
     const pts = plane.points.map((point) => mapPoint(point));
-    const center = pts.reduce(
-      (acc, point) => ({ x: acc.x + point.x / pts.length, y: acc.y + point.y / pts.length }),
-      { x: 0, y: 0 },
-    );
-    const localPath =
-      pts
-        .map(
-          (point, pointIndex) =>
-            `${pointIndex === 0 ? "M" : "L"} ${(point.x - center.x).toFixed(2)} ${(point.y - center.y).toFixed(2)}`,
-        )
-        .join(" ") + " Z";
+    const { path: localPath, center } = facetPath(pts);
     page.drawSvgPath(localPath, {
       x: center.x,
       y: center.y,
@@ -762,12 +875,21 @@ export async function roofDrawingPdf(
       if (next) page.drawLine({ start: point, end: next, thickness: 1.8, color: BLUE });
     });
     const area = m.planes.find((item) => item.id === plane.id)?.area ?? 0;
-    page.drawText(`${plane.name}  |  ${area.toFixed(1)} SF  |  ${(area / 100).toFixed(2)} SQ`, {
-      x: center.x - 34,
-      y: center.y,
-      size: 7,
+    const areaLabel = `${area.toFixed(1)} SF`;
+    page.drawText(areaLabel, {
+      x: center.x - bold.widthOfTextAtSize(areaLabel, 9) / 2,
+      y: center.y + 1,
+      size: 9,
       font: bold,
       color: NAVY,
+    });
+    const squaresLabel = `${(area / 100).toFixed(2)} SQ`;
+    page.drawText(squaresLabel, {
+      x: center.x - font.widthOfTextAtSize(squaresLabel, 7) / 2,
+      y: center.y - 9,
+      size: 7,
+      font,
+      color: MUTED,
     });
   });
   // Plane-level takeoff keeps each slope traceable to its drawn geometry.
