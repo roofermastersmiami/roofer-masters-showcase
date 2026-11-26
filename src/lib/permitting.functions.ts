@@ -33,6 +33,7 @@ const inspectionInput = z.object({
   notes: z.string().max(5000).optional(),
 });
 
+// tenant-audit: reviewed — every server function is authenticated, resolves exactly one membership from the middleware-verified user ID, rejects non-admin roles, and applies company_id predicates to reads/writes. Job/application links are revalidated within that company; RLS and composite FKs remain defense in depth. Service-role access is never based on browser-supplied company IDs.
 async function permitContext(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const db = supabaseAdmin as SupabaseClient;
