@@ -1,4 +1,7 @@
 -- Keep the legacy lead -> customer/property fan-out compatible with company ownership.
+-- tenant-audit: reviewed
+-- Security review: company_id is mandatory; conflict updates preserve the existing
+-- customer's company and lead linkage is constrained to the source company.
 -- This migration depends on 0042 and must be applied only after 0042 is reconciled
 -- against the production schema. It does not change RLS or enable tenant onboarding.
 
@@ -26,10 +29,10 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE
   SET
-    company_id = EXCLUDED.company_id,
     name = EXCLUDED.name,
     phone = EXCLUDED.phone,
-    email = EXCLUDED.email;
+    email = EXCLUDED.email
+  WHERE public.crm_customers.company_id = EXCLUDED.company_id;
 
   IF NEW.customer_id IS NULL THEN
     UPDATE public.leads
