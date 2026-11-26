@@ -135,6 +135,52 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     assert payload["address_match"] == {"source": "Test geocoder"}
 
 
+def test_analyze_endpoint_falls_back_to_tnm_when_copc_items_yield_no_facets(monkeypatch):
+    # Regression: a COPC item can intersect the search bbox (stac_items >= 1)
+    # yet produce zero usable roof points. The TNM fallback must still run —
+    # it previously required stac_items == 0, which left Broward addresses
+    # footprint-only even though TNM tiles cover them.
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "TNM fallback test address", {"source": "Test geocoder"}
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        return polygon, {"provider": "Broward County Building Footprints"}
+
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(
+        roof_service,
+        "_read_lidar_facets",
+        lambda _polygon: ([], {"stac_items": 1, "tiles_used": 0, "building_class_points": 0}),
+    )
+
+    async def fake_tnm(_polygon):
+        return (
+            [{"area_sqft": 1200.0, "pitch_rise_per_12": 6.0}],
+            {"source": "USGS National Map (TNM) Lidar Point Cloud LAZ", "tiles_used": 1},
+        )
+
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+
+    response = TestClient(roof_service.app).post(
+        "/v1/roof/analyze",
+        json={"street_address": "Unique TNM fallback regression address"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "lidar_facets"
+    assert payload["roof"]["area_sqft"] == 1200.0
+    assert payload["lidar"]["source"] == "USGS National Map (TNM) Lidar Point Cloud LAZ"
+
+
 
 def test_footprint_match_fields_preserve_address_mismatch_evidence():
     from main import _footprint_match_fields
