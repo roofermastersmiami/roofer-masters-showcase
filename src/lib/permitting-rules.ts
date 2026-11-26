@@ -16,14 +16,14 @@ export function requiresNoticeOfCommencement(
   contractValueCents: number | null | undefined,
   thresholdCents = DEFAULT_NOC_THRESHOLD_CENTS,
 ): NoticeOfCommencementResult {
+  if (!Number.isSafeInteger(thresholdCents) || thresholdCents < 0) {
+    throw new RangeError("NOC threshold must be a non-negative safe integer in cents");
+  }
   if (contractValueCents == null) {
     return { required: false, reason: "value_unknown", thresholdCents };
   }
   if (!Number.isSafeInteger(contractValueCents) || contractValueCents < 0) {
     throw new RangeError("Contract value must be a non-negative safe integer in cents");
-  }
-  if (!Number.isSafeInteger(thresholdCents) || thresholdCents < 0) {
-    throw new RangeError("NOC threshold must be a non-negative safe integer in cents");
   }
 
   return contractValueCents > thresholdCents
