@@ -39,5 +39,6 @@ describe("Notice of Commencement threshold", () => {
     expect(() => requiresNoticeOfCommencement(100, Number.MAX_SAFE_INTEGER + 1)).toThrow(
       RangeError,
     );
+    expect(() => requiresNoticeOfCommencement(null, -1)).toThrow(RangeError);
   });
 });
