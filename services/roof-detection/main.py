@@ -305,11 +305,15 @@ async def resolve_miramar_address_point(
             response = await client.get(url, params=params)
             response.raise_for_status()
             payload = response.json()
-        if payload.get("error"):
+        # ArcGIS errors, malformed JSON shapes, and invalid features must safely
+        # fall through to the next geocoder instead of aborting address resolution.
+        if not isinstance(payload, dict) or payload.get("error"):
             return None
         requested = _normalize_street_address(street_line)
         matches = []
         for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
             attrs = feature.get("attributes") or {}
             candidate_address = str(attrs.get("situsaddrfull") or "")
             if _normalize_street_address(candidate_address) != requested:
