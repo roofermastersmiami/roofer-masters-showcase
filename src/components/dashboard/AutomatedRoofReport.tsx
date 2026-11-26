@@ -389,6 +389,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                       <th className="py-2 pr-3">Fit RMSE</th>
                       <th className="py-2 pr-3">Area SF</th>
                       <th className="py-2 pr-3">Squares</th>
+                      <th className="py-2 pr-3">Boundary LF*</th>
                       <th className="py-2 pr-3">Pitch</th>
                       <th className="py-2">Azimuth</th>
                     </tr>
@@ -408,6 +409,11 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                           </td>
                           <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                           <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
+                          <td className="py-2 pr-3 tabular-nums">
+                            {facet.boundary_perimeter_lf != null
+                              ? facet.boundary_perimeter_lf.toFixed(1)
+                              : "—"}
+                          </td>
                           <td className="py-2 pr-3 tabular-nums">
                             {facet.pitch_rise_per_12.toFixed(1)}:12 (
                             {facet.pitch_degrees.toFixed(1)}°)
@@ -476,8 +482,9 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
-            the measurement editor.
+            {visibleResult.disclaimer} *Boundary LF is the perimeter of an individual fitted facet
+            hull; it is not a categorized edge takeoff and may include shared or incomplete
+            boundaries. Eaves, rakes, ridges, hips, and valleys remain unclassified.
           </p>
           {visibleResult.roof.facets.length > 0 && (
             <p className="text-sm text-muted-foreground" role="status">
