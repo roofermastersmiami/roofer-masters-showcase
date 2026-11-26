@@ -30,30 +30,30 @@ Keep the Permitting UI owner-only and keep external-company onboarding disabled 
 
 The reviewed production snapshot contained:
 
-| Table | Observed rows | `company_id` observed |
-|---|---:|---|
-| `leads` | 10 | absent |
-| `crm_customers` | 21 | absent |
-| `crm_properties` | 18 | absent |
-| `roof_report_orders` | 3 | absent |
+| Table                | Observed rows | `company_id` observed |
+| -------------------- | ------------: | --------------------- |
+| `leads`              |            10 | absent                |
+| `crm_customers`      |            21 | absent                |
+| `crm_properties`     |            18 | absent                |
+| `roof_report_orders` |             3 | absent                |
 
 **Count discrepancy:** the implementation note attached to PR #181 records 12 `roof_report_orders`, while the later read-only count query returned 3. This discrepancy is recorded on PR #181. Re-run an exact `SELECT count(*)` and compare project/connection, schema, filters, and query timestamp before using the count in a backfill preflight. Do not infer that either count is correct without that reconciliation.
 
 ### Migration-by-migration disposition
 
-| Migration | Repository change | Production observation | Safe next step |
-|---|---|---|---|
-| 0031 | Production-manager roof-report storage policy | No matching production policy was found in the inspected storage policy list | Compare all policies and role semantics; add only a narrowly scoped missing policy after review |
-| 0032 | `delete_crm_customer(uuid)` SECURITY DEFINER RPC | Function was not present in the inspected public routine inventory | Review current app callers, grants, FK behavior, and tenant scope before creating/replacing |
-| 0033 | Four-argument address-first `create_roof_report_request` RPC | A four-argument overload exists, alongside other overloads | Compare full function definitions, ownership, grants, and behavior; do not overwrite by signature alone |
-| 0034 | Six-argument report RPC and contact columns | Six-argument overload exists; verify exact column definitions and function body before considering satisfied | Compare exact schema/function definitions and grants |
-| 0035 | Private signed-contract bucket and object policies | `signed-contracts` bucket was absent | Design company-aware object paths and authorization before creating; legacy lead/report path assumptions are not sufficient for SaaS |
-| 0036 | `appointments`, `receptionist_logs`, scheduling RPCs/trigger | Both tables were absent in the inspected production catalog | Build only after company ownership and appointment tenant authorization are designed |
-| 0037 | `pdf_sign_templates` and template storage policies | Table was absent; policies were not found | Reconcile storage and ownership model before creating |
-| 0038 | Owner-user keyed branding table and policies | Existing branding is company-ID keyed and has a different column set; bucket already exists with company path policies | Treat migration 0038 as superseded by live schema; do not replay; document intended final schema |
-| 0039 | Company table, membership enum/table, helpers and policies | Tables/helpers already exist; membership role is text with CHECK; company table includes slug; policies already exist with different names | Compare full DDL, function definitions, grants, RLS flags and policy expressions; create only a forward repair if a specific invariant is missing |
-| 0040 | Add accent and replace theme palette constraint | `theme_accent` exists with default `magenta`; exact check constraints were not fully verified in the snapshot | Verify constraints and allowed palette/accent values before applying; avoid replacing a working constraint blindly |
-| 0041 | `crm_company_permit_settings` with FORCE RLS | Table was absent | Reconcile company schema first; apply only after its helper functions and owner/admin policies pass PostgreSQL integration tests |
+| Migration | Repository change                                            | Production observation                                                                                                                     | Safe next step                                                                                                                                    |
+| --------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0031      | Production-manager roof-report storage policy                | No matching production policy was found in the inspected storage policy list                                                               | Compare all policies and role semantics; add only a narrowly scoped missing policy after review                                                   |
+| 0032      | `delete_crm_customer(uuid)` SECURITY DEFINER RPC             | Function was not present in the inspected public routine inventory                                                                         | Review current app callers, grants, FK behavior, and tenant scope before creating/replacing                                                       |
+| 0033      | Four-argument address-first `create_roof_report_request` RPC | A four-argument overload exists, alongside other overloads                                                                                 | Compare full function definitions, ownership, grants, and behavior; do not overwrite by signature alone                                           |
+| 0034      | Six-argument report RPC and contact columns                  | Six-argument overload exists; verify exact column definitions and function body before considering satisfied                               | Compare exact schema/function definitions and grants                                                                                              |
+| 0035      | Private signed-contract bucket and object policies           | `signed-contracts` bucket was absent                                                                                                       | Design company-aware object paths and authorization before creating; legacy lead/report path assumptions are not sufficient for SaaS              |
+| 0036      | `appointments`, `receptionist_logs`, scheduling RPCs/trigger | Both tables were absent in the inspected production catalog                                                                                | Build only after company ownership and appointment tenant authorization are designed                                                              |
+| 0037      | `pdf_sign_templates` and template storage policies           | Table was absent; policies were not found                                                                                                  | Reconcile storage and ownership model before creating                                                                                             |
+| 0038      | Owner-user keyed branding table and policies                 | Existing branding is company-ID keyed and has a different column set; bucket already exists with company path policies                     | Treat migration 0038 as superseded by live schema; do not replay; document intended final schema                                                  |
+| 0039      | Company table, membership enum/table, helpers and policies   | Tables/helpers already exist; membership role is text with CHECK; company table includes slug; policies already exist with different names | Compare full DDL, function definitions, grants, RLS flags and policy expressions; create only a forward repair if a specific invariant is missing |
+| 0040      | Add accent and replace theme palette constraint              | `theme_accent` exists with default `magenta`; exact check constraints were not fully verified in the snapshot                              | Verify constraints and allowed palette/accent values before applying; avoid replacing a working constraint blindly                                |
+| 0041      | `crm_company_permit_settings` with FORCE RLS                 | Table was absent                                                                                                                           | Reconcile company schema first; apply only after its helper functions and owner/admin policies pass PostgreSQL integration tests                  |
 
 ## Proposed forward-only sequence
 
