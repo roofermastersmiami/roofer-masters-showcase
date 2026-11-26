@@ -70,7 +70,8 @@ CREATE TABLE public.roof_jobs (
 INSERT INTO auth.users(id) VALUES
  ('00000000-0000-0000-0000-000000000001'),
  ('00000000-0000-0000-0000-000000000002'),
- ('00000000-0000-0000-0000-000000000003');
+ ('00000000-0000-0000-0000-000000000003'),
+ ('00000000-0000-0000-0000-000000000004');
 INSERT INTO public.crm_companies(id,name,slug,created_by) VALUES
  ('10000000-0000-0000-0000-000000000001','Company A','company-a','00000000-0000-0000-0000-000000000001'),
  ('10000000-0000-0000-0000-000000000002','Company B','company-b','00000000-0000-0000-0000-000000000002');
@@ -158,6 +159,19 @@ DO $$ BEGIN
  EXCEPTION WHEN insufficient_privilege THEN NULL;
  END;
 END $$;
+RESET ROLE;
+
+-- A signed-in user with no company membership must see no permit records.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
+DO $ BEGIN
+  IF (SELECT count(*) FROM public.roof_permit_applications) <> 0 THEN
+    RAISE EXCEPTION 'Nonmember unexpectedly read permit applications';
+  END IF;
+  IF (SELECT count(*) FROM public.roof_permit_inspections) <> 0 THEN
+    RAISE EXCEPTION 'Nonmember unexpectedly read permit inspections';
+  END IF;
+END $;
 RESET ROLE;
 
 SET ROLE authenticated;
