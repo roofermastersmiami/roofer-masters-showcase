@@ -163,11 +163,14 @@ async def resolve_broward_address_point(address: str) -> tuple[float, float, str
             response = await client.get(url, params=params)
             response.raise_for_status()
             payload = response.json()
-        if payload.get("error"):
+        # Unexpected payloads are provider failures, not fatal geocoding errors.
+        if not isinstance(payload, dict) or payload.get("error"):
             return None
         requested = _normalize_street_address(street_line)
         matches = []
         for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
             attrs = feature.get("attributes") or {}
             candidate_address = attrs.get("FULL_SITE_ADDRESS") or attrs.get("Address") or ""
             if _normalize_street_address(str(candidate_address)) != requested:
@@ -199,14 +202,17 @@ async def resolve_broward_address_point(address: str) -> tuple[float, float, str
 
 async def geocode_with_provenance(address: str) -> tuple[float, float, str, dict[str, Any]]:
     """Resolve an address once and retain the provider evidence for diagnostics."""
-    miramar_match = await resolve_miramar_address_point(address)
-    if miramar_match:
-        lat, lon, matched_address, provenance = miramar_match
-        return lat, lon, matched_address, dict(provenance)
-
+    # Preserve the existing county exact-match contract: Broward address points
+    # carry the county folio used by downstream parcel corroboration. Miramar's
+    # city layer is the next authoritative fallback, before general geocoders.
     county_match = await resolve_broward_address_point(address)
     if county_match:
         lat, lon, matched_address, provenance = county_match
+        return lat, lon, matched_address, dict(provenance)
+
+    miramar_match = await resolve_miramar_address_point(address)
+    if miramar_match:
+        lat, lon, matched_address, provenance = miramar_match
         return lat, lon, matched_address, dict(provenance)
 
     headers = {"User-Agent": USER_AGENT}
