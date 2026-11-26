@@ -292,7 +292,7 @@ async def resolve_miramar_address_point(
         return None
     # Match the same ordinal normalization used for exact local comparison;
     # otherwise a GIS value like "189 AVE" is excluded by a "%189TH%" query.
-    street_tokens = [re.sub(r"^(\\d+)(?:ST|ND|RD|TH)$", r"\\1", token) for token in street_tokens]
+    street_tokens = [re.sub(r"^(\d+)(?:ST|ND|RD|TH)$", r"\1", token) for token in street_tokens]
     house_number = tokens[0].replace("'", "''")
     street_token = street_tokens[0].replace("'", "''")
     url = (
