@@ -112,6 +112,9 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
       (!(data.changes.permit_number ?? current.permit_number)?.trim() || !data.changes.issued_at)) {
       throw new Error("Issuance requires an official permit number and issue date.");
     }
+    if (nextStatus === "rejected" && !data.changes.notes?.trim()) {
+      throw new Error("Recording a rejection requires the municipality rejection reason in the notes.");
+    }
     if (nextStatus === "submitted" && !(data.changes.submitted_at ?? current.submitted_at)) {
       throw new Error("Submission requires the actual submission timestamp.");
     }
