@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CalendarPlus, ClipboardList, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { createPermitPacketPdf } from "@/lib/permit-packet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,6 +146,48 @@ export function PermitRecords() {
     onSuccess: async (_saved, variables) => { setInspectionConfirmations((current) => { const next = { ...current }; delete next[variables.id]; return next; }); toast.success("Inspection confirmation details saved."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not save confirmation details."),
   });
+  const downloadPermitPacket = async (application: (typeof applications)[number]) => {
+    try {
+      const job = jobs.find((candidate) => candidate.id === application.roof_job_id);
+      const relatedInspections = inspections.filter((item) => item.application_id === application.id);
+      const bytes = await createPermitPacketPdf({
+        jobTitle: job?.title ?? "Roofing job",
+        propertyAddress: job?.address ?? "",
+        jurisdiction: application.jurisdiction_name,
+        permitType: application.permit_type,
+        permitNumber: application.permit_number,
+        status: application.application_status,
+        portalUrl: application.portal_url,
+        submittedAt: application.submitted_at,
+        issuedAt: application.issued_at,
+        expiresAt: application.expires_at,
+        feeCents: application.fee_cents,
+        applicationNotes: application.notes,
+        inspections: relatedInspections.map((item) => ({
+          type: item.inspection_type,
+          status: item.scheduling_status,
+          scheduledAt: item.scheduled_at,
+          completedAt: item.completed_at,
+          confirmationNumber: item.confirmation_number,
+          notes: item.notes,
+        })),
+      });
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeNumber = String(application.permit_number || application.id.slice(0, 8)).replace(/[^a-zA-Z0-9_-]/g, "-");
+      link.href = url;
+      link.download = `roofer-masters-permit-summary-${safeNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("CRM permit summary PDF generated.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate permit summary.");
+    }
+  };
+
   const updateInspectionStatus = useMutation({
     mutationFn: ({ id, status, scheduledAt }: {
       id: string;
@@ -252,7 +295,7 @@ export function PermitRecords() {
                       <td className="py-3 pr-3"><div className="font-medium">{job?.title ?? "Roofing job"}</div><div className="text-xs text-muted-foreground">{job?.address ?? ""}</div></td>
                       <td className="py-3 pr-3">{item.jurisdiction_name}<div className="text-xs text-muted-foreground">{item.permit_type}</div></td>
                       <td className="py-3 pr-3"><div className="flex min-w-44 flex-col gap-1"><Input aria-label="Official permit number" placeholder="Permit number" value={permitNumbers[item.id] ?? item.permit_number ?? ""} onChange={(event) => setPermitNumbers((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={120} /><Input aria-label="Permit expiration date" type="date" value={expiryDates[item.id] ?? item.expires_at ?? ""} onChange={(event) => setExpiryDates((current) => ({ ...current, [item.id]: event.target.value }))} /><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div><Button size="sm" variant="ghost" disabled={savePermitDetails.isPending} onClick={() => savePermitDetails.mutate({ id: item.id, permitNumber: permitNumbers[item.id] ?? item.permit_number ?? "", expiresAt: expiryDates[item.id] ?? item.expires_at ?? "" })}>Save details</Button></div></td>
-                      <td className="py-3 pr-3"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge></td>
+                      <td className="py-3 pr-3"><div className="flex flex-col items-start gap-2"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge><Button size="sm" variant="ghost" onClick={() => void downloadPermitPacket(item)}>Print summary</Button></div></td>
                       <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <div className="flex min-w-52 flex-col gap-2"><Input aria-label="Official permit issue date" type="date" value={issuanceDates[item.id] ?? ""} onChange={(event) => setIssuanceDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!issuanceDates[item.id] || !item.permit_number?.trim() || recordIssuance.isPending} onClick={() => recordIssuance.mutate({ id: item.id, issuedAt: issuanceDates[item.id] })}>Record issued</Button><span className="text-xs text-muted-foreground">Requires official permit number and issue date.</span><Input aria-label="Municipal rejection reason" placeholder="Reason if rejected" value={rejectionReasons[item.id] ?? ""} onChange={(event) => setRejectionReasons((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={4000} /><Button size="sm" variant="destructive" disabled={!rejectionReasons[item.id]?.trim() || recordRejection.isPending} onClick={() => recordRejection.mutate({ id: item.id, reason: rejectionReasons[item.id] })}>Record rejection</Button></div> : "—"}</td>
                     </tr>;
                   })}</tbody>
