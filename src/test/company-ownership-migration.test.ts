@@ -11,13 +11,18 @@ const journal = JSON.parse(
 );
 
 describe("CRM company ownership migration 0042", () => {
-  it("is registered as the next sequential migration", () => {
-    expect(journal.entries.at(-1)).toMatchObject({
+  it("is registered at index 42 in the sequential migration journal", () => {
+    const entry = journal.entries.find(
+      (candidate: { tag: string }) => candidate.tag === "0042_crm_company_ownership_foundation",
+    );
+    const previous = journal.entries.find((candidate: { idx: number }) => candidate.idx === 41);
+    expect(entry).toMatchObject({
       idx: 42,
       tag: "0042_crm_company_ownership_foundation",
       when: expect.any(Number),
     });
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when);
+    expect(previous).toBeDefined();
+    expect(entry.when).toBeGreaterThan(previous.when);
   });
 
   it("fails closed unless exactly one legacy company and its owner membership exist", () => {
