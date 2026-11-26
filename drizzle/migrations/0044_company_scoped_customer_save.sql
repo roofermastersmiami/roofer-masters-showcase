@@ -68,7 +68,7 @@ BEGIN
   RETURN cid;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.save_crm_customer(jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.save_crm_customer(jsonb) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.save_crm_customer(jsonb) FROM PUBLIC, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.save_crm_customer(jsonb) TO authenticated;
 COMMENT ON FUNCTION public.save_crm_customer(jsonb) IS
   'Company-scoped CRM customer save; depends on migrations 0042 and 0043.';
