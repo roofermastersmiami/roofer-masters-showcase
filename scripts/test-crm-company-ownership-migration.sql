@@ -158,10 +158,11 @@ INSERT INTO public.crm_properties(id,customer_id,company_id) VALUES
 DO $$
 BEGIN
   BEGIN
-    INSERT INTO public.crm_properties(id,customer_id,company_id)
+    INSERT INTO public.crm_properties(id,customer_id,company_id,address)
     VALUES ('40000000-0000-0000-0000-000000000002',
             '30000000-0000-0000-0000-000000000002',
-            '10000000-0000-0000-0000-000000000001');
+            '10000000-0000-0000-0000-000000000001',
+            'Cross-company link rejection');
     RAISE EXCEPTION 'Cross-company customer/property link unexpectedly succeeded';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
