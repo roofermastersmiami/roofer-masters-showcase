@@ -742,10 +742,23 @@ def test_parcel_evidence_is_non_destructive_without_verified_polygon():
 
 def test_explicit_candidate_selection_is_not_filtered_by_parcel_evidence():
     selected = (8.0, Polygon([(5, 5), (6, 5), (6, 6), (5, 6)]), {"candidate_id": "explicit"})
+    other = (2.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "other"})
     parcel = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
-    # The explicit-selection path intentionally bypasses the parcel filter.
-    assert selected[1].intersection(parcel).area == 0
-    assert selected[2]["candidate_id"] == "explicit"
+    # The actual resolver used by get_footprint honors the explicit ID even
+    # when parcel evidence would favor a different building.
+    filtered, _ = roof_service._apply_parcel_candidate_evidence(
+        [selected, other], parcel, {"status": "matched"}
+    )
+    assert [row[2]["candidate_id"] for row in filtered] == ["other"]
+    resolved = roof_service._find_explicit_candidate([selected, other], "explicit")
+    assert resolved is selected
+
+
+def test_explicit_candidate_selection_rejects_stale_or_duplicate_ids():
+    candidate = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "same"})
+    duplicate = (2.0, Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]), {"candidate_id": "same"})
+    assert roof_service._find_explicit_candidate([candidate], "missing") is None
+    assert roof_service._find_explicit_candidate([candidate, duplicate], "same") is None
 
 
 @pytest.mark.parametrize(
