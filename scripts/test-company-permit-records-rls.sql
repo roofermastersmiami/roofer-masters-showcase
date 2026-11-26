@@ -164,14 +164,14 @@ RESET ROLE;
 -- A signed-in user with no company membership must see no permit records.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
-DO $ BEGIN
+DO $$ BEGIN
   IF (SELECT count(*) FROM public.roof_permit_applications) <> 0 THEN
     RAISE EXCEPTION 'Nonmember unexpectedly read permit applications';
   END IF;
   IF (SELECT count(*) FROM public.roof_permit_inspections) <> 0 THEN
     RAISE EXCEPTION 'Nonmember unexpectedly read permit inspections';
   END IF;
-END $;
+END $$;
 RESET ROLE;
 
 SET ROLE authenticated;
@@ -199,7 +199,7 @@ RESET ROLE;
 -- Non-admin company members must not update or delete permit records.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
-DO $ BEGIN
+DO $$ BEGIN
   UPDATE public.roof_permit_applications
     SET notes='unauthorized edit'
     WHERE id='50000000-0000-0000-0000-000000000001';
@@ -214,13 +214,13 @@ DO $ BEGIN
                  WHERE id='60000000-0000-0000-0000-000000000001') THEN
     RAISE EXCEPTION 'Non-admin member unexpectedly deleted an inspection';
   END IF;
-END $;
+END $$;
 RESET ROLE;
 
 -- Company A admins must not create an inspection linked to Company B's application.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
-DO $ BEGIN
+DO $$ BEGIN
   BEGIN
     INSERT INTO public.roof_permit_inspections(
       company_id,application_id,inspection_type
@@ -244,7 +244,7 @@ DO $ BEGIN
     RAISE EXCEPTION 'Issued permit without official number/timestamps unexpectedly accepted';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
-END $;
+END $$;
 RESET ROLE;
 
 \echo 'PASS: company-scoped permit application/inspection RLS and same-company job linkage'
