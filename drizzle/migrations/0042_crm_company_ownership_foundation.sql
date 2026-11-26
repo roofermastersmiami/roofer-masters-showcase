@@ -98,7 +98,7 @@ ALTER TABLE public.crm_properties
 ALTER TABLE public.crm_customers
   ADD CONSTRAINT crm_customers_source_lead_company_fkey
   FOREIGN KEY (source_lead_id, company_id)
-  REFERENCES public.leads(id, company_id) ON DELETE RESTRICT;
+  REFERENCES public.leads(id, company_id) ON DELETE SET NULL (source_lead_id);
 
 -- Lead/customer reverse links cannot cross company boundaries.
 ALTER TABLE public.leads
@@ -109,7 +109,7 @@ ALTER TABLE public.leads
 ALTER TABLE public.crm_properties
   ADD CONSTRAINT crm_properties_customer_company_fkey
   FOREIGN KEY (customer_id, company_id)
-  REFERENCES public.crm_customers(id, company_id) ON DELETE CASCADE;
+  REFERENCES public.crm_customers(id, company_id) ON DELETE RESTRICT;
 
 ALTER TABLE public.roof_report_orders
   ADD CONSTRAINT roof_report_orders_customer_company_fkey
