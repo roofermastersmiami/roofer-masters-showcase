@@ -288,6 +288,13 @@
       "when": 1795656000000,
       "tag": "0040_persist_crm_theme_accent",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795657000000,
+      "tag": "0041_company_permit_qualifier_settings",
+      "breakpoints": true
     }
   ]
 }
