@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { jobsQuery } from "./operations-data";
 import type { Lead } from "./data";
-import { requiresNoticeOfCommencement } from "@/lib/permitting-rules";
+import { getRecordedBudgetForNocScreening, requiresNoticeOfCommencement } from "@/lib/permitting-rules";
 
 const permitStatuses = [
   { value: "not_started", label: "Not started" },
@@ -26,7 +26,7 @@ function permitLabel(status: string) {
 }
 
 function formatCurrency(cents: number | null | undefined) {
-  if (cents == null) return "Value not recorded";
+  if (cents == null || cents === 0) return "Budget not recorded";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
@@ -60,8 +60,8 @@ export function Permitting({ leads }: { leads: Lead[] }) {
     submitted: records.filter((job) => job.permit_status === "submitted").length,
     approved: records.filter((job) => job.permit_status === "approved").length,
     inspections: records.filter((job) => !!job.inspection_at).length,
-    nocReview: records.filter((job) => requiresNoticeOfCommencement(job.budget_cents).required).length,
-    nocValueMissing: records.filter((job) => requiresNoticeOfCommencement(job.budget_cents).reason === "value_unknown").length,
+    nocReview: records.filter((job) => requiresNoticeOfCommencement(getRecordedBudgetForNocScreening(job.budget_cents)).required).length,
+    nocValueMissing: records.filter((job) => requiresNoticeOfCommencement(getRecordedBudgetForNocScreening(job.budget_cents)).reason === "value_unknown").length,
   }), [records]);
 
   const visible = records.filter((job) => {
@@ -137,7 +137,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                 </tr></thead>
                 <tbody>
                   {visible.map((job) => {
-                    const noc = requiresNoticeOfCommencement(job.budget_cents);
+                    const noc = requiresNoticeOfCommencement(getRecordedBudgetForNocScreening(job.budget_cents));
                     return <tr key={job.id} className="border-b last:border-0">
                       <td className="px-3 py-3">
                         <p className="font-medium">{job.title}</p>
