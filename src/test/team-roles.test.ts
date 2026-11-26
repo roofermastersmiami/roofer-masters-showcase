@@ -25,10 +25,8 @@ describe("team roles", () => {
       expect(canOpen(["sales"], s)).toBe(true);
     expect(canOpen(["sales"], "jobs")).toBe(false);
   });
-  it("permitting is available to office, sales and production, but not crew or accounting", () => {
-    for (const r of ["office", "sales", "production_manager"])
-      expect(canOpen([r], "permitting")).toBe(true);
-    for (const r of ["crew", "accounting"])
+  it("keeps permitting owner-only until a role-checked service is available", () => {
+    for (const r of ["office", "sales", "production_manager", "crew", "accounting"])
       expect(canOpen([r], "permitting")).toBe(false);
     expect(canOpen(["admin"], "permitting")).toBe(true);
   });
