@@ -36,6 +36,8 @@ describe("CRM company ownership migration 0042", () => {
 
   it("enforces same-company customer, lead, property, and report relationships", () => {
     expect(migration).toMatch(/crm_customers_source_lead_company_fkey/i);
+    expect(migration).toMatch(/ON DELETE SET NULL \\(source_lead_id\\)/i);
+    expect(migration).toMatch(/crm_properties_customer_company_fkey[\\s\\S]*?ON DELETE RESTRICT/i);
     expect(migration).toMatch(/leads_customer_company_fkey/i);
     expect(migration).toMatch(/crm_properties_customer_company_fkey/i);
     expect(migration).toMatch(/roof_report_orders_customer_company_fkey/i);
