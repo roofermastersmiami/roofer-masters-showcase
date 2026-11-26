@@ -89,8 +89,8 @@ export function Permitting({ leads }: { leads: Lead[] }) {
         <PermitCount title="Not started" value={counts.notStarted} description="Permit status needs review" />
         <PermitCount title="Submitted" value={counts.submitted} description="Marked submitted in job records" />
         <PermitCount title="Approved" value={counts.approved} description="Marked approved in job records" />
-        <PermitCount title="NOC review" value={counts.nocReview} description="Recorded budget exceeds the $5,000 preliminary threshold" />
-        <PermitCount title="Value missing" value={counts.nocValueMissing} description="Cannot assess NOC threshold without a job value" />
+        <PermitCount title="NOC screening" value={counts.nocReview} description="Recorded budget exceeds the preliminary $5,000 screen" />
+        <PermitCount title="Budget missing" value={counts.nocValueMissing} description="Contract price must be checked manually" />
       </div>
 
       <Card>
