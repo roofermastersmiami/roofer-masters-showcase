@@ -2,7 +2,7 @@ name: Roofer Masters Roof Tests
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feat/company-permit-qualifier-settings]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
