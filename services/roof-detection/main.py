@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import math
 import os
@@ -1210,27 +1211,47 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
     }
 
 async def _download_tile(url: str, dest: Path) -> None:
-    """Stream a LAZ tile into the local cache; a partial file is never kept."""
+    """Stream a LAZ tile into the local cache; a partial file is never kept.
+
+    USGS rate-limits aggressive clients (HTTP 429) and occasionally answers
+    with an HTML interstitial instead of the file, so transient failures are
+    retried with backoff. A LAZ always starts with the LASF signature;
+    anything else must never enter the cache.
+    """
     tmp = dest.with_suffix(dest.suffix + ".part")
-    async with httpx.AsyncClient(
-        timeout=httpx.Timeout(900.0, connect=15.0),
-        follow_redirects=True,
-        headers={"User-Agent": USER_AGENT},
-    ) as client:
-        async with client.stream("GET", url) as response:
-            response.raise_for_status()
-            with open(tmp, "wb") as handle:
-                async for chunk in response.aiter_bytes(1 << 20):
-                    handle.write(chunk)
-    # USGS occasionally answers with an HTML interstitial instead of the
-    # file. A LAZ always starts with the LASF signature; anything else must
-    # never enter the cache.
-    with open(tmp, "rb") as handle:
-        signature = handle.read(4)
-    if signature != b"LASF":
-        tmp.unlink(missing_ok=True)
-        raise ValueError(f"Downloaded tile did not have a LASF signature: {url}")
-    tmp.rename(dest)
+    last_error: Exception | None = None
+    for attempt in range(3):
+        if attempt:
+            await asyncio.sleep(20 * attempt)
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(900.0, connect=15.0),
+                follow_redirects=True,
+                headers={"User-Agent": USER_AGENT},
+            ) as client:
+                async with client.stream("GET", url) as response:
+                    response.raise_for_status()
+                    with open(tmp, "wb") as handle:
+                        async for chunk in response.aiter_bytes(1 << 20):
+                            handle.write(chunk)
+            with open(tmp, "rb") as handle:
+                signature = handle.read(4)
+            if signature != b"LASF":
+                raise ValueError(f"Downloaded tile did not have a LASF signature: {url}")
+            tmp.rename(dest)
+            return
+        except (httpx.HTTPStatusError, httpx.TransportError, ValueError) as exc:
+            last_error = exc
+            tmp.unlink(missing_ok=True)
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code not in (
+                429,
+                500,
+                502,
+                503,
+                504,
+            ):
+                raise
+    raise last_error if last_error else RuntimeError(f"Tile download failed: {url}")
 
 
 def _tnm_points_local(

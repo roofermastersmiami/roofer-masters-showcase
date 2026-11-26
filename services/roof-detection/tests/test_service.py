@@ -830,3 +830,67 @@ def test_edge_lengths_classify_sloped_peak_as_hip_not_ridge():
     assert edges["hip"] == pytest.approx(34.3, rel=0.05)
     assert edges["ridge"] == 0.0
     assert edges["valley"] == 0.0
+
+
+def test_download_tile_retries_after_rate_limit(tmp_path, monkeypatch):
+    """USGS answers 429 under load; the download must back off and retry."""
+    import asyncio as asyncio_module
+
+    import httpx
+
+    import main as service
+
+    class FakeResponse:
+        def __init__(self, status, chunks):
+            self.status_code = status
+            self._chunks = chunks
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                request = httpx.Request("GET", "https://example.test/tile.laz")
+                raise httpx.HTTPStatusError(
+                    "rate limited", request=request, response=httpx.Response(self.status_code, request=request)
+                )
+
+        async def aiter_bytes(self, _chunk_size):
+            for chunk in self._chunks:
+                yield chunk
+
+    class FakeStream:
+        def __init__(self, response):
+            self._response = response
+
+        async def __aenter__(self):
+            return self._response
+
+        async def __aexit__(self, *_exc):
+            return False
+
+    attempts: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            return False
+
+        def stream(self, _method, url):
+            attempts.append(url)
+            if len(attempts) == 1:
+                return FakeStream(FakeResponse(429, []))
+            return FakeStream(FakeResponse(200, [b"LASF" + b"\x00" * 64]))
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(service.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(asyncio_module, "sleep", no_sleep)
+
+    dest = tmp_path / "tile.laz"
+    asyncio_module.run(service._download_tile("https://example.test/tile.laz", dest))
+    assert attempts == ["https://example.test/tile.laz"] * 2
+    assert dest.read_bytes().startswith(b"LASF")
