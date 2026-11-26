@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042]
   pull_request:
-    branches: [main, master, feat/company-owned-crm-records-0042]
+    branches: [main, master, feat/company-owned-crm-records-0042, feat/company-ownership-trigger-0043]
   workflow_dispatch:
 
 jobs:
