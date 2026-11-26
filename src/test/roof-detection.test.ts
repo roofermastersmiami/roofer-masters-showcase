@@ -79,7 +79,11 @@ describe("LiDAR facet roof-system selection", () => {
       expect(drawing.verified).toBe(false);
       expect(drawing.accuracy).toBe("public_lidar_estimate");
       expect(drawing.planes).toHaveLength(1);
-      expect(drawing.planes[0]?.edges.every((edge) => edge === "other")).toBe(true);
+      // A lone facet's perimeter is classified from its slope: eaves run
+      // across the downslope, rakes along it. Nothing stays "other".
+      expect(
+        drawing.planes[0]?.edges.every((edge) => edge === "eave" || edge === "rake"),
+      ).toBe(true);
     },
   );
 });
@@ -194,5 +198,119 @@ describe("LiDAR address-to-footprint confidence metadata", () => {
     const parsed = roofDetectionResponseSchema.parse(response);
     expect(parsed.footprint.address_point_inside_footprint).toBeUndefined();
     expect(parsed.footprint.address_to_footprint_distance_m).toBeUndefined();
+  });
+});
+
+describe("LiDAR edge classification for automatic reports", () => {
+  const origin = response.location;
+  const lonScale = 111320 * Math.cos((origin.lat * Math.PI) / 180) * (1 / 0.3048);
+  const latScale = 110540 * (1 / 0.3048);
+  // Build a boundary ring from local feet (x east, z south of origin) + elevation meters.
+  const ring = (points: [number, number, number][]) =>
+    points.map(([x, z, elevation]) => [
+      origin.lat - z / latScale,
+      origin.lon + x / lonScale,
+      elevation,
+    ]) as [number, number, number][];
+  const facet = (
+    id: string,
+    pitchRise: number,
+    points: [number, number, number][],
+  ) => ({
+    id,
+    point_count: 500,
+    pitch_degrees: (Math.atan(pitchRise / 12) * 180) / Math.PI,
+    pitch_rise_per_12: pitchRise,
+    azimuth_degrees: 180,
+    area_sqft: 600,
+    squares: 6,
+    boundary_latlon: ring([...points, points[0]!]),
+  });
+  const makeResponse = (facets: ReturnType<typeof facet>[]): RoofDetectionResponse => ({
+    ...response,
+    roof: {
+      ...response.roof,
+      facet_count: facets.length,
+      facets: facets as RoofDetectionResponse["roof"]["facets"],
+    },
+  });
+  const EAVE_M = 10;
+  const RIDGE_M = 12.286; // 7.5 ft above the eave over a 15 ft run = 6/12
+
+  it("classifies a gable roof's ridge, eaves, and rakes", () => {
+    const drawing = detectedFacetsToDrawing(
+      makeResponse([
+        facet("facet-1", 6, [
+          [0, 0, EAVE_M],
+          [40, 0, EAVE_M],
+          [40, 15, RIDGE_M],
+          [0, 15, RIDGE_M],
+        ]),
+        facet("facet-2", 6, [
+          [0, 15, RIDGE_M],
+          [40, 15, RIDGE_M],
+          [40, 30, EAVE_M],
+          [0, 30, EAVE_M],
+        ]),
+      ]),
+      "Metal Roof",
+    );
+    const edges = measureDrawing(drawing).edges;
+    expect(edges.ridge).toBeCloseTo(40, 0);
+    expect(edges.eave).toBeCloseTo(80, 0);
+    expect(edges.rake).toBeCloseTo(4 * Math.hypot(15, 7.5), 0);
+    expect(edges.hip).toBe(0);
+    expect(edges.valley).toBe(0);
+    expect(edges.other).toBe(0);
+  });
+
+  it("classifies the trough between two opposing slopes as a valley", () => {
+    const drawing = detectedFacetsToDrawing(
+      makeResponse([
+        facet("facet-1", 2.25, [
+          [0, 0, RIDGE_M],
+          [40, 0, EAVE_M],
+          [40, 30, EAVE_M],
+          [0, 30, RIDGE_M],
+        ]),
+        facet("facet-2", 2.25, [
+          [40, 0, EAVE_M],
+          [80, 0, RIDGE_M],
+          [80, 30, RIDGE_M],
+          [40, 30, EAVE_M],
+        ]),
+      ]),
+      "Shingle Roof",
+    );
+    const edges = measureDrawing(drawing).edges;
+    expect(edges.valley).toBeCloseTo(30, 0);
+    expect(edges.ridge).toBe(0);
+    expect(edges.hip).toBe(0);
+  });
+
+  it("snaps offset hull endpoints so a shared ridge is counted once", () => {
+    const drawing = detectedFacetsToDrawing(
+      makeResponse([
+        facet("facet-1", 6, [
+          [0, 0, EAVE_M],
+          [40, 0, EAVE_M],
+          [40, 15, RIDGE_M],
+          [0, 15, RIDGE_M],
+        ]),
+        // Second hull's ridge line sits 0.6 ft off the first facet's, as
+        // independently fitted LiDAR hulls do.
+        facet("facet-2", 6.25, [
+          [0, 15.6, RIDGE_M],
+          [40, 15.6, RIDGE_M],
+          [40, 30, EAVE_M],
+          [0, 30, EAVE_M],
+        ]),
+      ]),
+      "Metal Roof",
+    );
+    const edges = measureDrawing(drawing).edges;
+    expect(edges.ridge).toBeCloseTo(40, 0);
+    expect(edges.eave).toBeCloseTo(80, 0);
+    expect(edges.other).toBe(0);
   });
 });

@@ -461,8 +461,8 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
-            the measurement editor.
+            {visibleResult.disclaimer} Edge classifications are estimated from the LiDAR facet
+            geometry; review them in the measurement editor before relying on the report.
           </p>
           {visibleResult.roof.facets.length > 0 && (
             <p className="text-sm text-muted-foreground" role="status">
