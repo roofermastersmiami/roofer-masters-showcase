@@ -57,16 +57,13 @@ RANSAC_RESIDUAL_THRESHOLD_FALLBACK_M = float(
 )
 # Coverage completion: after hull resolution, parts of the clipped footprint
 # region that no facet claimed are assigned to an adjacent facet along the
-# planes' intersection lines — but only within reach of roof evidence:
-# input points no facet claimed that the growing facet's own plane still
-# predicts (seam points between two planes, a dropped duplicate
+# planes' intersection lines — but only where roof evidence brackets the
+# growth: input points no facet claimed that the growing facet's own plane
+# still predicts (seam points between two planes, a dropped duplicate
 # detection's fringe). Evidence-free overhang/courtyard margins stay
 # unclaimed, so the tessellation completes measured seams along hips,
-# ridges and eaves without inventing roof the point cloud never saw. The
-# radius matches the DBSCAN clustering scale: points that close together
-# are one surface.
+# ridges and eaves without inventing roof the point cloud never saw.
 COVERAGE_GAP_ADJACENCY_M = float(os.getenv("COVERAGE_GAP_ADJACENCY_M", "1.0"))
-COVERAGE_EVIDENCE_RADIUS_M = float(os.getenv("COVERAGE_EVIDENCE_RADIUS_M", "1.5"))
 # An unclaimed point only evidences growth of a facet whose plane actually
 # predicts it (residual within this tolerance, the RANSAC fallback scale).
 # Without the check, a facet annexes any nearby unclaimed surface — a
@@ -933,12 +930,14 @@ def _complete_coverage(
     dropped as a duplicate). An unclaimed part of the clipped footprint
     region is split among the adjacent facets along the planes'
     intersection lines and merged into them — but a facet may only grow
-    within COVERAGE_EVIDENCE_RADIUS_M of an unclaimed input point that
-    the facet's own plane predicts (residual within
-    COVERAGE_EVIDENCE_RESIDUAL_M), so completion follows measured roof
-    surface and never annexes a neighbouring surface the plane does not
-    fit. Facet point counts and fit RMSE are untouched: they describe
-    the points actually fitted, not the completed geometry.
+    across ground bracketed by unclaimed input points that the facet's
+    own plane predicts (residual within COVERAGE_EVIDENCE_RESIDUAL_M):
+    its growth zone is the convex hull of its polygon plus those points,
+    so completion follows measured roof surface, never annexes a
+    neighbouring surface the plane does not fit, and never extends past
+    the outermost returns near an eave. Facet point counts and fit RMSE
+    are untouched: they describe the points actually fitted, not the
+    completed geometry.
     """
     from shapely.ops import unary_union
 
@@ -970,12 +969,16 @@ def _complete_coverage(
         if not owners:
             owners = [min(records, key=lambda record: record["polygon"].distance(component))]
         owners.sort(key=lambda record: -record["point_count"])
-        # Each owner's evidence zone inside this component: the reach of
-        # the unclaimed points its own plane predicts.
+        # Each owner's evidence zone inside this component: the convex
+        # hull of the facet's own polygon plus the unclaimed points its
+        # plane predicts. Growth is bracketed by measured points on every
+        # side — a radial buffer around the points would also annex the
+        # strip beyond the outermost returns, overshooting the true roof
+        # edge wherever returns thin out near an eave.
         zones: dict[int, Any] = {}
         for index, owner in enumerate(owners):
             fitting = [
-                Point(float(point[0]), float(point[1]))
+                (float(point[0]), float(point[1]))
                 for point in unclaimed_rows
                 if abs(
                     float(point[2])
@@ -984,11 +987,13 @@ def _complete_coverage(
                 <= COVERAGE_EVIDENCE_RESIDUAL_M
             ]
             if fitting:
-                zone = unary_union(
-                    [point.buffer(COVERAGE_EVIDENCE_RADIUS_M) for point in fitting]
-                ).intersection(component)
-                if not zone.is_empty:
-                    zones[index] = zone
+                hull = MultiPoint(
+                    fitting + list(owner["polygon"].exterior.coords)
+                ).convex_hull
+                if hull.geom_type == "Polygon" and not hull.is_empty:
+                    zone = hull.intersection(component)
+                    if not zone.is_empty:
+                        zones[index] = zone
         if not zones:
             continue
         def grow(owner: dict[str, Any], geometry: Any) -> None:
