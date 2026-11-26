@@ -327,6 +327,21 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
               View technical detection details
             </summary>
+            {(visibleResult.footprint.candidate_id || visibleResult.footprint.parcel_match) && (
+              <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
+                <strong>Building and parcel match evidence</strong>
+                {visibleResult.footprint.candidate_id && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Selected building candidate: <code>{visibleResult.footprint.candidate_id}</code>
+                  </p>
+                )}
+                {visibleResult.footprint.parcel_match && (
+                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 text-[11px]">
+                    {JSON.stringify(visibleResult.footprint.parcel_match, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
             {visibleResult.lidar && (
               <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
                 <strong>Source-data coverage</strong>
@@ -374,6 +389,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                       <th className="py-2 pr-3">Fit RMSE</th>
                       <th className="py-2 pr-3">Area SF</th>
                       <th className="py-2 pr-3">Squares</th>
+                      <th className="py-2 pr-3">Boundary LF*</th>
                       <th className="py-2 pr-3">Pitch</th>
                       <th className="py-2">Azimuth</th>
                     </tr>
@@ -394,13 +410,18 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
                           <td className="py-2 pr-3 tabular-nums">{facet.area_sqft.toFixed(1)}</td>
                           <td className="py-2 pr-3 tabular-nums">{facet.squares.toFixed(2)}</td>
                           <td className="py-2 pr-3 tabular-nums">
+                            {facet.boundary_perimeter_lf != null
+                              ? facet.boundary_perimeter_lf.toFixed(1)
+                              : "—"}
+                          </td>
+                          <td className="py-2 pr-3 tabular-nums">
                             {facet.pitch_rise_per_12.toFixed(1)}:12 (
                             {facet.pitch_degrees.toFixed(1)}°)
                           </td>
                           <td className="py-2 tabular-nums">{facet.azimuth_degrees.toFixed(0)}°</td>
                         </tr>
                         <tr className="border-b border-border/60">
-                          <td colSpan={7} className="pb-3 pt-1">
+                          <td colSpan={8} className="pb-3 pt-1">
                             <details className="text-xs">
                               <summary className="cursor-pointer text-muted-foreground">
                                 View measured facet boundary geometry (latitude, longitude,
@@ -461,8 +482,9 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {visibleResult.disclaimer} Edge classifications are left unclassified until reviewed in
-            the measurement editor.
+            {visibleResult.disclaimer} *Boundary LF is the perimeter of an individual fitted facet
+            hull; it is not a categorized edge takeoff and may include shared or incomplete
+            boundaries. Eaves, rakes, ridges, hips, and valleys remain unclassified.
           </p>
           {visibleResult.roof.facets.length > 0 && (
             <p className="text-sm text-muted-foreground" role="status">

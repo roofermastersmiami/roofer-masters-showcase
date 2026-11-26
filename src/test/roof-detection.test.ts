@@ -196,3 +196,57 @@ describe("LiDAR address-to-footprint confidence metadata", () => {
     expect(parsed.footprint.address_to_footprint_distance_m).toBeUndefined();
   });
 });
+
+
+describe("building candidate and parcel match audit evidence", () => {
+  it("retains selected candidate ID and verified parcel evidence at the CRM boundary", () => {
+    const parcelMatch = {
+      status: "matched",
+      provider: "City of Miramar GIS",
+      folio: "verified-folio",
+      building_candidates_intersecting_parcel: 1,
+    };
+    const parsed = roofDetectionResponseSchema.parse({
+      ...response,
+      footprint: {
+        ...response.footprint,
+        candidate_id: "candidate-123",
+        parcel_match: parcelMatch,
+      },
+    });
+
+    expect(parsed.footprint.candidate_id).toBe("candidate-123");
+    expect(parsed.footprint.parcel_match).toEqual(parcelMatch);
+  });
+
+  it("remains compatible with older service responses without parcel evidence", () => {
+    const parsed = roofDetectionResponseSchema.parse(response);
+    expect(parsed.footprint.candidate_id).toBeUndefined();
+    expect(parsed.footprint.parcel_match).toBeUndefined();
+  });
+});
+
+
+describe("LiDAR facet boundary perimeter diagnostics", () => {
+  it("preserves the optional measured facet perimeter without treating it as classified edges", () => {
+    const parsed = roofDetectionResponseSchema.parse({
+      ...response,
+      roof: {
+        ...response.roof,
+        edge_measurement_status: "unclassified_facet_boundaries",
+        facets: response.roof.facets.map((facet) => ({
+          ...facet,
+          boundary_perimeter_lf: 142.6,
+        })),
+      },
+    });
+    expect(parsed.roof.facets[0].boundary_perimeter_lf).toBe(142.6);
+    expect(parsed.roof.edge_lengths_lf).toBeNull();
+    expect(parsed.roof.edge_measurement_status).toBe("unclassified_facet_boundaries");
+  });
+
+  it("accepts legacy facets without perimeter diagnostics", () => {
+    const parsed = roofDetectionResponseSchema.parse(response);
+    expect(parsed.roof.facets[0].boundary_perimeter_lf).toBeUndefined();
+  });
+});

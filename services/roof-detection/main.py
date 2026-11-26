@@ -163,11 +163,14 @@ async def resolve_broward_address_point(address: str) -> tuple[float, float, str
             response = await client.get(url, params=params)
             response.raise_for_status()
             payload = response.json()
-        if payload.get("error"):
+        # Unexpected payloads are provider failures, not fatal geocoding errors.
+        if not isinstance(payload, dict) or payload.get("error"):
             return None
         requested = _normalize_street_address(street_line)
         matches = []
         for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
             attrs = feature.get("attributes") or {}
             candidate_address = attrs.get("FULL_SITE_ADDRESS") or attrs.get("Address") or ""
             if _normalize_street_address(str(candidate_address)) != requested:
@@ -199,9 +202,17 @@ async def resolve_broward_address_point(address: str) -> tuple[float, float, str
 
 async def geocode_with_provenance(address: str) -> tuple[float, float, str, dict[str, Any]]:
     """Resolve an address once and retain the provider evidence for diagnostics."""
+    # Preserve the existing county exact-match contract: Broward address points
+    # carry the county folio used by downstream parcel corroboration. Miramar's
+    # city layer is the next authoritative fallback, before general geocoders.
     county_match = await resolve_broward_address_point(address)
     if county_match:
         lat, lon, matched_address, provenance = county_match
+        return lat, lon, matched_address, dict(provenance)
+
+    miramar_match = await resolve_miramar_address_point(address)
+    if miramar_match:
+        lat, lon, matched_address, provenance = miramar_match
         return lat, lon, matched_address, dict(provenance)
 
     headers = {"User-Agent": USER_AGENT}
@@ -244,6 +255,9 @@ def _normalize_street_address(value: str | None) -> str:
     street = value.split(",", 1)[0].upper()
     street = re.sub(r"[^A-Z0-9 ]+", " ", street)
     tokens = street.split()
+    # GIS address points commonly omit ordinal suffixes (189 AVE) while
+    # user-entered addresses include them (189TH AVE). Normalize numeric ordinals.
+    tokens = [re.sub(r"^(\d+)(?:ST|ND|RD|TH)$", r"\1", token) for token in tokens]
     expansions = {
         "N": "NORTH", "S": "SOUTH", "E": "EAST", "W": "WEST",
         "NE": "NORTHEAST", "NW": "NORTHWEST", "SE": "SOUTHEAST", "SW": "SOUTHWEST",
@@ -254,7 +268,147 @@ def _normalize_street_address(value: str | None) -> str:
     return " ".join(expansions.get(token, token) for token in tokens)
 
 
-async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None, dict[str, Any]]:
+async def resolve_miramar_address_point(
+    address: str,
+) -> tuple[float, float, str, dict[str, Any]] | None:
+    """Resolve an exact Miramar situs address to the City's official address point.
+
+    A coarse server-side query is followed by normalized full-address equality;
+    zero, duplicate, malformed, or unavailable records fall back to other geocoders.
+    """
+    street_line = address.split(",", 1)[0].strip()
+    tokens = re.findall(r"[A-Za-z0-9]+", street_line.upper())
+    if len(tokens) < 3 or not tokens[0].isdigit():
+        return None
+    excluded = {
+        "N", "S", "E", "W", "NE", "NW", "SE", "SW", "NORTH", "SOUTH",
+        "EAST", "WEST", "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+        "ST", "STREET", "AVE", "AVENUE", "RD", "ROAD", "DR", "DRIVE",
+        "BLVD", "BOULEVARD", "CT", "COURT", "LN", "LANE", "PL", "PLACE",
+        "TRL", "TRAIL", "PKWY", "PARKWAY", "HWY", "HIGHWAY",
+    }
+    street_tokens = [token for token in tokens[1:] if token not in excluded]
+    if not street_tokens:
+        return None
+    # Match the same ordinal normalization used for exact local comparison;
+    # otherwise a GIS value like "189 AVE" is excluded by a "%189TH%" query.
+    street_tokens = [re.sub(r"^(\d+)(?:ST|ND|RD|TH)$", r"\1", token) for token in street_tokens]
+    house_number = tokens[0].replace("'", "''")
+    street_token = street_tokens[0].replace("'", "''")
+    url = (
+        "https://smartcity.miramarfl.gov/server/rest/services/Hosted/"
+        "MiramarAddressPoints/FeatureServer/1/query"
+    )
+    params = {
+        "where": f"situsaddrfull LIKE '%{house_number}%' AND situsaddrfull LIKE '%{street_token}%'",
+        "outFields": "parcel_id,situsaddrfull,situszip,addr_id",
+        "returnGeometry": "true", "outSR": "4326", "resultRecordCount": "20", "f": "json",
+    }
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(12.0, connect=5.0), headers={"User-Agent": USER_AGENT}
+        ) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        # ArcGIS errors, malformed JSON shapes, and invalid features must safely
+        # fall through to the next geocoder instead of aborting address resolution.
+        if not isinstance(payload, dict) or payload.get("error"):
+            return None
+        requested = _normalize_street_address(street_line)
+        matches = []
+        for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
+            attrs = feature.get("attributes") or {}
+            candidate_address = str(attrs.get("situsaddrfull") or "")
+            if _normalize_street_address(candidate_address) != requested:
+                continue
+            geometry = feature.get("geometry") or {}
+            try:
+                lon, lat = float(geometry["x"]), float(geometry["y"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not (-80.95 <= lon <= -80.05 and 25.0 <= lat <= 26.5):
+                continue
+            matches.append((lat, lon, candidate_address, {
+                "source": "City of Miramar Official Address Points",
+                "parcel_id": attrs.get("parcel_id"),
+                "address_id": attrs.get("addr_id"),
+                "zip_code": attrs.get("situszip"),
+            }))
+        return matches[0] if len(matches) == 1 else None
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None
+
+
+async def resolve_miramar_situs_folio(address: str) -> tuple[str | None, dict[str, Any]]:
+    """Resolve a situs street address to the City's parcel FOLIO.
+
+    This deliberately uses the parcel-information layer rather than assuming
+    the address-point parcel_id field has the same identifier format as FOLIO.
+    """
+    street_line = address.split(",", 1)[0].strip()
+    tokens = re.findall(r"[A-Za-z0-9]+", street_line.upper())
+    if len(tokens) < 3 or not tokens[0].isdigit():
+        return None, {"status": "invalid_address", "provider": "City of Miramar Parcel Information"}
+    house_number = tokens[0].replace("'", "''")
+    excluded_tokens = {
+        "N", "S", "E", "W", "NE", "NW", "SE", "SW", "NORTH", "SOUTH", "EAST", "WEST",
+        "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+        "ST", "STREET", "AVE", "AVENUE", "AV", "RD", "ROAD", "DR", "DRIVE",
+        "BLVD", "BOULEVARD", "CT", "COURT", "LN", "LANE", "PL", "PLACE",
+        "TRL", "TRAIL", "PKWY", "PARKWAY", "HWY", "HIGHWAY",
+    }
+    street_tokens = [
+        token[:-2] if re.fullmatch(r"[0-9]+(?:ST|ND|RD|TH)", token) else token
+        for token in tokens[1:]
+    ]
+    street_token = next((token for token in street_tokens if token not in excluded_tokens), "")
+    if not street_token:
+        return None, {"status": "invalid_address", "provider": "City of Miramar Parcel Information"}
+    url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
+           "MiramarParcelsInfo/FeatureServer/21/query")
+    params = {
+        "where": f"SITUS_ADDR LIKE '%{house_number}%' AND SITUS_ADDR LIKE '%{street_token}%'",
+        "outFields": "FOLIO,SITUS_ADDR", "returnGeometry": "false",
+        "resultRecordCount": "50", "f": "json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0),
+                                     headers={"User-Agent": USER_AGENT}) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, dict) or payload.get("error"):
+            return None, {"status": "provider_error", "provider": "City of Miramar Parcel Information"}
+        requested = _normalize_street_address(street_line)
+        matches = []
+        for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
+            attrs = feature.get("attributes") or {}
+            situs = str(attrs.get("SITUS_ADDR") or "")
+            folio = str(attrs.get("FOLIO") or "").strip()
+            if folio and _normalize_street_address(situs) == requested:
+                matches.append((folio, situs))
+        unique_folios = {folio for folio, _ in matches}
+        if len(unique_folios) != 1:
+            return None, {
+                "status": "not_found" if not matches else "ambiguous",
+                "provider": "City of Miramar Parcel Information",
+                "match_count": len(unique_folios),
+            }
+        folio = next(iter(unique_folios))
+        return folio, {
+            "status": "matched", "provider": "City of Miramar Parcel Information",
+            "folio": folio, "matched_situs_address": matches[0][1],
+        }
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None, {"status": "provider_error", "provider": "City of Miramar Parcel Information"}
+
+
+async def resolve_miramar_parcel(lat: float, lon: float, expected_parcel_id: str | None = None) -> tuple[Polygon | None, dict[str, Any]]:
     """Find the unique Miramar parcel containing a resolved address point."""
     url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
            "MiramarParcels/FeatureServer/20/query")
@@ -267,10 +421,12 @@ async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None
             response = await client.get(url, params=params)
             response.raise_for_status()
             payload = response.json()
-        if payload.get("error"):
+        if not isinstance(payload, dict) or payload.get("error"):
             return None, {"status": "provider_error", "provider": "City of Miramar GIS"}
         point, matches = Point(lon, lat), []
         for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
             geometry = feature.get("geometry")
             if not geometry:
                 continue
@@ -287,12 +443,67 @@ async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None
             return None, {"status": "not_found" if not matches else "ambiguous",
                           "provider": "City of Miramar GIS", "match_count": len(matches)}
         polygon, identity = matches[0]
+        if expected_parcel_id is not None:
+            expected = str(expected_parcel_id).strip().upper()
+            actual = str(identity.get("folio") or "").strip().upper()
+            if not expected or not actual or expected != actual:
+                return None, {"status": "identity_mismatch", "provider": "City of Miramar GIS",
+                              "address_point_parcel_id": expected_parcel_id,
+                              "parcel_folio": identity.get("folio"), "object_id": identity.get("object_id")}
         return polygon, {"status": "matched", "provider": "City of Miramar GIS", **identity}
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         return None, {"status": "provider_error", "provider": "City of Miramar GIS"}
 
 
-async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None) -> tuple[Polygon, dict[str, Any]]:
+def _apply_parcel_candidate_evidence(
+    candidates: list[tuple[float, Polygon, dict[str, Any]]],
+    parcel_polygon: Polygon | None,
+    parcel_metadata: dict[str, Any],
+) -> tuple[list[tuple[float, Polygon, dict[str, Any]]], dict[str, Any]]:
+    """Narrow candidates only when exactly one building is substantially inside a verified parcel."""
+    evidence = dict(parcel_metadata)
+    # A geometry is usable for candidate filtering only when its parcel identity
+    # was independently verified. Keep this guard here as defense in depth:
+    # callers must not narrow buildings with stale or contradictory parcel
+    # geometry merely by passing a polygon.
+    if parcel_polygon is None or evidence.get("status") != "matched":
+        return candidates, evidence
+
+    parcel_candidates = [
+        row for row in candidates
+        if parcel_polygon.intersection(row[1]).area / max(row[1].area, 1e-12) >= 0.50
+    ]
+    evidence["building_candidates_intersecting_parcel"] = len(parcel_candidates)
+    for row in candidates:
+        row[2]["parcel_match"] = dict(evidence)
+
+    if len(parcel_candidates) == 1:
+        parcel_candidates[0][2]["parcel_match"] = dict(evidence)
+        return parcel_candidates, evidence
+
+    # Zero or multiple parcel intersections are not decisive. Keep all
+    # candidates so existing address/distance safeguards can decide.
+    return candidates, evidence
+
+
+def _find_explicit_candidate(
+    candidates: list[tuple[float, Polygon, dict[str, Any]]],
+    selected_candidate_id: str,
+) -> tuple[float, Polygon, dict[str, Any]] | None:
+    """Return only one exact candidate-id match; stale or duplicate ids fail closed."""
+    matches = [row for row in candidates if row[2].get("candidate_id") == selected_candidate_id]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _parcel_requires_explicit_candidate_selection(parcel_metadata: dict[str, Any]) -> bool:
+    """A verified parcel with no building overlap must never fall back to nearest-building auto-match."""
+    return (
+        parcel_metadata.get("status") == "matched"
+        and parcel_metadata.get("building_candidates_intersecting_parcel") == 0
+    )
+
+
+async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None, address_provenance: dict[str, Any] | None = None) -> tuple[Polygon, dict[str, Any]]:
     # Use a nationwide ArcGIS structures layer first. It is independent of
     # Overpass and covers US building polygons; OSM remains a secondary source.
     address_point = Point(lon, lat)
@@ -545,17 +756,21 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # multiple buildings and cannot independently establish the primary roof.
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
     if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
-        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon)
-        if parcel_polygon is not None and not selected_candidate_id:
-            parcel_candidates = [row for row in candidates
-                if parcel_polygon.intersection(row[1]).area / max(row[1].area, 1e-12) >= 0.50]
-            parcel_metadata["building_candidates_intersecting_parcel"] = len(parcel_candidates)
-            if len(parcel_candidates) == 1:
-                parcel_candidates[0][2]["parcel_match"] = dict(parcel_metadata)
-                candidates = parcel_candidates
-            else:
-                for row in candidates:
-                    row[2]["parcel_match"] = dict(parcel_metadata)
+        # Never compare the address-point parcel_id directly with polygon FOLIO:
+        # they are separate GIS-layer fields with no proven shared identifier contract.
+        # Resolve the situs address independently to a FOLIO, then reconcile FOLIO-to-FOLIO.
+        situs_folio, situs_evidence = await resolve_miramar_situs_folio(street_address)
+        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon, situs_folio)
+        parcel_metadata["situs_address_evidence"] = situs_evidence
+        if situs_folio is None and parcel_metadata.get("status") == "matched":
+            # Parcel geometry without a verified address-to-FOLIO link is not
+            # authoritative enough to narrow candidate buildings.
+            parcel_metadata["status"] = "identity_unverified"
+            parcel_metadata["address_point_parcel_id"] = (address_provenance or {}).get("parcel_id")
+        if not selected_candidate_id:
+            candidates, parcel_metadata = _apply_parcel_candidate_evidence(
+                candidates, parcel_polygon, parcel_metadata
+            )
         elif parcel_metadata.get("status") in {"ambiguous", "not_found"}:
             for row in candidates:
                 row[2]["parcel_match"] = dict(parcel_metadata)
@@ -595,11 +810,8 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # candidates returned in the 409 response. The identifier is tied to the
     # provider, source record, and polygon geometry so stale selections fail closed.
     if selected_candidate_id:
-        selected = [
-            candidate for candidate in candidates
-            if candidate[2].get("candidate_id") == selected_candidate_id
-        ]
-        if len(selected) != 1:
+        selected_candidate = _find_explicit_candidate(candidates, selected_candidate_id)
+        if selected_candidate is None:
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -621,8 +833,35 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                     ],
                 },
             )
-        _, selected_polygon, selected_metadata = selected[0]
+        _, selected_polygon, selected_metadata = selected_candidate
         return selected_polygon, selected_metadata
+
+    # A verified parcel that contains none of the mapped buildings is
+    # contradictory evidence. Do not let distance heuristics auto-select a
+    # neighboring structure; require an explicit user choice.
+    if _parcel_requires_explicit_candidate_selection(parcel_metadata):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "parcel_building_mismatch_confirmation_required",
+                "message": "The verified address parcel does not contain any mapped building candidate. Review the outlines and explicitly select the correct building before roof analysis.",
+                "candidate_count": len(candidates),
+                "parcel_match": parcel_metadata,
+                "candidates": [
+                    {
+                        "candidate_id": row[2]["candidate_id"],
+                        "provider": row[2].get("provider"),
+                        "source_id": row[2].get("source_id"),
+                        "area_sqft": row[2]["area_sqft"],
+                        "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
+                        "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
+                        "centroid": row[2]["centroid"],
+                        "polygon_geojson": mapping(row[1]),
+                    }
+                    for row in candidates
+                ],
+            },
+        )
 
     # A candidate outside the trusted 25 m auto-match radius may still be
     # the correct building when geocoding lands on the street. Surface it for
@@ -722,6 +961,32 @@ def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer,
     return _transform_polygon(polygon, to_xy), to_xy, to_ll
 
 
+def _facet_boundary_perimeter_lf(boundary_xy, plane_coefficients) -> float | None:
+    """Measure one observed facet boundary in 3D feet, not classified roof edges.
+
+    Facet hulls are independent; shared boundaries may be duplicated and hulls
+    may be incomplete. This diagnostic is not an eave/rake/ridge/hip/valley takeoff.
+    """
+    try:
+        a, b, c = (float(value) for value in plane_coefficients)
+        coordinates = [(float(point[0]), float(point[1])) for point in boundary_xy]
+    except (TypeError, ValueError, IndexError):
+        return None
+    values = (a, b, c, *(value for point in coordinates for value in point))
+    if len(coordinates) < 4 or not all(math.isfinite(value) for value in values):
+        return None
+    if coordinates[0] != coordinates[-1]:
+        coordinates.append(coordinates[0])
+    perimeter_m = 0.0
+    for first, second in zip(coordinates, coordinates[1:]):
+        dx, dy = second[0] - first[0], second[1] - first[1]
+        dz = a * dx + b * dy
+        perimeter_m += math.sqrt(dx * dx + dy * dy + dz * dz)
+    if not math.isfinite(perimeter_m) or perimeter_m <= 0:
+        return None
+    return perimeter_m * 3.280839895
+
+
 def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
     remaining = points.copy()
     facets: list[dict[str, Any]] = []
@@ -800,6 +1065,10 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                 component_array = np.asarray(component_points, dtype=float)
                 residuals = component_array[:, 2] - model.predict(component_array[:, :2])
                 fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
+                boundary_perimeter_lf = _facet_boundary_perimeter_lf(
+                    [[float(x), float(y)] for x, y in component.exterior.coords],
+                    [a, b, float(model.intercept_)],
+                )
                 facets.append({
                     "id": f"facet-{len(facets) + 1}",
                     "point_count": len(component_points),
@@ -816,6 +1085,10 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                         [round(float(x), 3), round(float(y), 3)]
                         for x, y in component.exterior.coords
                     ],
+                    "boundary_perimeter_lf": (
+                        round(boundary_perimeter_lf, 1)
+                        if boundary_perimeter_lf is not None else None
+                    ),
                 })
         remaining = remaining[~inliers]
     return facets
@@ -998,7 +1271,7 @@ async def analyze_roof(request: AnalyzeRequest):
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
         address_provenance = {"source": "User-provided coordinates"}
-    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
+    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id, address_provenance)
     footprint_sqft = _polygon_area_sqft(footprint)
     try:
         facets, lidar_meta = _read_lidar_facets(footprint)
@@ -1021,6 +1294,10 @@ async def analyze_roof(request: AnalyzeRequest):
             **_footprint_match_fields(footprint_meta),
             "polygon_geojson": mapping(footprint),
             "building_tags": footprint_meta.get("building_tags", {}),
+            # Preserve the candidate and parcel evidence used to accept this
+            # outline so the CRM can display an auditable match decision.
+            "candidate_id": footprint_meta.get("candidate_id"),
+            "parcel_match": footprint_meta.get("parcel_match"),
         },
         "lidar": {"source": "Microsoft Planetary Computer / USGS 3DEP COPC", **lidar_meta},
         "roof": {
@@ -1031,7 +1308,9 @@ async def analyze_roof(request: AnalyzeRequest):
                 max(facets, key=lambda facet: facet["area_sqft"])["pitch_rise_per_12"] if facets else None
             ),
             "facets": facets,
+            # Independent facet hulls do not establish shared-edge topology.
             "edge_lengths_lf": None,
+            "edge_measurement_status": "unclassified_facet_boundaries" if facets else "no_facets",
         },
         "fallback": {
             "available": not bool(facets),

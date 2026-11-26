@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 
@@ -11,6 +12,64 @@ from fastapi.testclient import TestClient
 import main as roof_service
 from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footprint_meters, _fit_facets, _polygon_area_sqft, _project_polygon
 from shapely.geometry import Point, Polygon, mapping
+
+
+def test_miramar_address_point_requires_one_exact_match(monkeypatch):
+    import asyncio
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"features": [{"attributes": {
+                "situsaddrfull": "3062 SW 189TH AVE", "parcel_id": "verified-folio",
+                "addr_id": "A123", "situszip": "33029",
+            }, "geometry": {"x": -80.4, "y": 25.98}}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            return False
+        async def get(self, url, params=None):
+            assert "%189%" in params["where"]
+            assert "%189TH%" not in params["where"]
+            return FakeResponse()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    result = asyncio.run(roof_service.resolve_miramar_address_point(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert result is not None
+    lat, lon, matched, evidence = result
+    assert (lat, lon) == pytest.approx((25.98, -80.4))
+    assert matched == "3062 SW 189TH AVE"
+    assert evidence["parcel_id"] == "verified-folio"
+
+
+def test_miramar_address_point_rejects_ambiguous_exact_matches(monkeypatch):
+    import asyncio
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            attrs = {"situsaddrfull": "3062 SW 189TH AVE", "parcel_id": "folio"}
+            return {"features": [
+                {"attributes": attrs, "geometry": {"x": -80.4, "y": 25.98}},
+                {"attributes": attrs, "geometry": {"x": -80.401, "y": 25.981}},
+            ]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return False
+        async def get(self, *args, **kwargs): return FakeResponse()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    assert asyncio.run(roof_service.resolve_miramar_address_point(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    )) is None
 
 
 def test_request_requires_address_or_complete_coordinates():
@@ -101,12 +160,19 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     async def fake_geocode(_address):
         return 25.00005, -79.99995, "Endpoint test address", {"source": "Test geocoder"}
 
-    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None, _address_provenance=None):
         return polygon, {
             "osm_way_id": 123,
             "building_tags": {"building": "house"},
             "address_point_inside_footprint": False,
             "address_to_footprint_distance_m": 3.27,
+            "candidate_id": "candidate-123",
+            "parcel_match": {
+                "status": "matched",
+                "provider": "City of Miramar GIS",
+                "folio": "verified-folio",
+                "building_candidates_intersecting_parcel": 1,
+            },
         }
 
     monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
@@ -126,6 +192,13 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     payload = response.json()
     assert payload["footprint"]["address_point_inside_footprint"] is False
     assert payload["footprint"]["address_to_footprint_distance_m"] == 3.27
+    assert payload["footprint"]["candidate_id"] == "candidate-123"
+    assert payload["footprint"]["parcel_match"] == {
+        "status": "matched",
+        "provider": "City of Miramar GIS",
+        "folio": "verified-folio",
+        "building_candidates_intersecting_parcel": 1,
+    }
     assert payload["status"] == "footprint_only"
     assert payload["address_match"] == {"source": "Test geocoder"}
 
@@ -304,7 +377,7 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
     async def fake_geocode(_address):
         return 25.00005, -79.99995, "Candidate selection test address", {"source": "Test geocoder"}
 
-    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None, _address_provenance=None):
         selected["candidate_id"] = _selected_candidate_id
         return polygon, {
             "provider": "test",
@@ -669,6 +742,37 @@ def test_resolve_miramar_parcel_returns_unique_polygon_and_folio(monkeypatch):
                         "object_id": 42, "folio": "514102000010"}
 
 
+def test_resolve_miramar_parcel_requires_matching_address_point_parcel_id(monkeypatch):
+    import asyncio
+
+    polygon = Polygon([(-80.4, 25.9), (-80.3, 25.9), (-80.3, 26.0), (-80.4, 26.0)])
+    class Response:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"features": [{"geometry": mapping(polygon),
+                "properties": {"OBJECTID": 42, "FOLIO": "514102000010"}}]}
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+
+    found, evidence = asyncio.run(
+        roof_service.resolve_miramar_parcel(25.95, -80.35, "514102000010")
+    )
+    assert found.equals(polygon)
+    assert evidence["status"] == "matched"
+
+    rejected, mismatch = asyncio.run(
+        roof_service.resolve_miramar_parcel(25.95, -80.35, "999999999999")
+    )
+    assert rejected is None
+    assert mismatch["status"] == "identity_mismatch"
+    assert mismatch["address_point_parcel_id"] == "999999999999"
+    assert mismatch["parcel_folio"] == "514102000010"
+
+
 @pytest.mark.parametrize(("features", "status", "count"), [
     ([], "not_found", 0),
     ([1, 2], "ambiguous", 2),
@@ -705,3 +809,254 @@ def test_resolve_miramar_parcel_reports_provider_failure(monkeypatch):
     found, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
     assert found is None
     assert evidence == {"status": "provider_error", "provider": "City of Miramar GIS"}
+
+
+@pytest.mark.parametrize(
+    ("parcel_polygon", "expected_count", "expected_intersections"),
+    [
+        (Polygon([(0, 0), (2, 0), (2, 2), (0, 2)]), 1, 1),
+        (Polygon([(0, 0), (4, 0), (4, 2), (0, 2)]), 2, 2),
+        (Polygon([(10, 10), (12, 10), (12, 12), (10, 12)]), 2, 0),
+    ],
+)
+def test_parcel_evidence_narrows_only_one_building_candidate(
+    parcel_polygon, expected_count, expected_intersections
+):
+    first = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "first"})
+    second = (2.0, Polygon([(3, 0), (4, 0), (4, 1), (3, 1)]), {"candidate_id": "second"})
+    candidates, evidence = roof_service._apply_parcel_candidate_evidence(
+        [first, second], parcel_polygon, {"status": "matched", "folio": "verified-folio"}
+    )
+    assert len(candidates) == expected_count
+    assert evidence["building_candidates_intersecting_parcel"] == expected_intersections
+    if expected_intersections == 1:
+        assert candidates[0][2]["candidate_id"] == "first"
+    else:
+        assert {row[2]["candidate_id"] for row in candidates} == {"first", "second"}
+
+
+def test_parcel_evidence_is_non_destructive_without_verified_polygon():
+    candidate = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "chosen"})
+    candidates, evidence = roof_service._apply_parcel_candidate_evidence(
+        [candidate], None, {"status": "provider_error"}
+    )
+    assert candidates == [candidate]
+    assert evidence["status"] == "provider_error"
+
+
+def test_parcel_evidence_cannot_filter_candidates_with_unverified_geometry():
+    candidate = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "chosen"})
+    unrelated_parcel = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])
+
+    for status in ("identity_mismatch", "provider_error", "not_found", "ambiguous"):
+        candidates, evidence = roof_service._apply_parcel_candidate_evidence(
+            [candidate], unrelated_parcel, {"status": status}
+        )
+        assert candidates == [candidate]
+        assert evidence["status"] == status
+
+
+def test_explicit_candidate_selection_is_not_filtered_by_parcel_evidence():
+    selected = (8.0, Polygon([(5, 5), (6, 5), (6, 6), (5, 6)]), {"candidate_id": "explicit"})
+    other = (2.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "other"})
+    parcel = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    # The actual resolver used by get_footprint honors the explicit ID even
+    # when parcel evidence would favor a different building.
+    filtered, _ = roof_service._apply_parcel_candidate_evidence(
+        [selected, other], parcel, {"status": "matched"}
+    )
+    assert [row[2]["candidate_id"] for row in filtered] == ["other"]
+    resolved = roof_service._find_explicit_candidate([selected, other], "explicit")
+    assert resolved is selected
+
+
+def test_explicit_candidate_selection_rejects_stale_or_duplicate_ids():
+    candidate = (1.0, Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), {"candidate_id": "same"})
+    duplicate = (2.0, Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]), {"candidate_id": "same"})
+    assert roof_service._find_explicit_candidate([candidate], "missing") is None
+    assert roof_service._find_explicit_candidate([candidate, duplicate], "same") is None
+
+
+@pytest.mark.parametrize(
+    ("evidence", "requires_selection"),
+    [
+        ({"status": "matched", "building_candidates_intersecting_parcel": 0}, True),
+        ({"status": "matched", "building_candidates_intersecting_parcel": 1}, False),
+        ({"status": "matched", "building_candidates_intersecting_parcel": 2}, False),
+        ({"status": "provider_error"}, False),
+        ({"status": "not_found"}, False),
+        ({"status": "ambiguous"}, False),
+    ],
+)
+def test_verified_parcel_mismatch_blocks_distance_auto_selection(evidence, requires_selection):
+    assert roof_service._parcel_requires_explicit_candidate_selection(evidence) is requires_selection
+
+
+def test_address_normalization_matches_ordinal_and_non_ordinal_street_numbers():
+    assert roof_service._normalize_street_address("3062 Southwest 189th Avenue") == roof_service._normalize_street_address("3062 SW 189 AVE")
+    assert roof_service._normalize_street_address("3062 Southwest 189th Avenue") != roof_service._normalize_street_address("3062 Southwest 190th Avenue")
+
+
+def test_miramar_parcel_rejects_malformed_non_object_payload(monkeypatch):
+    import asyncio
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return []
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    polygon, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
+    assert polygon is None
+    assert evidence["status"] == "provider_error"
+
+
+def test_resolve_miramar_situs_folio_matches_exact_situs_and_normalizes_ordinal(monkeypatch):
+    import asyncio
+
+    class Response:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"features": [
+                {"attributes": {"SITUS_ADDR": "3062 SW 189 AVE", "FOLIO": "514102000010"}},
+                {"attributes": {"SITUS_ADDR": "3062 SW 190 AVE", "FOLIO": "514102000011"}},
+            ]}
+
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, url, params=None):
+            assert "MiramarParcelsInfo/FeatureServer/21/query" in url
+            assert params["outFields"] == "FOLIO,SITUS_ADDR"
+            assert "%189%" in params["where"]
+            return Response()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    folio, evidence = asyncio.run(roof_service.resolve_miramar_situs_folio(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert folio == "514102000010"
+    assert evidence["status"] == "matched"
+    assert evidence["folio"] == folio
+
+
+@pytest.mark.parametrize(
+    ("features", "expected_status"),
+    [
+        ([], "not_found"),
+        ([
+            {"attributes": {"SITUS_ADDR": "3062 SW 189 AVE", "FOLIO": "514102000010"}},
+            {"attributes": {"SITUS_ADDR": "3062 SW 189 AVE", "FOLIO": "514102000011"}},
+        ], "ambiguous"),
+        ([{"attributes": {"SITUS_ADDR": "3062 SW 190 AVE", "FOLIO": "514102000010"}}], "not_found"),
+    ],
+)
+def test_resolve_miramar_situs_folio_fails_closed_for_missing_ambiguous_or_wrong_address(
+    monkeypatch, features, expected_status
+):
+    import asyncio
+
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {"features": features}
+
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    folio, evidence = asyncio.run(roof_service.resolve_miramar_situs_folio(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert folio is None
+    assert evidence["status"] == expected_status
+
+
+def test_resolve_miramar_situs_folio_reports_provider_failure(monkeypatch):
+    import asyncio
+
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs):
+            raise roof_service.httpx.ConnectError("offline")
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    folio, evidence = asyncio.run(roof_service.resolve_miramar_situs_folio(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert folio is None
+    assert evidence == {
+        "status": "provider_error",
+        "provider": "City of Miramar Parcel Information",
+    }
+
+
+
+def test_geocode_with_provenance_prefers_exact_miramar_address_point_before_nominatim(monkeypatch):
+    import asyncio
+
+    calls = []
+
+    async def no_county_match(_address):
+        calls.append("broward")
+        return None
+
+    async def miramar_match(_address):
+        calls.append("miramar")
+        return (
+            25.98,
+            -80.39,
+            "3062 SW 189 AVE",
+            {
+                "source": "City of Miramar Official Address Points",
+                "parcel_id": "address-layer-id",
+                "address_id": 123,
+                "zip_code": "33029",
+            },
+        )
+
+    async def unexpected_nominatim(_address):
+        calls.append("nominatim")
+        raise AssertionError("Nominatim must not override an exact official Miramar address point")
+
+    monkeypatch.setattr(roof_service, "resolve_broward_address_point", no_county_match)
+    monkeypatch.setattr(roof_service, "resolve_miramar_address_point", miramar_match)
+    monkeypatch.setattr(roof_service, "_geocode_nominatim", unexpected_nominatim, raising=False)
+
+    result = asyncio.run(
+        roof_service.geocode_with_provenance(
+            "3062 Southwest 189th Avenue, Miramar, FL 33029"
+        )
+    )
+
+    assert result[0:3] == (25.98, -80.39, "3062 SW 189 AVE")
+    assert result[3]["source"] == "City of Miramar Official Address Points"
+    assert calls == ["broward", "miramar"]
+
+
+def test_facet_boundary_perimeter_uses_fitted_plane_surface_distance():
+    perimeter = roof_service._facet_boundary_perimeter_lf(
+        [[0, 0], [3, 0], [3, 2], [0, 2], [0, 0]],
+        [0.5, 0.0, 10.0],
+    )
+    expected_m = 2 * math.sqrt(3**2 + 1.5**2) + 4
+    assert perimeter == pytest.approx(expected_m * 3.280839895, rel=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("boundary", "coefficients"),
+    [
+        ([[0, 0], [1, 0], [1, 1]], [0, 0, 0]),
+        ([[0, 0], [1, 0], [1, 1], [0, 0]], [float("nan"), 0, 0]),
+        ([[0, 0], [1, 0], [1, 1], [0, 0]], [0, 0]),
+    ],
+)
+def test_facet_boundary_perimeter_rejects_incomplete_or_invalid_geometry(boundary, coefficients):
+    assert roof_service._facet_boundary_perimeter_lf(boundary, coefficients) is None
