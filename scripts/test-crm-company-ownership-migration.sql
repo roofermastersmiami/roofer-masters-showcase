@@ -106,6 +106,10 @@ ALTER TABLE public.crm_customers
 ALTER TABLE public.crm_properties
   ADD COLUMN address text NOT NULL DEFAULT '';
 
+-- Match the production crm_properties natural-key constraint from migration 0013.
+ALTER TABLE public.crm_properties
+  ADD CONSTRAINT crm_properties_customer_id_address_key UNIQUE (customer_id,address);
+
 \ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql
 CREATE TRIGGER crm_sync_lead_customer
 AFTER INSERT OR UPDATE OF name,phone,email,address ON public.leads
@@ -118,7 +122,7 @@ VALUES (
   'New trigger test lead','3055550100','lead@example.com','100 Test Street'
 );
 
-DO $
+DO $$
 DECLARE
   lead_company uuid;
   customer_company uuid;
@@ -138,7 +142,7 @@ BEGIN
      OR property_company IS DISTINCT FROM lead_company THEN
     RAISE EXCEPTION 'Lead trigger failed to propagate company ownership to customer/property';
   END IF;
-END $;
+END $$;
 
 -- Same-company composite FK rejects a customer from another tenant.
 INSERT INTO public.crm_companies(id,name,created_by) VALUES
