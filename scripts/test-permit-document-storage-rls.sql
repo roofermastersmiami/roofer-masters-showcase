@@ -86,7 +86,7 @@ DO $$ BEGIN
   ) THEN
     RAISE EXCEPTION 'Authorization helper incorrectly grants Company A access to Company B file';
   END IF;
-END $;
+END $$;
 RESET ROLE;
 
 -- Company A owner cannot read, update, or delete Company B files.
