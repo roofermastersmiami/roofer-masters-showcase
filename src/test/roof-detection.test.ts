@@ -196,3 +196,32 @@ describe("LiDAR address-to-footprint confidence metadata", () => {
     expect(parsed.footprint.address_to_footprint_distance_m).toBeUndefined();
   });
 });
+
+
+describe("building candidate and parcel match audit evidence", () => {
+  it("retains selected candidate ID and verified parcel evidence at the CRM boundary", () => {
+    const parcelMatch = {
+      status: "matched",
+      provider: "City of Miramar GIS",
+      folio: "verified-folio",
+      building_candidates_intersecting_parcel: 1,
+    };
+    const parsed = roofDetectionResponseSchema.parse({
+      ...response,
+      footprint: {
+        ...response.footprint,
+        candidate_id: "candidate-123",
+        parcel_match: parcelMatch,
+      },
+    });
+
+    expect(parsed.footprint.candidate_id).toBe("candidate-123");
+    expect(parsed.footprint.parcel_match).toEqual(parcelMatch);
+  });
+
+  it("remains compatible with older service responses without parcel evidence", () => {
+    const parsed = roofDetectionResponseSchema.parse(response);
+    expect(parsed.footprint.candidate_id).toBeUndefined();
+    expect(parsed.footprint.parcel_match).toBeUndefined();
+  });
+});
