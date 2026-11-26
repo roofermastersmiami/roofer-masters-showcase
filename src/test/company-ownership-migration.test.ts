@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  new URL("../../drizzle/migrations/0042_crm_company_ownership_foundation.sql", import.meta.url),
+  resolve(process.cwd(), "drizzle/migrations/0042_crm_company_ownership_foundation.sql"),
   "utf8",
 );
 const journal = JSON.parse(
-  readFileSync(new URL("../../drizzle/migrations/meta/_journal.json", import.meta.url), "utf8"),
+  readFileSync(resolve(process.cwd(), "drizzle/migrations/meta/_journal.json"), "utf8"),
 );
 
 describe("CRM company ownership migration 0042", () => {
