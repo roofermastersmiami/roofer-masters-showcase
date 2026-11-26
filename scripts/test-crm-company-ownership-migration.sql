@@ -251,7 +251,7 @@ INSERT INTO public.crm_company_memberships(company_id,user_id,role) VALUES
  ('10000000-0000-0000-0000-000000000002',
   '00000000-0000-0000-0000-000000000002','crew');
 
-\\ir ../drizzle/migrations/0044_company_scoped_customer_save.sql
+\ir ../drizzle/migrations/0044_company_scoped_customer_save.sql
 
 -- Company A can create a customer; migration 0043's trigger creates the paired row.
 SET ROLE authenticated;
@@ -346,7 +346,7 @@ BEGIN
   END;
 END $$;
 
-\\echo 'PASS: migration 0044 authenticated company-scoped customer save, cross-company rejection, multiple-membership denial, role denial, and unauthenticated denial'
+\echo 'PASS: migration 0044 authenticated company-scoped customer save, cross-company rejection, multiple-membership denial, role denial, and unauthenticated denial'
 
 DO $$
 BEGIN
