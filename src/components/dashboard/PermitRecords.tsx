@@ -43,6 +43,7 @@ export function PermitRecords() {
   const [issuanceDates, setIssuanceDates] = useState<Record<string, string>>({});
   const [permitNumbers, setPermitNumbers] = useState<Record<string, string>>({});
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
+  const [inspectionConfirmations, setInspectionConfirmations] = useState<Record<string, string>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -117,6 +118,12 @@ export function PermitRecords() {
     },
     onSuccess: async () => { toast.success("Permit issuance recorded from the official document."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not record permit issuance."),
+  });
+  const saveInspectionConfirmation = useMutation({
+    mutationFn: ({ id, confirmationNumber }: { id: string; confirmationNumber: string }) =>
+      updatePermitInspection({ id, changes: { confirmation_number: confirmationNumber.trim() || null } }),
+    onSuccess: async () => { toast.success("Inspection confirmation details saved."); await refresh(); },
+    onError: (error) => toast.error(error.message || "Could not save confirmation details."),
   });
   const updateInspectionStatus = useMutation({
     mutationFn: ({ id, status, scheduledAt }: {
@@ -241,7 +248,7 @@ export function PermitRecords() {
                 <div className="space-y-3">{inspections.map((item) => {
                   const application = applications.find((candidate) => candidate.id === item.application_id);
                   return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-                    <div><div className="font-medium">{item.inspection_type}</div><div className="text-xs text-muted-foreground">{application?.jurisdiction_name ?? "Permit"} · {localDateTime(item.scheduled_at)}</div><div className="mt-1"><Badge variant="secondary">{String(item.scheduling_status).replaceAll("_", " ")}</Badge></div></div>
+                    <div><div className="font-medium">{item.inspection_type}</div><div className="text-xs text-muted-foreground">{application?.jurisdiction_name ?? "Permit"} · {localDateTime(item.scheduled_at)}</div><div className="mt-1"><Badge variant="secondary">{String(item.scheduling_status).replaceAll("_", " ")}</Badge></div><div className="mt-2 flex flex-wrap items-center gap-2"><Input aria-label="Municipal inspection confirmation number" placeholder="Confirmation number (optional)" className="h-8 w-56" value={inspectionConfirmations[item.id] ?? item.confirmation_number ?? ""} onChange={(event) => setInspectionConfirmations((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={120} /><Button size="sm" variant="ghost" disabled={saveInspectionConfirmation.isPending} onClick={() => saveInspectionConfirmation.mutate({ id: item.id, confirmationNumber: inspectionConfirmations[item.id] ?? item.confirmation_number ?? "" })}>Save confirmation</Button></div></div>
                     <div className="flex flex-wrap gap-2">
                       {item.scheduling_status === "requested" && <div className="flex flex-wrap items-center gap-2"><Input aria-label="Confirmed inspection date and time" type="datetime-local" className="h-8 w-48" value={scheduleDates[item.id] ?? ""} onChange={(event) => setScheduleDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!scheduleDates[item.id]} onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "scheduled", scheduledAt: scheduleDates[item.id] })}>Confirm scheduled</Button></div>}
                       {item.scheduling_status === "scheduled" && <><Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "passed" })}>Passed</Button><Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "failed" })}>Failed</Button></>}
