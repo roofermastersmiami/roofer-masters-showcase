@@ -35,7 +35,7 @@ export function PermitRecords() {
   const [applicationId, setApplicationId] = useState("");
   const [inspectionType, setInspectionType] = useState("Roof dry-in");
   const [inspectionDate, setInspectionDate] = useState("");
-  const [inspectionNotes, setInspectionNotes] = useState("");
+  const [inspectionNotes, setInspectionNotes] = useState("");\n  const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -203,7 +203,7 @@ export function PermitRecords() {
                   return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
                     <div><div className="font-medium">{item.inspection_type}</div><div className="text-xs text-muted-foreground">{application?.jurisdiction_name ?? "Permit"} · {localDateTime(item.scheduled_at)}</div><div className="mt-1"><Badge variant="secondary">{String(item.scheduling_status).replaceAll("_", " ")}</Badge></div></div>
                     <div className="flex flex-wrap gap-2">
-                      {item.scheduling_status === "requested" && <Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "scheduled" })}>Mark scheduled</Button>}
+                      {item.scheduling_status === "requested" && <div className="flex flex-wrap items-center gap-2"><Input aria-label="Confirmed inspection date and time" type="datetime-local" className="h-8 w-48" value={scheduleDates[item.id] ?? ""} onChange={(event) => setScheduleDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!scheduleDates[item.id]} onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "scheduled", scheduledAt: scheduleDates[item.id] })}>Confirm scheduled</Button></div>}
                       {item.scheduling_status === "scheduled" && <><Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "passed" })}>Passed</Button><Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "failed" })}>Failed</Button></>}
                       {!["passed", "failed", "cancelled"].includes(item.scheduling_status) && <Button size="sm" variant="ghost" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "cancelled" })}>Cancel</Button>}
                     </div>
