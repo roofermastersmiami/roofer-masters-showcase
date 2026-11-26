@@ -40,6 +40,8 @@ jobs:
           python-version: "3.11"
       - name: Validate Python receptionist syntax
         run: python -m compileall -q services/receptionist
+      - name: Upgrade npm to the Arborist-fixed release
+        run: npm install --global npm@11.21.2
       - name: Install dependencies
         run: npm install
       - name: Validate database migration journal
