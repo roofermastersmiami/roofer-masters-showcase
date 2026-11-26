@@ -86,3 +86,51 @@ describe("inspection status transitions", () => {
     expect(canTransitionPermitInspection("scheduled", "scheduled")).toBe(true);
   });
 });
+
+describe("complete permitting transition matrix", () => {
+  it("keeps every application status limited to its explicitly supported next states", () => {
+    const allowed: Record<
+      "draft" | "ready_to_submit" | "submitted" | "issued" | "rejected" | "expired" | "cancelled",
+      string[]
+    > = {
+      draft: ["draft", "ready_to_submit", "cancelled"],
+      ready_to_submit: ["ready_to_submit", "submitted", "cancelled"],
+      submitted: ["submitted", "issued", "rejected", "cancelled"],
+      issued: ["issued", "expired"],
+      rejected: ["rejected"],
+      expired: ["expired"],
+      cancelled: ["cancelled"],
+    };
+    const statuses = Object.keys(allowed) as Array<keyof typeof allowed>;
+
+    for (const current of statuses) {
+      for (const next of statuses) {
+        expect(canTransitionPermitApplication(current, next)).toBe(
+          allowed[current].includes(next),
+        );
+      }
+    }
+  });
+
+  it("keeps every inspection status limited to its explicitly supported next states", () => {
+    const allowed: Record<
+      "requested" | "scheduled" | "passed" | "failed" | "cancelled",
+      string[]
+    > = {
+      requested: ["requested", "scheduled", "cancelled"],
+      scheduled: ["scheduled", "passed", "failed", "cancelled"],
+      passed: ["passed"],
+      failed: ["failed"],
+      cancelled: ["cancelled"],
+    };
+    const statuses = Object.keys(allowed) as Array<keyof typeof allowed>;
+
+    for (const current of statuses) {
+      for (const next of statuses) {
+        expect(canTransitionPermitInspection(current, next)).toBe(
+          allowed[current].includes(next),
+        );
+      }
+    }
+  });
+});
