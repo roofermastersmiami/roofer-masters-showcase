@@ -244,6 +244,7 @@ $$;
 GRANT USAGE ON SCHEMA auth TO authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 
+ALTER TABLE public.leads ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.leads ADD COLUMN source text, ADD COLUMN page text;
 
 INSERT INTO public.crm_company_memberships(company_id,user_id,role) VALUES
