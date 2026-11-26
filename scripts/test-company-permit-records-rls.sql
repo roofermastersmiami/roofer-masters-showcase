@@ -91,11 +91,12 @@ INSERT INTO public.roof_jobs(id,lead_id,property_id) VALUES
 
 -- Migration 0047 requires exactly one company; run its ownership DDL against a
 -- one-company fixture first, then add Company B to test two-company RLS.
-DELETE FROM public.crm_company_memberships WHERE company_id='10000000-0000-0000-0000-000000000002';
-DELETE FROM public.crm_companies WHERE id='10000000-0000-0000-0000-000000000002';
+-- Remove the dependent roof job before its lead/property parents.
+DELETE FROM public.roof_jobs WHERE id='40000000-0000-0000-0000-000000000002';
 DELETE FROM public.leads WHERE company_id='10000000-0000-0000-0000-000000000002';
 DELETE FROM public.crm_properties WHERE company_id='10000000-0000-0000-0000-000000000002';
-DELETE FROM public.roof_jobs WHERE id='40000000-0000-0000-0000-000000000002';
+DELETE FROM public.crm_company_memberships WHERE company_id='10000000-0000-0000-0000-000000000002';
+DELETE FROM public.crm_companies WHERE id='10000000-0000-0000-0000-000000000002';
 
 \ir ../drizzle/migrations/0047_company_owned_roof_jobs.sql
 \ir ../drizzle/migrations/0048_company_permit_applications_and_inspections.sql
