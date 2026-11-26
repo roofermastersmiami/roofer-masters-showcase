@@ -159,7 +159,7 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     async def fake_geocode(_address):
         return 25.00005, -79.99995, "Endpoint test address", {"source": "Test geocoder"}
 
-    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None, _address_provenance=None):
         return polygon, {
             "osm_way_id": 123,
             "building_tags": {"building": "house"},
@@ -362,7 +362,7 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
     async def fake_geocode(_address):
         return 25.00005, -79.99995, "Candidate selection test address", {"source": "Test geocoder"}
 
-    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None, _address_provenance=None):
         selected["candidate_id"] = _selected_candidate_id
         return polygon, {
             "provider": "test",
