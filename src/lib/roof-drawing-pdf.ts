@@ -40,6 +40,59 @@ const LEGEND_EXTRA: Array<{ label: string; color: ReturnType<typeof rgb> }> = [
   { label: "Pitch Change", color: rgb(0.8, 0.6, 0.35) },
 ];
 
+export type RoofReportThemeId = "roofsnap" | "navy" | "charcoal" | "emerald";
+
+export type RoofReportTheme = {
+  label: string;
+  header: ReturnType<typeof rgb>;
+  footer: ReturnType<typeof rgb>;
+  footerDark: ReturnType<typeof rgb>;
+  accent: ReturnType<typeof rgb>;
+  facetFill: ReturnType<typeof rgb>;
+};
+
+/** Selectable sketch-report themes; "roofsnap" is the default. */
+export const ROOF_REPORT_THEMES: Record<RoofReportThemeId, RoofReportTheme> = {
+  roofsnap: {
+    label: "RoofSnap Classic (black & blue)",
+    header: rgb(0.05, 0.05, 0.06),
+    footer: rgb(0.04, 0.27, 0.52),
+    footerDark: rgb(0.02, 0.18, 0.38),
+    accent: rgb(0.08, 0.32, 0.52),
+    facetFill: rgb(0.87, 0.93, 0.98),
+  },
+  navy: {
+    label: "Roofer Masters Navy",
+    header: rgb(0.055, 0.16, 0.27),
+    footer: rgb(0.05, 0.22, 0.38),
+    footerDark: rgb(0.03, 0.13, 0.24),
+    accent: rgb(0.1, 0.38, 0.62),
+    facetFill: rgb(0.88, 0.92, 0.97),
+  },
+  charcoal: {
+    label: "Charcoal & Orange",
+    header: rgb(0.13, 0.13, 0.14),
+    footer: rgb(0.17, 0.17, 0.18),
+    footerDark: rgb(0.08, 0.08, 0.09),
+    accent: rgb(0.9, 0.45, 0.1),
+    facetFill: rgb(0.93, 0.93, 0.92),
+  },
+  emerald: {
+    label: "Emerald",
+    header: rgb(0.04, 0.3, 0.22),
+    footer: rgb(0.05, 0.36, 0.26),
+    footerDark: rgb(0.03, 0.23, 0.16),
+    accent: rgb(0.05, 0.45, 0.3),
+    facetFill: rgb(0.89, 0.95, 0.91),
+  },
+};
+
+export type RoofReportOptions = {
+  theme?: RoofReportThemeId;
+  /** Page-1 logo size multiplier (0.5–1.6). Default 1. */
+  logoScale?: number;
+};
+
 export type RoofPdfLayout = {
   brand: { x: number; y: number };
   tagline: { x: number; y: number };
@@ -85,7 +138,13 @@ export async function roofDrawingPdf(
   address: string,
   photos: Photo[] = [],
   clientContact: { phone?: string; email?: string } = {},
+  options: RoofReportOptions = {},
 ) {
+  const theme = ROOF_REPORT_THEMES[options.theme ?? "roofsnap"];
+  const logoScale = Math.min(1.6, Math.max(0.5, options.logoScale ?? 1));
+  const BLUE = theme.accent;
+  const NAVY = theme.header;
+  const FACET_FILL = theme.facetFill;
   const m = measureDrawing(d);
   const reportAudit = auditRoofReport(d);
   const pdf = await PDFDocument.create();
@@ -198,13 +257,13 @@ export async function roofDrawingPdf(
 
   // RoofSnap chrome: black header bar on diagram/measurement pages.
   const drawBlackHeader = (p: PDFPage, heading: string) => {
-    p.drawRectangle({ x: 0, y: PAGE_H - 52, width: PAGE_W, height: 52, color: BLACK });
+    p.drawRectangle({ x: 0, y: PAGE_H - 52, width: PAGE_W, height: 52, color: theme.header });
     p.drawText(heading, { x: 30, y: PAGE_H - 34, size: 15, font: bold, color: WHITE });
   };
   // RoofSnap chrome: blue footer band with project/property/prepared-by.
   const drawBlueFooter = (p: PDFPage, heading: string, number: number) => {
-    p.drawRectangle({ x: 0, y: 26, width: PAGE_W, height: 104, color: FOOTER_BLUE });
-    p.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: 26, color: FOOTER_DARK });
+    p.drawRectangle({ x: 0, y: 26, width: PAGE_W, height: 104, color: theme.footer });
+    p.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: 26, color: theme.footerDark });
     p.drawText("Project from", { x: 30, y: 108, size: 11, font: bold, color: WHITE });
     p.drawText(projectShort, { x: 30, y: 92, size: 11, font: bold, color: WHITE });
     p.drawText(projectLong, { x: 30, y: 78, size: 7.5, font, color: SILVER });
@@ -379,13 +438,13 @@ export async function roofDrawingPdf(
     218,
     150,
   );
-  const logoDrawn = await embedLogo(firstPage, 185, 118, 120);
+  const logoDrawn = await embedLogo(firstPage, 185 * logoScale, 118 * logoScale, 120);
   if (!logoDrawn) {
     const brandText = "ROOFER MASTERS";
     firstPage.drawText(brandText, {
-      x: PAGE_W - MARGIN - bold.widthOfTextAtSize(brandText, 18),
+      x: PAGE_W - MARGIN - bold.widthOfTextAtSize(brandText, 18 * logoScale),
       y: 196,
-      size: 18,
+      size: 18 * logoScale,
       font: bold,
       color: NAVY,
     });
