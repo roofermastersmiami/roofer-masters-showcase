@@ -32,6 +32,14 @@ const requestSchema = z.object({
     .default([]),
 });
 
+// tenant-audit: reviewed — new authenticated staff email sender.
+// requireSupabaseAuth middleware plus an explicit has_any_role check
+// (admin, office, sales, production_manager) run before any work. The
+// function reads and writes no tenant data; it only sends caller-supplied
+// content through the server-side SMTP transport. Input is zod-bounded:
+// one recipient, subject/message length caps, at most 5 attachments and
+// 20 MB total, with a %PDF- magic check on .pdf attachments. SMTP secrets
+// come from server env only and are never returned to the caller.
 export const sendCrmEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => requestSchema.parse(input))

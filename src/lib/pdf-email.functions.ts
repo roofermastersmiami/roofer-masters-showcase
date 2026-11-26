@@ -25,6 +25,10 @@ const requestSchema = z.object({
     .max(10),
 });
 
+// tenant-audit: reviewed — refactor only: the SMTP transport was
+// extracted verbatim into src/lib/smtp.server.ts and is shared with the
+// CRM email function. This handler's auth middleware, role checks,
+// storage access, validation, and behavior are unchanged.
 export const emailRoofReportPdfs = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => requestSchema.parse(input))
