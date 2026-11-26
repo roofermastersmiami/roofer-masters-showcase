@@ -97,7 +97,13 @@ INSERT INTO public.crm_companies(id,name,created_by) VALUES
  ('10000000-0000-0000-0000-000000000002','Second Company','00000000-0000-0000-0000-000000000002');
 INSERT INTO public.crm_customers(id,company_id) VALUES
  ('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002');
-DO $$
+INSERT INTO public.leads(id,company_id) VALUES
+ ('20000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000002');
+INSERT INTO public.crm_properties(id,customer_id,company_id) VALUES
+ ('40000000-0000-0000-0000-000000000003',
+  '30000000-0000-0000-0000-000000000002',
+  '10000000-0000-0000-0000-000000000002');
+DO $
 BEGIN
   BEGIN
     INSERT INTO public.crm_properties(id,customer_id,company_id)
@@ -107,7 +113,32 @@ BEGIN
     RAISE EXCEPTION 'Cross-company customer/property link unexpectedly succeeded';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
-END $$;
+  BEGIN
+    INSERT INTO public.leads(id,customer_id,company_id)
+    VALUES ('20000000-0000-0000-0000-000000000004',
+            '30000000-0000-0000-0000-000000000002',
+            '10000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'Cross-company lead/customer link unexpectedly succeeded';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.crm_customers(id,source_lead_id,company_id)
+    VALUES ('30000000-0000-0000-0000-000000000003',
+            '20000000-0000-0000-0000-000000000003',
+            '10000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'Cross-company customer/source-lead link unexpectedly succeeded';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.roof_report_orders(id,customer_id,property_id,company_id)
+    VALUES ('50000000-0000-0000-0000-000000000002',
+            '30000000-0000-0000-0000-000000000001',
+            '40000000-0000-0000-0000-000000000003',
+            '10000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'Cross-company roof report/property link unexpectedly succeeded';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+END $;
 
 -- Preserve the original source-lead deletion behavior: only source_lead_id is nulled.
 DELETE FROM public.leads WHERE id='20000000-0000-0000-0000-000000000001';
