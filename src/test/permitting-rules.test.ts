@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_NOC_THRESHOLD_CENTS,
+  getRecordedBudgetForNocScreening,
   requiresNoticeOfCommencement,
 } from "@/lib/permitting-rules";
 
@@ -21,6 +22,14 @@ describe("Notice of Commencement threshold", () => {
     expect(requiresNoticeOfCommencement(500_001).required).toBe(true);
     expect(requiresNoticeOfCommencement(600_000, 550_000).required).toBe(true);
     expect(requiresNoticeOfCommencement(550_000, 550_000).required).toBe(false);
+  });
+
+  it("treats the existing zero-cent job placeholder as an unrecorded budget", () => {
+    expect(getRecordedBudgetForNocScreening(0)).toBeNull();
+    expect(getRecordedBudgetForNocScreening(null)).toBeNull();
+    expect(getRecordedBudgetForNocScreening(undefined)).toBeNull();
+    expect(getRecordedBudgetForNocScreening(500_001)).toBe(500_001);
+    expect(requiresNoticeOfCommencement(getRecordedBudgetForNocScreening(0)).reason).toBe("value_unknown");
   });
 
   it("marks missing contract values as unknown instead of treating them as zero", () => {
