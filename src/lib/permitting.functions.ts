@@ -148,7 +148,7 @@ export const recordPermitRejection = createServerFn({ method: "POST" })
     const timestamp = new Date().toISOString();
     const existingNotes = String(current.notes ?? "").trim();
     const notes = existingNotes
-      ? `${existingNotes}\\n\\nRejection reason (recorded ${timestamp}): ${data.reason}`
+      ? `${existingNotes}\n\nRejection reason (recorded ${timestamp}): ${data.reason}`
       : `Rejection reason (recorded ${timestamp}): ${data.reason}`;
     const { data: saved, error } = await db.from("roof_permit_applications")
       .update({ application_status: "rejected", notes })
