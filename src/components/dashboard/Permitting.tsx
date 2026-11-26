@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { jobsQuery } from "./operations-data";
 import type { Lead } from "./data";
+import { requiresNoticeOfCommencement } from "@/lib/permitting-rules";
 
 const permitStatuses = [
   { value: "not_started", label: "Not started" },
@@ -54,6 +55,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
     submitted: records.filter((job) => job.permit_status === "submitted").length,
     approved: records.filter((job) => job.permit_status === "approved").length,
     inspections: records.filter((job) => !!job.inspection_at).length,
+    nocReview: records.filter((job) => requiresNoticeOfCommencement(job.budget_cents ?? 0).required).length,
   }), [records]);
 
   const visible = records.filter((job) => {
@@ -81,11 +83,12 @@ export function Permitting({ leads }: { leads: Lead[] }) {
         </Badge>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <PermitCount title="Roofing jobs" value={counts.total} description="Jobs currently in the CRM" />
         <PermitCount title="Not started" value={counts.notStarted} description="Permit status needs review" />
         <PermitCount title="Submitted" value={counts.submitted} description="Marked submitted in job records" />
         <PermitCount title="Approved" value={counts.approved} description="Marked approved in job records" />
+        <PermitCount title="NOC review" value={counts.nocReview} description="Job value exceeds the $5,000 default threshold" />
       </div>
 
       <Card>
@@ -93,7 +96,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
           <CardTitle className="text-base">Permit status pipeline</CardTitle>
           <CardDescription>
             This is a view of the existing job-level status only. It does not yet track permit IDs,
-            jurisdiction application records, correction notices, or official portal responses.
+            jurisdiction application records, correction notices, or official portal responses. The NOC flag is a preliminary $5,000 value-threshold reminder only; verify the applicable jurisdiction rule before relying on it.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -143,6 +146,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                     <th className="px-3 py-3 font-medium">Job status</th>
                     <th className="px-3 py-3 font-medium">Permit status</th>
                     <th className="px-3 py-3 font-medium">Inspection</th>
+                    <th className="px-3 py-3 font-medium">NOC threshold</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,6 +167,13 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                         </Badge>
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
+                      <td className="px-3 py-3">
+                        {requiresNoticeOfCommencement(job.budget_cents ?? 0).required ? (
+                          <Badge variant="outline">Review NOC</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Below default threshold</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
