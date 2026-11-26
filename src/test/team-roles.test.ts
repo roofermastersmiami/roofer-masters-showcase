@@ -25,6 +25,13 @@ describe("team roles", () => {
       expect(canOpen(["sales"], s)).toBe(true);
     expect(canOpen(["sales"], "jobs")).toBe(false);
   });
+  it("permitting is available to office, sales and production, but not crew or accounting", () => {
+    for (const r of ["office", "sales", "production_manager"])
+      expect(canOpen([r], "permitting")).toBe(true);
+    for (const r of ["crew", "accounting"])
+      expect(canOpen([r], "permitting")).toBe(false);
+    expect(canOpen(["admin"], "permitting")).toBe(true);
+  });
   it("production manager works jobs and roof reports, not leads", () => {
     expect(canOpen(["production_manager"], "jobs")).toBe(true);
     expect(canOpen(["production_manager"], "measurements")).toBe(true);
