@@ -173,8 +173,10 @@ export function detectedFacetsToDrawing(
     const deduped = points.filter(
       (point, index) =>
         index === 0 ||
-        Math.hypot(point.x - (points[index - 1]?.x ?? NaN), point.z - (points[index - 1]?.z ?? NaN)) >
-          0.01,
+        Math.hypot(
+          point.x - (points[index - 1]?.x ?? NaN),
+          point.z - (points[index - 1]?.z ?? NaN),
+        ) > 0.01,
     );
     if (deduped.length < 3)
       throw new Error(`Facet ${projected[i]?.facet.id ?? i} has too few unique boundary points.`);
@@ -270,12 +272,7 @@ export function detectedFacetsToDrawing(
     }
     return inside / steps;
   };
-  const classifyShared = (
-    i: number,
-    j: number,
-    mid: Pt2,
-    segmentSlope: number,
-  ): EdgeType => {
+  const classifyShared = (i: number, j: number, mid: Pt2, segmentSlope: number): EdgeType => {
     const planeI = facetPlanes[i];
     const planeJ = facetPlanes[j];
     if (!planeI || !planeJ) return "other";

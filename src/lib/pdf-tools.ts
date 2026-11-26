@@ -1,11 +1,5 @@
 import { PDFDocument as CantooDocument } from "@cantoo/pdf-lib";
-import {
-  PDFDocument,
-  StandardFonts,
-  degrees,
-  rgb,
-  type PDFPage,
-} from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb, type PDFPage } from "pdf-lib";
 
 /**
  * Free, in-browser PDF operations for the CRM's PDF Tools section.
@@ -63,10 +57,7 @@ export async function organizePages(
 }
 
 /** Create a simple text document PDF (title + wrapped body text). */
-export async function createPdfFromText(
-  title: string,
-  body: string,
-): Promise<Uint8Array> {
+export async function createPdfFromText(title: string, body: string): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -146,10 +137,7 @@ export type PdfTextEdit = {
 };
 
 /** Edit a PDF: stamp text (optionally over a whiteout box) onto pages. */
-export async function editPdfText(
-  bytes: Uint8Array,
-  edits: PdfTextEdit[],
-): Promise<Uint8Array> {
+export async function editPdfText(bytes: Uint8Array, edits: PdfTextEdit[]): Promise<Uint8Array> {
   const doc = await PDFDocument.load(bytes);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const pages = doc.getPages();
@@ -184,10 +172,7 @@ export type PdfComment = {
  * position and a comments page is appended listing every note, so comments
  * are visible in any PDF viewer (no proprietary annotation layer needed).
  */
-export async function addComments(
-  bytes: Uint8Array,
-  comments: PdfComment[],
-): Promise<Uint8Array> {
+export async function addComments(bytes: Uint8Array, comments: PdfComment[]): Promise<Uint8Array> {
   if (comments.length === 0) throw new Error("Add at least one comment.");
   const doc = await PDFDocument.load(bytes);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -253,10 +238,7 @@ export type FormFieldSpec = {
 };
 
 /** Prepare a form: add fillable AcroForm fields to a PDF. */
-export async function prepareForm(
-  bytes: Uint8Array,
-  fields: FormFieldSpec[],
-): Promise<Uint8Array> {
+export async function prepareForm(bytes: Uint8Array, fields: FormFieldSpec[]): Promise<Uint8Array> {
   if (fields.length === 0) throw new Error("Add at least one form field.");
   const doc = await PDFDocument.load(bytes);
   const form = doc.getForm();
@@ -266,7 +248,8 @@ export async function prepareForm(
     const page = pages[field.page];
     if (!page) throw new Error(`Page ${field.page + 1} does not exist in this PDF.`);
     const name = field.name.trim().slice(0, 60);
-    if (!name || usedNames.has(name)) throw new Error(`Form field name "${name}" is empty or duplicated.`);
+    if (!name || usedNames.has(name))
+      throw new Error(`Form field name "${name}" is empty or duplicated.`);
     usedNames.add(name);
     if (field.kind === "checkbox") {
       const checkbox = form.createCheckBox(name);
@@ -411,7 +394,12 @@ export async function protectPdf(
   doc.encrypt({
     userPassword,
     ownerPassword: ownerPassword || userPassword,
-    permissions: { printing: "highResolution", modifying: false, copying: false, annotating: false },
+    permissions: {
+      printing: "highResolution",
+      modifying: false,
+      copying: false,
+      annotating: false,
+    },
   });
   return doc.save();
 }

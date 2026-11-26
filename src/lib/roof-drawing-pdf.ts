@@ -289,11 +289,7 @@ export async function roofDrawingPdf(
       ].filter(Boolean),
       218,
     );
-    block(
-      "Prepared by",
-      ["Roofer Masters", "(305) 942-3093", "roofermasters@gmail.com"],
-      428,
-    );
+    block("Prepared by", ["Roofer Masters", "(305) 942-3093", "roofermasters@gmail.com"], 428);
     p.drawText("ROOFER MASTERS", { x: 30, y: 10, size: 7, font: bold, color: SILVER });
     const centerLabel = heading;
     p.drawText(centerLabel, {
@@ -428,7 +424,12 @@ export async function roofDrawingPdf(
   };
   infoBlock(
     "Property address",
-    [customer || "Not provided", address || "Not provided", clientContact.phone ?? "", clientContact.email ?? ""].filter(Boolean),
+    [
+      customer || "Not provided",
+      address || "Not provided",
+      clientContact.phone ?? "",
+      clientContact.email ?? "",
+    ].filter(Boolean),
     30,
     176,
   );
@@ -498,7 +499,10 @@ export async function roofDrawingPdf(
   const diagramMap = makeMapPoint({ x: 46, y: 196, width: PAGE_W - 92, height: 500 });
   drawFacetOutlines(measurePage, diagramMap, { fill: false, edgeWidth: 1.6 });
   // Edge labels in feet/inches, rotated along each edge, RoofSnap-style.
-  const labeled = new Map<string, { a: { x: number; y: number }; b: { x: number; y: number }; length: number }>();
+  const labeled = new Map<
+    string,
+    { a: { x: number; y: number }; b: { x: number; y: number }; length: number }
+  >();
   d.planes.forEach((plane) =>
     plane.points.forEach((point, index) => {
       const next = plane.points[(index + 1) % plane.points.length];
@@ -572,7 +576,13 @@ export async function roofDrawingPdf(
   const wasteX = [118, 196, 274, 352, 430, 508];
   const wasteTableY = 684;
   // Suggested-waste flag over the suggested column.
-  numbersPage.drawRectangle({ x: wasteX[3]! - 34, y: wasteTableY + 16, width: 104, height: 15, color: BLACK });
+  numbersPage.drawRectangle({
+    x: wasteX[3]! - 34,
+    y: wasteTableY + 16,
+    width: 104,
+    height: 15,
+    color: BLACK,
+  });
   numbersPage.drawText("SUGGESTED WASTE", {
     x: wasteX[3]! - 34 + (104 - bold.widthOfTextAtSize("SUGGESTED WASTE", 7.5)) / 2,
     y: wasteTableY + 20.5,
@@ -589,7 +599,12 @@ export async function roofDrawingPdf(
       color: BLACK,
     });
   });
-  numbersPage.drawLine({ start: { x: 30, y: wasteTableY - 6 }, end: { x: PAGE_W - 30, y: wasteTableY - 6 }, thickness: 0.6, color: SILVER });
+  numbersPage.drawLine({
+    start: { x: 30, y: wasteTableY - 6 },
+    end: { x: PAGE_W - 30, y: wasteTableY - 6 },
+    thickness: 0.6,
+    color: SILVER,
+  });
   const wasteRow = (label: string, values: string[], yPos: number) => {
     numbersPage.drawText(label, { x: 30, y: yPos, size: 9.5, font: bold, color: INK });
     values.forEach((value, index) =>
@@ -601,7 +616,12 @@ export async function roofDrawingPdf(
         color: INK,
       }),
     );
-    numbersPage.drawLine({ start: { x: 30, y: yPos - 6 }, end: { x: PAGE_W - 30, y: yPos - 6 }, thickness: 0.6, color: SILVER });
+    numbersPage.drawLine({
+      start: { x: 30, y: yPos - 6 },
+      end: { x: PAGE_W - 30, y: yPos - 6 },
+      thickness: 0.6,
+      color: SILVER,
+    });
   };
   wasteRow(
     "Squares",
@@ -610,9 +630,7 @@ export async function roofDrawingPdf(
   );
   wasteRow(
     "Area",
-    wasteColumns.map(
-      (col) => `${Math.round(m.area * col.factor).toLocaleString("en-US")} ft.²`,
-    ),
+    wasteColumns.map((col) => `${Math.round(m.area * col.factor).toLocaleString("en-US")} ft.²`),
     wasteTableY - 40,
   );
   const wasteNote =
@@ -738,7 +756,13 @@ export async function roofDrawingPdf(
       drawBlueFooter(page, "SKETCH REPORT  |  REPORT DETAILS", pageNumber);
       y = PAGE_H - 84;
     }
-    page.drawRectangle({ x: MARGIN, y: y - 20, width: PAGE_W - MARGIN * 2, height: 23, color: LIGHT });
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - 20,
+      width: PAGE_W - MARGIN * 2,
+      height: 23,
+      color: LIGHT,
+    });
     page.drawRectangle({ x: MARGIN, y: y - 20, width: 4, height: 23, color: BLUE });
     page.drawText(safe(heading), { x: MARGIN + 12, y: y - 13, size: 10, font: bold, color: NAVY });
     y -= 34;
@@ -777,7 +801,13 @@ export async function roofDrawingPdf(
       y = PAGE_H - 84;
     }
     if (alternate)
-      page.drawRectangle({ x: MARGIN, y: y - 5, width: PAGE_W - MARGIN * 2, height: 19, color: LIGHT });
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - 5,
+        width: PAGE_W - MARGIN * 2,
+        height: 19,
+        color: LIGHT,
+      });
     page.drawText(safe(label), { x: MARGIN + 8, y, size: 8.5, font, color: MUTED });
     const val = safe(value);
     const maxWidth = PAGE_W - MARGIN * 2 - 190;
@@ -792,7 +822,13 @@ export async function roofDrawingPdf(
       drawBlueFooter(page, "SKETCH REPORT  |  REPORT DETAILS", pageNumber);
       y = PAGE_H - 84;
     }
-    page.drawRectangle({ x: MARGIN, y: y - 6, width: PAGE_W - MARGIN * 2, height: 22, color: NAVY });
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - 6,
+      width: PAGE_W - MARGIN * 2,
+      height: 22,
+      color: NAVY,
+    });
     for (const col of columns)
       page.drawText(col.label, { x: col.x, y, size: 8, font: bold, color: WHITE });
     y -= 27;
@@ -805,7 +841,13 @@ export async function roofDrawingPdf(
       y = PAGE_H - 84;
     }
     if (index % 2 === 0)
-      page.drawRectangle({ x: MARGIN, y: y - 5, width: PAGE_W - MARGIN * 2, height: 19, color: LIGHT });
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - 5,
+        width: PAGE_W - MARGIN * 2,
+        height: 19,
+        color: LIGHT,
+      });
     values.forEach((value, i) => {
       const col = columns[i];
       if (!col) return;
@@ -826,7 +868,11 @@ export async function roofDrawingPdf(
   row("Property address", address || "Not provided");
   row("Prepared for", customer || "Not provided", true);
   row("Roofing system", d.roof_type);
-  row("Measurement status", d.verified ? "Owner-reviewed drawing" : "Preliminary / not owner-reviewed", true);
+  row(
+    "Measurement status",
+    d.verified ? "Owner-reviewed drawing" : "Preliminary / not owner-reviewed",
+    true,
+  );
   const accuracyLabels = {
     photo_estimate: "Estimated from photo / public aerial",
     public_lidar_estimate: "Preliminary estimate from public LiDAR elevation data",

@@ -79,8 +79,18 @@ const TOOLS: Array<{ id: ToolId; label: string; blurb: string; icon: typeof File
   { id: "create", label: "Create a PDF", blurb: "From text or photos", icon: FilePlus2 },
   { id: "combine", label: "Combine files", blurb: "Merge PDFs into one", icon: Files },
   { id: "organize", label: "Organize pages", blurb: "Reorder, delete, rotate", icon: ListOrdered },
-  { id: "comments", label: "Add comments", blurb: "Numbered notes on pages", icon: MessageSquarePlus },
-  { id: "esign", label: "Request e-signature", blurb: "Send documents to sign", icon: FileSignature },
+  {
+    id: "comments",
+    label: "Add comments",
+    blurb: "Numbered notes on pages",
+    icon: MessageSquarePlus,
+  },
+  {
+    id: "esign",
+    label: "Request e-signature",
+    blurb: "Send documents to sign",
+    icon: FileSignature,
+  },
   { id: "ocr", label: "Scan & OCR", blurb: "Make scans searchable", icon: ScanText },
   { id: "protect", label: "Protect a PDF", blurb: "AES-256 password lock", icon: Lock },
   { id: "redact", label: "Redact a PDF", blurb: "Permanently remove content", icon: Eraser },
@@ -135,7 +145,11 @@ function PagePreview({
   onPoint?: (x: number, y: number) => void;
   onRect?: (rect: { x: number; y: number; width: number; height: number }) => void;
 }) {
-  const [preview, setPreview] = useState<{ dataUrl: string; widthPt: number; heightPt: number } | null>(null);
+  const [preview, setPreview] = useState<{
+    dataUrl: string;
+    widthPt: number;
+    heightPt: number;
+  } | null>(null);
   const dragStart = useRef<{ fx: number; fy: number } | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -172,7 +186,11 @@ function PagePreview({
         const end = toPdf(event);
         const start = dragStart.current;
         dragStart.current = null;
-        if (onRect && start && (Math.abs(end.fx - start.fx) > 0.02 || Math.abs(end.fy - start.fy) > 0.02)) {
+        if (
+          onRect &&
+          start &&
+          (Math.abs(end.fx - start.fx) > 0.02 || Math.abs(end.fy - start.fy) > 0.02)
+        ) {
           const x = Math.min(start.fx, end.fx) * preview.widthPt;
           const topFy = Math.min(start.fy, end.fy);
           const width = Math.abs(end.fx - start.fx) * preview.widthPt;
@@ -198,7 +216,13 @@ function PageNav({
   if (pageCount <= 1) return null;
   return (
     <div className="flex items-center gap-2 text-sm">
-      <Button type="button" variant="outline" size="sm" disabled={pageIndex === 0} onClick={() => onChange(pageIndex - 1)}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={pageIndex === 0}
+        onClick={() => onChange(pageIndex - 1)}
+      >
         Previous
       </Button>
       <span>
@@ -217,7 +241,13 @@ function PageNav({
   );
 }
 
-function EmailComposer({ result, defaultSubject }: { result: ResultFile; defaultSubject?: string }) {
+function EmailComposer({
+  result,
+  defaultSubject,
+}: {
+  result: ResultFile;
+  defaultSubject?: string;
+}) {
   const sendEmail = useServerFn(sendCrmEmail);
   const [open, setOpen] = useState(false);
   const [to, setTo] = useState("");
@@ -234,15 +264,29 @@ function EmailComposer({ result, defaultSubject }: { result: ResultFile; default
     <div className="grid w-full gap-2 rounded border p-3">
       <Label>
         Send to
-        <Input type="email" value={to} onChange={(event) => setTo(event.target.value)} placeholder="customer@email.com" />
+        <Input
+          type="email"
+          value={to}
+          onChange={(event) => setTo(event.target.value)}
+          placeholder="customer@email.com"
+        />
       </Label>
       <Label>
         Subject
-        <Input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Your document from Roofer Masters" />
+        <Input
+          value={subject}
+          onChange={(event) => setSubject(event.target.value)}
+          placeholder="Your document from Roofer Masters"
+        />
       </Label>
       <Label>
         Message
-        <Textarea rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Hi, attached is your document…" />
+        <Textarea
+          rows={4}
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder="Hi, attached is your document…"
+        />
       </Label>
       <div className="flex gap-2">
         <Button
@@ -282,8 +326,8 @@ function EmailComposer({ result, defaultSubject }: { result: ResultFile; default
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Sends from the Roofer Masters mailbox. If email is not configured yet, the error message names the missing server
-        settings.
+        Sends from the Roofer Masters mailbox. If email is not configured yet, the error message
+        names the missing server settings.
       </p>
     </div>
   );
@@ -359,7 +403,10 @@ function PanelShell({
     <div className="grid gap-3">
       {children}
       {error && (
-        <p role="alert" className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm">
+        <p
+          role="alert"
+          className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm"
+        >
           {error}
         </p>
       )}
@@ -441,8 +488,14 @@ function ExportPanel() {
           onClick={() =>
             run(async () => {
               const text = await exportPdfToText(source!.bytes);
-              downloadBytes(new TextEncoder().encode(text), `${baseName(source!.name)}.txt`, "text/plain");
-              setNote("Exported the text already inside the PDF. For scanned pages with no text, use Scan & OCR.");
+              downloadBytes(
+                new TextEncoder().encode(text),
+                `${baseName(source!.name)}.txt`,
+                "text/plain",
+              );
+              setNote(
+                "Exported the text already inside the PDF. For scanned pages with no text, use Scan & OCR.",
+              );
             })
           }
         >
@@ -460,14 +513,24 @@ function CreatePanel() {
   const [mode, setMode] = useState<"text" | "images">("text");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [images, setImages] = useState<Array<{ bytes: Uint8Array; kind: "png" | "jpg"; name: string }>>([]);
+  const [images, setImages] = useState<
+    Array<{ bytes: Uint8Array; kind: "png" | "jpg"; name: string }>
+  >([]);
   return (
     <PanelShell error={error} result={result}>
       <div className="flex gap-2">
-        <Button type="button" variant={mode === "text" ? "default" : "outline"} onClick={() => setMode("text")}>
+        <Button
+          type="button"
+          variant={mode === "text" ? "default" : "outline"}
+          onClick={() => setMode("text")}
+        >
           From text
         </Button>
-        <Button type="button" variant={mode === "images" ? "default" : "outline"} onClick={() => setMode("images")}>
+        <Button
+          type="button"
+          variant={mode === "images" ? "default" : "outline"}
+          onClick={() => setMode("images")}
+        >
           From photos / images
         </Button>
       </div>
@@ -475,11 +538,20 @@ function CreatePanel() {
         <div className="grid gap-2">
           <Label>
             Title
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Document title" />
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Document title"
+            />
           </Label>
           <Label>
             Text
-            <Textarea rows={10} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Type or paste the document text…" />
+            <Textarea
+              rows={10}
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              placeholder="Type or paste the document text…"
+            />
           </Label>
           <Button
             type="button"
@@ -599,7 +671,8 @@ function OrganizePanel() {
   const [rotateDegrees, setRotateDegrees] = useState("90");
   const [rotations, setRotations] = useState<Record<number, number>>({});
   useEffect(() => {
-    if (pageCount > 0 && !order) setOrder(Array.from({ length: pageCount }, (_, i) => i + 1).join(", "));
+    if (pageCount > 0 && !order)
+      setOrder(Array.from({ length: pageCount }, (_, i) => i + 1).join(", "));
   }, [pageCount, order]);
   return (
     <PanelShell error={error} result={result}>
@@ -613,7 +686,12 @@ function OrganizePanel() {
           <div className="flex flex-wrap items-end gap-2">
             <Label>
               Rotate page
-              <Input value={rotatePage} onChange={(event) => setRotatePage(event.target.value)} placeholder="Page #" className="w-24" />
+              <Input
+                value={rotatePage}
+                onChange={(event) => setRotatePage(event.target.value)}
+                placeholder="Page #"
+                className="w-24"
+              />
             </Label>
             <Label>
               By
@@ -640,7 +718,10 @@ function OrganizePanel() {
             </Button>
             {Object.keys(rotations).length > 0 && (
               <span className="text-sm text-muted-foreground">
-                Rotations: {Object.entries(rotations).map(([page, deg]) => `p.${Number(page) + 1} → ${deg}°`).join(", ")}
+                Rotations:{" "}
+                {Object.entries(rotations)
+                  .map(([page, deg]) => `p.${Number(page) + 1} → ${deg}°`)
+                  .join(", ")}
               </span>
             )}
           </div>
@@ -678,11 +759,19 @@ function ProtectPanel() {
       <div className="flex flex-wrap gap-2">
         <Label>
           Password to open
-          <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <Input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
         </Label>
         <Label>
           Confirm password
-          <Input type="password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+          <Input
+            type="password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+          />
         </Label>
       </div>
       <Button
@@ -698,8 +787,8 @@ function ProtectPanel() {
         Protect with AES-256 password
       </Button>
       <p className="text-sm text-muted-foreground">
-        The file cannot be opened without the password, and copying/editing are disabled. Keep the password somewhere safe —
-        it cannot be recovered from the file.
+        The file cannot be opened without the password, and copying/editing are disabled. Keep the
+        password somewhere safe — it cannot be recovered from the file.
       </p>
     </PanelShell>
   );
@@ -713,7 +802,9 @@ function CompressPanel() {
     <PanelShell error={error} result={result}>
       <SourcePicker source={source} onSource={setSource} />
       {source && (
-        <p className="text-sm text-muted-foreground">Current size: {(source.bytes.length / 1024).toFixed(0)} KB</p>
+        <p className="text-sm text-muted-foreground">
+          Current size: {(source.bytes.length / 1024).toFixed(0)} KB
+        </p>
       )}
       <div className="flex flex-wrap gap-2">
         <Button
@@ -756,8 +847,8 @@ function CompressPanel() {
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Image modes rebuild pages as photos — best for scanned or photo-heavy PDFs. Lossless keeps the original text and
-        vector content and only rebuilds the file structure.
+        Image modes rebuild pages as photos — best for scanned or photo-heavy PDFs. Lossless keeps
+        the original text and vector content and only rebuilds the file structure.
       </p>
     </PanelShell>
   );
@@ -778,7 +869,9 @@ function EditPanel() {
       {source && (
         <div className="grid gap-2">
           <PageNav pageIndex={pageIndex} pageCount={pageCount} onChange={setPageIndex} />
-          <p className="text-sm text-muted-foreground">Click on the page where the text should go, type it, then add it.</p>
+          <p className="text-sm text-muted-foreground">
+            Click on the page where the text should go, type it, then add it.
+          </p>
           <PagePreview
             bytes={source.bytes}
             pageIndex={pageIndex}
@@ -786,15 +879,31 @@ function EditPanel() {
           />
           <div className="flex flex-wrap items-end gap-2">
             <Label className="grow">
-              Text to add{pendingPoint ? ` at (${pendingPoint.x.toFixed(0)}, ${pendingPoint.y.toFixed(0)})` : ""}
-              <Input value={text} onChange={(event) => setText(event.target.value)} placeholder="Click the page, then type…" />
+              Text to add
+              {pendingPoint
+                ? ` at (${pendingPoint.x.toFixed(0)}, ${pendingPoint.y.toFixed(0)})`
+                : ""}
+              <Input
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder="Click the page, then type…"
+              />
             </Label>
             <Label>
               Size
-              <Input type="number" className="w-20" value={size} onChange={(event) => setSize(event.target.value)} />
+              <Input
+                type="number"
+                className="w-20"
+                value={size}
+                onChange={(event) => setSize(event.target.value)}
+              />
             </Label>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={cover} onChange={(event) => setCover(event.target.checked)} />
+              <input
+                type="checkbox"
+                checked={cover}
+                onChange={(event) => setCover(event.target.checked)}
+              />
               Cover what's underneath
             </label>
             <Button
@@ -824,7 +933,8 @@ function EditPanel() {
           </div>
           {edits.length > 0 && (
             <p className="text-sm text-muted-foreground">
-              {edits.length} edit(s) queued: {edits.map((edit) => `"${edit.text}" (p.${edit.page + 1})`).join(", ")}
+              {edits.length} edit(s) queued:{" "}
+              {edits.map((edit) => `"${edit.text}" (p.${edit.page + 1})`).join(", ")}
             </p>
           )}
           <Button
@@ -840,8 +950,8 @@ function EditPanel() {
             Apply edits
           </Button>
           <p className="text-sm text-muted-foreground">
-            Edit adds new text (with an optional white cover box). The original text stays in the file underneath a cover
-            box — use Redact when content must be permanently removed.
+            Edit adds new text (with an optional white cover box). The original text stays in the
+            file underneath a cover box — use Redact when content must be permanently removed.
           </p>
         </div>
       )}
@@ -862,12 +972,22 @@ function CommentsPanel() {
       {source && (
         <div className="grid gap-2">
           <PageNav pageIndex={pageIndex} pageCount={pageCount} onChange={setPageIndex} />
-          <p className="text-sm text-muted-foreground">Click where the note belongs, write the comment, and add it.</p>
-          <PagePreview bytes={source.bytes} pageIndex={pageIndex} onPoint={(x, y) => setPendingPoint({ x, y })} />
+          <p className="text-sm text-muted-foreground">
+            Click where the note belongs, write the comment, and add it.
+          </p>
+          <PagePreview
+            bytes={source.bytes}
+            pageIndex={pageIndex}
+            onPoint={(x, y) => setPendingPoint({ x, y })}
+          />
           <div className="flex flex-wrap items-end gap-2">
             <Label className="grow">
               Comment{pendingPoint ? ` on page ${pageIndex + 1}` : ""}
-              <Input value={text} onChange={(event) => setText(event.target.value)} placeholder="Click the page, then write the note…" />
+              <Input
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder="Click the page, then write the note…"
+              />
             </Label>
             <Button
               type="button"
@@ -876,7 +996,13 @@ function CommentsPanel() {
               onClick={() => {
                 setComments((current) => [
                   ...current,
-                  { page: pageIndex, x: pendingPoint!.x, y: pendingPoint!.y, text: text.trim(), author: "Roofer Masters" },
+                  {
+                    page: pageIndex,
+                    x: pendingPoint!.x,
+                    y: pendingPoint!.y,
+                    text: text.trim(),
+                    author: "Roofer Masters",
+                  },
                 ]);
                 setText("");
               }}
@@ -906,8 +1032,8 @@ function CommentsPanel() {
             Add comments to PDF
           </Button>
           <p className="text-sm text-muted-foreground">
-            Each comment becomes a numbered yellow marker on the page plus a comments page at the end, so the notes are
-            visible in any PDF viewer.
+            Each comment becomes a numbered yellow marker on the page plus a comments page at the
+            end, so the notes are visible in any PDF viewer.
           </p>
         </div>
       )}
@@ -927,7 +1053,8 @@ function RedactPanel() {
         <div className="grid gap-2">
           <PageNav pageIndex={pageIndex} pageCount={pageCount} onChange={setPageIndex} />
           <p className="text-sm text-muted-foreground">
-            Drag a box over anything that must be removed — a price, an address, a signature. Repeat on any page.
+            Drag a box over anything that must be removed — a price, an address, a signature. Repeat
+            on any page.
           </p>
           <PagePreview
             bytes={source.bytes}
@@ -937,7 +1064,8 @@ function RedactPanel() {
           {rects.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>
-                {rects.length} redaction box(es): {rects.map((rect) => `p.${rect.page + 1}`).join(", ")}
+                {rects.length} redaction box(es):{" "}
+                {rects.map((rect) => `p.${rect.page + 1}`).join(", ")}
               </span>
               <Button type="button" variant="ghost" size="sm" onClick={() => setRects([])}>
                 Clear all
@@ -949,7 +1077,11 @@ function RedactPanel() {
             disabled={busy || rects.length === 0}
             onClick={() =>
               run(async () => {
-                const bytes = await rasterizePdf(source.bytes, { dpi: 200, quality: 0.9, redactions: rects });
+                const bytes = await rasterizePdf(source.bytes, {
+                  dpi: 200,
+                  quality: 0.9,
+                  redactions: rects,
+                });
                 setResult({ bytes, name: `${baseName(source.name)}-redacted.pdf` });
               })
             }
@@ -957,8 +1089,8 @@ function RedactPanel() {
             Redact permanently
           </Button>
           <p className="text-sm text-muted-foreground">
-            Redaction rebuilds every page as an image with the boxes burned in — the covered content is gone from the file,
-            not just hidden. Text in the result is no longer selectable.
+            Redaction rebuilds every page as an image with the boxes burned in — the covered content
+            is gone from the file, not just hidden. Text in the result is no longer selectable.
           </p>
         </div>
       )}
@@ -980,16 +1112,30 @@ function FormPanel() {
       {source && (
         <div className="grid gap-2">
           <PageNav pageIndex={pageIndex} pageCount={pageCount} onChange={setPageIndex} />
-          <p className="text-sm text-muted-foreground">Click where a fillable field should start, name it, and add it.</p>
-          <PagePreview bytes={source.bytes} pageIndex={pageIndex} onPoint={(x, y) => setPendingPoint({ x, y })} />
+          <p className="text-sm text-muted-foreground">
+            Click where a fillable field should start, name it, and add it.
+          </p>
+          <PagePreview
+            bytes={source.bytes}
+            pageIndex={pageIndex}
+            onPoint={(x, y) => setPendingPoint({ x, y })}
+          />
           <div className="flex flex-wrap items-end gap-2">
             <Label>
               Field name
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Customer signature date" />
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="e.g. Customer signature date"
+              />
             </Label>
             <Label>
               Type
-              <select className="h-9 rounded border bg-background px-2" value={kind} onChange={(event) => setKind(event.target.value as FormFieldSpec["kind"])}>
+              <select
+                className="h-9 rounded border bg-background px-2"
+                value={kind}
+                onChange={(event) => setKind(event.target.value as FormFieldSpec["kind"])}
+              >
                 <option value="text">Text</option>
                 <option value="checkbox">Checkbox</option>
                 <option value="dropdown">Dropdown</option>
@@ -1021,7 +1167,10 @@ function FormPanel() {
           </div>
           {fields.length > 0 && (
             <p className="text-sm text-muted-foreground">
-              Fields: {fields.map((field) => `${field.name} (${field.kind}, p.${field.page + 1})`).join(", ")}
+              Fields:{" "}
+              {fields
+                .map((field) => `${field.name} (${field.kind}, p.${field.page + 1})`)
+                .join(", ")}
             </p>
           )}
           <Button
@@ -1076,12 +1225,18 @@ function SignPanel() {
                       type="checkbox"
                       className="ml-2"
                       checked={Boolean(values[field.name])}
-                      onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.checked }))}
+                      onChange={(event) =>
+                        setValues((current) => ({ ...current, [field.name]: event.target.checked }))
+                      }
                     />
                   ) : (
                     <Input
-                      value={typeof values[field.name] === "string" ? (values[field.name] as string) : ""}
-                      onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
+                      value={
+                        typeof values[field.name] === "string" ? (values[field.name] as string) : ""
+                      }
+                      onChange={(event) =>
+                        setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                      }
                     />
                   )}
                 </Label>
@@ -1094,17 +1249,28 @@ function SignPanel() {
               <SignatureCanvas ref={signaturePad} canvasProps={{ width: 340, height: 120 }} />
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => signaturePad.current?.clear()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => signaturePad.current?.clear()}
+              >
                 Clear signature
               </Button>
             </div>
             <Label>
               Printed name (optional)
-              <Input value={printedName} onChange={(event) => setPrintedName(event.target.value)} className="max-w-sm" />
+              <Input
+                value={printedName}
+                onChange={(event) => setPrintedName(event.target.value)}
+                className="max-w-sm"
+              />
             </Label>
           </div>
           <PageNav pageIndex={pageIndex} pageCount={pageCount} onChange={setPageIndex} />
-          <p className="text-sm text-muted-foreground">Click on the page where the signature should be stamped.</p>
+          <p className="text-sm text-muted-foreground">
+            Click on the page where the signature should be stamped.
+          </p>
           <PagePreview
             bytes={source.bytes}
             pageIndex={pageIndex}
@@ -1127,7 +1293,8 @@ function SignPanel() {
                   if (!canvas) throw new Error("Draw your signature first.");
                   const signatureBlob = await new Promise<Blob>((resolve, reject) =>
                     canvas.toBlob(
-                      (blob) => (blob ? resolve(blob) : reject(new Error("Signature capture failed"))),
+                      (blob) =>
+                        blob ? resolve(blob) : reject(new Error("Signature capture failed")),
                       "image/png",
                     ),
                   );
@@ -1145,7 +1312,8 @@ function SignPanel() {
                     }),
                   });
                 }
-                if (bytes === source.bytes) throw new Error("Fill a field or place a signature first.");
+                if (bytes === source.bytes)
+                  throw new Error("Fill a field or place a signature first.");
                 setResult({ bytes, name: `${baseName(source.name)}-signed.pdf` });
               })
             }
@@ -1166,7 +1334,11 @@ function OcrPanel() {
   const [text, setText] = useState("");
   return (
     <PanelShell error={error} result={result}>
-      <SourcePicker source={source} onSource={setSource} accept="application/pdf,image/png,image/jpeg" />
+      <SourcePicker
+        source={source}
+        onSource={setSource}
+        accept="application/pdf,image/png,image/jpeg"
+      />
       <Button
         type="button"
         disabled={busy || !source}
@@ -1189,9 +1361,9 @@ function OcrPanel() {
         {busy ? progress || "Running OCR…" : "Run OCR — make searchable PDF"}
       </Button>
       <p className="text-sm text-muted-foreground">
-        Works on scanned PDFs and photos of documents. Recognition runs in your browser (free); the first run downloads the
-        English language pack. The result keeps the page images and adds an invisible text layer, so the PDF becomes
-        searchable and copyable.
+        Works on scanned PDFs and photos of documents. Recognition runs in your browser (free); the
+        first run downloads the English language pack. The result keeps the page images and adds an
+        invisible text layer, so the PDF becomes searchable and copyable.
       </p>
       {text && (
         <Label>
@@ -1210,16 +1382,19 @@ function EsignPanel() {
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted-foreground">
-        For a tracked signature with a signing record, send the proposal from Estimates &amp; proposals — the customer signs
-        through a secure link and the signed PDF is stored on the job. To simply email any PDF with a signature request, pick
-        the file below.
+        For a tracked signature with a signing record, send the proposal from Estimates &amp;
+        proposals — the customer signs through a secure link and the signed PDF is stored on the
+        job. To simply email any PDF with a signature request, pick the file below.
       </p>
       <Button type="button" onClick={() => openProposals()}>
         Open Estimates &amp; proposals
       </Button>
       <SourcePicker source={source} onSource={setSource} />
       {emailResult && (
-        <EmailComposer result={emailResult} defaultSubject="Please review and sign — Roofer Masters" />
+        <EmailComposer
+          result={emailResult}
+          defaultSubject="Please review and sign — Roofer Masters"
+        />
       )}
     </div>
   );
@@ -1233,8 +1408,8 @@ export function PdfTools() {
       <div>
         <h2 className="text-lg font-semibold">PDF Tools</h2>
         <p className="text-sm text-muted-foreground">
-          Every Acrobat-style tool, free — the work happens in your browser, so documents never leave your computer except
-          when you email them.
+          Every Acrobat-style tool, free — the work happens in your browser, so documents never
+          leave your computer except when you email them.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">

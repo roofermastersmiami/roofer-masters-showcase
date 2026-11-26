@@ -104,7 +104,9 @@ export function RoofMeasurements({
   const aerialFn = useServerFn(loadPublicAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
-  const [reportTheme, setReportTheme] = useState<"roofsnap" | "navy" | "charcoal" | "emerald">("roofsnap");
+  const [reportTheme, setReportTheme] = useState<"roofsnap" | "navy" | "charcoal" | "emerald">(
+    "roofsnap",
+  );
   const [logoSize, setLogoSize] = useState("1");
   const userEditedDrawing = useRef(false);
   const { go } = useCrm();

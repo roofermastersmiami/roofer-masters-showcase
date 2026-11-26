@@ -81,9 +81,9 @@ describe("LiDAR facet roof-system selection", () => {
       expect(drawing.planes).toHaveLength(1);
       // A lone facet's perimeter is classified from its slope: eaves run
       // across the downslope, rakes along it. Nothing stays "other".
-      expect(
-        drawing.planes[0]?.edges.every((edge) => edge === "eave" || edge === "rake"),
-      ).toBe(true);
+      expect(drawing.planes[0]?.edges.every((edge) => edge === "eave" || edge === "rake")).toBe(
+        true,
+      );
     },
   );
 });
@@ -212,11 +212,7 @@ describe("LiDAR edge classification for automatic reports", () => {
       origin.lon + x / lonScale,
       elevation,
     ]) as [number, number, number][];
-  const facet = (
-    id: string,
-    pitchRise: number,
-    points: [number, number, number][],
-  ) => ({
+  const facet = (id: string, pitchRise: number, points: [number, number, number][]) => ({
     id,
     point_count: 500,
     pitch_degrees: (Math.atan(pitchRise / 12) * 180) / Math.PI,

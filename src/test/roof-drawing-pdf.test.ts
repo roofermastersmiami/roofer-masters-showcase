@@ -1,11 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
-import {
-  ROOF_REPORT_THEMES,
-  roofDrawingPdf,
-  type RoofReportThemeId,
-} from "@/lib/roof-drawing-pdf";
+import { ROOF_REPORT_THEMES, roofDrawingPdf, type RoofReportThemeId } from "@/lib/roof-drawing-pdf";
 
 const origin = { lat: 25.998, lon: -80.3995 };
 const lonScale = 111320 * Math.cos((origin.lat * Math.PI) / 180) * (1 / 0.3048);
@@ -56,10 +52,28 @@ const response = {
     dominant_pitch_rise_per_12: 6,
     edge_lengths_lf: { ridge: 14, hip: 108, valley: 0, eave: 172, rake: 0, pitch_change: 0 },
     facets: [
-      facet("facet-1", [[0, 0, E], [50, 0, E], [32, 18, R], [18, 18, R]]),
-      facet("facet-2", [[50, 36, E], [0, 36, E], [18, 18, R], [32, 18, R]]),
-      facet("facet-3", [[0, 36, E], [0, 0, E], [18, 18, R]]),
-      facet("facet-4", [[50, 0, E], [50, 36, E], [32, 18, R]]),
+      facet("facet-1", [
+        [0, 0, E],
+        [50, 0, E],
+        [32, 18, R],
+        [18, 18, R],
+      ]),
+      facet("facet-2", [
+        [50, 36, E],
+        [0, 36, E],
+        [18, 18, R],
+        [32, 18, R],
+      ]),
+      facet("facet-3", [
+        [0, 36, E],
+        [0, 0, E],
+        [18, 18, R],
+      ]),
+      facet("facet-4", [
+        [50, 0, E],
+        [50, 36, E],
+        [32, 18, R],
+      ]),
     ],
   },
   fallback: { available: false, mode: null, footprint_area_sqft: 1800, message: null },

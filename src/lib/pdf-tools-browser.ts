@@ -31,10 +31,7 @@ export type RenderedPage = {
   scale: number; // canvas pixels per PDF point
 };
 
-export async function renderPdfPages(
-  bytes: Uint8Array,
-  dpi = 150,
-): Promise<RenderedPage[]> {
+export async function renderPdfPages(bytes: Uint8Array, dpi = 150): Promise<RenderedPage[]> {
   const pdfjs = await loadPdfJs();
   const pdf = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
   const scale = dpi / 72;
@@ -238,9 +235,7 @@ export async function ocrPdfToSearchable(
             opacity: 0,
             // Stretch the invisible glyphs to the recognized word box so
             // text selection maps to the right area.
-            ...(Math.abs(measured - widthPt) > 1
-              ? { wordSpacing: 0, characterSpacing: 0 }
-              : {}),
+            ...(Math.abs(measured - widthPt) > 1 ? { wordSpacing: 0, characterSpacing: 0 } : {}),
           });
         }
       } else if (data.text.trim()) {
