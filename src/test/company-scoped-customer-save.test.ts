@@ -21,7 +21,7 @@ describe("company-scoped customer save RPC", () => {
 
   it("fails closed unless the actor has exactly one company membership", () => {
     expect(migration).toMatch(/auth\.uid\(\) IS NULL/i);
-    expect(migration).toMatch(/SELECT count\(\) INTO company_count/i);
+    expect(migration).toMatch(/SELECT count\(\*\) INTO company_count/i);
     expect(migration).toMatch(/company_count <> 1/i);
   });
 
