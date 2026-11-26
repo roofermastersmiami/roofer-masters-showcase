@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CalendarPlus, ClipboardList, Plus, RefreshCw } from "lucide-react";
+import { AlertCircle, CalendarPlus, ClipboardList, Download, FileText, Plus, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createPermitPacketPdf } from "@/lib/permit-packet";
+import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +48,8 @@ export function PermitRecords() {
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
   const [inspectionConfirmations, setInspectionConfirmations] = useState<Record<string, string>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
+  const [permitFiles, setPermitFiles] = useState<Record<string, { name: string; path: string }[]>>({});
+  const [fileBusy, setFileBusy] = useState<Record<string, boolean>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -138,6 +141,63 @@ export function PermitRecords() {
     onSuccess: async (_saved, variables) => { setInspectionConfirmations((current) => { const next = { ...current }; delete next[variables.id]; return next; }); toast.success("Inspection confirmation details saved."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not save confirmation details."),
   });
+  const loadPermitFiles = async (application: (typeof applications)[number]) => {
+    try {
+      const folder = `${application.company_id}/${application.id}`;
+      const { data, error } = await supabase.storage.from("permit-documents").list(folder, {
+        limit: 100, sortBy: { column: "created_at", order: "desc" },
+      });
+      if (error) throw error;
+      setPermitFiles((current) => ({
+        ...current,
+        [application.id]: (data ?? []).filter((file) => file.id && file.name).map((file) => ({
+          name: file.name,
+          path: `${folder}/${file.name}`,
+        })),
+      }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load permit documents. Apply the storage migration first.");
+    }
+  };
+
+  const uploadPermitFile = async (application: (typeof applications)[number], file?: File) => {
+    if (!file) return;
+    const allowed = ["application/pdf", "image/jpeg", "image/png"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Only PDF, JPG, and PNG permit documents are allowed.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("Permit documents must be 25 MB or smaller.");
+      return;
+    }
+    setFileBusy((current) => ({ ...current, [application.id]: true }));
+    try {
+      const folder = `${application.company_id}/${application.id}`;
+      const safeName = file.name.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-100) || "permit-document";
+      const path = `${folder}/${crypto.randomUUID()}-${safeName}`;
+      const { error } = await supabase.storage.from("permit-documents").upload(path, file, {
+        contentType: file.type, cacheControl: "3600", upsert: false,
+      });
+      if (error) throw error;
+      toast.success("Permit document uploaded securely.");
+      await loadPermitFiles(application);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload permit document.");
+    } finally {
+      setFileBusy((current) => ({ ...current, [application.id]: false }));
+    }
+  };
+
+  const openPermitFile = async (path: string) => {
+    const { data, error } = await supabase.storage.from("permit-documents").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message || "Could not create a secure document link.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
   const downloadPermitPacket = async (application: (typeof applications)[number]) => {
     try {
       const job = jobs.find((candidate) => candidate.id === application.roof_job_id);
@@ -289,7 +349,18 @@ export function PermitRecords() {
                       <td className="py-3 pr-3"><div className="font-medium">{job?.title ?? "Roofing job"}</div><div className="text-xs text-muted-foreground">{job?.address ?? ""}</div></td>
                       <td className="py-3 pr-3">{item.jurisdiction_name}<div className="text-xs text-muted-foreground">{item.permit_type}</div></td>
                       <td className="py-3 pr-3"><div className="flex min-w-44 flex-col gap-1"><Input aria-label="Official permit number" placeholder="Permit number" value={permitNumbers[item.id] ?? item.permit_number ?? ""} onChange={(event) => setPermitNumbers((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={120} /><Input aria-label="Permit expiration date" type="date" value={expiryDates[item.id] ?? item.expires_at ?? ""} onChange={(event) => setExpiryDates((current) => ({ ...current, [item.id]: event.target.value }))} /><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div><Button size="sm" variant="ghost" disabled={savePermitDetails.isPending} onClick={() => savePermitDetails.mutate({ id: item.id, permitNumber: permitNumbers[item.id] ?? item.permit_number ?? "", expiresAt: expiryDates[item.id] ?? item.expires_at ?? "" })}>Save details</Button></div></td>
-                      <td className="py-3 pr-3"><div className="flex flex-col items-start gap-2"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge><Button size="sm" variant="ghost" onClick={() => void downloadPermitPacket(item)}>Print summary</Button></div></td>
+                      <td className="py-3 pr-3"><div className="flex flex-col items-start gap-2"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge><Button size="sm" variant="ghost" onClick={() => void downloadPermitPacket(item)}>Print summary</Button><div className="mt-2 flex flex-col gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-primary">
+                          <Upload className="size-3.5" /> {fileBusy[item.id] ? "Uploading…" : "Upload permit document"}
+                          <input className="sr-only" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" disabled={!!fileBusy[item.id]} onChange={(event) => { void uploadPermitFile(item, event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                        </label>
+                        <Button size="sm" variant="ghost" className="h-7 justify-start px-0" onClick={() => void loadPermitFiles(item)}>
+                          <FileText className="mr-1 size-3.5" /> Load documents
+                        </Button>
+                        {(permitFiles[item.id] ?? []).map((file) => <button key={file.path} type="button" className="inline-flex items-center gap-1 text-left text-xs text-primary hover:underline" onClick={() => void openPermitFile(file.path)}>
+                          <Download className="size-3" /> {file.name}
+                        </button>)}
+                      </div></div></td>
                       <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <div className="flex min-w-52 flex-col gap-2"><Input aria-label="Official permit issue date" type="date" value={issuanceDates[item.id] ?? ""} onChange={(event) => setIssuanceDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!issuanceDates[item.id] || !item.permit_number?.trim() || recordIssuance.isPending} onClick={() => recordIssuance.mutate({ id: item.id, issuedAt: issuanceDates[item.id] })}>Record issued</Button><span className="text-xs text-muted-foreground">Requires official permit number and issue date.</span><Input aria-label="Municipal rejection reason" placeholder="Reason if rejected" value={rejectionReasons[item.id] ?? ""} onChange={(event) => setRejectionReasons((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={4000} /><Button size="sm" variant="destructive" disabled={!rejectionReasons[item.id]?.trim() || recordRejection.isPending} onClick={() => recordRejection.mutate({ id: item.id, reason: rejectionReasons[item.id] })}>Record rejection</Button></div> : "—"}</td>
                     </tr>;
                   })}</tbody>
