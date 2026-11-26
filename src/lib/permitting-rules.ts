@@ -7,6 +7,13 @@
  */
 export const DEFAULT_NOC_THRESHOLD_CENTS = 500_000;
 
+/** Existing job creation stores 0 cents when no accepted proposal supplied a budget. */
+export function getRecordedBudgetForNocScreening(
+  budgetCents: number | null | undefined,
+): number | null {
+  return budgetCents == null || budgetCents === 0 ? null : budgetCents;
+}
+
 export type NoticeOfCommencementResult =
   | { required: true; reason: "value_exceeds_threshold"; thresholdCents: number }
   | { required: false; reason: "value_at_or_below_threshold"; thresholdCents: number }
