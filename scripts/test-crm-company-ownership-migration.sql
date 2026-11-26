@@ -77,6 +77,19 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'company_id must be NOT NULL on all core records';
   END IF;
+  -- Migration 0042 is only a relational-integrity foundation. RLS policy
+  -- replacement is a separate coordinated release, so this migration must
+  -- leave the fixture's existing RLS state untouched.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relname IN ('leads','crm_customers','crm_properties','roof_report_orders')
+      AND c.relrowsecurity
+  ) THEN
+    RAISE EXCEPTION 'Migration 0042 unexpectedly changed core-table RLS state';
+  END IF;
 END $$;
 
 -- Same-company composite FK rejects a customer from another tenant.
