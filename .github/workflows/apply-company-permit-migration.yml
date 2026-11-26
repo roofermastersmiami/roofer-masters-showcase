@@ -1,10 +1,10 @@
-name: Apply company permit settings migration
+name: Audit production migration readiness (read-only)
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: "Type APPLY_0041 to authorize applying migration 0041 to production"
+        description: "Type AUDIT_ONLY to run a read-only production migration audit"
         required: true
         type: string
 
@@ -16,17 +16,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  migrate:
-    name: Apply migration 0041 to production Supabase
+  audit:
+    name: Read-only production migration ledger audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Require explicit migration confirmation
+      - name: Require read-only audit confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
-          if [ "$CONFIRMATION" != "APPLY_0041" ]; then
-            echo "::error::Confirmation must exactly equal APPLY_0041."
+          if [ "$CONFIRMATION" != "AUDIT_ONLY" ]; then
+            echo "::error::Confirmation must exactly equal AUDIT_ONLY."
             exit 1
           fi
 
@@ -42,13 +42,10 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Validate migration journal
+      - name: Validate repository migration journal
         run: npm run check:migrations
 
-      - name: Verify migration file is present
-        run: test -s drizzle/migrations/0041_company_permit_qualifier_settings.sql
-
-      - name: Apply pending Drizzle migrations
+      - name: Compare production ledger with repository journal (read only)
         env:
           LOVABLE_DB_MIGRATION_URL: ${{ secrets.LOVABLE_DB_MIGRATION_URL }}
         run: |
@@ -56,22 +53,45 @@ jobs:
             echo "::error::Repository secret LOVABLE_DB_MIGRATION_URL is not configured."
             exit 1
           fi
-          npx drizzle-kit migrate
-
-      - name: Verify permit settings table exists
-        env:
-          LOVABLE_DB_MIGRATION_URL: ${{ secrets.LOVABLE_DB_MIGRATION_URL }}
-        run: |
           node --input-type=module <<'NODE'
+          import fs from "node:fs";
           import postgres from "postgres";
-          const sql = postgres(process.env.LOVABLE_DB_MIGRATION_URL, { max: 1, connect_timeout: 10 });
+
+          const journal = JSON.parse(fs.readFileSync("drizzle/migrations/meta/_journal.json", "utf8"));
+          const sql = postgres(process.env.LOVABLE_DB_MIGRATION_URL, {
+            max: 1,
+            connect_timeout: 10,
+            idle_timeout: 5,
+            prepare: false,
+          });
+
           try {
-            const rows = await sql`select to_regclass('public.crm_company_permit_settings') as table_name`;
-            if (rows[0]?.table_name !== "crm_company_permit_settings") {
-              throw new Error("Migration completed but expected table was not found.");
+            const rows = await sql`
+              select id, created_at
+              from drizzle.__drizzle_migrations
+              order by created_at asc, id asc
+            `;
+            const appliedTimestamps = new Set(rows.map((row) => String(row.created_at)));
+            const pending = journal.entries.filter((entry) =>
+              !appliedTimestamps.has(String(entry.when))
+            );
+
+            console.log(`Production migration ledger rows: ${rows.length}`);
+            console.log(`Latest production migration timestamp: ${rows.at(-1)?.created_at ?? "none"}`);
+            console.log(`Repository migrations not present in production ledger: ${pending.length}`);
+            for (const entry of pending) {
+              console.log(`PENDING ${entry.tag} (${entry.when})`);
             }
-            console.log("Verified public.crm_company_permit_settings exists.");
+
+            if (pending.length > 0) {
+              console.error("::error::Production has pending journal entries. This audit intentionally performs no DDL. Reconcile schema and ledger before any migration runner is authorized.");
+              process.exitCode = 2;
+            }
           } finally {
             await sql.end();
           }
           NODE
+
+      - name: Explicitly confirm no database writes were run
+        if: always()
+        run: echo "Read-only audit only. No migration command or database DDL was executed."
