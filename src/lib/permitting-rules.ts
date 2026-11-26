@@ -73,3 +73,13 @@ export function canTransitionPermitInspection(
 ): boolean {
   return current === next || inspectionTransitions[current].includes(next);
 }
+
+/** New permit applications must begin in the draft state. */
+export function canCreatePermitApplication(status: PermitApplicationStatus): boolean {
+  return status === "draft";
+}
+
+/** New inspections must begin as requested; outcomes require a confirmed appointment. */
+export function canCreatePermitInspection(status: PermitInspectionStatus): boolean {
+  return status === "requested";
+}
