@@ -1,0 +1,77 @@
+name: Apply company permit settings migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type APPLY_0041 to authorize applying migration 0041 to production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply migration 0041 to production Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require explicit migration confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$CONFIRMATION" != "APPLY_0041" ]; then
+            echo "::error::Confirmation must exactly equal APPLY_0041."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate migration journal
+        run: npm run check:migrations
+
+      - name: Verify migration file is present
+        run: test -s drizzle/migrations/0041_company_permit_qualifier_settings.sql
+
+      - name: Apply pending Drizzle migrations
+        env:
+          LOVABLE_DB_MIGRATION_URL: ${{ secrets.LOVABLE_DB_MIGRATION_URL }}
+        run: |
+          if [ -z "$LOVABLE_DB_MIGRATION_URL" ]; then
+            echo "::error::Repository secret LOVABLE_DB_MIGRATION_URL is not configured."
+            exit 1
+          fi
+          npx drizzle-kit migrate
+
+      - name: Verify permit settings table exists
+        env:
+          LOVABLE_DB_MIGRATION_URL: ${{ secrets.LOVABLE_DB_MIGRATION_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+          import postgres from "postgres";
+          const sql = postgres(process.env.LOVABLE_DB_MIGRATION_URL, { max: 1, connect_timeout: 10 });
+          try {
+            const rows = await sql`select to_regclass('public.crm_company_permit_settings') as table_name`;
+            if (rows[0]?.table_name !== "crm_company_permit_settings") {
+              throw new Error("Migration completed but expected table was not found.");
+            }
+            console.log("Verified public.crm_company_permit_settings exists.");
+          } finally {
+            await sql.end();
+          }
+          NODE
