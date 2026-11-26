@@ -727,10 +727,6 @@ def test_resolve_miramar_parcel_returns_unique_polygon_and_folio(monkeypatch):
                         "object_id": 42, "folio": "514102000010"}
 
 
-@pytest.mark.parametrize(("features", "status", "count"), [
-    ([], "not_found", 0),
-    ([1, 2], "ambiguous", 2),
-])
 def test_resolve_miramar_parcel_requires_matching_address_point_parcel_id(monkeypatch):
     import asyncio
 
@@ -762,6 +758,10 @@ def test_resolve_miramar_parcel_requires_matching_address_point_parcel_id(monkey
     assert mismatch["parcel_folio"] == "514102000010"
 
 
+@pytest.mark.parametrize(("features", "status", "count"), [
+    ([], "not_found", 0),
+    ([1, 2], "ambiguous", 2),
+])
 def test_resolve_miramar_parcel_fails_closed_without_unique_match(monkeypatch, features, status, count):
     import asyncio
     polygon = Polygon([(-80.4, 25.9), (-80.3, 25.9), (-80.3, 26.0), (-80.4, 26.0)])
