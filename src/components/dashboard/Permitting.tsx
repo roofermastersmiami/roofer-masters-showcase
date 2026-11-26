@@ -1,29 +1,67 @@
-import { ClipboardCheck, FileCheck2, FolderOpen, MapPinned, ShieldAlert } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, CalendarClock, ClipboardCheck, FileCheck2, MapPinned } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { jobsQuery, type Job } from "./operations-data";
+import type { Lead } from "./data";
 
-const setupAreas = [
-  {
-    title: "Permit pipeline",
-    description:
-      "Track permit applications from draft through approval, inspections, and closeout. Records will be linked to the CRM customer, property, job, and roof report.",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "HVHZ packet builder",
-    description:
-      "Prepare jurisdiction-specific roof submittals, attach reviewed roof drawings, and assemble verified product approvals and supporting PDFs.",
-    icon: FileCheck2,
-  },
-  {
-    title: "Jurisdictions & product approvals",
-    description:
-      "Maintain official building department links, local NOC thresholds, approved NOAs and Florida Product Approval references, and uploaded permit templates.",
-    icon: MapPinned,
-  },
-];
+const permitStatuses = [
+  { value: "not_started", label: "Not started" },
+  { value: "submitted", label: "Submitted" },
+  { value: "approved", label: "Approved" },
+  { value: "not_required", label: "Not required" },
+] as const;
 
-export function Permitting() {
+const jobStatuses: Record<string, string> = {
+  scheduled: "Scheduled",
+  in_progress: "In progress",
+  on_hold: "On hold",
+  completed: "Completed",
+};
+
+function permitLabel(status: string) {
+  return permitStatuses.find((item) => item.value === status)?.label ?? "Unknown";
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "Not scheduled";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Invalid date"
+    : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function PermitCount({ title, value, description }: { title: string; value: number; description: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{title}</CardDescription>
+        <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-xs text-muted-foreground">{description}</CardContent>
+    </Card>
+  );
+}
+
+export function Permitting({ leads }: { leads: Lead[] }) {
+  const jobs = useQuery(jobsQuery);
+  const [filter, setFilter] = useState("active");
+  const records = jobs.data ?? [];
+  const counts = useMemo(() => ({
+    total: records.length,
+    notStarted: records.filter((job) => job.permit_status === "not_started").length,
+    submitted: records.filter((job) => job.permit_status === "submitted").length,
+    approved: records.filter((job) => job.permit_status === "approved").length,
+    inspections: records.filter((job) => !!job.inspection_at).length,
+  }), [records]);
+
+  const visible = records.filter((job) => {
+    if (filter === "active") return job.permit_status !== "approved" && job.permit_status !== "not_required";
+    if (filter === "all") return true;
+    return job.permit_status === filter;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -33,70 +71,120 @@ export function Permitting() {
           </p>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Permitting</h1>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Manage roofing permits and HVHZ submittal preparation in the same company workspace as
-            your leads, properties, roof measurements, and projects.
+            Live permit-status overview from existing roofing jobs. Update a job's permit status and
+            inspection date in Projects & production; this view reflects those saved records.
           </p>
         </div>
         <Badge variant="outline" className="gap-1.5">
-          <ShieldAlert className="size-3.5" />
-          Setup required
+          <ClipboardCheck className="size-3.5" />
+          Existing job data
         </Badge>
       </div>
 
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardHeader>
-          <CardTitle className="text-base">Permit records are not connected yet</CardTitle>
-          <CardDescription className="max-w-3xl leading-relaxed">
-            This workspace is owner-only for now because existing roofing-job permit data is not
-            exposed through a team-scoped permitting service. It will not display sample permits or
-            claim that packets have been submitted. Company-scoped permit records, role-checked
-            server access, and private document storage must be provisioned before team workflows
-            or packet saving can be enabled.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {setupAreas.map(({ title, description, icon: Icon }) => (
-          <Card key={title} className="h-full">
-            <CardHeader className="space-y-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Icon className="size-5" aria-hidden="true" />
-              </div>
-              <CardTitle className="text-base">{title}</CardTitle>
-              <CardDescription className="leading-relaxed">{description}</CardDescription>
-            </CardHeader>
-          </Card>
-        ))}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <PermitCount title="Roofing jobs" value={counts.total} description="Jobs currently in the CRM" />
+        <PermitCount title="Not started" value={counts.notStarted} description="Permit status needs review" />
+        <PermitCount title="Submitted" value={counts.submitted} description="Marked submitted in job records" />
+        <PermitCount title="Approved" value={counts.approved} description="Marked approved in job records" />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Required before live permitting can be enabled</CardTitle>
+          <CardTitle className="text-base">Permit status pipeline</CardTitle>
           <CardDescription>
-            These controls protect customer data and prevent inaccurate permit submissions.
+            This is a view of the existing job-level status only. It does not yet track permit IDs,
+            jurisdiction application records, correction notices, or official portal responses.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <ul className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2">
-            <li className="flex gap-2">
-              <FolderOpen className="mt-0.5 size-4 shrink-0 text-primary" />
-              Tenant-isolated permit records and private packet storage.
-            </li>
-            <li className="flex gap-2">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0 text-primary" />
-              Role-checked access and idempotent permit creation from approved work.
-            </li>
-            <li className="flex gap-2">
-              <FileCheck2 className="mt-0.5 size-4 shrink-0 text-primary" />
-              Verified NOA / FL approval records and real jurisdiction templates.
-            </li>
-            <li className="flex gap-2">
-              <ClipboardCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-              Packet generation, upload confirmation, and inspection status history.
-            </li>
-          </ul>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Show</span>
+              <select
+                aria-label="Filter permits"
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              >
+                <option value="active">Needs action</option>
+                <option value="all">All jobs</option>
+                {permitStatuses.map((status) => (
+                  <option key={status.value} value={status.value}>{status.label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <CalendarClock className="size-4" />
+              {counts.inspections} job inspections scheduled
+            </div>
+          </div>
+
+          {jobs.isLoading ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading permit statuses…</p>
+          ) : jobs.error ? (
+            <div role="alert" className="flex items-center gap-2 py-6 text-sm text-destructive">
+              <AlertCircle className="size-4" />
+              Could not load job permit statuses. Check your access and try again.
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="py-10 text-center">
+              <MapPinned className="mx-auto mb-3 size-8 text-muted-foreground" />
+              <p className="font-medium">No jobs match this filter</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create or update a roofing job in Projects & production to track its permit status here.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="px-3 py-3 font-medium">Job / customer</th>
+                    <th className="px-3 py-3 font-medium">Job status</th>
+                    <th className="px-3 py-3 font-medium">Permit status</th>
+                    <th className="px-3 py-3 font-medium">Inspection</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((job) => (
+                    <tr key={job.id} className="border-b last:border-0">
+                      <td className="px-3 py-3">
+                        <p className="font-medium">{job.title}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {leads.find((lead) => lead.id === job.lead_id)?.name ?? "Customer not linked"}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">
+                        {jobStatuses[job.status] ?? job.status}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Badge variant={job.permit_status === "approved" ? "default" : "secondary"}>
+                          {permitLabel(job.permit_status)}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
+      </Card>
+
+      <Card className="border-amber-500/30 bg-amber-500/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileCheck2 className="size-4" />
+            Next permitting capabilities
+          </CardTitle>
+          <CardDescription className="leading-relaxed">
+            Detailed permit applications, jurisdiction directories, verified NOA / Florida Product
+            Approval records, NOC tracking, and saved PDF packets require dedicated company-scoped
+            records and private document storage. They are not represented as active until those
+            foundations and access policies are implemented and tested.
+          </CardDescription>
+        </CardHeader>
       </Card>
     </div>
   );
