@@ -118,7 +118,7 @@ VALUES (
   'New trigger test lead','3055550100','lead@example.com','100 Test Street'
 );
 
-DO $
+DO $$
 DECLARE
   lead_company uuid;
   customer_company uuid;
@@ -138,7 +138,7 @@ BEGIN
      OR property_company IS DISTINCT FROM lead_company THEN
     RAISE EXCEPTION 'Lead trigger failed to propagate company ownership to customer/property';
   END IF;
-END $;
+END $$;
 
 -- Same-company composite FK rejects a customer from another tenant.
 INSERT INTO public.crm_companies(id,name,created_by) VALUES
