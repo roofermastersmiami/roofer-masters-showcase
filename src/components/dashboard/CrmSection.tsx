@@ -5,6 +5,7 @@ import { CrewJobs } from "./CrewJobs";
 import { RoofReports } from "./RoofReports";
 import { CrmCalendar } from "@/components/CrmCalendar";
 import { RoofMeasurementsTab } from "./RoofMeasurementsTab";
+import { Permitting } from "./Permitting";
 import { AdvancedEstimator } from "./AdvancedEstimator";
 import { CostCatalog } from "./CostCatalog";
 import { Expenses } from "./Expenses";
@@ -62,6 +63,8 @@ export function CrmSection({ section }: { section: string }) {
       return <RoofReports onOpenMeasurement={openRoofMeasurements} />;
     case "appointments":
       return <CrmCalendar onOpenRoofReport={openRoofMeasurements} />;
+    case "permitting":
+      return <Permitting leads={leads} />;
     case "measurements":
       return (
         <RoofMeasurementsTab

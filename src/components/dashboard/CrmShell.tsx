@@ -13,6 +13,7 @@ import {
   Calculator,
   CalendarDays,
   FileText,
+  ClipboardCheck,
   HardHat,
   Receipt,
   Clock,
@@ -93,6 +94,7 @@ const groups = [
     items: [
       { id: "roof-reports", label: "Roof reports", icon: FileText },
       { id: "measurements", label: "Roof measurements", icon: MapPin },
+      { id: "permitting", label: "Permitting", icon: ClipboardCheck },
       { id: "estimates", label: "Quick estimator", icon: Calculator },
       { id: "detailed-estimator", label: "Detailed estimator", icon: Calculator },
       { id: "prices", label: "Material & labor prices", icon: Settings },

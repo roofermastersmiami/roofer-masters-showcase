@@ -25,6 +25,11 @@ describe("team roles", () => {
       expect(canOpen(["sales"], s)).toBe(true);
     expect(canOpen(["sales"], "jobs")).toBe(false);
   });
+  it("keeps permitting owner-only until a role-checked service is available", () => {
+    for (const r of ["office", "sales", "production_manager", "crew", "accounting"])
+      expect(canOpen([r], "permitting")).toBe(false);
+    expect(canOpen(["admin"], "permitting")).toBe(true);
+  });
   it("production manager works jobs and roof reports, not leads", () => {
     expect(canOpen(["production_manager"], "jobs")).toBe(true);
     expect(canOpen(["production_manager"], "measurements")).toBe(true);
