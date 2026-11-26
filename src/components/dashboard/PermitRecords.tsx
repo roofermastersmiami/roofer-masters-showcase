@@ -44,6 +44,7 @@ export function PermitRecords() {
   const [permitNumbers, setPermitNumbers] = useState<Record<string, string>>({});
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
   const [inspectionConfirmations, setInspectionConfirmations] = useState<Record<string, string>>({});
+  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -105,6 +106,25 @@ export function PermitRecords() {
       updatePermitApplication({ id, changes: { permit_number: permitNumber.trim() || null, expires_at: expiresAt || null } }),
     onSuccess: async (_saved, variables) => { setPermitNumbers((current) => { const next = { ...current }; delete next[variables.id]; return next; }); setExpiryDates((current) => { const next = { ...current }; delete next[variables.id]; return next; }); toast.success("Permit details saved."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not save permit details."),
+  });
+  const recordRejection = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => {
+      const application = applications.find((item) => item.id === id);
+      if (!application) throw new Error("Permit application was not found.");
+      const cleanReason = reason.trim();
+      if (!cleanReason) throw new Error("Enter the municipality's rejection reason before recording rejection.");
+      const existingNotes = String(application.notes ?? "").trim();
+      const notes = existingNotes
+        ? `${existingNotes}\\n\\nRejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`
+        : `Rejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`;
+      return updatePermitApplication({ id, changes: { application_status: "rejected", notes } });
+    },
+    onSuccess: async (_saved, variables) => {
+      setRejectionReasons((current) => { const next = { ...current }; delete next[variables.id]; return next; });
+      toast.success("Rejection recorded with the reason provided.");
+      await refresh();
+    },
+    onError: (error) => toast.error(error.message || "Could not record rejection."),
   });
   const recordIssuance = useMutation({
     mutationFn: ({ id, issuedAt }: { id: string; issuedAt: string }) => {
@@ -233,7 +253,7 @@ export function PermitRecords() {
                       <td className="py-3 pr-3">{item.jurisdiction_name}<div className="text-xs text-muted-foreground">{item.permit_type}</div></td>
                       <td className="py-3 pr-3"><div className="flex min-w-44 flex-col gap-1"><Input aria-label="Official permit number" placeholder="Permit number" value={permitNumbers[item.id] ?? item.permit_number ?? ""} onChange={(event) => setPermitNumbers((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={120} /><Input aria-label="Permit expiration date" type="date" value={expiryDates[item.id] ?? item.expires_at ?? ""} onChange={(event) => setExpiryDates((current) => ({ ...current, [item.id]: event.target.value }))} /><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div><Button size="sm" variant="ghost" disabled={savePermitDetails.isPending} onClick={() => savePermitDetails.mutate({ id: item.id, permitNumber: permitNumbers[item.id] ?? item.permit_number ?? "", expiresAt: expiryDates[item.id] ?? item.expires_at ?? "" })}>Save details</Button></div></td>
                       <td className="py-3 pr-3"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge></td>
-                      <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <div className="flex min-w-52 flex-col gap-2"><Input aria-label="Official permit issue date" type="date" value={issuanceDates[item.id] ?? ""} onChange={(event) => setIssuanceDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!issuanceDates[item.id] || !item.permit_number?.trim() || recordIssuance.isPending} onClick={() => recordIssuance.mutate({ id: item.id, issuedAt: issuanceDates[item.id] })}>Record issued</Button><span className="text-xs text-muted-foreground">Requires official permit number and issue date.</span></div> : "—"}</td>
+                      <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <div className="flex min-w-52 flex-col gap-2"><Input aria-label="Official permit issue date" type="date" value={issuanceDates[item.id] ?? ""} onChange={(event) => setIssuanceDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!issuanceDates[item.id] || !item.permit_number?.trim() || recordIssuance.isPending} onClick={() => recordIssuance.mutate({ id: item.id, issuedAt: issuanceDates[item.id] })}>Record issued</Button><span className="text-xs text-muted-foreground">Requires official permit number and issue date.</span><Input aria-label="Municipal rejection reason" placeholder="Reason if rejected" value={rejectionReasons[item.id] ?? ""} onChange={(event) => setRejectionReasons((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={4000} /><Button size="sm" variant="destructive" disabled={!rejectionReasons[item.id]?.trim() || recordRejection.isPending} onClick={() => recordRejection.mutate({ id: item.id, reason: rejectionReasons[item.id] })}>Record rejection</Button></div> : "—"}</td>
                     </tr>;
                   })}</tbody>
                 </table></div>
