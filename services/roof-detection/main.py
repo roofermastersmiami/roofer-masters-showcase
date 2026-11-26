@@ -342,7 +342,7 @@ async def resolve_miramar_address_point(
         return None
 
 
-async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None, dict[str, Any]]:
+async def resolve_miramar_parcel(lat: float, lon: float, expected_parcel_id: str | None = None) -> tuple[Polygon | None, dict[str, Any]]:
     """Find the unique Miramar parcel containing a resolved address point."""
     url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
            "MiramarParcels/FeatureServer/20/query")
@@ -377,6 +377,13 @@ async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None
             return None, {"status": "not_found" if not matches else "ambiguous",
                           "provider": "City of Miramar GIS", "match_count": len(matches)}
         polygon, identity = matches[0]
+        if expected_parcel_id is not None:
+            expected = str(expected_parcel_id).strip().upper()
+            actual = str(identity.get("folio") or "").strip().upper()
+            if not expected or not actual or expected != actual:
+                return None, {"status": "identity_mismatch", "provider": "City of Miramar GIS",
+                              "address_point_parcel_id": expected_parcel_id,
+                              "parcel_folio": identity.get("folio"), "object_id": identity.get("object_id")}
         return polygon, {"status": "matched", "provider": "City of Miramar GIS", **identity}
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         return None, {"status": "provider_error", "provider": "City of Miramar GIS"}
@@ -426,7 +433,7 @@ def _parcel_requires_explicit_candidate_selection(parcel_metadata: dict[str, Any
     )
 
 
-async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None) -> tuple[Polygon, dict[str, Any]]:
+async def get_footprint(lat: float, lon: float, street_address: str | None = None, selected_candidate_id: str | None = None, address_provenance: dict[str, Any] | None = None) -> tuple[Polygon, dict[str, Any]]:
     # Use a nationwide ArcGIS structures layer first. It is independent of
     # Overpass and covers US building polygons; OSM remains a secondary source.
     address_point = Point(lon, lat)
@@ -679,7 +686,8 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # multiple buildings and cannot independently establish the primary roof.
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
     if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
-        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon)
+        expected_parcel_id = (address_provenance or {}).get("parcel_id") if (address_provenance or {}).get("source") == "City of Miramar Official Address Points" else None
+        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon, expected_parcel_id)
         if not selected_candidate_id:
             candidates, parcel_metadata = _apply_parcel_candidate_evidence(
                 candidates, parcel_polygon, parcel_metadata
@@ -1150,7 +1158,7 @@ async def analyze_roof(request: AnalyzeRequest):
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
         address_provenance = {"source": "User-provided coordinates"}
-    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
+    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id, address_provenance)
     footprint_sqft = _polygon_area_sqft(footprint)
     try:
         facets, lidar_meta = _read_lidar_facets(footprint)
