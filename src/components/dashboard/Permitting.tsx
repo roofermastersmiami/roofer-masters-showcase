@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { jobsQuery } from "./operations-data";
 import type { Lead } from "./data";
+import { PermitRecords } from "./PermitRecords";
 import {
   getRecordedBudgetForNocScreening,
   requiresNoticeOfCommencement,
@@ -263,7 +264,9 @@ export function Permitting({ leads }: { leads: Lead[] }) {
         </CardContent>
       </Card>
 
-      <PermitRecords />\n\n      <Card className="border-amber-500/30 bg-amber-500/5">
+      <PermitRecords />
+
+      <Card className="border-amber-500/30 bg-amber-500/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <FileCheck2 className="size-4" />
