@@ -10,6 +10,7 @@ const facetSchema = z.object({
   azimuth_degrees: z.number().finite().min(0).lt(360),
   area_sqft: z.number().finite().positive(),
   squares: z.number().finite().positive(),
+  boundary_perimeter_lf: z.number().finite().positive().nullable().optional(),
   boundary_latlon: z
     .array(
       z.tuple([
@@ -69,6 +70,7 @@ export const roofDetectionResponseSchema = z.object({
     dominant_pitch_rise_per_12: z.number().finite().nonnegative().nullable(),
     facets: z.array(facetSchema),
     edge_lengths_lf: z.null(),
+    edge_measurement_status: z.enum(["unclassified_facet_boundaries", "no_facets"]).optional(),
   }),
   fallback: z.object({
     available: z.boolean(),
