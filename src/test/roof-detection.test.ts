@@ -225,3 +225,28 @@ describe("building candidate and parcel match audit evidence", () => {
     expect(parsed.footprint.parcel_match).toBeUndefined();
   });
 });
+
+
+describe("LiDAR facet boundary perimeter diagnostics", () => {
+  it("preserves the optional measured facet perimeter without treating it as classified edges", () => {
+    const parsed = roofDetectionResponseSchema.parse({
+      ...response,
+      roof: {
+        ...response.roof,
+        edge_measurement_status: "unclassified_facet_boundaries",
+        facets: response.roof.facets.map((facet) => ({
+          ...facet,
+          boundary_perimeter_lf: 142.6,
+        })),
+      },
+    });
+    expect(parsed.roof.facets[0].boundary_perimeter_lf).toBe(142.6);
+    expect(parsed.roof.edge_lengths_lf).toBeNull();
+    expect(parsed.roof.edge_measurement_status).toBe("unclassified_facet_boundaries");
+  });
+
+  it("accepts legacy facets without perimeter diagnostics", () => {
+    const parsed = roofDetectionResponseSchema.parse(response);
+    expect(parsed.roof.facets[0].boundary_perimeter_lf).toBeUndefined();
+  });
+});
