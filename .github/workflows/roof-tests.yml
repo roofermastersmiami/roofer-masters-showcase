@@ -53,6 +53,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
           psql "postgresql://postgres@localhost:5432/roofer_test" -v ON_ERROR_STOP=1 -f scripts/test-company-permit-settings-rls.sql
+      - name: Run CRM company ownership PostgreSQL 16 integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_ownership_test
+          psql "postgresql://postgres@localhost:5432/crm_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-crm-company-ownership-migration.sql
       - name: Run lint checks (baseline audit)
         run: npm run lint
         continue-on-error: true
