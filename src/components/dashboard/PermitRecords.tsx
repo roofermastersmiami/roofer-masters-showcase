@@ -35,7 +35,8 @@ export function PermitRecords() {
   const [applicationId, setApplicationId] = useState("");
   const [inspectionType, setInspectionType] = useState("Roof dry-in");
   const [inspectionDate, setInspectionDate] = useState("");
-  const [inspectionNotes, setInspectionNotes] = useState("");\n  const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
+  const [inspectionNotes, setInspectionNotes] = useState("");
+  const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -87,15 +88,18 @@ export function PermitRecords() {
     onError: (error) => toast.error(error.message || "Could not update application."),
   });
   const updateInspectionStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "scheduled" | "passed" | "failed" | "cancelled" }) =>
-      updatePermitInspection({
-        id,
-        changes: {
-          scheduling_status: status,
-          ...(status === "scheduled" ? { scheduled_at: new Date().toISOString() } : {}),
-          ...(["passed", "failed"].includes(status) ? { completed_at: new Date().toISOString() } : {}),
-        },
-      }),
+    mutationFn: ({ id, status, scheduledAt }: {
+      id: string;
+      status: "scheduled" | "passed" | "failed" | "cancelled";
+      scheduledAt?: string;
+    }) => updatePermitInspection({
+      id,
+      changes: {
+        scheduling_status: status,
+        ...(status === "scheduled" && scheduledAt ? { scheduled_at: new Date(scheduledAt).toISOString() } : {}),
+        ...(["passed", "failed"].includes(status) ? { completed_at: new Date().toISOString() } : {}),
+      },
+    }),
     onSuccess: refresh,
     onError: (error) => toast.error(error.message || "Could not update inspection."),
   });
@@ -205,7 +209,7 @@ export function PermitRecords() {
                     <div className="flex flex-wrap gap-2">
                       {item.scheduling_status === "requested" && <div className="flex flex-wrap items-center gap-2"><Input aria-label="Confirmed inspection date and time" type="datetime-local" className="h-8 w-48" value={scheduleDates[item.id] ?? ""} onChange={(event) => setScheduleDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!scheduleDates[item.id]} onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "scheduled", scheduledAt: scheduleDates[item.id] })}>Confirm scheduled</Button></div>}
                       {item.scheduling_status === "scheduled" && <><Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "passed" })}>Passed</Button><Button size="sm" variant="outline" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "failed" })}>Failed</Button></>}
-                      {!["passed", "failed", "cancelled"].includes(item.scheduling_status) && <Button size="sm" variant="ghost" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "cancelled" })}>Cancel</Button>}
+                      {![ "passed", "failed", "cancelled" ].includes(item.scheduling_status) && <Button size="sm" variant="ghost" onClick={() => updateInspectionStatus.mutate({ id: item.id, status: "cancelled" })}>Cancel</Button>}
                     </div>
                   </div>;
                 })}</div>
