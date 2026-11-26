@@ -140,6 +140,9 @@ describe("complete permitting transition matrix", () => {
 describe("initial permit record states", () => {
   it("allows new permit applications only as drafts", () => {
     expect(canCreatePermitApplication("draft")).toBe(true);
+    expect(canCreatePermitApplication("draft", { permit_number: "P-123" })).toBe(false);
+    expect(canCreatePermitApplication("draft", { submitted_at: "2026-11-01T12:00:00.000Z" })).toBe(false);
+    expect(canCreatePermitApplication("draft", { issued_at: "2026-11-02T12:00:00.000Z" })).toBe(false);
     for (const status of ["ready_to_submit", "submitted", "issued", "rejected", "expired", "cancelled"] as const) {
       expect(canCreatePermitApplication(status)).toBe(false);
     }
@@ -147,6 +150,8 @@ describe("initial permit record states", () => {
 
   it("allows new inspections only as requested", () => {
     expect(canCreatePermitInspection("requested")).toBe(true);
+    expect(canCreatePermitInspection("requested", { scheduled_at: "2026-11-01T12:00:00.000Z" })).toBe(false);
+    expect(canCreatePermitInspection("requested", { completed_at: "2026-11-01T12:00:00.000Z" })).toBe(false);
     for (const status of ["scheduled", "passed", "failed", "cancelled"] as const) {
       expect(canCreatePermitInspection(status)).toBe(false);
     }
