@@ -89,7 +89,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
         <PermitCount title="Not started" value={counts.notStarted} description="Permit status needs review" />
         <PermitCount title="Submitted" value={counts.submitted} description="Marked submitted in job records" />
         <PermitCount title="Approved" value={counts.approved} description="Marked approved in job records" />
-        <PermitCount title="NOC screening" value={counts.nocReview} description="Recorded budget exceeds the preliminary $5,000 screen" />
+        <PermitCount title="NOC screening" value={counts.nocReview} description="Recorded budget exceeds the preliminary $5,000 screen; not a legal determination" />
         <PermitCount title="Budget missing" value={counts.nocValueMissing} description="Contract price must be checked manually" />
       </div>
 
@@ -98,7 +98,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
           <CardTitle className="text-base">Permit status pipeline</CardTitle>
           <CardDescription>
             This is a view of the existing job-level status only. It does not yet track permit IDs,
-            jurisdiction application records, correction notices, or official portal responses. The NOC reminder compares the recorded job budget with a preliminary $5,000 threshold; job budget is not verified contract value. Missing budgets are flagged for review. Confirm the actual contract price and current jurisdiction-specific requirement before relying on this reminder.
+            jurisdiction application records, correction notices, or official portal responses. The NOC reminder compares the recorded job budget with a preliminary $5,000 threshold; job budget is not verified contract value. Missing budgets are flagged for review. A budget below the screen is not an NOC clearance. Confirm the actual contract price and current jurisdiction-specific requirement for every job.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -148,7 +148,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                       <td className="px-3 py-3 text-muted-foreground">{formatCurrency(job.budget_cents)}</td>
                       <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
                       <td className="px-3 py-3">
-                        {noc.required ? <Badge variant="outline">Review NOC</Badge> : noc.reason === "value_unknown" ? <Badge variant="secondary">Budget missing — review</Badge> : <span className="text-xs text-muted-foreground">Budget at/below default</span>}
+                        {noc.required ? <Badge variant="outline">Review NOC</Badge> : noc.reason === "value_unknown" ? <Badge variant="secondary">Budget missing — review</Badge> : <span className="text-xs text-muted-foreground">No budget flag — verify locally</span>}
                       </td>
                     </tr>;
                   })}
