@@ -123,12 +123,12 @@ DO $$ BEGIN
   DELETE FROM storage.objects
    WHERE bucket_id='permit-documents'
      AND name='10000000-0000-0000-0000-000000000002/50000000-0000-0000-0000-000000000002/b.pdf';
-END $;
+END $$;
 RESET ROLE;
 
 -- Verify persisted state as the database owner, not through the caller's
 -- tenant-filtered SELECT policy (which intentionally hides Company B rows).
-DO $ BEGIN
+DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM storage.objects WHERE name='forged.pdf') THEN
     RAISE EXCEPTION 'Company A owner unexpectedly updated Company B file';
   END IF;
@@ -138,7 +138,7 @@ DO $ BEGIN
   ) THEN
     RAISE EXCEPTION 'Company A owner unexpectedly deleted Company B file';
   END IF;
-END $;
+END $$;
 
 -- Company A office member cannot update or delete even Company A's own file.
 SET ROLE authenticated;
