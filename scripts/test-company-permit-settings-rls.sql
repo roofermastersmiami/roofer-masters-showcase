@@ -93,7 +93,7 @@ END $$;
 
 -- Company A ordinary member: can read own company's row, never Company B.
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',true);
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
 DO $$ DECLARE n integer; BEGIN
  SELECT count(*) INTO n FROM public.crm_company_permit_settings;
  IF n <> 1 THEN RAISE EXCEPTION 'member should see exactly one company row; saw %',n; END IF;
@@ -115,7 +115,7 @@ RESET ROLE;
 
 -- Company A owner: may create/update A, but cannot forge a B company_id.
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 DO $$ DECLARE n integer; BEGIN
  SELECT count(*) INTO n FROM public.crm_company_permit_settings;
  IF n <> 1 THEN RAISE EXCEPTION 'Company A owner should see only A; saw %',n; END IF;
@@ -141,7 +141,7 @@ RESET ROLE;
 
 -- Company B owner is isolated and retains CCC license as exact text.
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
 DO $$ BEGIN
  IF (SELECT count(*) FROM public.crm_company_permit_settings) <> 1 THEN
    RAISE EXCEPTION 'Company B owner did not see exactly its own row';
