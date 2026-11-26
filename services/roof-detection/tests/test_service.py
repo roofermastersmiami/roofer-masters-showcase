@@ -31,7 +31,9 @@ def test_miramar_address_point_requires_one_exact_match(monkeypatch):
             return self
         async def __aexit__(self, *args):
             return False
-        async def get(self, *args, **kwargs):
+        async def get(self, url, params=None):
+            assert "%189%" in params["where"]
+            assert "%189TH%" not in params["where"]
             return FakeResponse()
 
     monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
@@ -835,3 +837,19 @@ def test_verified_parcel_mismatch_blocks_distance_auto_selection(evidence, requi
 def test_address_normalization_matches_ordinal_and_non_ordinal_street_numbers():
     assert roof_service._normalize_street_address("3062 Southwest 189th Avenue") == roof_service._normalize_street_address("3062 SW 189 AVE")
     assert roof_service._normalize_street_address("3062 Southwest 189th Avenue") != roof_service._normalize_street_address("3062 Southwest 190th Avenue")
+
+
+def test_miramar_parcel_rejects_malformed_non_object_payload(monkeypatch):
+    import asyncio
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return []
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    polygon, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
+    assert polygon is None
+    assert evidence["status"] == "provider_error"
