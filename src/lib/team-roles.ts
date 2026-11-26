@@ -55,7 +55,9 @@ export const SECTION_ROLES: Record<string, readonly R[]> = {
   appointments: ["office", "sales", "production_manager"],
   "roof-reports": ["office", "sales", "production_manager"],
   measurements: ["office", "sales", "production_manager"],
-  permitting: ["office", "sales", "production_manager"],
+  // Permit records currently depend on owner-only roof_jobs access. Expand only after a
+  // role-checked server projection and tenant-scoped permit policies are available.
+  permitting: [],
   estimates: ["office", "sales"],
   proposals: ["office", "sales"],
   "detailed-estimator": ["accounting"],
