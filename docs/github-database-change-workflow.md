@@ -22,6 +22,7 @@ Files marked generated remain generated and must not be hand-edited. In particul
 ## Security release gate
 
 A schema PR is not proof of deployment. A feature is not complete until the migration is applied and tests prove:
+
 - unauthenticated access is denied;
 - a member can read only their own company's row;
 - a non-admin member cannot insert or update;
