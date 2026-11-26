@@ -101,9 +101,9 @@ export function PermitRecords() {
     mutationFn: ({ id, issuedAt }: { id: string; issuedAt: string }) => {
       const application = applications.find((item) => item.id === id);
       if (!application?.permit_number?.trim()) throw new Error("Enter the official permit number before recording issuance.");
+      if (!application.submitted_at) throw new Error("Record the actual submission date before recording issuance.");
       return updatePermitApplication({ id, changes: {
         application_status: "issued",
-        submitted_at: application.submitted_at ?? new Date(issuedAt + "T12:00:00").toISOString(),
         issued_at: new Date(issuedAt + "T12:00:00").toISOString(),
       } });
     },
