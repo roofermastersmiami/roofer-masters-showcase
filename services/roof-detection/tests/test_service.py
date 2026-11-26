@@ -896,3 +896,88 @@ def test_miramar_parcel_rejects_malformed_non_object_payload(monkeypatch):
     polygon, evidence = asyncio.run(roof_service.resolve_miramar_parcel(25.95, -80.35))
     assert polygon is None
     assert evidence["status"] == "provider_error"
+
+
+def test_resolve_miramar_situs_folio_matches_exact_situs_and_normalizes_ordinal(monkeypatch):
+    import asyncio
+
+    class Response:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"features": [
+                {"attributes": {"SITUS_ADDR": "3062 SW 189 AVE", "FOLIO": "514102000010"}},
+                {"attributes": {"SITUS_ADDR": "3062 SW 190 AVE", "FOLIO": "514102000011"}},
+            ]}
+
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, url, params=None):
+            assert "MiramarParcelsInfo/FeatureServer/21/query" in url
+            assert params["outFields"] == "FOLIO,SITUS_ADDR"
+            assert "%189%" in params["where"]
+            return Response()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    folio, evidence = asyncio.run(roof_service.resolve_miramar_situs_folio(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert folio == "514102000010"
+    assert evidence["status"] == "matched"
+    assert evidence["folio"] == folio
+
+
+@pytest.mark.parametrize(
+    ("features", "expected_status"),
+    [
+        ([], "not_found"),
+        ([
+            {"attributes": {"SITUS_ADDR": "3062 SW 189 AVE", "FOLIO": "514102000010"}},
+            {"attributes": {"SITUS_ADDR": "3062 SW 189 AVE", "FOLIO": "514102000011"}},
+        ], "ambiguous"),
+        ([{"attributes": {"SITUS_ADDR": "3062 SW 190 AVE", "FOLIO": "514102000010"}}], "not_found"),
+    ],
+)
+def test_resolve_miramar_situs_folio_fails_closed_for_missing_ambiguous_or_wrong_address(
+    monkeypatch, features, expected_status
+):
+    import asyncio
+
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {"features": features}
+
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    folio, evidence = asyncio.run(roof_service.resolve_miramar_situs_folio(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert folio is None
+    assert evidence["status"] == expected_status
+
+
+def test_resolve_miramar_situs_folio_reports_provider_failure(monkeypatch):
+    import asyncio
+
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs):
+            raise roof_service.httpx.ConnectError("offline")
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+    folio, evidence = asyncio.run(roof_service.resolve_miramar_situs_folio(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ))
+    assert folio is None
+    assert evidence == {
+        "status": "provider_error",
+        "provider": "City of Miramar Parcel Information",
+    }
