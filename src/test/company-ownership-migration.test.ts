@@ -48,7 +48,7 @@ describe("CRM company ownership migration 0042", () => {
   it("indexes company ownership and protects company parent rows", () => {
     for (const table of ["leads", "crm_customers", "crm_properties", "roof_report_orders"]) {
       expect(migration).toMatch(
-        new RegExp(`CONSTRAINT ${table}_company_id_fkey[\\\\s\\\\S]*?ON DELETE RESTRICT`, "i"),
+        new RegExp(`ADD CONSTRAINT ${table}_company_id_fkey[\\s\\S]*?ON DELETE RESTRICT`, "i"),
       );
       expect(migration).toContain(`CREATE INDEX IF NOT EXISTS ${table}_company_id_idx`);
     }
