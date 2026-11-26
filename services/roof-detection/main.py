@@ -342,6 +342,65 @@ async def resolve_miramar_address_point(
         return None
 
 
+async def resolve_miramar_situs_folio(address: str) -> tuple[str | None, dict[str, Any]]:
+    """Resolve a situs street address to the City's parcel FOLIO.
+
+    This deliberately uses the parcel-information layer rather than assuming
+    the address-point parcel_id field has the same identifier format as FOLIO.
+    """
+    street_line = address.split(",", 1)[0].strip()
+    tokens = re.findall(r"[A-Za-z0-9]+", street_line.upper())
+    if len(tokens) < 3 or not tokens[0].isdigit():
+        return None, {"status": "invalid_address", "provider": "City of Miramar Parcel Information"}
+    house_number = tokens[0].replace("'", "''")
+    street_token = next((token for token in tokens[1:] if token not in {
+        "N", "S", "E", "W", "NE", "NW", "SE", "SW", "NORTH", "SOUTH", "EAST", "WEST",
+        "ST", "STREET", "AVE", "AVENUE", "RD", "ROAD", "DR", "DRIVE", "BLVD", "BOULEVARD",
+        "CT", "COURT", "LN", "LANE", "PL", "PLACE", "TRL", "TRAIL", "PKWY", "PARKWAY",
+    }), "")
+    if not street_token:
+        return None, {"status": "invalid_address", "provider": "City of Miramar Parcel Information"}
+    url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
+           "MiramarParcelsInfo/FeatureServer/21/query")
+    params = {
+        "where": f"SITUS_ADDR LIKE '%{house_number}%' AND SITUS_ADDR LIKE '%{street_token}%'",
+        "outFields": "FOLIO,SITUS_ADDR", "returnGeometry": "false",
+        "resultRecordCount": "50", "f": "json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0),
+                                     headers={"User-Agent": USER_AGENT}) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, dict) or payload.get("error"):
+            return None, {"status": "provider_error", "provider": "City of Miramar Parcel Information"}
+        requested = _normalize_street_address(street_line)
+        matches = []
+        for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
+            attrs = feature.get("attributes") or {}
+            situs = str(attrs.get("SITUS_ADDR") or "")
+            folio = str(attrs.get("FOLIO") or "").strip()
+            if folio and _normalize_street_address(situs) == requested:
+                matches.append((folio, situs))
+        unique_folios = {folio for folio, _ in matches}
+        if len(unique_folios) != 1:
+            return None, {
+                "status": "not_found" if not matches else "ambiguous",
+                "provider": "City of Miramar Parcel Information",
+                "match_count": len(unique_folios),
+            }
+        folio = next(iter(unique_folios))
+        return folio, {
+            "status": "matched", "provider": "City of Miramar Parcel Information",
+            "folio": folio, "matched_situs_address": matches[0][1],
+        }
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None, {"status": "provider_error", "provider": "City of Miramar Parcel Information"}
+
+
 async def resolve_miramar_parcel(lat: float, lon: float, expected_parcel_id: str | None = None) -> tuple[Polygon | None, dict[str, Any]]:
     """Find the unique Miramar parcel containing a resolved address point."""
     url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
@@ -690,8 +749,17 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # multiple buildings and cannot independently establish the primary roof.
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
     if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
-        expected_parcel_id = (address_provenance or {}).get("parcel_id") if (address_provenance or {}).get("source") == "City of Miramar Official Address Points" else None
-        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon, expected_parcel_id)
+        # Never compare the address-point parcel_id directly with polygon FOLIO:
+        # they are separate GIS-layer fields with no proven shared identifier contract.
+        # Resolve the situs address independently to a FOLIO, then reconcile FOLIO-to-FOLIO.
+        situs_folio, situs_evidence = await resolve_miramar_situs_folio(street_address)
+        parcel_polygon, parcel_metadata = await resolve_miramar_parcel(lat, lon, situs_folio)
+        parcel_metadata["situs_address_evidence"] = situs_evidence
+        if situs_folio is None and parcel_metadata.get("status") == "matched":
+            # Parcel geometry without a verified address-to-FOLIO link is not
+            # authoritative enough to narrow candidate buildings.
+            parcel_metadata["status"] = "identity_unverified"
+            parcel_metadata["address_point_parcel_id"] = (address_provenance or {}).get("parcel_id")
         if not selected_candidate_id:
             candidates, parcel_metadata = _apply_parcel_candidate_evidence(
                 candidates, parcel_polygon, parcel_metadata
