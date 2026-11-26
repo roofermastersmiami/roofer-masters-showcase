@@ -13,6 +13,62 @@ from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footpri
 from shapely.geometry import Point, Polygon, mapping
 
 
+@pytest.mark.asyncio
+async def test_miramar_address_point_requires_one_exact_match(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"features": [{"attributes": {
+                "situsaddrfull": "3062 SW 189TH AVE", "parcel_id": "verified-folio",
+                "addr_id": "A123", "situszip": "33029",
+            }, "geometry": {"x": -80.4, "y": 25.98}}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            return False
+        async def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    result = await roof_service.resolve_miramar_address_point(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    )
+    assert result is not None
+    lat, lon, matched, evidence = result
+    assert (lat, lon) == pytest.approx((25.98, -80.4))
+    assert matched == "3062 SW 189TH AVE"
+    assert evidence["parcel_id"] == "verified-folio"
+
+
+@pytest.mark.asyncio
+async def test_miramar_address_point_rejects_ambiguous_exact_matches(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            attrs = {"situsaddrfull": "3062 SW 189TH AVE", "parcel_id": "folio"}
+            return {"features": [
+                {"attributes": attrs, "geometry": {"x": -80.4, "y": 25.98}},
+                {"attributes": attrs, "geometry": {"x": -80.401, "y": 25.981}},
+            ]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return False
+        async def get(self, *args, **kwargs): return FakeResponse()
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
+    assert await roof_service.resolve_miramar_address_point(
+        "3062 Southwest 189th Avenue, Miramar, FL 33029"
+    ) is None
+
+
 def test_request_requires_address_or_complete_coordinates():
     with pytest.raises(ValueError):
         AnalyzeRequest()
