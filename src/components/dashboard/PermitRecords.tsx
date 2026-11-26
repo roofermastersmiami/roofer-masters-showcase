@@ -41,6 +41,8 @@ export function PermitRecords() {
   const [inspectionNotes, setInspectionNotes] = useState("");
   const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
   const [issuanceDates, setIssuanceDates] = useState<Record<string, string>>({});
+  const [permitNumbers, setPermitNumbers] = useState<Record<string, string>>({});
+  const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -96,6 +98,12 @@ export function PermitRecords() {
     }),
     onSuccess: async () => { toast.success("Submission recorded. Confirm this was submitted externally."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not update application."),
+  });
+  const savePermitDetails = useMutation({
+    mutationFn: ({ id, permitNumber, expiresAt }: { id: string; permitNumber: string; expiresAt: string }) =>
+      updatePermitApplication({ id, changes: { permit_number: permitNumber.trim() || null, expires_at: expiresAt || null } }),
+    onSuccess: async () => { toast.success("Permit details saved."); await refresh(); },
+    onError: (error) => toast.error(error.message || "Could not save permit details."),
   });
   const recordIssuance = useMutation({
     mutationFn: ({ id, issuedAt }: { id: string; issuedAt: string }) => {
@@ -216,7 +224,7 @@ export function PermitRecords() {
                     return <tr key={item.id} className="border-b last:border-0">
                       <td className="py-3 pr-3"><div className="font-medium">{job?.title ?? "Roofing job"}</div><div className="text-xs text-muted-foreground">{job?.address ?? ""}</div></td>
                       <td className="py-3 pr-3">{item.jurisdiction_name}<div className="text-xs text-muted-foreground">{item.permit_type}</div></td>
-                      <td className="py-3 pr-3"><div>{item.permit_number || "—"}</div><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div></td>
+                      <td className="py-3 pr-3"><div className="flex min-w-44 flex-col gap-1"><Input aria-label="Official permit number" placeholder="Permit number" value={permitNumbers[item.id] ?? item.permit_number ?? ""} onChange={(event) => setPermitNumbers((current) => ({ ...current, [item.id]: event.target.value }))} maxLength={120} /><Input aria-label="Permit expiration date" type="date" value={expiryDates[item.id] ?? item.expires_at ?? ""} onChange={(event) => setExpiryDates((current) => ({ ...current, [item.id]: event.target.value }))} /><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div><Button size="sm" variant="ghost" disabled={savePermitDetails.isPending} onClick={() => savePermitDetails.mutate({ id: item.id, permitNumber: permitNumbers[item.id] ?? item.permit_number ?? "", expiresAt: expiryDates[item.id] ?? item.expires_at ?? "" })}>Save details</Button></div></td>
                       <td className="py-3 pr-3"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge></td>
                       <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <div className="flex min-w-52 flex-col gap-2"><Input aria-label="Official permit issue date" type="date" value={issuanceDates[item.id] ?? ""} onChange={(event) => setIssuanceDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!issuanceDates[item.id] || !item.permit_number?.trim() || recordIssuance.isPending} onClick={() => recordIssuance.mutate({ id: item.id, issuedAt: issuanceDates[item.id] })}>Record issued</Button><span className="text-xs text-muted-foreground">Requires official permit number and issue date.</span></div> : "—"}</td>
                     </tr>;
