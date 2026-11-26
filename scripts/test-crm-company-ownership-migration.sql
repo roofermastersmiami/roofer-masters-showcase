@@ -243,6 +243,8 @@ AS $$
 $$;
 GRANT USAGE ON SCHEMA auth TO authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
+-- Supabase grants public-schema usage by default; recreate that default in this isolated fixture.
+GRANT USAGE ON SCHEMA public TO authenticated;
 
 ALTER TABLE public.leads ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.leads ADD COLUMN source text, ADD COLUMN page text;
