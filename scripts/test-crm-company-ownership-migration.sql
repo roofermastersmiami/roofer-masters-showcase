@@ -261,7 +261,10 @@ SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001'
 SELECT public.save_crm_customer(
   '{"name":"Company A customer","phone":"3055550101","email":"a@example.com","customer_type":"residential"}'::jsonb
 );
-DO $$
+
+-- Verify persisted rows with the privileged fixture connection, not the app role.
+RESET ROLE;
+DO $
 DECLARE
   created_customer uuid;
 BEGIN
@@ -276,10 +279,13 @@ BEGIN
       AND company_id='10000000-0000-0000-0000-000000000001') THEN
     RAISE EXCEPTION 'Customer source lead was not linked within Company A';
   END IF;
-END $$;
+END $;
+
+-- Re-enter the restricted role for authorization-negative tests.
+SET ROLE authenticated;
 
 -- A user cannot update a customer owned by another company.
-DO $$
+DO $
 BEGIN
   BEGIN
     PERFORM public.save_crm_customer(jsonb_build_object(
