@@ -16,12 +16,13 @@ const fixture = readFileSync(
 
 describe("company-aware lead/customer synchronization", () => {
   it("registers migration 0043 after ownership foundation 0042", () => {
-    expect(journal.entries.at(-1)).toMatchObject({
+    const entry = journal.entries.find((item: { idx: number }) => item.idx === 43);
+    expect(entry).toMatchObject({
       idx: 43,
       tag: "0043_company_aware_lead_customer_sync",
       when: expect.any(Number),
     });
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when);
+    expect(entry!.when).toBeGreaterThan(journal.entries[42].when);
   });
 
   it("requires a source company and propagates it to customers and properties", () => {
