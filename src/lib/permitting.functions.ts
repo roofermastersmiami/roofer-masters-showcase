@@ -129,6 +129,36 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
     return saved;
   });
 
+export const recordPermitRejection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({
+    id: z.string().uuid(),
+    reason: z.string().trim().min(1).max(4000),
+  }).parse(raw))
+  .handler(async ({ data, context }) => {
+    const { db, companyId } = await permitContext(context.userId);
+    const { data: current, error: currentError } = await db.from("roof_permit_applications")
+      .select("application_status,notes,updated_at")
+      .eq("id", data.id).eq("company_id", companyId).maybeSingle();
+    if (currentError || !current) throw new Error("Permit application was not found in your company.");
+    if (!canTransitionPermitApplication(
+      current.application_status as import("@/lib/permitting-rules").PermitApplicationStatus,
+      "rejected",
+    )) throw new Error("Only a submitted permit application can be recorded as rejected.");
+    const timestamp = new Date().toISOString();
+    const existingNotes = String(current.notes ?? "").trim();
+    const notes = existingNotes
+      ? `${existingNotes}\\n\\nRejection reason (recorded ${timestamp}): ${data.reason}`
+      : `Rejection reason (recorded ${timestamp}): ${data.reason}`;
+    const { data: saved, error } = await db.from("roof_permit_applications")
+      .update({ application_status: "rejected", notes })
+      .eq("id", data.id).eq("company_id", companyId)
+      .eq("updated_at", current.updated_at).select("*").maybeSingle();
+    if (error) throw new Error("Could not record the permit rejection.");
+    if (!saved) throw new Error("This permit application changed in another session. Reload it and retry recording the rejection.");
+    return saved;
+  });
+
 export const createPermitInspection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => inspectionInput.parse(raw))
