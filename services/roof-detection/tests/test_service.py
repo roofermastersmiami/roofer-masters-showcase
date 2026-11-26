@@ -731,6 +731,37 @@ def test_resolve_miramar_parcel_returns_unique_polygon_and_folio(monkeypatch):
     ([], "not_found", 0),
     ([1, 2], "ambiguous", 2),
 ])
+def test_resolve_miramar_parcel_requires_matching_address_point_parcel_id(monkeypatch):
+    import asyncio
+
+    polygon = Polygon([(-80.4, 25.9), (-80.3, 25.9), (-80.3, 26.0), (-80.4, 26.0)])
+    class Response:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"features": [{"geometry": mapping(polygon),
+                "properties": {"OBJECTID": 42, "FOLIO": "514102000010"}}]}
+    class Client:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def get(self, *args, **kwargs): return Response()
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", Client)
+
+    found, evidence = asyncio.run(
+        roof_service.resolve_miramar_parcel(25.95, -80.35, "514102000010")
+    )
+    assert found.equals(polygon)
+    assert evidence["status"] == "matched"
+
+    rejected, mismatch = asyncio.run(
+        roof_service.resolve_miramar_parcel(25.95, -80.35, "999999999999")
+    )
+    assert rejected is None
+    assert mismatch["status"] == "identity_mismatch"
+    assert mismatch["address_point_parcel_id"] == "999999999999"
+    assert mismatch["parcel_folio"] == "514102000010"
+
+
 def test_resolve_miramar_parcel_fails_closed_without_unique_match(monkeypatch, features, status, count):
     import asyncio
     polygon = Polygon([(-80.4, 25.9), (-80.3, 25.9), (-80.3, 26.0), (-80.4, 26.0)])
