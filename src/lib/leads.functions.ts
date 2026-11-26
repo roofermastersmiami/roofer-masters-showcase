@@ -4,6 +4,11 @@ import { instantInputSchema, instantRange, qualifyRoofLead } from "./instant-est
 import { chatFetchSchema, chatMessageSchema, chatStartSchema, leadFormSchema } from "./lead-schema";
 import { getPublicLeadCompanyId } from "./public-lead-company";
 
+/**
+ * tenant-audit: reviewed — privileged Supabase access is server-only. Public lead
+ * writes derive company_id from validated server env, never request data; rate limits
+ * include that company. Chat follow-ups require the per-lead opaque chat_token.
+ */
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
