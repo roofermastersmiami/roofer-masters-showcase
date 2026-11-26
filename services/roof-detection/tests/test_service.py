@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 
@@ -1038,3 +1039,24 @@ def test_geocode_with_provenance_prefers_exact_miramar_address_point_before_nomi
     assert result[0:3] == (25.98, -80.39, "3062 SW 189 AVE")
     assert result[3]["source"] == "City of Miramar Official Address Points"
     assert calls == ["broward", "miramar"]
+
+
+def test_facet_boundary_perimeter_uses_fitted_plane_surface_distance():
+    perimeter = roof_service._facet_boundary_perimeter_lf(
+        [[0, 0], [3, 0], [3, 2], [0, 2], [0, 0]],
+        [0.5, 0.0, 10.0],
+    )
+    expected_m = 2 * math.sqrt(3**2 + 1.5**2) + 4
+    assert perimeter == pytest.approx(expected_m * 3.280839895, rel=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("boundary", "coefficients"),
+    [
+        ([[0, 0], [1, 0], [1, 1]], [0, 0, 0]),
+        ([[0, 0], [1, 0], [1, 1], [0, 0]], [float("nan"), 0, 0]),
+        ([[0, 0], [1, 0], [1, 1], [0, 0]], [0, 0]),
+    ],
+)
+def test_facet_boundary_perimeter_rejects_incomplete_or_invalid_geometry(boundary, coefficients):
+    assert roof_service._facet_boundary_perimeter_lf(boundary, coefficients) is None
