@@ -25,7 +25,12 @@ function permitLabel(status: string) {
   return permitStatuses.find((item) => item.value === status)?.label ?? "Unknown";
 }
 
-function formatCurrency(cents: number | null | undefined) {\n  if (cents == null) return "Value not recorded";\n  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);\n}\n\nfunction formatDate(value: string | null) {
+function formatCurrency(cents: number | null | undefined) {
+  if (cents == null) return "Value not recorded";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function formatDate(value: string | null) {
   if (!value) return "Not scheduled";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -121,13 +126,14 @@ export function Permitting({ leads }: { leads: Lead[] }) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[780px] text-left text-sm">
+              <table className="w-full min-w-[900px] text-left text-sm">
                 <thead><tr className="border-b text-xs text-muted-foreground">
                   <th className="px-3 py-3 font-medium">Job / customer</th>
                   <th className="px-3 py-3 font-medium">Job status</th>
                   <th className="px-3 py-3 font-medium">Permit status</th>
+                  <th className="px-3 py-3 font-medium">Job value</th>
                   <th className="px-3 py-3 font-medium">Inspection</th>
-                  <th className="px-3 py-3 font-medium">NOC threshold</th>
+                  <th className="px-3 py-3 font-medium">NOC review</th>
                 </tr></thead>
                 <tbody>
                   {visible.map((job) => {
@@ -139,7 +145,8 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{jobStatuses[job.status] ?? job.status}</td>
                       <td className="px-3 py-3"><Badge variant={job.permit_status === "approved" ? "default" : "secondary"}>{permitLabel(job.permit_status)}</Badge></td>
-                      <td className="px-3 py-3 text-muted-foreground">{formatCurrency(job.budget_cents)}</td>\n                      <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{formatCurrency(job.budget_cents)}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
                       <td className="px-3 py-3">
                         {noc.required ? <Badge variant="outline">Review NOC</Badge> : noc.reason === "value_unknown" ? <Badge variant="secondary">Value missing — review</Badge> : <span className="text-xs text-muted-foreground">Below default threshold</span>}
                       </td>
