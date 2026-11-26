@@ -98,7 +98,7 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db.from("roof_permit_applications")
-      .select("application_status").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+      .select("application_status,permit_number,submitted_at,issued_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Permit application was not found in your company.");
     const nextStatus = data.changes.application_status;
     const transitions: Record<string, string[]> = {
@@ -111,11 +111,15 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
       !transitions[current.application_status]?.includes(nextStatus)) {
       throw new Error("Invalid permit application status transition.");
     }
-    if (nextStatus === "issued" && (!data.changes.permit_number?.trim() || !data.changes.issued_at)) {
+    if (nextStatus === "issued" &&
+      (!(data.changes.permit_number ?? current.permit_number)?.trim() || !data.changes.issued_at)) {
       throw new Error("Issuance requires an official permit number and issue date.");
     }
-    if (nextStatus === "submitted" && !data.changes.submitted_at) {
+    if (nextStatus === "submitted" && !(data.changes.submitted_at ?? current.submitted_at)) {
       throw new Error("Submission requires the actual submission timestamp.");
+    }
+    if (nextStatus === "expired" && !(data.changes.issued_at ?? current.issued_at)) {
+      throw new Error("Expiration can only be recorded for a permit that has been issued.");
     }
     const { data: saved, error } = await db.from("roof_permit_applications")
       .update(data.changes).eq("id", data.id).eq("company_id", companyId).select("*").maybeSingle();
