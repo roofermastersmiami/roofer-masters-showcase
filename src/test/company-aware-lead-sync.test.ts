@@ -29,7 +29,7 @@ describe("company-aware lead/customer synchronization", () => {
     expect(migration).toMatch(/INSERT INTO public\.crm_customers\s*\([\s\S]*?company_id/i);
     expect(migration).toMatch(/VALUES\s*\([\s\S]*?NEW\.company_id/i);
     expect(migration).toMatch(/INSERT INTO public\.crm_properties\s*\([\s\S]*?company_id/i);
-    expect(migration).toMatch(/ON CONFLICT \(id\) DO UPDATE[\s\S]*?company_id = EXCLUDED\.company_id/i);
+    expect(migration).toMatch(/ON CONFLICT \(id\) DO UPDATE[\s\S]*?WHERE public\.crm_customers\.company_id = EXCLUDED\.company_id/i);
   });
 
   it("keeps the integration fixture exercising the real trigger migration", () => {
