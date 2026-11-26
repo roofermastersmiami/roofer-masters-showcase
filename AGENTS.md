@@ -16,8 +16,7 @@ Lovable, not by hand. With the [Lovable MCP](https://mcp.lovable.dev)
 connected, `send_message` asks Lovable to do it; otherwise ask the user to
 use the editor.
 
-- **Database.** Do not add or edit `supabase/migrations/` or `drizzle/`.
-  Ask Lovable to change the schema.
+- **Database.** Schema changes may be delivered without Lovable credits through reviewed GitHub pull requests. Add sequential SQL files under `drizzle/migrations/` and update `drizzle/migrations/meta/_journal.json` in the same PR. Never rewrite published migrations or migration history. Each migration must be additive where practical, reviewed for RLS/grants/SECURITY DEFINER safety, and paired with documented validation. Generated database types remain generated and must not be hand-edited. Do not deploy schema changes directly from an unreviewed branch; merge only after CI and SQL review, then apply through the repository's approved database deployment path.
 - **Generated files.** Do not edit a file whose header says it is automatically
   generated.
 - **AI gateway.** Keep model calls on Lovable's gateway, and keep
