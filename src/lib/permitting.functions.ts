@@ -99,7 +99,7 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db.from("roof_permit_applications")
-      .select("application_status,permit_number,submitted_at,issued_at,expires_at,notes").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+      .select("application_status,permit_number,submitted_at,issued_at,expires_at,notes,updated_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Permit application was not found in your company.");
     const nextStatus = data.changes.application_status;
     if (nextStatus && !canTransitionPermitApplication(
@@ -123,8 +123,9 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
       throw new Error("Expiration can only be recorded for a permit that has been issued.");
     }
     const { data: saved, error } = await db.from("roof_permit_applications")
-      .update(data.changes).eq("id", data.id).eq("company_id", companyId).select("*").maybeSingle();
-    if (error || !saved) throw new Error("Could not update this permit application.");
+      .update(data.changes).eq("id", data.id).eq("company_id", companyId).eq("updated_at", current.updated_at).select("*").maybeSingle();
+    if (error) throw new Error("Could not update this permit application.");
+    if (!saved) throw new Error("This permit application changed in another session. Reload it and retry your update.");
     return saved;
   });
 
@@ -149,7 +150,7 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db.from("roof_permit_inspections")
-      .select("scheduling_status,scheduled_at,completed_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+      .select("scheduling_status,scheduled_at,completed_at,updated_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Inspection was not found in your company.");
     const nextStatus = data.changes.scheduling_status;
     if (nextStatus && !canTransitionPermitInspection(
@@ -167,7 +168,8 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
       throw new Error("An inspection outcome requires its completion timestamp.");
     }
     const { data: saved, error } = await db.from("roof_permit_inspections")
-      .update(data.changes).eq("id", data.id).eq("company_id", companyId).select("*").maybeSingle();
-    if (error || !saved) throw new Error("Could not update this inspection.");
+      .update(data.changes).eq("id", data.id).eq("company_id", companyId).eq("updated_at", current.updated_at).select("*").maybeSingle();
+    if (error) throw new Error("Could not update this inspection.");
+    if (!saved) throw new Error("This inspection changed in another session. Reload it and retry your update.");
     return saved;
   });
