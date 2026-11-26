@@ -246,7 +246,8 @@ export function PermitRecords() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      // Give the browser time to begin consuming the object URL before revoking it.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success("CRM permit summary PDF generated.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not generate permit summary.");
