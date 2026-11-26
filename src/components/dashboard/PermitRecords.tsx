@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CalendarPlus, ClipboardList, Download, FileText, Plus, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createPermitPacketPdf } from "@/lib/permit-packet";
+import { buildPermitDocumentPath, validatePermitDocument } from "@/lib/permit-document-validation";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -162,20 +163,19 @@ export function PermitRecords() {
 
   const uploadPermitFile = async (application: (typeof applications)[number], file?: File) => {
     if (!file) return;
-    const allowed = ["application/pdf", "image/jpeg", "image/png"];
-    if (!allowed.includes(file.type)) {
-      toast.error("Only PDF, JPG, and PNG permit documents are allowed.");
-      return;
-    }
-    if (file.size > 25 * 1024 * 1024) {
-      toast.error("Permit documents must be 25 MB or smaller.");
+    const validation = validatePermitDocument(file);
+    if (!validation.valid) {
+      toast.error(validation.reason);
       return;
     }
     setFileBusy((current) => ({ ...current, [application.id]: true }));
     try {
-      const folder = `${application.company_id}/${application.id}`;
-      const safeName = file.name.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g, "-").slice(-100) || "permit-document";
-      const path = `${folder}/${crypto.randomUUID()}-${safeName}`;
+      const path = buildPermitDocumentPath(
+        application.company_id,
+        application.id,
+        validation.safeName,
+        crypto.randomUUID(),
+      );
       const { error } = await supabase.storage.from("permit-documents").upload(path, file, {
         contentType: file.type, cacheControl: "3600", upsert: false,
       });
