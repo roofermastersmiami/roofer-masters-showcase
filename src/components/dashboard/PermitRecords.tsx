@@ -13,6 +13,7 @@ import {
   getPermitWorkspace,
   updatePermitApplication,
   updatePermitInspection,
+  recordPermitRejection,
 } from "@/lib/permitting.functions";
 
 const inputClass = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
@@ -109,17 +110,8 @@ export function PermitRecords() {
     onError: (error) => toast.error(error.message || "Could not save permit details."),
   });
   const recordRejection = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) => {
-      const application = applications.find((item) => item.id === id);
-      if (!application) throw new Error("Permit application was not found.");
-      const cleanReason = reason.trim();
-      if (!cleanReason) throw new Error("Enter the municipality's rejection reason before recording rejection.");
-      const existingNotes = String(application.notes ?? "").trim();
-      const notes = existingNotes
-        ? `${existingNotes}\n\nRejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`
-        : `Rejection reason (recorded ${new Date().toISOString()}): ${cleanReason}`;
-      return updatePermitApplication({ id, changes: { application_status: "rejected", notes } });
-    },
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      recordPermitRejection({ id, reason }),
     onSuccess: async (_saved, variables) => {
       setRejectionReasons((current) => { const next = { ...current }; delete next[variables.id]; return next; });
       toast.success("Rejection recorded with the reason provided.");
