@@ -33,7 +33,8 @@ describe("company-scoped customer save RPC", () => {
   });
 
   it("revokes public execution and grants only authenticated/service roles", () => {
-    expect(migration).toMatch(/REVOKE ALL ON FUNCTION public\.save_crm_customer\(jsonb\) FROM PUBLIC, anon/i);
-    expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.save_crm_customer\(jsonb\) TO authenticated, service_role/i);
+    expect(migration).toMatch(/REVOKE ALL ON FUNCTION public\.save_crm_customer\(jsonb\) FROM PUBLIC, anon, service_role/i);
+    expect(migration).toMatch(/GRANT EXECUTE ON FUNCTION public\.save_crm_customer\(jsonb\) TO authenticated/i);
+    expect(migration).not.toMatch(/GRANT EXECUTE ON FUNCTION public\.save_crm_customer\(jsonb\) TO [^;]*service_role/i);
   });
 });
