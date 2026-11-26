@@ -2,9 +2,9 @@ name: Roofer Masters Roof Tests
 
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046]
+    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/permit-management-workflows-0049]
   pull_request:
-    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046]
+    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/permit-records-and-inspections-0048]
   workflow_dispatch:
 
 jobs:
@@ -65,6 +65,18 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_customer_delete_test
           psql "postgresql://postgres@localhost:5432/crm_customer_delete_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-customer-delete.sql
+      - name: Run company-scoped permit records PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_permit_records_test
+          psql "postgresql://postgres@localhost:5432/crm_permit_records_test" -v ON_ERROR_STOP=1 -f scripts/test-company-permit-records-rls.sql
+      - name: Run permit document storage PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_permit_storage_test
+          psql "postgresql://postgres@localhost:5432/crm_permit_storage_test" -v ON_ERROR_STOP=1 -f scripts/test-permit-document-storage-rls.sql
       - name: Run lint checks (baseline audit)
         run: npm run lint
         continue-on-error: true
