@@ -961,6 +961,32 @@ def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer,
     return _transform_polygon(polygon, to_xy), to_xy, to_ll
 
 
+def _facet_boundary_perimeter_lf(boundary_xy, plane_coefficients) -> float | None:
+    """Measure one observed facet boundary in 3D feet, not classified roof edges.
+
+    Facet hulls are independent; shared boundaries may be duplicated and hulls
+    may be incomplete. This diagnostic is not an eave/rake/ridge/hip/valley takeoff.
+    """
+    try:
+        a, b, c = (float(value) for value in plane_coefficients)
+        coordinates = [(float(point[0]), float(point[1])) for point in boundary_xy]
+    except (TypeError, ValueError, IndexError):
+        return None
+    values = (a, b, c, *(value for point in coordinates for value in point))
+    if len(coordinates) < 4 or not all(math.isfinite(value) for value in values):
+        return None
+    if coordinates[0] != coordinates[-1]:
+        coordinates.append(coordinates[0])
+    perimeter_m = 0.0
+    for first, second in zip(coordinates, coordinates[1:]):
+        dx, dy = second[0] - first[0], second[1] - first[1]
+        dz = a * dx + b * dy
+        perimeter_m += math.sqrt(dx * dx + dy * dy + dz * dz)
+    if not math.isfinite(perimeter_m) or perimeter_m <= 0:
+        return None
+    return perimeter_m * 3.280839895
+
+
 def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
     remaining = points.copy()
     facets: list[dict[str, Any]] = []
@@ -1055,6 +1081,13 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                         [round(float(x), 3), round(float(y), 3)]
                         for x, y in component.exterior.coords
                     ],
+                    "boundary_perimeter_lf": round(
+                        _facet_boundary_perimeter_lf(
+                            [[float(x), float(y)] for x, y in component.exterior.coords],
+                            [a, b, float(model.intercept_)],
+                        ),
+                        1,
+                    ),
                 })
         remaining = remaining[~inliers]
     return facets
@@ -1274,7 +1307,9 @@ async def analyze_roof(request: AnalyzeRequest):
                 max(facets, key=lambda facet: facet["area_sqft"])["pitch_rise_per_12"] if facets else None
             ),
             "facets": facets,
+            # Independent facet hulls do not establish shared-edge topology.
             "edge_lengths_lf": None,
+            "edge_measurement_status": "unclassified_facet_boundaries" if facets else "no_facets",
         },
         "fallback": {
             "available": not bool(facets),
