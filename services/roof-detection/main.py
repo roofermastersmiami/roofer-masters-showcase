@@ -353,11 +353,18 @@ async def resolve_miramar_situs_folio(address: str) -> tuple[str | None, dict[st
     if len(tokens) < 3 or not tokens[0].isdigit():
         return None, {"status": "invalid_address", "provider": "City of Miramar Parcel Information"}
     house_number = tokens[0].replace("'", "''")
-    street_token = next((token for token in tokens[1:] if token not in {
+    excluded_tokens = {
         "N", "S", "E", "W", "NE", "NW", "SE", "SW", "NORTH", "SOUTH", "EAST", "WEST",
-        "ST", "STREET", "AVE", "AVENUE", "RD", "ROAD", "DR", "DRIVE", "BLVD", "BOULEVARD",
-        "CT", "COURT", "LN", "LANE", "PL", "PLACE", "TRL", "TRAIL", "PKWY", "PARKWAY",
-    }), "")
+        "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+        "ST", "STREET", "AVE", "AVENUE", "AV", "RD", "ROAD", "DR", "DRIVE",
+        "BLVD", "BOULEVARD", "CT", "COURT", "LN", "LANE", "PL", "PLACE",
+        "TRL", "TRAIL", "PKWY", "PARKWAY", "HWY", "HIGHWAY",
+    }
+    street_tokens = [
+        re.sub(r"^(\\d+)(?:ST|ND|RD|TH)$", r"\\1", token)
+        for token in tokens[1:]
+    ]
+    street_token = next((token for token in street_tokens if token not in excluded_tokens), "")
     if not street_token:
         return None, {"status": "invalid_address", "provider": "City of Miramar Parcel Information"}
     url = ("https://services6.arcgis.com/dAtAhTJ12QXYHJYN/ArcGIS/rest/services/"
