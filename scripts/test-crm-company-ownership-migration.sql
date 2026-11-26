@@ -103,7 +103,7 @@ INSERT INTO public.crm_properties(id,customer_id,company_id) VALUES
  ('40000000-0000-0000-0000-000000000003',
   '30000000-0000-0000-0000-000000000002',
   '10000000-0000-0000-0000-000000000002');
-DO $
+DO $$
 BEGIN
   BEGIN
     INSERT INTO public.crm_properties(id,customer_id,company_id)
@@ -138,7 +138,7 @@ BEGIN
     RAISE EXCEPTION 'Cross-company roof report/property link unexpectedly succeeded';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
-END $;
+END $$;
 
 -- Preserve the original source-lead deletion behavior: only source_lead_id is nulled.
 DELETE FROM public.leads WHERE id='20000000-0000-0000-0000-000000000001';
