@@ -290,6 +290,9 @@ async def resolve_miramar_address_point(
     street_tokens = [token for token in tokens[1:] if token not in excluded]
     if not street_tokens:
         return None
+    # Match the same ordinal normalization used for exact local comparison;
+    # otherwise a GIS value like "189 AVE" is excluded by a "%189TH%" query.
+    street_tokens = [re.sub(r"^(\\d+)(?:ST|ND|RD|TH)$", r"\\1", token) for token in street_tokens]
     house_number = tokens[0].replace("'", "''")
     street_token = street_tokens[0].replace("'", "''")
     url = (
@@ -352,10 +355,12 @@ async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None
             response = await client.get(url, params=params)
             response.raise_for_status()
             payload = response.json()
-        if payload.get("error"):
+        if not isinstance(payload, dict) or payload.get("error"):
             return None, {"status": "provider_error", "provider": "City of Miramar GIS"}
         point, matches = Point(lon, lat), []
         for feature in payload.get("features", []):
+            if not isinstance(feature, dict):
+                continue
             geometry = feature.get("geometry")
             if not geometry:
                 continue
