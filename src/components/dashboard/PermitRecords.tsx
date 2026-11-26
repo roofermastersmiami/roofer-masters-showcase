@@ -164,7 +164,9 @@ export function PermitRecords() {
           notes: item.notes,
         })),
       });
-      const blob = new Blob([bytes], { type: "application/pdf" });
+      const pdfBuffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(pdfBuffer).set(bytes);
+      const blob = new Blob([pdfBuffer], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const safeNumber = String(application.permit_number || application.id.slice(0, 8)).replace(/[^a-zA-Z0-9_-]/g, "-");
