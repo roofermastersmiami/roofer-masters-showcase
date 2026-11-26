@@ -165,6 +165,13 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
             "building_tags": {"building": "house"},
             "address_point_inside_footprint": False,
             "address_to_footprint_distance_m": 3.27,
+            "candidate_id": "candidate-123",
+            "parcel_match": {
+                "status": "matched",
+                "provider": "City of Miramar GIS",
+                "folio": "verified-folio",
+                "building_candidates_intersecting_parcel": 1,
+            },
         }
 
     monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
@@ -184,6 +191,13 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     payload = response.json()
     assert payload["footprint"]["address_point_inside_footprint"] is False
     assert payload["footprint"]["address_to_footprint_distance_m"] == 3.27
+    assert payload["footprint"]["candidate_id"] == "candidate-123"
+    assert payload["footprint"]["parcel_match"] == {
+        "status": "matched",
+        "provider": "City of Miramar GIS",
+        "folio": "verified-folio",
+        "building_candidates_intersecting_parcel": 1,
+    }
     assert payload["status"] == "footprint_only"
     assert payload["address_match"] == {"source": "Test geocoder"}
 
