@@ -263,7 +263,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
         </CardContent>
       </Card>
 
-      <Card className="border-amber-500/30 bg-amber-500/5">
+      <PermitRecords />\n\n      <Card className="border-amber-500/30 bg-amber-500/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <FileCheck2 className="size-4" />
