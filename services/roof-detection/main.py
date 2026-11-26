@@ -199,6 +199,11 @@ async def resolve_broward_address_point(address: str) -> tuple[float, float, str
 
 async def geocode_with_provenance(address: str) -> tuple[float, float, str, dict[str, Any]]:
     """Resolve an address once and retain the provider evidence for diagnostics."""
+    miramar_match = await resolve_miramar_address_point(address)
+    if miramar_match:
+        lat, lon, matched_address, provenance = miramar_match
+        return lat, lon, matched_address, dict(provenance)
+
     county_match = await resolve_broward_address_point(address)
     if county_match:
         lat, lon, matched_address, provenance = county_match
@@ -252,6 +257,73 @@ def _normalize_street_address(value: str | None) -> str:
         "PL": "PLACE", "TRL": "TRAIL", "PKWY": "PARKWAY", "HWY": "HIGHWAY",
     }
     return " ".join(expansions.get(token, token) for token in tokens)
+
+
+async def resolve_miramar_address_point(
+    address: str,
+) -> tuple[float, float, str, dict[str, Any]] | None:
+    """Resolve an exact Miramar situs address to the City's official address point.
+
+    A coarse server-side query is followed by normalized full-address equality;
+    zero, duplicate, malformed, or unavailable records fall back to other geocoders.
+    """
+    street_line = address.split(",", 1)[0].strip()
+    tokens = re.findall(r"[A-Za-z0-9]+", street_line.upper())
+    if len(tokens) < 3 or not tokens[0].isdigit():
+        return None
+    excluded = {
+        "N", "S", "E", "W", "NE", "NW", "SE", "SW", "NORTH", "SOUTH",
+        "EAST", "WEST", "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST",
+        "ST", "STREET", "AVE", "AVENUE", "RD", "ROAD", "DR", "DRIVE",
+        "BLVD", "BOULEVARD", "CT", "COURT", "LN", "LANE", "PL", "PLACE",
+        "TRL", "TRAIL", "PKWY", "PARKWAY", "HWY", "HIGHWAY",
+    }
+    street_tokens = [token for token in tokens[1:] if token not in excluded]
+    if not street_tokens:
+        return None
+    house_number = tokens[0].replace("'", "''")
+    street_token = street_tokens[0].replace("'", "''")
+    url = (
+        "https://smartcity.miramarfl.gov/server/rest/services/Hosted/"
+        "MiramarAddressPoints/FeatureServer/1/query"
+    )
+    params = {
+        "where": f"situsaddrfull LIKE '%{house_number}%' AND situsaddrfull LIKE '%{street_token}%'",
+        "outFields": "parcel_id,situsaddrfull,situszip,addr_id",
+        "returnGeometry": "true", "outSR": "4326", "resultRecordCount": "20", "f": "json",
+    }
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(12.0, connect=5.0), headers={"User-Agent": USER_AGENT}
+        ) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+        if payload.get("error"):
+            return None
+        requested = _normalize_street_address(street_line)
+        matches = []
+        for feature in payload.get("features", []):
+            attrs = feature.get("attributes") or {}
+            candidate_address = str(attrs.get("situsaddrfull") or "")
+            if _normalize_street_address(candidate_address) != requested:
+                continue
+            geometry = feature.get("geometry") or {}
+            try:
+                lon, lat = float(geometry["x"]), float(geometry["y"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not (-80.95 <= lon <= -80.05 and 25.0 <= lat <= 26.5):
+                continue
+            matches.append((lat, lon, candidate_address, {
+                "source": "City of Miramar Official Address Points",
+                "parcel_id": attrs.get("parcel_id"),
+                "address_id": attrs.get("addr_id"),
+                "zip_code": attrs.get("situszip"),
+            }))
+        return matches[0] if len(matches) == 1 else None
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        return None
 
 
 async def resolve_miramar_parcel(lat: float, lon: float) -> tuple[Polygon | None, dict[str, Any]]:
