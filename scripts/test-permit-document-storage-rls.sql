@@ -99,6 +99,22 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+-- Company A office member cannot update or delete even Company A's own file.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
+UPDATE storage.objects SET name=
+ '10000000-0000-0000-0000-000000000001/50000000-0000-0000-0000-000000000001/office-renamed.pdf'
+ WHERE bucket_id='permit-documents'
+ AND name LIKE '%/a.pdf';
+IF (SELECT count(*) FROM storage.objects WHERE name LIKE '%/office-renamed.pdf') <> 0 THEN
+  RAISE EXCEPTION 'Non-admin member unexpectedly updated own permit document';
+END IF;
+DELETE FROM storage.objects WHERE bucket_id='permit-documents' AND name LIKE '%/a.pdf';
+IF NOT EXISTS (SELECT 1 FROM storage.objects WHERE name LIKE '%/a.pdf') THEN
+  RAISE EXCEPTION 'Non-admin member unexpectedly deleted own permit document';
+END IF;
+RESET ROLE;
+
 -- Company A owner can upload, update, and delete only within Company A's app.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
@@ -106,6 +122,16 @@ INSERT INTO storage.objects(bucket_id,name) VALUES (
  'permit-documents',
  '10000000-0000-0000-0000-000000000001/50000000-0000-0000-0000-000000000001/new.pdf'
 );
+-- A tenant admin cannot move an object into another tenant's namespace.
+DO $ BEGIN
+  BEGIN
+    UPDATE storage.objects SET name=
+      '10000000-0000-0000-0000-000000000002/50000000-0000-0000-0000-000000000002/forged.pdf'
+    WHERE bucket_id='permit-documents' AND name LIKE '%/new.pdf';
+    RAISE EXCEPTION 'Cross-tenant object path change unexpectedly accepted';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $;
 UPDATE storage.objects SET name=
  '10000000-0000-0000-0000-000000000001/50000000-0000-0000-0000-000000000001/renamed.pdf'
  WHERE bucket_id='permit-documents'
