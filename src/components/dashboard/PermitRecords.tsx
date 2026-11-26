@@ -103,7 +103,7 @@ export function PermitRecords() {
   const savePermitDetails = useMutation({
     mutationFn: ({ id, permitNumber, expiresAt }: { id: string; permitNumber: string; expiresAt: string }) =>
       updatePermitApplication({ id, changes: { permit_number: permitNumber.trim() || null, expires_at: expiresAt || null } }),
-    onSuccess: async () => { toast.success("Permit details saved."); await refresh(); },
+    onSuccess: async (_saved, variables) => { setPermitNumbers((current) => { const next = { ...current }; delete next[variables.id]; return next; }); setExpiryDates((current) => { const next = { ...current }; delete next[variables.id]; return next; }); toast.success("Permit details saved."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not save permit details."),
   });
   const recordIssuance = useMutation({
@@ -116,13 +116,13 @@ export function PermitRecords() {
         issued_at: new Date(issuedAt + "T12:00:00").toISOString(),
       } });
     },
-    onSuccess: async () => { toast.success("Permit issuance recorded from the official document."); await refresh(); },
+    onSuccess: async (_saved, variables) => { setIssuanceDates((current) => { const next = { ...current }; delete next[variables.id]; return next; }); toast.success("Permit issuance recorded from the official document."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not record permit issuance."),
   });
   const saveInspectionConfirmation = useMutation({
     mutationFn: ({ id, confirmationNumber }: { id: string; confirmationNumber: string }) =>
       updatePermitInspection({ id, changes: { confirmation_number: confirmationNumber.trim() || null } }),
-    onSuccess: async () => { toast.success("Inspection confirmation details saved."); await refresh(); },
+    onSuccess: async (_saved, variables) => { setInspectionConfirmations((current) => { const next = { ...current }; delete next[variables.id]; return next; }); toast.success("Inspection confirmation details saved."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not save confirmation details."),
   });
   const updateInspectionStatus = useMutation({
