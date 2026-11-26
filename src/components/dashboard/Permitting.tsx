@@ -139,7 +139,7 @@ export function Permitting({ leads }: { leads: Lead[] }) {
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{jobStatuses[job.status] ?? job.status}</td>
                       <td className="px-3 py-3"><Badge variant={job.permit_status === "approved" ? "default" : "secondary"}>{permitLabel(job.permit_status)}</Badge></td>
-                      <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{formatCurrency(job.budget_cents)}</td>\n                      <td className="px-3 py-3 text-muted-foreground">{formatDate(job.inspection_at)}</td>
                       <td className="px-3 py-3">
                         {noc.required ? <Badge variant="outline">Review NOC</Badge> : noc.reason === "value_unknown" ? <Badge variant="secondary">Value missing — review</Badge> : <span className="text-xs text-muted-foreground">Below default threshold</span>}
                       </td>
