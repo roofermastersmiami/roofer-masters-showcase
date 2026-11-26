@@ -40,6 +40,7 @@ export function PermitRecords() {
   const [inspectionDate, setInspectionDate] = useState("");
   const [inspectionNotes, setInspectionNotes] = useState("");
   const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
+  const [issuanceDates, setIssuanceDates] = useState<Record<string, string>>({});
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -95,6 +96,19 @@ export function PermitRecords() {
     }),
     onSuccess: async () => { toast.success("Submission recorded. Confirm this was submitted externally."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not update application."),
+  });
+  const recordIssuance = useMutation({
+    mutationFn: ({ id, issuedAt }: { id: string; issuedAt: string }) => {
+      const application = applications.find((item) => item.id === id);
+      if (!application?.permit_number?.trim()) throw new Error("Enter the official permit number before recording issuance.");
+      return updatePermitApplication({ id, changes: {
+        application_status: "issued",
+        submitted_at: application.submitted_at ?? new Date(issuedAt + "T12:00:00").toISOString(),
+        issued_at: new Date(issuedAt + "T12:00:00").toISOString(),
+      } });
+    },
+    onSuccess: async () => { toast.success("Permit issuance recorded from the official document."); await refresh(); },
+    onError: (error) => toast.error(error.message || "Could not record permit issuance."),
   });
   const updateInspectionStatus = useMutation({
     mutationFn: ({ id, status, scheduledAt }: {
@@ -204,7 +218,7 @@ export function PermitRecords() {
                       <td className="py-3 pr-3">{item.jurisdiction_name}<div className="text-xs text-muted-foreground">{item.permit_type}</div></td>
                       <td className="py-3 pr-3"><div>{item.permit_number || "—"}</div><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div></td>
                       <td className="py-3 pr-3"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge></td>
-                      <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <span className="text-xs text-muted-foreground">Awaiting official response</span> : "—"}</td>
+                      <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <div className="flex min-w-52 flex-col gap-2"><Input aria-label="Official permit issue date" type="date" value={issuanceDates[item.id] ?? ""} onChange={(event) => setIssuanceDates((current) => ({ ...current, [item.id]: event.target.value }))} /><Button size="sm" variant="outline" disabled={!issuanceDates[item.id] || !item.permit_number?.trim() || recordIssuance.isPending} onClick={() => recordIssuance.mutate({ id: item.id, issuedAt: issuanceDates[item.id] })}>Record issued</Button><span className="text-xs text-muted-foreground">Requires official permit number and issue date.</span></div> : "—"}</td>
                     </tr>;
                   })}</tbody>
                 </table></div>
