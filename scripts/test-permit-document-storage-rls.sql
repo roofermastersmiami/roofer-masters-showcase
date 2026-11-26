@@ -77,6 +77,27 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+-- Ensure the test is running as a non-privileged role and that no permissive
+-- catch-all DELETE policy can override the tenant-scoped policy.
+SET ROLE authenticated;
+DO $ DECLARE delete_policy_count integer; BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)) THEN
+    RAISE EXCEPTION 'RLS test role % bypasses row-level security', current_user;
+  END IF;
+  SELECT count(*) INTO delete_policy_count
+  FROM pg_policies
+  WHERE schemaname = 'storage' AND tablename = 'objects'
+    AND cmd IN ('DELETE', 'ALL')
+    AND 'authenticated' = ANY(roles::text[]);
+  IF delete_policy_count <> 1 THEN
+    RAISE EXCEPTION 'Expected exactly one authenticated DELETE/ALL policy, found %; policies: %',
+      delete_policy_count,
+      (SELECT string_agg(policyname || ': ' || cmd || ' USING ' || coalesce(qual, '<none>'), E'\\n')
+       FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects');
+  END IF;
+END $;
+RESET ROLE;
+
 -- Assert the exact authorization predicate independently before exercising RLS.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
