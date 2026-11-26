@@ -83,7 +83,7 @@ export const createPermitApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => applicationInput.parse(raw))
   .handler(async ({ data, context }) => {
-    if (!canCreatePermitApplication(data.application_status)) {
+    if (!canCreatePermitApplication(data.application_status, data)) {
       throw new Error("New permit applications must start as drafts. Record submission and issuance through the permit workflow.");
     }
     const { db, companyId } = await permitContext(context.userId);
@@ -168,7 +168,7 @@ export const createPermitInspection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => inspectionInput.parse(raw))
   .handler(async ({ data, context }) => {
-    if (!canCreatePermitInspection(data.scheduling_status)) {
+    if (!canCreatePermitInspection(data.scheduling_status, data)) {
       throw new Error("New inspections must start as requested. Confirm an appointment before recording an outcome.");
     }
     const { db, companyId } = await permitContext(context.userId);
