@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0044_company_scoped_customer_save.sql"),
   "utf8",
 );
+const fixture = readFileSync(
+  resolve(process.cwd(), "scripts/test-crm-company-ownership-migration.sql"),
+  "utf8",
+);
 const journal = JSON.parse(
   readFileSync(resolve(process.cwd(), "drizzle/migrations/meta/_journal.json"), "utf8"),
 );
@@ -17,6 +21,12 @@ describe("company-scoped customer save RPC", () => {
       tag: "0044_company_scoped_customer_save",
     });
     expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when);
+  });
+
+  it("runs the migration in the PostgreSQL integration fixture", () => {
+    expect(fixture).toContain("\\ir ../drizzle/migrations/0044_company_scoped_customer_save.sql");
+    expect(fixture).toMatch(/Cross-company customer update unexpectedly succeeded/);
+    expect(fixture).toMatch(/Multiple memberships unexpectedly authorized/);
   });
 
   it("fails closed unless the actor has exactly one company membership", () => {
