@@ -327,6 +327,21 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
               View technical detection details
             </summary>
+            {(visibleResult.footprint.candidate_id || visibleResult.footprint.parcel_match) && (
+              <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
+                <strong>Building and parcel match evidence</strong>
+                {visibleResult.footprint.candidate_id && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Selected building candidate: <code>{visibleResult.footprint.candidate_id}</code>
+                  </p>
+                )}
+                {visibleResult.footprint.parcel_match && (
+                  <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background p-2 text-[11px]">
+                    {JSON.stringify(visibleResult.footprint.parcel_match, null, 2)}
+                  </pre>
+                )}
+              </div>
+            )}
             {visibleResult.lidar && (
               <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-sm">
                 <strong>Source-data coverage</strong>
