@@ -51,9 +51,7 @@ ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'permit-documents'
   AND cardinality(storage.foldername(name)) = 2
-  AND EXISTS (
-    SELECT 1
-    FROM public.roof_permit_applications a
+  AND (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
     WHERE a.id::text = (storage.foldername(name))[2]
       AND a.company_id::text = (storage.foldername(name))[1]
       AND public.is_crm_company_admin(a.company_id)
@@ -76,6 +74,146 @@ ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'permit-documents'
   AND cardinality(storage.foldername(name)) = 2
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
+  'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
+
+  AND (storage.foldername(name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+)
+WITH CHECK (
+  bucket_id = 'permit-documents'
+  AND cardinality(storage.foldername(name)) = 2
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+CREATE POLICY "Company admins delete permit documents"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'permit-documents'
+  AND cardinality(storage.foldername(name)) = 2
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
+  'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
+
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+)
+WITH CHECK (
+  bucket_id = 'permit-documents'
+  AND cardinality(storage.foldername(name)) = 2
+  AND (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+CREATE POLICY "Company admins delete permit documents"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'permit-documents'
+  AND cardinality(storage.foldername(name)) = 2
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
+  'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
+
+  AND (storage.foldername(name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+CREATE POLICY "Company admins delete permit documents"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'permit-documents'
+  AND cardinality(storage.foldername(name)) = 2
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
+  'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
+
+  AND EXISTS (
+    SELECT 1
+    FROM public.roof_permit_applications a
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+CREATE POLICY "Company admins delete permit documents"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'permit-documents'
+  AND cardinality(storage.foldername(name)) = 2
+  AND (storage.foldername(name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
+  'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
+
+  AND (storage.foldername(name))[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    WHERE a.id::text = (storage.foldername(name))[2]
+      AND a.company_id::text = (storage.foldername(name))[1]
+      AND public.is_crm_company_admin(a.company_id)
+  )
+);
+
+COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
+  'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
+
   AND EXISTS (
     SELECT 1
     FROM public.roof_permit_applications a
