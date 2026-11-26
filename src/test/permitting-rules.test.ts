@@ -5,6 +5,8 @@ import {
   requiresNoticeOfCommencement,
   canTransitionPermitApplication,
   canTransitionPermitInspection,
+  canCreatePermitApplication,
+  canCreatePermitInspection,
 } from "@/lib/permitting-rules";
 
 describe("Notice of Commencement threshold", () => {
@@ -131,6 +133,22 @@ describe("complete permitting transition matrix", () => {
           allowed[current].includes(next),
         );
       }
+    }
+  });
+});
+
+describe("initial permit record states", () => {
+  it("allows new permit applications only as drafts", () => {
+    expect(canCreatePermitApplication("draft")).toBe(true);
+    for (const status of ["ready_to_submit", "submitted", "issued", "rejected", "expired", "cancelled"] as const) {
+      expect(canCreatePermitApplication(status)).toBe(false);
+    }
+  });
+
+  it("allows new inspections only as requested", () => {
+    expect(canCreatePermitInspection("requested")).toBe(true);
+    for (const status of ["scheduled", "passed", "failed", "cancelled"] as const) {
+      expect(canCreatePermitInspection(status)).toBe(false);
     }
   });
 });
