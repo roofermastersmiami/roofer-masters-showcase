@@ -44,7 +44,7 @@ export function canManageCompanyMember(
   targetRole: string | null | undefined,
   nextRole?: CompanyTeamRole,
 ): boolean {
-  if (!isCompanyAdmin(actorRole) || !targetRole || targetRole === "owner") return false;
+  if (!isCompanyAdmin(actorRole) || !targetRole || targetRole === "owner" || nextRole === "owner") return false;
 
   if (actorRole === "owner") return true;
 
