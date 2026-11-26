@@ -13,8 +13,8 @@ from main import AnalyzeRequest, _deduplicate_lidar_points, _distance_to_footpri
 from shapely.geometry import Point, Polygon, mapping
 
 
-@pytest.mark.asyncio
-async def test_miramar_address_point_requires_one_exact_match(monkeypatch):
+def test_miramar_address_point_requires_one_exact_match(monkeypatch):
+    import asyncio
     class FakeResponse:
         def raise_for_status(self):
             return None
@@ -35,9 +35,9 @@ async def test_miramar_address_point_requires_one_exact_match(monkeypatch):
             return FakeResponse()
 
     monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
-    result = await roof_service.resolve_miramar_address_point(
+    result = asyncio.run(roof_service.resolve_miramar_address_point(
         "3062 Southwest 189th Avenue, Miramar, FL 33029"
-    )
+    ))
     assert result is not None
     lat, lon, matched, evidence = result
     assert (lat, lon) == pytest.approx((25.98, -80.4))
@@ -45,8 +45,8 @@ async def test_miramar_address_point_requires_one_exact_match(monkeypatch):
     assert evidence["parcel_id"] == "verified-folio"
 
 
-@pytest.mark.asyncio
-async def test_miramar_address_point_rejects_ambiguous_exact_matches(monkeypatch):
+def test_miramar_address_point_rejects_ambiguous_exact_matches(monkeypatch):
+    import asyncio
     class FakeResponse:
         def raise_for_status(self):
             return None
@@ -64,9 +64,9 @@ async def test_miramar_address_point_rejects_ambiguous_exact_matches(monkeypatch
         async def get(self, *args, **kwargs): return FakeResponse()
 
     monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeClient)
-    assert await roof_service.resolve_miramar_address_point(
+    assert asyncio.run(roof_service.resolve_miramar_address_point(
         "3062 Southwest 189th Avenue, Miramar, FL 33029"
-    ) is None
+    )) is None
 
 
 def test_request_requires_address_or_complete_coordinates():
