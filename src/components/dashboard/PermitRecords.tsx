@@ -32,6 +32,9 @@ export function PermitRecords() {
   const [jurisdiction, setJurisdiction] = useState("Miami-Dade County");
   const [permitType, setPermitType] = useState("Roof replacement");
   const [portalUrl, setPortalUrl] = useState("");
+  const [permitNumber, setPermitNumber] = useState("");
+  const [permitFee, setPermitFee] = useState("");
+  const [applicationNotes, setApplicationNotes] = useState("");
   const [applicationId, setApplicationId] = useState("");
   const [inspectionType, setInspectionType] = useState("Roof dry-in");
   const [inspectionDate, setInspectionDate] = useState("");
@@ -46,10 +49,16 @@ export function PermitRecords() {
       permit_type: permitType,
       application_status: "draft",
       portal_url: portalUrl.trim() || null,
+      permit_number: permitNumber.trim() || null,
+      fee_cents: permitFee.trim() ? Math.round(Number(permitFee) * 100) : null,
+      notes: applicationNotes,
     }),
     onSuccess: async () => {
       toast.success("Permit application draft saved.");
       setPortalUrl("");
+      setPermitNumber("");
+      setPermitFee("");
+      setApplicationNotes("");
       await refresh();
     },
     onError: (error) => toast.error(error.message || "Could not save permit application."),
@@ -143,8 +152,13 @@ export function PermitRecords() {
                     <div><label className={labelClass} htmlFor="permit-jurisdiction">Jurisdiction</label><Input id="permit-jurisdiction" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)} maxLength={160} required /></div>
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>
                   </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div><label className={labelClass} htmlFor="permit-number">Permit number (if already assigned)</label><Input id="permit-number" value={permitNumber} onChange={(event) => setPermitNumber(event.target.value)} maxLength={120} /></div>
+                    <div><label className={labelClass} htmlFor="permit-fee">Permit fee (USD)</label><Input id="permit-fee" type="number" min="0" step="0.01" value={permitFee} onChange={(event) => setPermitFee(event.target.value)} /></div>
+                  </div>
                   <div><label className={labelClass} htmlFor="permit-portal">Official portal link (optional)</label><Input id="permit-portal" type="url" placeholder="https://" value={portalUrl} onChange={(event) => setPortalUrl(event.target.value)} /></div>
-                  <Button type="submit" disabled={!jobId || !jurisdiction.trim() || !permitType.trim() || createApplication.isPending}>
+                  <div><label className={labelClass} htmlFor="permit-notes">Application notes / correction details</label><Input id="permit-notes" value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} maxLength={10000} /></div>
+                  <Button type="submit" disabled={!jobId || !jurisdiction.trim() || !permitType.trim() || (permitFee.trim() !== "" && (!Number.isFinite(Number(permitFee)) || Number(permitFee) < 0)) || createApplication.isPending}>
                     {createApplication.isPending ? "Saving…" : "Save draft"}
                   </Button>
                 </form>
@@ -188,7 +202,7 @@ export function PermitRecords() {
                     return <tr key={item.id} className="border-b last:border-0">
                       <td className="py-3 pr-3"><div className="font-medium">{job?.title ?? "Roofing job"}</div><div className="text-xs text-muted-foreground">{job?.address ?? ""}</div></td>
                       <td className="py-3 pr-3">{item.jurisdiction_name}<div className="text-xs text-muted-foreground">{item.permit_type}</div></td>
-                      <td className="py-3 pr-3">{item.permit_number || "—"}</td>
+                      <td className="py-3 pr-3"><div>{item.permit_number || "—"}</div><div className="text-xs text-muted-foreground">{item.fee_cents == null ? "Fee not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.fee_cents / 100)}</div></td>
                       <td className="py-3 pr-3"><Badge variant={item.application_status === "issued" ? "default" : "secondary"}>{String(item.application_status).replaceAll("_", " ")}</Badge></td>
                       <td className="py-3 pr-3">{item.application_status === "draft" ? <Button size="sm" variant="outline" disabled={markReady.isPending} onClick={() => markReady.mutate(item.id)}>Mark ready</Button> : item.application_status === "ready_to_submit" ? <Button size="sm" variant="outline" disabled={markSubmitted.isPending} onClick={() => markSubmitted.mutate(item.id)}>Record submitted</Button> : item.application_status === "submitted" ? <span className="text-xs text-muted-foreground">Awaiting official response</span> : "—"}</td>
                     </tr>;
