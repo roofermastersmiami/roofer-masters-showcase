@@ -45,6 +45,18 @@ describe("CRM company ownership migration 0042", () => {
     expect(migration).toMatch(/roof_report_orders_property_company_fkey/i);
   });
 
+  it("indexes company ownership and protects company parent rows", () => {
+    for (const table of ["leads", "crm_customers", "crm_properties", "roof_report_orders"]) {
+      expect(migration).toMatch(
+        new RegExp(`CONSTRAINT ${table}_company_id_fkey[\\\\s\\\\S]*?ON DELETE RESTRICT`, "i"),
+      );
+      expect(migration).toContain(`CREATE INDEX IF NOT EXISTS ${table}_company_id_idx`);
+    }
+    for (const table of ["leads", "crm_customers", "crm_properties"]) {
+      expect(migration).toContain(`CONSTRAINT ${table}_id_company_id_key UNIQUE (id, company_id)`);
+    }
+  });
+
   it("does not claim to enable tenant isolation before RLS and RPC migration", () => {
     expect(migration).toMatch(/NOT the tenant-isolation release gate/i);
     expect(migration).toMatch(/RLS policies remain unchanged/i);
