@@ -80,7 +80,7 @@ RESET ROLE;
 -- Ensure the test is running as a non-privileged role and that no permissive
 -- catch-all DELETE policy can override the tenant-scoped policy.
 SET ROLE authenticated;
-DO $ DECLARE delete_policy_count integer; BEGIN
+DO $$ DECLARE delete_policy_count integer; BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)) THEN
     RAISE EXCEPTION 'RLS test role % bypasses row-level security', current_user;
   END IF;
@@ -95,7 +95,7 @@ DO $ DECLARE delete_policy_count integer; BEGIN
       (SELECT string_agg(policyname || ': ' || cmd || ' USING ' || coalesce(qual, '<none>'), E'\\n')
        FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects');
   END IF;
-END $;
+END $$;
 RESET ROLE;
 
 -- Assert the exact authorization predicate independently before exercising RLS.
