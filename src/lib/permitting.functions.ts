@@ -99,7 +99,7 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db.from("roof_permit_applications")
-      .select("application_status,permit_number,submitted_at,issued_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+      .select("application_status,permit_number,submitted_at,issued_at,expires_at,notes").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Permit application was not found in your company.");
     const nextStatus = data.changes.application_status;
     if (nextStatus && !canTransitionPermitApplication(
@@ -108,17 +108,18 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
     )) {
       throw new Error("Invalid permit application status transition.");
     }
+    const resultingApplication = { ...current, ...data.changes };
     if (nextStatus === "issued" &&
-      (!(data.changes.permit_number ?? current.permit_number)?.trim() || !data.changes.issued_at)) {
+      (!(resultingApplication.permit_number ?? "").trim() || !resultingApplication.issued_at)) {
       throw new Error("Issuance requires an official permit number and issue date.");
     }
     if (nextStatus === "rejected" && !data.changes.notes?.trim()) {
       throw new Error("Recording a rejection requires the municipality rejection reason in the notes.");
     }
-    if (nextStatus === "submitted" && !(data.changes.submitted_at ?? current.submitted_at)) {
+    if (nextStatus === "submitted" && !resultingApplication.submitted_at) {
       throw new Error("Submission requires the actual submission timestamp.");
     }
-    if (nextStatus === "expired" && !(data.changes.issued_at ?? current.issued_at)) {
+    if (nextStatus === "expired" && !resultingApplication.issued_at) {
       throw new Error("Expiration can only be recorded for a permit that has been issued.");
     }
     const { data: saved, error } = await db.from("roof_permit_applications")
@@ -148,7 +149,7 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db.from("roof_permit_inspections")
-      .select("scheduling_status").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+      .select("scheduling_status,scheduled_at,completed_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
     if (currentError || !current) throw new Error("Inspection was not found in your company.");
     const nextStatus = data.changes.scheduling_status;
     if (nextStatus && !canTransitionPermitInspection(
@@ -157,10 +158,12 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
     )) {
       throw new Error("Invalid inspection status transition.");
     }
-    if (nextStatus === "scheduled" && !data.changes.scheduled_at) {
-      throw new Error("Scheduling requires the confirmed appointment date and time.");
+    const resultingInspection = { ...current, ...data.changes };
+    if ((nextStatus === "scheduled" || nextStatus === "passed" || nextStatus === "failed") &&
+      !resultingInspection.scheduled_at) {
+      throw new Error("Scheduling an inspection outcome requires a confirmed appointment date and time.");
     }
-    if ((nextStatus === "passed" || nextStatus === "failed") && !data.changes.completed_at) {
+    if ((nextStatus === "passed" || nextStatus === "failed") && !resultingInspection.completed_at) {
       throw new Error("An inspection outcome requires its completion timestamp.");
     }
     const { data: saved, error } = await db.from("roof_permit_inspections")
