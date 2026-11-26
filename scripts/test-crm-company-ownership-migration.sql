@@ -106,7 +106,7 @@ ALTER TABLE public.crm_customers
 ALTER TABLE public.crm_properties
   ADD COLUMN address text NOT NULL DEFAULT '';
 
-\\ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql
+\ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql
 CREATE TRIGGER crm_sync_lead_customer
 AFTER INSERT OR UPDATE OF name,phone,email,address ON public.leads
 FOR EACH ROW EXECUTE FUNCTION public.sync_lead_customer();
