@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CalendarClock, ClipboardCheck, FileCheck2, MapPinned } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { jobsQuery, type Job } from "./operations-data";
+import { jobsQuery } from "./operations-data";
 import type { Lead } from "./data";
 
 const permitStatuses = [
