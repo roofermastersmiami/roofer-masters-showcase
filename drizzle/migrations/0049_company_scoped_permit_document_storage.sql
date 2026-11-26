@@ -97,6 +97,10 @@ COMMENT ON POLICY "Company members read permit documents" ON storage.objects IS
   'Permit files are private and readable only by members of the company that owns the linked permit application. Use short-lived signed URLs after authorization.';
 
 
+-- tenant-audit: reviewed
+-- Review: the helper below is SECURITY DEFINER but exposes only a boolean check for
+-- a three-segment permit-object path. It binds the application to its company and
+-- requires the JWT subject to hold owner/admin membership in that same company.
 -- Evaluate storage authorization in a narrowly scoped SECURITY DEFINER helper.
 -- Storage's DELETE path must not rely on caller-visible application rows: the
 -- helper verifies both the exact application/company pair and the caller's
