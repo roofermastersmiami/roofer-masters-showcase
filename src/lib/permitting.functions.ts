@@ -109,18 +109,20 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
       throw new Error("Invalid permit application status transition.");
     }
     const resultingApplication = { ...current, ...data.changes };
-    if (nextStatus === "issued" &&
+    // Validate invariants against the resulting record, not only an explicit
+    // status transition. Detail-only edits must not invalidate an issued permit.
+    if (resultingApplication.application_status === "issued" &&
       (!(resultingApplication.permit_number ?? "").trim() || !resultingApplication.issued_at)) {
-      throw new Error("Issuance requires an official permit number and issue date.");
+      throw new Error("An issued permit must retain its official permit number and issue date.");
     }
     if (nextStatus === "rejected" && !data.changes.notes?.trim()) {
       throw new Error("Recording a rejection requires the municipality rejection reason in the notes.");
     }
-    if (nextStatus === "submitted" && !resultingApplication.submitted_at) {
-      throw new Error("Submission requires the actual submission timestamp.");
+    if (resultingApplication.application_status === "submitted" && !resultingApplication.submitted_at) {
+      throw new Error("A submitted application must retain its actual submission timestamp.");
     }
-    if (nextStatus === "expired" && !resultingApplication.issued_at) {
-      throw new Error("Expiration can only be recorded for a permit that has been issued.");
+    if (resultingApplication.application_status === "expired" && !resultingApplication.issued_at) {
+      throw new Error("An expired permit must retain its issue date.");
     }
     const { data: saved, error } = await db.from("roof_permit_applications")
       .update(data.changes).eq("id", data.id).eq("company_id", companyId).eq("updated_at", current.updated_at).select("*").maybeSingle();
@@ -190,12 +192,13 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
       throw new Error("Invalid inspection status transition.");
     }
     const resultingInspection = { ...current, ...data.changes };
-    if ((nextStatus === "scheduled" || nextStatus === "passed" || nextStatus === "failed") &&
+    // Keep required dates intact during detail-only edits as well as transitions.
+    if (["scheduled", "passed", "failed"].includes(resultingInspection.scheduling_status) &&
       !resultingInspection.scheduled_at) {
-      throw new Error("Scheduling an inspection outcome requires a confirmed appointment date and time.");
+      throw new Error("A scheduled inspection or recorded outcome must retain its confirmed appointment date and time.");
     }
-    if ((nextStatus === "passed" || nextStatus === "failed") && !resultingInspection.completed_at) {
-      throw new Error("An inspection outcome requires its completion timestamp.");
+    if (["passed", "failed"].includes(resultingInspection.scheduling_status) && !resultingInspection.completed_at) {
+      throw new Error("A recorded inspection outcome must retain its completion timestamp.");
     }
     const { data: saved, error } = await db.from("roof_permit_inspections")
       .update(data.changes).eq("id", data.id).eq("company_id", companyId).eq("updated_at", current.updated_at).select("*").maybeSingle();
