@@ -576,7 +576,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
             deduplicated[duplicate_index] = candidate
     candidates = deduplicated
 
-# Parcel membership is corroborating evidence only; parcels may contain
+    # Parcel membership is corroborating evidence only; parcels may contain
     # multiple buildings and cannot independently establish the primary roof.
     parcel_metadata: dict[str, Any] = {"status": "not_applicable"}
     if street_address and re.search(r"\bMIRAMAR\b", street_address, re.IGNORECASE):
