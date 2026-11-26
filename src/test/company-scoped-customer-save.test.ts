@@ -12,11 +12,18 @@ const journal = JSON.parse(
 
 describe("company-scoped customer save RPC", () => {
   it("registers migration 0044 after the trigger compatibility migration", () => {
-    expect(journal.entries.at(-1)).toMatchObject({
+    const migrationEntry = journal.entries.find(
+      (entry: { tag: string }) => entry.tag === "0044_company_scoped_customer_save",
+    );
+    const triggerEntry = journal.entries.find(
+      (entry: { tag: string }) => entry.tag === "0043_company_aware_lead_customer_sync",
+    );
+
+    expect(migrationEntry).toMatchObject({
       idx: 44,
       tag: "0044_company_scoped_customer_save",
     });
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when);
+    expect(migrationEntry?.when).toBeGreaterThan(triggerEntry?.when ?? 0);
   });
 
   it("fails closed unless the actor has exactly one company membership", () => {
