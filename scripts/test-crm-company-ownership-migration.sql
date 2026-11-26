@@ -33,9 +33,6 @@ CREATE TABLE public.crm_properties (
   id uuid PRIMARY KEY,
   customer_id uuid REFERENCES public.crm_customers(id)
 );
--- Match the production crm_properties natural-key constraint from migration 0013.
-ALTER TABLE public.crm_properties
-  ADD CONSTRAINT crm_properties_customer_id_address_key UNIQUE (customer_id,address);
 CREATE TABLE public.roof_report_orders (
   id uuid PRIMARY KEY,
   customer_id uuid REFERENCES public.crm_customers(id),
@@ -108,6 +105,10 @@ ALTER TABLE public.crm_customers
   ADD COLUMN email text NOT NULL DEFAULT '';
 ALTER TABLE public.crm_properties
   ADD COLUMN address text NOT NULL DEFAULT '';
+
+-- Match the production crm_properties natural-key constraint from migration 0013.
+ALTER TABLE public.crm_properties
+  ADD CONSTRAINT crm_properties_customer_id_address_key UNIQUE (customer_id,address);
 
 \ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql
 CREATE TRIGGER crm_sync_lead_customer
