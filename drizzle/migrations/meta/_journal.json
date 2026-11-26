@@ -330,6 +330,13 @@
       "when": 1795731000000,
       "tag": "0046_company_scoped_customer_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795732000000,
+      "tag": "0047_company_owned_roof_jobs",
+      "breakpoints": true
     }
   ]
 }
