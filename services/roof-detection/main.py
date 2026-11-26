@@ -255,6 +255,9 @@ def _normalize_street_address(value: str | None) -> str:
     street = value.split(",", 1)[0].upper()
     street = re.sub(r"[^A-Z0-9 ]+", " ", street)
     tokens = street.split()
+    # GIS address points commonly omit ordinal suffixes (189 AVE) while
+    # user-entered addresses include them (189TH AVE). Normalize numeric ordinals.
+    tokens = [re.sub(r"^(\d+)(?:ST|ND|RD|TH)$", r"\1", token) for token in tokens]
     expansions = {
         "N": "NORTH", "S": "SOUTH", "E": "EAST", "W": "WEST",
         "NE": "NORTHEAST", "NW": "NORTHWEST", "SE": "SOUTHEAST", "SW": "SOUTHWEST",
