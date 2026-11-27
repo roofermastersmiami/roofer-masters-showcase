@@ -274,7 +274,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_COUNTY_PROFILE.id]: BROWARD_COUNTY_PROFILE,
     [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
     [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
-    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,\n    [BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id]: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
+    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
+    [BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id]: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -346,5 +347,6 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   browardBuildingCode: BROWARD_BUILDING_URL,
   browardParticipatingCities: BROWARD_EPERMITS_URL,
   sunriseResidentialRoofChecklist: SUNRISE_CHECKLIST_URL,
-  floridaBuildingCodeMilestones: FBC_CODE_URL,\n  coralSpringsResidentialReroofChecklist: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf",
+  floridaBuildingCodeMilestones: FBC_CODE_URL,
+  coralSpringsResidentialReroofChecklist: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf",
 } as const;
