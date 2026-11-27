@@ -54,6 +54,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { CrmContext } from "./CrmContext";
 import { LeadSheet } from "./LeadSheet";
+import { MeasurementActivityButton } from "./MeasurementActivity";
+import { useMeasurementRunner } from "./use-measurement-runner";
+import { setMeasurementReadyAction } from "@/lib/measurement-activity";
 import { leadsQuery, formatWhen } from "./data";
 import { tasksQuery } from "./operations-data";
 import { customersQuery, propertiesQuery } from "./foundation-data";
@@ -143,6 +146,10 @@ export function CrmShell({
   const tasks = useQuery(tasksQuery);
   const customers = useQuery(customersQuery);
   const properties = useQuery(propertiesQuery);
+  // Roof measurements run as background jobs for the whole session:
+  // they keep finishing while the user works anywhere in the CRM,
+  // and completions surface in the header's measurement activity.
+  useMeasurementRunner();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const section = pathname.split("/")[2] ?? "";
@@ -450,6 +457,16 @@ export function CrmShell({
     if (id) await navigate({ to: "/dashboard/$section", params: { section: id } });
     else await navigate({ to: "/dashboard" });
   }
+  // The "Open" action on a "Roof report ready" toast lands on that
+  // report's measurement workspace, same as the activity list does.
+  useEffect(() => {
+    setMeasurementReadyAction((reportId) => {
+      setSelectedRoofReportId(reportId);
+      void go("measurements");
+    });
+    return () => setMeasurementReadyAction(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useWebMCP({
     name: "read_crm_navigation",
     description:
@@ -896,6 +913,7 @@ export function CrmShell({
             >
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
+            <MeasurementActivityButton />
             <Button
               variant="ghost"
               size="icon"
