@@ -1,3 +1,4 @@
+// tenant-audit: reviewed — invoice creation derives company_id from the authorized lead and validates proposal company/lead; status changes verify same-company accounting membership before invoking the independently guarded RPC. Public invoice reads use an unguessable expiring capability token and return a restricted field set.
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
