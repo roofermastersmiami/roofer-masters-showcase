@@ -6,12 +6,12 @@ Status: **PR implementation; not deployed**.
 
 The live Supabase project contains exactly one company, Roofer Masters, and one owner membership for the company creator. Current core record counts:
 
-| Table | Existing rows |
-| --- | ---: |
-| leads | 10 |
-| crm_customers | 21 |
-| crm_properties | 18 |
-| roof_report_orders | 12 |
+| Table              | Existing rows |
+| ------------------ | ------------: |
+| leads              |            10 |
+| crm_customers      |            21 |
+| crm_properties     |            18 |
+| roof_report_orders |            12 |
 
 The live schema has no `company_id` on those four tables. The live database also does not contain `appointments`, `receptionist_logs`, or `pdf_sign_templates`. This check was read-only.
 

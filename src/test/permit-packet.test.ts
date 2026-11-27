@@ -16,12 +16,14 @@ describe("permit summary PDF", () => {
       expiresAt: "2027-11-03",
       feeCents: 12500,
       applicationNotes: "Test record only",
-      inspections: [{
-        type: "Roof dry-in",
-        status: "scheduled",
-        scheduledAt: "2026-11-10T14:00:00.000Z",
-        confirmationNumber: "CONF-456",
-      }],
+      inspections: [
+        {
+          type: "Roof dry-in",
+          status: "scheduled",
+          scheduledAt: "2026-11-10T14:00:00.000Z",
+          confirmationNumber: "CONF-456",
+        },
+      ],
     });
 
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
@@ -58,7 +60,6 @@ describe("permit summary PDF", () => {
     expect(loaded.getPageCount()).toBe(1);
   });
 });
-
 
 describe("permit expiration date formatting", () => {
   it("preserves the stored calendar date without timezone conversion", () => {

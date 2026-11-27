@@ -6,9 +6,9 @@ Status: read-only discovery; no production writes. Verified 2026-11-26.
 
 The live `user_roles` inventory currently returns one row:
 
-| User ID | Legacy role | Company memberships | Membership role |
-| --- | --- | ---: | --- |
-| `1c633ded-fb54-455c-939a-9af3321c6016` | `admin` | 1 | `owner` |
+| User ID                                | Legacy role | Company memberships | Membership role |
+| -------------------------------------- | ----------- | ------------------: | --------------- |
+| `1c633ded-fb54-455c-939a-9af3321c6016` | `admin`     |                   1 | `owner`         |
 
 The membership belongs to the existing Roofer Masters company. This supports the owner identity mapping for the currently observed account only. It is not evidence that there are no other staff identities in external identity providers or pending invitations. Repeat this inventory immediately before any production cutover.
 

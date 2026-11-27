@@ -79,7 +79,6 @@ Do not enable company switching, invitations, external-company onboarding, or co
 4. Automated tests run against a real migrated test database using separate authenticated identities.
 5. CI passes on the exact PR head and a reviewer confirms the deployed schema matches the tested migration.
 
-
 ## Roof-report workflow isolation gate
 
 The roof-report workflow is a priority blocker because its current server functions combine authenticated user-scoped reads with privileged service-role writes. Do not treat a successful user-scoped read as authorization for a later admin-client mutation.

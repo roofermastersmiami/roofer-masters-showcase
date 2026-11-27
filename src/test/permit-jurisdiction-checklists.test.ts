@@ -58,7 +58,9 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
       roofingSystem: "metal",
     });
     expect(result.authorityConfirmed).toBe(false);
-    expect(result.warnings.some((warning) => warning.includes("Enter and verify the property folio"))).toBe(true);
+    expect(
+      result.warnings.some((warning) => warning.includes("Enter and verify the property folio")),
+    ).toBe(true);
   });
 
   it("requires manual parcel-record verification even when the folio begins with 30", () => {
@@ -79,7 +81,9 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
       folio: "4942-01-001",
     });
     expect(result.authorityConfirmed).toBe(false);
-    expect(result.warnings.some((warning) => warning.includes("does not begin with 30"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("does not begin with 30"))).toBe(
+      true,
+    );
   });
 
   it("stops serving the 2023-code checklist after the 9th Edition effective date", () => {
@@ -175,7 +179,6 @@ describe("Broward authority routing", () => {
   });
 });
 
-
 describe("additional Broward city roofing profiles", () => {
   it("keeps Pembroke Pines checklist limited to residential reroof and requires parcel verification", () => {
     const unverified = getPermitChecklist({
@@ -226,7 +229,10 @@ describe("additional Broward city roofing profiles", () => {
   });
 
   it("suppresses the older-code city checklists after December 30, 2026", () => {
-    for (const profileId of [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id, BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]) {
+    for (const profileId of [
+      BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id,
+      BROWARD_HOLLYWOOD_ROOFING_PROFILE.id,
+    ]) {
       const result = getPermitChecklist({
         profileId,
         projectKind: "reroof",
@@ -240,7 +246,6 @@ describe("additional Broward city roofing profiles", () => {
     }
   });
 });
-
 
 describe("Coral Springs residential reroof checklist", () => {
   it("requires city parcel confirmation and exposes only source-backed city checklist items", () => {
@@ -332,7 +337,6 @@ describe("Pompano Beach roofing checklist", () => {
   });
 });
 
-
 describe("Fort Lauderdale roofing permit profile", () => {
   it("includes City-listed roofing forms and mandatory rooftop equipment affidavit", () => {
     const result = getPermitChecklist({
@@ -346,7 +350,9 @@ describe("Fort Lauderdale roofing permit profile", () => {
     expect(result.items.map((item) => item.id)).toContain("city-roofing-checklist");
     expect(result.items.map((item) => item.id)).toContain("hvzh-roofing-application");
     expect(result.items.map((item) => item.id)).toContain("rooftop-equipment-affidavit");
-    expect(result.items.find((item) => item.id === "rooftop-equipment-affidavit")?.appliesWhen).toContain("all roofing applications");
+    expect(
+      result.items.find((item) => item.id === "rooftop-equipment-affidavit")?.appliesWhen,
+    ).toContain("all roofing applications");
   });
 
   it("does not confirm Fort Lauderdale city authority without parcel-boundary verification", () => {
@@ -372,7 +378,6 @@ describe("Fort Lauderdale roofing permit profile", () => {
     expect(result.items).toHaveLength(0);
   });
 });
-
 
 describe("Miramar residential roofing permit profile", () => {
   it("includes the official City roofing package documents and requires parcel verification", () => {
@@ -424,7 +429,6 @@ describe("Miramar residential roofing permit profile", () => {
     expect(result.items).toHaveLength(0);
   });
 });
-
 
 describe("City of Margate roofing permit profile", () => {
   it("includes the City's roofing application, cost, asbestos, HVHZ, and product documents", () => {
@@ -675,35 +679,79 @@ describe("City of Hallandale Beach roofing permit profile", () => {
 
 describe("City of Miami residential roofing profile", () => {
   it("requires City folio and parcel verification and maps roof-system sections", () => {
-    const noFolio = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", asOfDate: "2026-11-26" });
+    const noFolio = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      asOfDate: "2026-11-26",
+    });
     expect(noFolio.authorityConfirmed).toBe(false);
     expect(noFolio.warnings.join(" ")).toContain("inside City of Miami limits");
 
-    const unverified = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", folio: "01-1234567", asOfDate: "2026-11-26" });
+    const unverified = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      folio: "01-1234567",
+      asOfDate: "2026-11-26",
+    });
     expect(unverified.authorityConfirmed).toBe(false);
-    expect(unverified.warnings.join(" ")).toContain("verify the address is inside City of Miami limits");
+    expect(unverified.warnings.join(" ")).toContain(
+      "verify the address is inside City of Miami limits",
+    );
 
-    const flat = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", roofingSystem: "low_slope", folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-11-26" });
+    const flat = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "low_slope",
+      folio: "01-1234567",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
     expect(flat.authorityConfirmed).toBe(true);
     expect(flat.requiredRoofingSections).toEqual(["A", "B", "C"]);
     expect(flat.items.map((item) => item.id)).toContain("miami-city-owner-notification");
 
-    const metal = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", roofingSystem: "metal", folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-11-26" });
+    const metal = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      folio: "01-1234567",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
     expect(metal.requiredRoofingSections).toEqual(["A", "B", "D"]);
-    const unsupported = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", roofingSystem: "other", folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-11-26" });
+    const unsupported = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "other",
+      folio: "01-1234567",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
     expect(unsupported.requiredRoofingSections).toEqual([]);
   });
 
   it("does not apply the residential City checklist to commercial reroofs, repairs, or new roofs", () => {
     for (const projectKind of ["commercial_reroof", "repair", "new_roof"] as const) {
-      const result = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind, folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-11-26" });
+      const result = getPermitChecklist({
+        profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+        projectKind,
+        folio: "01-1234567",
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-11-26",
+      });
       expect(result.authorityConfirmed).toBe(false);
       expect(result.items).toHaveLength(0);
     }
   });
 
   it("suppresses the 8th Edition City checklist after December 30, 2026", () => {
-    const result = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-12-31" });
+    const result = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      folio: "01-1234567",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
     expect(result.codeReferenceCurrent).toBe(false);
     expect(result.authorityConfirmed).toBe(false);
     expect(result.items).toHaveLength(0);
@@ -777,10 +825,16 @@ describe("City of Miami Gardens roofing permit profiles", () => {
   });
 
   it("suppresses both profiles after the 8th Edition reference expires", () => {
-    for (const profileId of [CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id, CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id]) {
+    for (const profileId of [
+      CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id,
+      CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id,
+    ]) {
       const result = getPermitChecklist({
         profileId,
-        projectKind: profileId === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id ? "commercial_reroof" : "reroof",
+        projectKind:
+          profileId === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id
+            ? "commercial_reroof"
+            : "reroof",
         parcelAuthorityVerified: true,
         asOfDate: "2026-12-31",
       });

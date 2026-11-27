@@ -42,16 +42,22 @@ describe("company-aware lead/customer synchronization", () => {
     expect(migration).toMatch(/INSERT INTO public\.crm_customers\s*\([\s\S]*?company_id/i);
     expect(migration).toMatch(/VALUES\s*\([\s\S]*?NEW\.company_id/i);
     expect(migration).toMatch(/INSERT INTO public\.crm_properties\s*\([\s\S]*?company_id/i);
-    expect(migration).toMatch(/ON CONFLICT \(id\) DO UPDATE[\s\S]*?WHERE public\.crm_customers\.company_id = EXCLUDED\.company_id/i);
+    expect(migration).toMatch(
+      /ON CONFLICT \(id\) DO UPDATE[\s\S]*?WHERE public\.crm_customers\.company_id = EXCLUDED\.company_id/i,
+    );
   });
 
   it("keeps the integration fixture exercising the real trigger migration", () => {
-    expect(fixture).toContain("\\ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql");
+    expect(fixture).toContain(
+      "\\ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql",
+    );
     expect(fixture).toMatch(/CREATE TRIGGER crm_sync_lead_customer[\s\S]*?sync_lead_customer\(\)/i);
     expect(fixture).toMatch(/Lead trigger failed to propagate company ownership/i);
   });
 
   it("does not change RLS or claim to complete tenant isolation", () => {
-    expect(migration).not.toMatch(/DROP POLICY|CREATE POLICY|ENABLE ROW LEVEL SECURITY|FORCE ROW LEVEL SECURITY/i);
+    expect(migration).not.toMatch(
+      /DROP POLICY|CREATE POLICY|ENABLE ROW LEVEL SECURITY|FORCE ROW LEVEL SECURITY/i,
+    );
   });
 });

@@ -8,19 +8,20 @@
 
 The following implementation PRs have been merged into their respective development bases. The company ownership prerequisites are also being consolidated onto the clean dependency chain:
 
-| PR | Work | Merge result | CI |
-|---|---|---|---|
-| #182 | Company-aware lead/customer synchronization | Merged into `feat/company-owned-crm-records-0042` | Passed |
-| #191 | Clean company-scoped customer-save foundation | Merged into `feat/company-ownership-trigger-0043` | Passed |
-| #211 | Trusted public lead routing rebased onto clean 0044 | Merged into `feat/company-ownership-trigger-0043` | Passed |
-| #197 | Company-scoped permit applications and inspections | Merged into `feat/company-scoped-team-policy-0048` | Passed |
-| #198 | Permit application and inspection management workflows | Merged into `feat/permit-records-and-inspections-0048` | Passed |
-| #204 | Source-backed Miami-Dade and Broward jurisdiction checklists | Merged into `feat/permit-management-workflows-0049` | Passed |
-| #205 | Company-scoped roof product approval register | Merged into `feat/permit-jurisdiction-checklists-0050` | Passed |
-| #206 | Company-scoped Notice of Commencement tracking | Merged into `feat/permit-product-approvals-0051` | Passed |
-| #207 | Product approval code-edition evidence | Merged into `feat/permit-noc-tracking-0052` | Passed |
+| PR   | Work                                                         | Merge result                                           | CI     |
+| ---- | ------------------------------------------------------------ | ------------------------------------------------------ | ------ |
+| #182 | Company-aware lead/customer synchronization                  | Merged into `feat/company-owned-crm-records-0042`      | Passed |
+| #191 | Clean company-scoped customer-save foundation                | Merged into `feat/company-ownership-trigger-0043`      | Passed |
+| #211 | Trusted public lead routing rebased onto clean 0044          | Merged into `feat/company-ownership-trigger-0043`      | Passed |
+| #197 | Company-scoped permit applications and inspections           | Merged into `feat/company-scoped-team-policy-0048`     | Passed |
+| #198 | Permit application and inspection management workflows       | Merged into `feat/permit-records-and-inspections-0048` | Passed |
+| #204 | Source-backed Miami-Dade and Broward jurisdiction checklists | Merged into `feat/permit-management-workflows-0049`    | Passed |
+| #205 | Company-scoped roof product approval register                | Merged into `feat/permit-jurisdiction-checklists-0050` | Passed |
+| #206 | Company-scoped Notice of Commencement tracking               | Merged into `feat/permit-product-approvals-0051`       | Passed |
+| #207 | Product approval code-edition evidence                       | Merged into `feat/permit-noc-tracking-0052`            | Passed |
 
 CI run references at the time of this update:
+
 - #197: `45910380413`
 - #198: `45930784096`
 - #204: `45928469905`
@@ -36,19 +37,19 @@ The latest passing pipelines included migration journal validation, privileged-c
 
 The migration journal on the permitting branch contains these entries:
 
-| Migration | Purpose |
-|---|---|
-| 0042 | CRM company ownership foundation |
-| 0043 | Company-aware lead/customer synchronization |
-| 0044 | Company-scoped customer save |
-| 0045 | Trusted company assignment for public lead intake |
-| 0046 | Company-scoped customer deletion |
-| 0047 | Company-owned roof jobs |
-| 0048 | Company permit applications and inspections |
-| 0049 | Company-scoped permit document storage |
-| 0050 | Company roof product approvals |
-| 0051 | Company NOC assessment and recording evidence |
-| 0052 | Product approval code-edition evidence |
+| Migration | Purpose                                           |
+| --------- | ------------------------------------------------- |
+| 0042      | CRM company ownership foundation                  |
+| 0043      | Company-aware lead/customer synchronization       |
+| 0044      | Company-scoped customer save                      |
+| 0045      | Trusted company assignment for public lead intake |
+| 0046      | Company-scoped customer deletion                  |
+| 0047      | Company-owned roof jobs                           |
+| 0048      | Company permit applications and inspections       |
+| 0049      | Company-scoped permit document storage            |
+| 0050      | Company roof product approvals                    |
+| 0051      | Company NOC assessment and recording evidence     |
+| 0052      | Product approval code-edition evidence            |
 
 The jurisdiction checklist feature also includes source-backed jurisdiction references and must be maintained as reviewed reference data, not represented as an official municipal determination.
 

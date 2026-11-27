@@ -44,7 +44,8 @@ export function displayPermitDate(value?: string | null) {
     date.getFullYear() !== Number(year) ||
     date.getMonth() !== Number(month) - 1 ||
     date.getDate() !== Number(day)
-  ) return value;
+  )
+    return value;
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "long",
@@ -69,7 +70,10 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
   const ensureSpace = (height = lineHeight) => {
     if (y - height < margin) addPage();
   };
-  const write = (value: string, options: { strong?: boolean; size?: number; color?: ReturnType<typeof rgb> } = {}) => {
+  const write = (
+    value: string,
+    options: { strong?: boolean; size?: number; color?: ReturnType<typeof rgb> } = {},
+  ) => {
     const size = options.size ?? 10;
     const font = options.strong ? bold : regular;
     const maxWidth = page.getWidth() - margin * 2;
@@ -94,21 +98,40 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
       const candidate = line ? line + " " + token : token;
       if (font.widthOfTextAtSize(candidate, size) > maxWidth && line) {
         ensureSpace(size + 5);
-        page.drawText(line, { x: margin, y, size, font, color: options.color ?? rgb(0.12, 0.16, 0.22) });
+        page.drawText(line, {
+          x: margin,
+          y,
+          size,
+          font,
+          color: options.color ?? rgb(0.12, 0.16, 0.22),
+        });
         y -= lineHeight;
         line = token;
       } else line = candidate;
     }
     ensureSpace(size + 5);
-    page.drawText(line, { x: margin, y, size, font, color: options.color ?? rgb(0.12, 0.16, 0.22) });
+    page.drawText(line, {
+      x: margin,
+      y,
+      size,
+      font,
+      color: options.color ?? rgb(0.12, 0.16, 0.22),
+    });
     y -= lineHeight;
   };
-  const gap = (amount = 8) => { y -= amount; };
+  const gap = (amount = 8) => {
+    y -= amount;
+  };
 
   write("ROOFER MASTERS | PERMIT RECORD SUMMARY", { strong: true, size: 16 });
-  write("CRM-generated summary — NOT an official municipal permit, approval, or inspection certificate.", {
-    strong: true, size: 9, color: rgb(0.65, 0.16, 0.12),
-  });
+  write(
+    "CRM-generated summary — NOT an official municipal permit, approval, or inspection certificate.",
+    {
+      strong: true,
+      size: 9,
+      color: rgb(0.65, 0.16, 0.12),
+    },
+  );
   gap(10);
   write("PROPERTY & JOB", { strong: true, size: 12 });
   write(`Job: ${data.jobTitle || "Not recorded"}`);
@@ -122,7 +145,9 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
   write(`Submission recorded: ${display(data.submittedAt)}`);
   write(`Issue date recorded: ${display(data.issuedAt)}`);
   write(`Expiration date: ${displayPermitDate(data.expiresAt)}`);
-  write(`Fee recorded: ${data.feeCents == null ? "Not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(data.feeCents / 100)}`);
+  write(
+    `Fee recorded: ${data.feeCents == null ? "Not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(data.feeCents / 100)}`,
+  );
   write(`Portal URL entered: ${data.portalUrl || "Not recorded"}`);
   gap();
   write("INSPECTIONS", { strong: true, size: 12 });
@@ -139,6 +164,9 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
   write(data.applicationNotes || "No application notes recorded.");
   gap(12);
   write(`Generated from the Roofer Masters CRM on ${new Date().toLocaleString()}.`, { size: 8 });
-  write("Verify all permit numbers, dates, fees, and inspection outcomes against the issuing authority's original records.", { size: 8 });
+  write(
+    "Verify all permit numbers, dates, fees, and inspection outcomes against the issuing authority's original records.",
+    { size: 8 },
+  );
   return pdf.save();
 }

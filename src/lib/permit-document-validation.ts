@@ -1,9 +1,5 @@
 export const PERMIT_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
-export const PERMIT_DOCUMENT_MIME_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-] as const;
+export const PERMIT_DOCUMENT_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
 
 export type PermitDocumentValidation =
   | { valid: true; safeName: string }

@@ -34,9 +34,18 @@ describe("CRM company ownership migration 0042", () => {
 
   it("backfills and requires company ownership on every core CRM record", () => {
     for (const table of ["leads", "crm_customers", "crm_properties", "roof_report_orders"]) {
-      expect(migration).toMatch(new RegExp(`ALTER TABLE public\\.${table}[\\s\\S]*?ADD COLUMN IF NOT EXISTS company_id uuid`, "i"));
-      expect(migration).toMatch(new RegExp(`UPDATE public\\.${table}[\\s\\S]*?SET company_id =`, "i"));
-      expect(migration).toMatch(new RegExp(`ALTER TABLE public\\.${table} ALTER COLUMN company_id SET NOT NULL`, "i"));
+      expect(migration).toMatch(
+        new RegExp(
+          `ALTER TABLE public\\.${table}[\\s\\S]*?ADD COLUMN IF NOT EXISTS company_id uuid`,
+          "i",
+        ),
+      );
+      expect(migration).toMatch(
+        new RegExp(`UPDATE public\\.${table}[\\s\\S]*?SET company_id =`, "i"),
+      );
+      expect(migration).toMatch(
+        new RegExp(`ALTER TABLE public\\.${table} ALTER COLUMN company_id SET NOT NULL`, "i"),
+      );
     }
   });
 

@@ -39,7 +39,13 @@ export function requiresNoticeOfCommencement(
 }
 
 export type PermitApplicationStatus =
-  | "draft" | "ready_to_submit" | "submitted" | "issued" | "rejected" | "expired" | "cancelled";
+  | "draft"
+  | "ready_to_submit"
+  | "submitted"
+  | "issued"
+  | "rejected"
+  | "expired"
+  | "cancelled";
 export type PermitInspectionStatus = "requested" | "scheduled" | "passed" | "failed" | "cancelled";
 
 const permitTransitions: Record<PermitApplicationStatus, readonly PermitApplicationStatus[]> = {
@@ -77,12 +83,18 @@ export function canTransitionPermitInspection(
 /** New permit applications must begin as clean drafts, without lifecycle evidence. */
 export function canCreatePermitApplication(
   status: PermitApplicationStatus,
-  details: { permit_number?: string | null; submitted_at?: string | null; issued_at?: string | null } = {},
+  details: {
+    permit_number?: string | null;
+    submitted_at?: string | null;
+    issued_at?: string | null;
+  } = {},
 ): boolean {
-  return status === "draft" &&
+  return (
+    status === "draft" &&
     !details.permit_number?.trim() &&
     !details.submitted_at &&
-    !details.issued_at;
+    !details.issued_at
+  );
 }
 
 /** New inspections must begin as requested, without a confirmed appointment or outcome. */

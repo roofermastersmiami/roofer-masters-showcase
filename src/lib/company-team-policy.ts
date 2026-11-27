@@ -44,7 +44,8 @@ export function canManageCompanyMember(
   targetRole: string | null | undefined,
   nextRole?: CompanyTeamRole,
 ): boolean {
-  if (!isCompanyAdmin(actorRole) || !targetRole || targetRole === "owner" || nextRole === "owner") return false;
+  if (!isCompanyAdmin(actorRole) || !targetRole || targetRole === "owner" || nextRole === "owner")
+    return false;
 
   if (actorRole === "owner") return true;
 
@@ -66,7 +67,7 @@ export function canAssignCompanyCrew(input: {
 }): boolean {
   const { actorRole, companyId, requestedUserIds, memberships } = input;
 
-  if (!companyId || !isCompanyAdmin(actorRole) && actorRole !== "production_manager") {
+  if (!companyId || (!isCompanyAdmin(actorRole) && actorRole !== "production_manager")) {
     return false;
   }
 

@@ -19,7 +19,9 @@ describe("company-scoped roof product approval register", () => {
   });
 
   it("supports NOA, Florida Product Approval, UL and Fire Directory references", () => {
-    expect(migration).toMatch(/'miami_dade_noa','florida_product_approval','ul_listing','fire_directory'/);
+    expect(migration).toMatch(
+      /'miami_dade_noa','florida_product_approval','ul_listing','fire_directory'/,
+    );
     expect(migration).toMatch(/hvhz_status IN \('yes','no','unknown'\)/);
     expect(migration).toMatch(/installation_limitations/);
     expect(migration).toMatch(/source_url/);
@@ -27,7 +29,9 @@ describe("company-scoped roof product approval register", () => {
 
   it("requires same-company application linkage and verification evidence", () => {
     expect(migration).toMatch(/FOREIGN KEY \(permit_application_id, company_id\)/);
-    expect(migration).toMatch(/approval_status <> 'verified' OR \(verified_at IS NOT NULL AND verified_by IS NOT NULL\)/);
+    expect(migration).toMatch(
+      /approval_status <> 'verified' OR \(verified_at IS NOT NULL AND verified_by IS NOT NULL\)/,
+    );
     expect(migration).toMatch(/approval_status <> 'expired' OR expires_on IS NOT NULL/);
   });
 

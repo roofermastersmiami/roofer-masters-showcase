@@ -31,14 +31,22 @@ describe("production permitting preflight is read-only and schema-drift tolerant
 
   it("captures constraints, indexes, RLS, policies, triggers, functions, and storage", () => {
     for (const evidence of [
-      "pg_constraint", "pg_indexes", "relforcerowsecurity", "pg_policies",
-      "information_schema.triggers", "pg_get_functiondef", "storage.buckets",
-    ]) expect(sql).toContain(evidence);
+      "pg_constraint",
+      "pg_indexes",
+      "relforcerowsecurity",
+      "pg_policies",
+      "information_schema.triggers",
+      "pg_get_functiondef",
+      "storage.buckets",
+    ])
+      expect(sql).toContain(evidence);
   });
 
   it("contains no schema or data mutation statements", () => {
     const executable = sql.replace(/^\\echo.*$/gm, "").replace(/^--.*$/gm, "");
-    expect(executable).not.toMatch(/^\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|CALL|COPY)\b/im);
+    expect(executable).not.toMatch(
+      /^\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|CALL|COPY)\b/im,
+    );
     expect(executable).toContain("BEGIN READ ONLY;");
     expect(executable).toContain("COMMIT;");
     expect(executable).toContain("SELECT current_database()");
@@ -55,7 +63,8 @@ describe("production permitting preflight is read-only and schema-drift tolerant
       "create_roof_report_request",
       "p.proacl AS raw_acl",
       "pg_get_function_identity_arguments",
-    ]) expect(sql).toContain(evidence);
+    ])
+      expect(sql).toContain(evidence);
 
     expect(sql).toContain("FROM pg_policies");
     expect(sql).toContain("FROM pg_proc p");

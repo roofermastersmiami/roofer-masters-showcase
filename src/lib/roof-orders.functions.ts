@@ -148,8 +148,11 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .maybeSingle();
     if (membershipError || !membership) throw new Error("A single company membership is required");
-    if (!allowedRoles.includes(membership.role as (typeof allowedRoles)[number]) &&
-        membership.role !== "owner" && membership.role !== "admin")
+    if (
+      !allowedRoles.includes(membership.role as (typeof allowedRoles)[number]) &&
+      membership.role !== "owner" &&
+      membership.role !== "admin"
+    )
       throw new Error("You do not have access to transfer this report to that destination");
 
     const { data: order, error: orderError } = await context.supabase

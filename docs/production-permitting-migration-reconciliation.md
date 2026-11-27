@@ -81,7 +81,6 @@ The reviewed production snapshot contained:
 - PR #181/#182/#183 CI workflows were observed completed successfully in the reviewed snapshot; all three remained open/draft and their mergeability does not imply deployment readiness.
 - No production DDL/DML or migration runner was executed as part of this audit.
 
-
 ---
 
 ## Read-only production refresh — 2026-11-26 (evening refresh)
@@ -91,23 +90,23 @@ The reviewed production snapshot contained:
 
 ### Current migration ledger
 
-- \`drizzle.__drizzle_migrations\` contains **30 rows**.
+- \`drizzle.\_\_drizzle_migrations\` contains **30 rows**.
 - Latest recorded migration timestamp: \`2026-11-21T03:35:20.000Z\`.
 - The live catalog still has no \`company_id\` column on \`leads\`, \`crm_customers\`, \`crm_properties\`, \`roof_report_orders\`, or \`roof_jobs\`.
 - Live \`crm_company_memberships.role\` remains \`text\` with a CHECK constraint, not the repository enum shape assumed by an earlier historical migration.
 
 ### Current company and operational record counts
 
-| Object | Live count / state |
-| --- | ---: |
-| Companies | 1 |
-| Company memberships | 1 (owner) |
-| Legacy \`user_roles\` users | 1 (admin role) |
-| Leads | 11 |
-| CRM customers | 22 |
-| CRM properties | 19 |
-| Roof report orders | 4 |
-| Roof jobs | 4 |
+| Object                      | Live count / state |
+| --------------------------- | -----------------: |
+| Companies                   |                  1 |
+| Company memberships         |          1 (owner) |
+| Legacy \`user_roles\` users |     1 (admin role) |
+| Leads                       |                 11 |
+| CRM customers               |                 22 |
+| CRM properties              |                 19 |
+| Roof report orders          |                  4 |
+| Roof jobs                   |                  4 |
 
 **Count drift is only partially reconciled.** PR #181's baseline note reported 12 roof-report orders; the 2026-11-26 earlier audit recorded 3; the evening read-only refresh returned 4. A privacy-minimized date-bucket query shows one order created on each of 2026-11-21, 2026-11-24, 2026-11-25, and 2026-11-26, so the 3 → 4 change is consistent with a new order created on 2026-11-26. The older 12 → 4 discrepancy remains unexplained and may reflect a different project, schema, filter, or earlier data state. Do not use 12 or 4 as a backfill assumption until that discrepancy is resolved against source records.
 
@@ -139,13 +138,13 @@ The \`storage.buckets\` inventory contains \`crm-company-branding\`, \`roof-job-
 
 The following stacked feature PRs have successful CI runs, including PostgreSQL security tests, unit tests, lint, and application build:
 
-| PR | Scope | CI |
-| --- | --- | --- |
-| #198 | Permit application / inspection management | Passed |
+| PR   | Scope                                          | CI     |
+| ---- | ---------------------------------------------- | ------ |
+| #198 | Permit application / inspection management     | Passed |
 | #204 | Miami-Dade and Broward jurisdiction checklists | Passed |
-| #205 | NOA / Florida Product Approval register | Passed |
-| #206 | NOC assessment and recording tracker | Passed |
-| #207 | Product-approval code-edition evidence | Passed |
+| #205 | NOA / Florida Product Approval register        | Passed |
+| #206 | NOC assessment and recording tracker           | Passed |
+| #207 | Product-approval code-edition evidence         | Passed |
 
 They remain open, draft, and stacked by dependency. Their successful CI does not mean the migrations have been merged or applied to production.
 
@@ -160,7 +159,6 @@ They remain open, draft, and stacked by dependency. Their successful CI does not
 7. Deploy only after the production schema and app version are aligned. Then run a read-only/live smoke test for application creation, document access, product approvals, NOC tracking, and inspection status.
 
 **Current decision: NO PRODUCTION MIGRATION OR DEPLOYMENT.** The feature build is CI-validated, but the production database prerequisites and tenant-isolation release gate remain incomplete.
-
 
 ---
 
@@ -199,7 +197,6 @@ The CI-validated candidate proves the new migrations and tenant-isolation fixtur
 
 **This live snapshot supersedes the older row-count observations above for current counts, but does not resolve the historical discrepancy or authorize a write.**
 
-
 ### Additional 0042/0043/0047 prerequisite checks — 2026-11-27
 
 The live read-only checks also verified the immediate ownership-backfill preconditions:
@@ -221,7 +218,7 @@ These checks reduce uncertainty for the data-integrity portions of 0042, 0043, a
 ### Confirmed migration sequence
 
 - Production is PostgreSQL **17.12** (server_version_num=170012), satisfying the PostgreSQL 15+ syntax prerequisite used by the ownership migration.
-- The live drizzle.__drizzle_migrations table has **30 rows**, IDs 1–30. Its timestamps match Drizzle journal entries 0000–0029 exactly.
+- The live drizzle.\_\_drizzle_migrations table has **30 rows**, IDs 1–30. Its timestamps match Drizzle journal entries 0000–0029 exactly.
 - The current repository journal contains entries 0000–0041. Therefore, journal entries **0030–0041 are not represented in the live Drizzle migration ledger**. Do not infer that these migrations ran merely because some similarly named objects exist in the catalog.
 - The presence of company tables is not proof that migration 0039 ran: the live table definitions differ materially from the repository's 0039 SQL.
 
@@ -246,8 +243,7 @@ The crm-company-branding bucket exists, but its live size and MIME settings diff
 
 This confirms the production problem is not simply “apply missing migrations 0030–0041.” The ledger records only 0000–0029, while the live company schema already contains a materially different implementation. The next safe task is to build a per-object reconciliation matrix from live DDL, constraints, indexes, triggers, function bodies, grants, RLS flags, policy expressions, and storage policies, then write **new forward-only migrations** for only the missing invariants. Historical migration files and ledger rows must not be rewritten or fabricated.
 
-PostgreSQL version compatibility is confirmed. Migration-history/schema reconciliation, company authorization cutover, and two-company production-like validation remain release blockers.
----
+## PostgreSQL version compatibility is confirmed. Migration-history/schema reconciliation, company authorization cutover, and two-company production-like validation remain release blockers.
 
 ## Live constraint, RPC, and storage-policy audit — 2026-11-27
 
@@ -286,20 +282,20 @@ These findings increase confidence in the live drift map but do not authorize pr
 
 **Purpose:** distinguish unapplied historical work from live objects that were created through a different schema path. This is a design/audit artifact, not an executable migration. The source SQL was reviewed against the read-only production catalog observations recorded above. No database writes were performed.
 
-| Migration | Intended change | Live evidence | Disposition |
-|---|---|---|---|
-| 0030 | Address-first roof-report RPC; remove old UUID signature | Three legacy SECURITY DEFINER report RPC overloads remain; live address-based lookup is global and not company-scoped | Reconcile RPC signatures and callers together. Do not replay. |
-| 0031 | Production-manager roof-report storage policy | Live proposal/job-photo policies are legacy role/assignment based; no tenant-scoped parent ownership | Replace as part of coordinated storage cutover; policy creation alone cannot remove permissive legacy access. |
-| 0032 | Customer delete SECURITY DEFINER RPC | Current live customer delete path is not confirmed safe for multi-company ownership | Preserve current behavior while implementing membership-derived company scoping and adversarial tests. |
-| 0033 | Restore address-first report RPC for PostgREST | Live address-based report RPCs exist, but use global address lookup and legacy role checks | Do not replay; fold required PostgREST contract into the tenant-safe replacement. |
-| 0034 | Add customer phone/email to report orders and update CRM contact data | Live report-order contact columns and exact constraints were not verified in the captured catalog output | Verify columns, defaults, nullability, and caller payloads on clone before classifying as present/absent. |
-| 0035 | Private signed-contracts bucket and policies | `signed-contracts` bucket absent in live bucket inventory | Candidate missing object; first map existing signed contract uploads and UI callers, then add only through reviewed forward migration. |
-| 0036 | Appointments, receptionist logs, availability and booking RPCs | `appointments` and `receptionist_logs` absent in live catalog check | Candidate missing objects. Separate from permit release unless required by current CRM app; verify app usage and preserve public/service-role booking behavior. |
-| 0037 | PDF signing templates and storage policies | `pdf_sign_templates` absent in live catalog check | Candidate missing objects. Audit UI routes and existing template files before adding. |
-| 0038 | Owner-user-keyed company branding, policies, branding bucket | Live branding table is company_id-keyed, has a different column set/policy model; branding bucket exists with settings that differ from migration defaults | Do not replay. Preserve live company-linked branding and uploaded assets; reconcile UI field mappings and storage paths. |
-| 0039 | Company table, enum membership role, membership policies, company creation RPC | Live company and membership tables exist but materially differ: slug exists; role is text with CHECK; branding references company_id; live policies differ; expected historical trigger not present | Treat as independently provisioned live foundation. Write compatibility checks/forward invariants; do not recreate table/type or force enum conversion without proving all app dependencies. |
-| 0040 | Theme accent column and palette/accent checks | Live branding has theme_accent; exact check constraints and allowed-value compatibility require catalog verification | Likely partially present; compare exact constraint definitions before any ALTER. |
-| 0041 | Company permit qualifier settings | `crm_company_permit_settings` was absent in the live permit-relations inventory | Candidate missing. Before adding, validate live company FK/role helper signatures and preserve the current text-role membership model. |
+| Migration | Intended change                                                                | Live evidence                                                                                                                                                                                       | Disposition                                                                                                                                                                                  |
+| --------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0030      | Address-first roof-report RPC; remove old UUID signature                       | Three legacy SECURITY DEFINER report RPC overloads remain; live address-based lookup is global and not company-scoped                                                                               | Reconcile RPC signatures and callers together. Do not replay.                                                                                                                                |
+| 0031      | Production-manager roof-report storage policy                                  | Live proposal/job-photo policies are legacy role/assignment based; no tenant-scoped parent ownership                                                                                                | Replace as part of coordinated storage cutover; policy creation alone cannot remove permissive legacy access.                                                                                |
+| 0032      | Customer delete SECURITY DEFINER RPC                                           | Current live customer delete path is not confirmed safe for multi-company ownership                                                                                                                 | Preserve current behavior while implementing membership-derived company scoping and adversarial tests.                                                                                       |
+| 0033      | Restore address-first report RPC for PostgREST                                 | Live address-based report RPCs exist, but use global address lookup and legacy role checks                                                                                                          | Do not replay; fold required PostgREST contract into the tenant-safe replacement.                                                                                                            |
+| 0034      | Add customer phone/email to report orders and update CRM contact data          | Live report-order contact columns and exact constraints were not verified in the captured catalog output                                                                                            | Verify columns, defaults, nullability, and caller payloads on clone before classifying as present/absent.                                                                                    |
+| 0035      | Private signed-contracts bucket and policies                                   | `signed-contracts` bucket absent in live bucket inventory                                                                                                                                           | Candidate missing object; first map existing signed contract uploads and UI callers, then add only through reviewed forward migration.                                                       |
+| 0036      | Appointments, receptionist logs, availability and booking RPCs                 | `appointments` and `receptionist_logs` absent in live catalog check                                                                                                                                 | Candidate missing objects. Separate from permit release unless required by current CRM app; verify app usage and preserve public/service-role booking behavior.                              |
+| 0037      | PDF signing templates and storage policies                                     | `pdf_sign_templates` absent in live catalog check                                                                                                                                                   | Candidate missing objects. Audit UI routes and existing template files before adding.                                                                                                        |
+| 0038      | Owner-user-keyed company branding, policies, branding bucket                   | Live branding table is company_id-keyed, has a different column set/policy model; branding bucket exists with settings that differ from migration defaults                                          | Do not replay. Preserve live company-linked branding and uploaded assets; reconcile UI field mappings and storage paths.                                                                     |
+| 0039      | Company table, enum membership role, membership policies, company creation RPC | Live company and membership tables exist but materially differ: slug exists; role is text with CHECK; branding references company_id; live policies differ; expected historical trigger not present | Treat as independently provisioned live foundation. Write compatibility checks/forward invariants; do not recreate table/type or force enum conversion without proving all app dependencies. |
+| 0040      | Theme accent column and palette/accent checks                                  | Live branding has theme_accent; exact check constraints and allowed-value compatibility require catalog verification                                                                                | Likely partially present; compare exact constraint definitions before any ALTER.                                                                                                             |
+| 0041      | Company permit qualifier settings                                              | `crm_company_permit_settings` was absent in the live permit-relations inventory                                                                                                                     | Candidate missing. Before adding, validate live company FK/role helper signatures and preserve the current text-role membership model.                                                       |
 
 ### Migration ordering and dependency notes
 
@@ -319,7 +315,6 @@ These findings increase confidence in the live drift map but do not authorize pr
 5. Re-run all checks and compare row counts and object ownership before proposing production execution.
 
 **Status:** CI for the integrated branch is green as of run 45938675718, but this reconciliation matrix is still an engineering plan. No merge, migration, or deployment is authorized or performed.
-
 
 ## Repeat production preflight — 2026-11-27
 
@@ -391,7 +386,7 @@ These policies must be dropped/replaced as a complete policy set in a single coo
 
 ### Confirmed live storage gap
 
-The live storage policy inventory still contains global-role/assignment policies for roof-job-photos and roofing-proposals. The proposal bucket mixes roof-report PDFs and expense-* objects, and current report file paths are roof-report/{report_id}/{filename} without a company segment. The job photo bucket uses {job_id}/... and crew assignment checks. A safe replacement must authorize through the linked company-owned report/job row and preserve the crew assignment rule; it must also handle the accounting expense path separately. Do not replace these policies with a broad company-admin-only rule or guess that every proposal object has a roof report parent.
+The live storage policy inventory still contains global-role/assignment policies for roof-job-photos and roofing-proposals. The proposal bucket mixes roof-report PDFs and expense-\* objects, and current report file paths are roof-report/{report_id}/{filename} without a company segment. The job photo bucket uses {job_id}/... and crew assignment checks. A safe replacement must authorize through the linked company-owned report/job row and preserve the crew assignment rule; it must also handle the accounting expense path separately. Do not replace these policies with a broad company-admin-only rule or guess that every proposal object has a roof report parent.
 
 The existing PR migration 0049 creates the new private permit-documents bucket and its application-linked company authorization policies. It does not replace the existing roof photo/proposal policies. The existing company branding policies are already company-aware and should be preserved after verifying helper EXECUTE grants.
 
@@ -407,6 +402,7 @@ The existing PR migration 0049 creates the new private permit-documents bucket a
 - The current production audit does not establish that every historical staff identity has a company membership. Do not infer memberships from a global role. The cutover must fail closed or use an explicitly reviewed identity mapping.
 
 No production writes, policy changes, RPC replacement, migration execution, or deployment were performed during this audit. The PR remains a draft and must not be merged or deployed until the remaining paths above have coordinated implementation and adversarial clone tests.
+
 ## Tenant RPC and policy replacement implementation — 2026-11-27
 
 Implementation was added to the PR branch only; it has not been applied to production.
@@ -422,7 +418,7 @@ Implementation was added to the PR branch only; it has not been applied to produ
 
 ### Deliberate fail-closed limitation
 
-Legacy accounting expense objects in roofing-proposals use expense-* object names without a company or expense-record key. Migration 0054 removes the legacy global accounting policy and leaves these objects inaccessible to authenticated users until the expense records and storage paths are migrated to an explicit company-owned key. This is intentional: preserving global access would retain a cross-tenant data exposure. A separate reviewed expense storage migration is still required.
+Legacy accounting expense objects in roofing-proposals use expense-\* object names without a company or expense-record key. Migration 0054 removes the legacy global accounting policy and leaves these objects inaccessible to authenticated users until the expense records and storage paths are migrated to an explicit company-owned key. This is intentional: preserving global access would retain a cross-tenant data exposure. A separate reviewed expense storage migration is still required.
 
 ### Validation still required
 
