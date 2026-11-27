@@ -124,7 +124,6 @@ export function Estimates({
       if (error || !data) throw error;
       id = data.id;
       const { generateProposalPdf } = await import("@/lib/proposal-pdf");
-      const lead = leads.find((l) => l.id === customer);
       const bytes = await generateProposalPdf(
         details,
         lead ? { name: lead.name, address: lead.address, email: lead.email } : undefined,
