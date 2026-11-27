@@ -29,6 +29,21 @@ describe("permit summary PDF", () => {
     expect(loaded.getPageCount()).toBeGreaterThan(0);
   });
 
+  it("creates a multi-page packet for long notes and unbroken portal values", async () => {
+    const bytes = await createPermitPacketPdf({
+      jobTitle: "Roof replacement",
+      propertyAddress: "100 Example Street, Miami, FL",
+      jurisdiction: "Miami-Dade County",
+      permitType: "Roof replacement",
+      portalUrl: `https://example.gov/${"permit-reference".repeat(60)}`,
+      status: "draft",
+      applicationNotes: "Long note " + "X".repeat(2400),
+      inspections: [],
+    });
+    const loaded = await PDFDocument.load(bytes);
+    expect(loaded.getPageCount()).toBeGreaterThan(1);
+  });
+
   it("creates a valid packet when no inspections or optional details exist", async () => {
     const bytes = await createPermitPacketPdf({
       jobTitle: "Roof repair",
