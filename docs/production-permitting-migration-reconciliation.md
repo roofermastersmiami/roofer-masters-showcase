@@ -247,3 +247,37 @@ The crm-company-branding bucket exists, but its live size and MIME settings diff
 This confirms the production problem is not simply “apply missing migrations 0030–0041.” The ledger records only 0000–0029, while the live company schema already contains a materially different implementation. The next safe task is to build a per-object reconciliation matrix from live DDL, constraints, indexes, triggers, function bodies, grants, RLS flags, policy expressions, and storage policies, then write **new forward-only migrations** for only the missing invariants. Historical migration files and ledger rows must not be rewritten or fabricated.
 
 PostgreSQL version compatibility is confirmed. Migration-history/schema reconciliation, company authorization cutover, and two-company production-like validation remain release blockers.
+---
+
+## Live constraint, RPC, and storage-policy audit — 2026-11-27
+
+**Method:** read-only PostgreSQL catalog inspection. No functions, policies, grants, tables, rows, or storage objects were changed.
+
+### Company identity constraints
+
+- `crm_companies.slug` has a unique constraint; `created_by` references `auth.users(id)` with RESTRICT.
+- `crm_company_memberships` has unique `(company_id,user_id)`, company/user foreign keys, and a text CHECK allowing owner, admin, office, sales, production_manager, crew, and accounting.
+- `crm_company_branding` uses `company_id` as its primary key and references `crm_companies` with CASCADE; `updated_by` references `auth.users` with SET NULL.
+- Existing customer/property/report/job foreign keys and uniqueness constraints are present, including unique `crm_properties(customer_id,address)` and unique `crm_customers(source_lead_id)`. They are not composite company-scoped constraints because the operational tables do not yet carry company_id.
+
+### Privileged RPC findings
+
+- `is_crm_company_member(uuid)` and `is_crm_company_admin(uuid)` are SECURITY DEFINER, pin `search_path` to public, and check `auth.uid()` against membership rows. Their current ACLs grant EXECUTE to anon, authenticated, and service_role. Anonymous execution is unnecessary for member/admin checks and should be explicitly reviewed/revoked in a forward security migration after checking all callers.
+- `save_crm_customer(jsonb)` is SECURITY DEFINER and authorizes through legacy global `has_any_role(auth.uid(), office/sales)`. It inserts leads and updates customer/lead records without a company membership check.
+- All three `create_roof_report_request` overloads are SECURITY DEFINER and authorize through legacy global roles. The address-based overloads search properties by normalized address without company scope; one overload can update an existing customer's personal contact fields. All need caller/grant inventory and a tenant-safe replacement plan before external-company onboarding.
+
+### Storage policy findings
+
+- Branding logo policies use company-ID path prefixes and membership/admin helpers.
+- Roof-job-photo and proposal-file policies remain based on legacy global roles or assignment arrays, not parent-company membership. Accounting expense receipt policy is also role-based.
+- The `permit-documents` bucket is absent. Do not create it until the parent application/company authorization contract and private object path policy are tested.
+
+### Forward repair implications
+
+1. Keep the live company and branding tables, constraints, and working company-prefix storage policies. Do not replay historical company table creation SQL.
+2. Add a new forward-only migration that verifies live preconditions and reconciles intended company invariants without changing the current text membership role model unless application compatibility is proven.
+3. Replace legacy privileged RPCs as a coordinated tenant cutover; do not merely add a company_id parameter supplied by the browser. Derive authorized company membership server-side and constrain every parent/child lookup and write.
+4. Review EXECUTE grants for company helpers and all SECURITY DEFINER functions. Revoke unnecessary anon access only in a reviewed migration with regression tests for public lead intake.
+5. Migrate storage authorization only after job/permit parent rows have company ownership. Existing permissive policies can OR together, so a new restrictive-looking policy alone does not neutralize legacy access.
+
+These findings increase confidence in the live drift map but do not authorize production writes. A production-like clone and two-company adversarial tests remain mandatory.
