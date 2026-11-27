@@ -154,6 +154,56 @@ export const BROWARD_SUNRISE_RESIDENTIAL_PROFILE: JurisdictionPermitProfile = {
   checklist: sunriseChecklist,
 };
 
+
+const pembrokePinesChecklist: ChecklistItem[] = [
+  { id: "building-application", label: "Broward County Uniform Building Permit Application", detail: "Complete the current Broward County uniform building application.", appliesWhen: "Required by the City of Pembroke Pines residential re-roof checklist.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+  { id: "hoa-awareness", label: "Homeowners Association Affidavit of Awareness", detail: "Submit the affidavit even when the property is not part of an association.", appliesWhen: "Required by the City of Pembroke Pines residential re-roof checklist.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+  { id: "roof-to-wall-connection", label: "Roof-to-wall connection affidavit", detail: "Provide the affidavit when the home is insured or valued over $300,000; it must be completed by an eligible licensed or design professional.", appliesWhen: "When the insured or property value threshold in the current city checklist is met.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+  { id: "asbestos-release", label: "Asbestos release form", detail: "Include the applicable asbestos release documentation.", appliesWhen: "Listed in the City of Pembroke Pines residential re-roof checklist.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+  { id: "hvzh-roofing-package", label: "HVHZ roofing package", detail: "Complete the applicable High Velocity Hurricane Zone roofing forms and supporting attachments.", appliesWhen: "Listed in the City of Pembroke Pines residential re-roof checklist.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+  { id: "rooftop-equipment-affidavit", label: "Rooftop-mounted equipment affidavit", detail: "Submit the current rooftop-mounted equipment affidavit.", appliesWhen: "Listed in the City of Pembroke Pines residential re-roof checklist.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+  { id: "commercial-reroof-statement", label: "Commercial re-roofing statement", detail: "Use the city's commercial re-roofing statement for commercial projects; this profile itself is limited to residential reroofs.", appliesWhen: "Commercial projects only; confirm the commercial permit checklist separately.", sourceUrl: "https://www.ppines.com/1665/Information-Forms" },
+  { id: "notice-of-commencement", label: "Recorded Notice of Commencement", detail: "Record, submit, and display before the first inspection when a non-mechanical project exceeds $5,000.", appliesWhen: "When the project value exceeds $5,000.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
+];
+
+const hollywoodChecklist: ChecklistItem[] = [
+  { id: "building-application", label: "Broward County Uniform Building Permit Application", detail: "Complete the application with Building checked; the city's checklist identifies a licensed roofing contractor or owner-builder.", appliesWhen: "Residential and commercial roofing permit applications.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "hvzh-roofing-package", label: "HVHZ Uniform Roofing Permit Application", detail: "Complete the applicable sections and attachments for the proposed roof system.", appliesWhen: "Residential and commercial roofing permit applications.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "product-approval-package", label: "Product approval and Fire Directory listing", detail: "Provide current Miami-Dade NOA or Florida Product Approval with all elements identified, plus Fire Directory listing pages.", appliesWhen: "For the proposed roofing product and assembly.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "asbestos-certificate", label: "Broward County Asbestos Program Certificate of Submittal", detail: "Include the Broward County asbestos submittal certificate.", appliesWhen: "Listed in the City of Hollywood roofing checklist.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "site-plan", label: "Roofing site plan", detail: "Show proposed dumpster, tar kettle, and related staging locations; maintain fire-lane access.", appliesWhen: "When applicable; the checklist excludes single-family residences from this site-plan item.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "reroof-mitigation-affidavit", label: "Re-roof mitigation affidavit", detail: "Submit the completed re-roof mitigation affidavit and mandatory countywide rooftop-mounted affidavit.", appliesWhen: "Listed in the City of Hollywood roofing checklist.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "roof-testing-calculations", label: "Roof testing and engineering calculations", detail: "Provide field withdrawal resistance tests, moisture survey reports, wind-pressure calculations, or polyiso attachment calculations when applicable.", appliesWhen: "As required by the roof assembly, project conditions, or plan review.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "letter-of-authorization", label: "Letter of authorization", detail: "Provide authorization documentation when applicable, such as HOA approval.", appliesWhen: "When required for the property or project.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "notice-of-commencement", label: "Notice of Commencement", detail: "Submit the Notice of Commencement when the job value exceeds $5,000.", appliesWhen: "When the project value exceeds $5,000.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+  { id: "historic-district-photos", label: "Existing roof photographs", detail: "Include photographs of the existing roof; the checklist notes roofing material in historic districts may remain the same or be upgraded, not downgraded.", appliesWhen: "Only for properties in a historic district.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
+];
+
+
+export const BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-pembroke-pines-residential-reroof",
+  label: "City of Pembroke Pines — residential re-roof",
+  county: "Broward",
+  authorityScope: "City of Pembroke Pines residential re-roof checklist, revised February 19, 2026.",
+  authorityWarning: "This profile is limited to residential re-roof intake in the City of Pembroke Pines. Confirm the parcel is inside city limits and check the live Building Department checklist before filing.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist", "https://www.ppines.com/1665/Information-Forms", FBC_CODE_URL],
+  checklist: pembrokePinesChecklist,
+};
+
+export const BROWARD_HOLLYWOOD_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-hollywood-roofing",
+  label: "City of Hollywood — residential / commercial roofing",
+  county: "Broward",
+  authorityScope: "City of Hollywood roofing checklist covering residential and commercial roofing permit applications.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Hollywood limits. The city notes project-specific additional items may apply; confirm the current Building Division packet before filing.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525", "https://www.hollywoodfl.org/499/Applications-Forms", FBC_CODE_URL],
+  checklist: hollywoodChecklist,
+};
+
 export type PermitChecklistRequest = {
   profileId: string;
   roofingSystem?: RoofingSystem;
@@ -192,7 +242,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const profiles: Record<string, JurisdictionPermitProfile> = {
     [MIAMI_DADE_UNINCORPORATED_PROFILE.id]: MIAMI_DADE_UNINCORPORATED_PROFILE,
     [BROWARD_COUNTY_PROFILE.id]: BROWARD_COUNTY_PROFILE,
-    [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
+    [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,\n    [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,\n    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -239,7 +289,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   }
 
   const roofSystem = request.roofingSystem ?? "other";
-  const profileScopeSupported = profile.id !== BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || request.projectKind === "reroof";
+  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id;\n  const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
   const requiredRoofingSections = !checklistEnabled ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
@@ -250,7 +300,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     : new Set(profile.checklist.map((item) => item.id));
   const items = (checklistEnabled ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
     if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
-    if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
+    if (item.id === "commercial-reroof-statement") return request.projectKind === "commercial_reroof";\n    if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
 
