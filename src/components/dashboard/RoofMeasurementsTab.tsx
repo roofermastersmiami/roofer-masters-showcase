@@ -21,6 +21,7 @@ import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
+import { DeleteRoofReportButton } from "./DeleteRoofReport";
 import {
   SATELLITE_DEFAULT_ZOOM,
   SATELLITE_MAX_ZOOM,
@@ -303,6 +304,14 @@ export function RoofMeasurementsTab({
             >
               <ArrowLeft /> All measurements
             </Button>
+            <DeleteRoofReportButton
+              reportId={report.id}
+              address={report.address}
+              onDeleted={() => {
+                setActiveId(null);
+                onSelectReport(null);
+              }}
+            />
           </div>
         </div>
         {drawings.isPending ? (
@@ -387,16 +396,18 @@ export function RoofMeasurementsTab({
                   {savedDrawing ? "Saved drawing available" : "No drawing saved yet"} ·{" "}
                   {row.file_path ? "PDF generated" : "PDF not generated"}
                 </p>
-                <Button
-                  className="mt-5"
-                  variant="outline"
-                  onClick={() => {
-                    setActiveId(row.id);
-                    onSelectReport(row.id);
-                  }}
-                >
-                  <MapPin /> Open 2D / 3D workspace
-                </Button>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setActiveId(row.id);
+                      onSelectReport(row.id);
+                    }}
+                  >
+                    <MapPin /> Open 2D / 3D workspace
+                  </Button>
+                  <DeleteRoofReportButton reportId={row.id} address={row.address} />
+                </div>
               </article>
             );
           })}
