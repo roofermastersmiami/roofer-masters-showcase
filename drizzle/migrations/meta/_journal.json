@@ -302,6 +302,13 @@
       "when": 1795660000000,
       "tag": "0042_crm_company_ownership_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1795661000000,
+      "tag": "0043_company_aware_lead_customer_sync",
+      "breakpoints": true
     }
   ]
 }

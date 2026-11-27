@@ -30,7 +30,7 @@ CREATE TABLE public.crm_customers (
 ALTER TABLE public.leads ADD CONSTRAINT leads_customer_id_fkey
   FOREIGN KEY (customer_id) REFERENCES public.crm_customers(id);
 CREATE TABLE public.crm_properties (
-  id uuid PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id uuid REFERENCES public.crm_customers(id)
 );
 CREATE TABLE public.roof_report_orders (
@@ -92,6 +92,58 @@ BEGIN
   END IF;
 END $$;
 
+-- Migration 0043 keeps the pre-existing lead fan-out trigger compatible with
+-- mandatory company ownership. Model the columns used by the production trigger.
+ALTER TABLE public.leads
+  ADD COLUMN name text NOT NULL DEFAULT '',
+  ADD COLUMN phone text,
+  ADD COLUMN email text,
+  ADD COLUMN address text;
+ALTER TABLE public.crm_customers
+  ADD COLUMN name text NOT NULL DEFAULT '',
+  ADD COLUMN phone text NOT NULL DEFAULT '',
+  ADD COLUMN email text NOT NULL DEFAULT '';
+ALTER TABLE public.crm_properties
+  ADD COLUMN address text NOT NULL DEFAULT '';
+
+-- Match the production crm_properties natural-key constraint from migration 0013.
+ALTER TABLE public.crm_properties
+  ADD CONSTRAINT crm_properties_customer_id_address_key UNIQUE (customer_id,address);
+
+\ir ../drizzle/migrations/0043_company_aware_lead_customer_sync.sql
+CREATE TRIGGER crm_sync_lead_customer
+AFTER INSERT OR UPDATE OF name,phone,email,address ON public.leads
+FOR EACH ROW EXECUTE FUNCTION public.sync_lead_customer();
+
+INSERT INTO public.leads(id,company_id,name,phone,email,address)
+VALUES (
+  '20000000-0000-0000-0000-000000000009',
+  '10000000-0000-0000-0000-000000000001',
+  'New trigger test lead','3055550100','lead@example.com','100 Test Street'
+);
+
+DO $$
+DECLARE
+  lead_company uuid;
+  customer_company uuid;
+  property_company uuid;
+  linked_customer uuid;
+BEGIN
+  SELECT company_id,customer_id INTO lead_company,linked_customer
+  FROM public.leads WHERE id='20000000-0000-0000-0000-000000000009';
+  SELECT company_id INTO customer_company
+  FROM public.crm_customers WHERE id=linked_customer;
+  SELECT company_id INTO property_company
+  FROM public.crm_properties WHERE customer_id=linked_customer
+    AND address='100 Test Street';
+
+  IF lead_company IS DISTINCT FROM '10000000-0000-0000-0000-000000000001'
+     OR customer_company IS DISTINCT FROM lead_company
+     OR property_company IS DISTINCT FROM lead_company THEN
+    RAISE EXCEPTION 'Lead trigger failed to propagate company ownership to customer/property';
+  END IF;
+END $$;
+
 -- Same-company composite FK rejects a customer from another tenant.
 INSERT INTO public.crm_companies(id,name,created_by) VALUES
  ('10000000-0000-0000-0000-000000000002','Second Company','00000000-0000-0000-0000-000000000002');
@@ -106,10 +158,11 @@ INSERT INTO public.crm_properties(id,customer_id,company_id) VALUES
 DO $$
 BEGIN
   BEGIN
-    INSERT INTO public.crm_properties(id,customer_id,company_id)
+    INSERT INTO public.crm_properties(id,customer_id,company_id,address)
     VALUES ('40000000-0000-0000-0000-000000000002',
             '30000000-0000-0000-0000-000000000002',
-            '10000000-0000-0000-0000-000000000001');
+            '10000000-0000-0000-0000-000000000001',
+            'Cross-company link rejection');
     RAISE EXCEPTION 'Cross-company customer/property link unexpectedly succeeded';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
