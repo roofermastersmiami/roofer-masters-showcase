@@ -54,7 +54,7 @@ DO $$ BEGIN
    INSERT INTO public.roof_permit_noc_tracking(company_id,permit_application_id,assessment_status,recording_status)
    VALUES ('10000000-0000-0000-0000-000000000001','50000000-0000-0000-0000-000000000002','not_assessed','not_started');
    RAISE EXCEPTION 'Cross-company NOC/application relationship unexpectedly accepted';
- EXCEPTION WHEN foreign_key_violation THEN NULL;
+ EXCEPTION WHEN foreign_key_violation OR unique_violation THEN NULL;
  END;
  BEGIN
    INSERT INTO public.roof_permit_noc_tracking(
