@@ -26,6 +26,16 @@ Or pass coordinates:
 { "lat": 38.8977, "lon": -77.0365 }
 ```
 
+### Asynchronous jobs (cold-cache safe)
+
+A cold-cache analysis is dominated by USGS tile downloads (~180 MB at throttled per-connection speeds) and can outlast the free tier's ~271 s request window, which kills a synchronous `POST /v1/roof/analyze` mid-download. The jobs API runs the same pipeline outside the request lifecycle:
+
+- `POST /v1/roof/analyze/jobs` — same request body as analyze; answers `202` immediately with `{ job_id, status: "queued", ... }`. Identical submissions dedupe onto the job already running for them.
+- `GET /v1/roof/analyze/jobs/{job_id}` — `{ status: queued | running | complete | failed, stage, detail, download_fraction, ... }`; a completed job carries `result`, the exact payload the synchronous endpoint returns. A failed job carries `error` plus, when the pipeline rejected the request itself, `error_status` / `error_detail` (for example a building-candidate list).
+- Job state is in-memory only (the free tier has no durable disk). A job lost to an instance restart or expiry answers `404` with `detail.code = "job_not_found"`; clients resubmit automatically — the CRM does — so a lost job never needs a human retry. Finished jobs expire after `JOB_TTL_SECONDS` (default 1800); at most `MAX_CONCURRENT_JOBS` (default 2) analyses run at once.
+
+Tile downloads attack the cold latency directly: tiles for one footprint are fetched concurrently, and each large tile is fetched as parallel HTTP byte ranges (`TILE_DOWNLOAD_CHUNKS`, default 4) because the USGS host throttles per connection — with automatic fallback to the original single-stream download whenever ranges are unavailable or fail. Chunk starts are staggered and non-206 answers are retried with backoff, because the USGS front door answers request bursts with an HTML interstitial challenge that decays over seconds.
+
 ## Free deployment with Render
 
 The repository includes a `render.yaml` Blueprint for the roof-detection service.

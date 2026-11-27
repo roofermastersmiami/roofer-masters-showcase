@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { measureDrawing } from "@/lib/roof-geometry";
 import {
   detectedFacetsToDrawing,
+  roofAnalysisJobSchema,
   roofDetectionResponseSchema,
   type RoofDetectionResponse,
 } from "@/lib/roof-detection";
@@ -426,5 +427,55 @@ describe("LiDAR converter vertex snap robustness", () => {
     const total = measured.planes.reduce((sum, plane) => sum + plane.area, 0);
     expect(total).toBeGreaterThan(1250);
     expect(total).toBeLessThan(1450);
+  });
+});
+
+describe("Async analyze job envelope", () => {
+  it("accepts a completed job whose result is a full detection response", () => {
+    const parsed = roofAnalysisJobSchema.parse({
+      job_id: "abc123",
+      status: "complete",
+      stage: "complete",
+      detail: "Measurement complete",
+      download_fraction: null,
+      elapsed_seconds: 812.4,
+      result: response,
+    });
+    expect(parsed.status).toBe("complete");
+    expect(parsed.result?.roof.area_sqft).toBe(response.roof.area_sqft);
+  });
+
+  it("accepts a running job with download progress and no result yet", () => {
+    const parsed = roofAnalysisJobSchema.parse({
+      job_id: "abc123",
+      status: "running",
+      stage: "downloading_tiles",
+      detail: "Downloading USGS LiDAR tiles — 42 MB of 178 MB",
+      download_fraction: 0.24,
+    });
+    expect(parsed.result).toBeUndefined();
+    expect(parsed.download_fraction).toBeCloseTo(0.24);
+  });
+
+  it("accepts a failed job carrying the pipeline rejection detail", () => {
+    const parsed = roofAnalysisJobSchema.parse({
+      job_id: "abc123",
+      status: "failed",
+      stage: "failed",
+      error: "Analysis request was rejected.",
+      error_status: 409,
+      error_detail: { candidates: [{ candidate_id: "abc12345" }], message: "pick one" },
+    });
+    expect(parsed.error_status).toBe(409);
+  });
+
+  it("rejects a completed job whose result is not a valid detection response", () => {
+    expect(() =>
+      roofAnalysisJobSchema.parse({
+        job_id: "abc123",
+        status: "complete",
+        result: { status: "lidar_facets" },
+      }),
+    ).toThrow();
   });
 });

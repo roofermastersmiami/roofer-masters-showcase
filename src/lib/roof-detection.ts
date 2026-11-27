@@ -95,6 +95,32 @@ export const roofDetectionResponseSchema = z.object({
 
 export type RoofDetectionResponse = z.infer<typeof roofDetectionResponseSchema>;
 
+/** Envelope of the asynchronous analyze jobs API (POST /v1/roof/analyze/jobs,
+ * GET /v1/roof/analyze/jobs/{id}). A cold-cache analysis can outlast the
+ * hosting tier's request window, so the service runs it as a job: submission
+ * answers 202 immediately and polling reports progress. A completed job's
+ * `result` is the exact payload the synchronous endpoint returns, validated
+ * by the same schema above. A failed job carries the pipeline's own
+ * rejection (`error_status` / `error_detail`, e.g. a building-candidate
+ * list) so every existing flow keeps working. A job lost to a service
+ * restart answers 404 instead of an envelope — job state is in-memory —
+ * and the caller resubmits automatically.
+ */
+export const roofAnalysisJobSchema = z.object({
+  job_id: z.string().min(1),
+  status: z.enum(["queued", "running", "complete", "failed"]),
+  stage: z.string().nullable().optional(),
+  detail: z.string().nullable().optional(),
+  download_fraction: z.number().min(0).max(1).nullable().optional(),
+  elapsed_seconds: z.number().nonnegative().optional(),
+  result: roofDetectionResponseSchema.optional(),
+  error: z.string().nullable().optional(),
+  error_status: z.number().int().nullable().optional(),
+  error_detail: z.unknown().optional(),
+});
+
+export type RoofAnalysisJob = z.infer<typeof roofAnalysisJobSchema>;
+
 type PlanVertex = { x: number; z: number; elevation: number };
 
 const planDistance = (a: { x: number; z: number }, b: { x: number; z: number }) =>
