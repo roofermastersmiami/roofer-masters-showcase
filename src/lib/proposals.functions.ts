@@ -80,7 +80,7 @@ export const getSharedProposal = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: share, error: shareError } = await supabaseAdmin
       .from("proposal_shares")
-      .select("proposal_id, expires_at, revoked_at, signed_name, signed_at")
+      .select("proposal_id, company_id, expires_at, revoked_at, signed_name, signed_at")
       .eq("token", data.token)
       .maybeSingle();
     if (shareError) throw new Error("Could not verify proposal link");
@@ -89,6 +89,7 @@ export const getSharedProposal = createServerFn({ method: "GET" })
       .from("proposals")
       .select("title, file_path, is_template")
       .eq("id", share.proposal_id)
+      .eq("company_id", share.company_id)
       .maybeSingle();
     if (proposalError) throw new Error("Could not load shared proposal");
     if (!proposal?.file_path || proposal.is_template) return null;
@@ -114,7 +115,7 @@ export const signSharedProposal = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: share, error: shareError } = await supabaseAdmin
       .from("proposal_shares")
-      .select("id, expires_at, revoked_at, signed_at")
+      .select("id, company_id, expires_at, revoked_at, signed_at")
       .eq("token", data.token)
       .maybeSingle();
     if (shareError) throw new Error("Could not verify proposal link");
@@ -126,6 +127,7 @@ export const signSharedProposal = createServerFn({ method: "POST" })
       .from("proposal_shares")
       .update({ signed_name: data.name, signed_at: signedAt, signature_data: data.signature })
       .eq("id", share.id)
+      .eq("company_id", share.company_id)
       .is("signed_at", null)
       .is("revoked_at", null)
       .gt("expires_at", signedAt)
