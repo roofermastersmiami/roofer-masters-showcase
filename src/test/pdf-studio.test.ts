@@ -65,17 +65,72 @@ import { describe, expect, it, vi } from "vitest";
         return [...this].map((b) => b.toString(16).padStart(2, "0")).join("");
       };
     }
+    const ctor = Uint8Ctor as unknown as {
+      fromBase64?: (base64: string) => Uint8Array;
+      fromHex?: (hex: string) => Uint8Array;
+    };
+    if (typeof ctor.fromBase64 !== "function") {
+      ctor.fromBase64 = (base64: string) => {
+        const binary = atob(base64.replace(/\s/g, ""));
+        return Uint8Ctor.from(binary, (ch) => ch.charCodeAt(0));
+      };
+      ctor.fromHex = (hex: string) => {
+        const out = new Uint8Ctor(hex.length / 2);
+        for (let i = 0; i < out.length; i++) {
+          out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+        }
+        return out;
+      };
+    }
+  };
+  const patchPromise = (PromiseCtor: typeof Promise) => {
+    const ctor = PromiseCtor as unknown as {
+      try?: (fn: (...args: unknown[]) => unknown, ...args: unknown[]) => Promise<unknown>;
+    };
+    if (typeof ctor.try !== "function") {
+      ctor.try = (fn, ...args) => new PromiseCtor((resolve) => resolve(fn(...args)));
+    }
+  };
+  const patchMath = (MathObj: typeof Math) => {
+    if (typeof (MathObj as { sumPrecise?: unknown }).sumPrecise !== "function") {
+      Object.defineProperty(MathObj, "sumPrecise", {
+        value: (items: Iterable<number>) => {
+          let sum = 0;
+          let compensation = 0;
+          for (const value of items) {
+            const next = sum + value;
+            if (Math.abs(sum) >= Math.abs(value)) {
+              compensation += sum - next + value;
+            } else {
+              compensation += value - next + sum;
+            }
+            sum = next;
+          }
+          return sum + compensation;
+        },
+      });
+    }
   };
   patchMap(Map);
   patchWeakMap(WeakMap);
   patchUint8(Uint8Array);
+  patchPromise(Promise);
+  patchMath(Math);
   const win = globalThis as unknown as {
-    window?: { Map: typeof Map; WeakMap: typeof WeakMap; Uint8Array: typeof Uint8Array };
+    window?: {
+      Map: typeof Map;
+      WeakMap: typeof WeakMap;
+      Uint8Array: typeof Uint8Array;
+      Promise: typeof Promise;
+      Math: typeof Math;
+    };
   };
   if (win.window) {
     patchMap(win.window.Map);
     patchWeakMap(win.window.WeakMap);
     patchUint8(win.window.Uint8Array);
+    patchPromise(win.window.Promise);
+    patchMath(win.window.Math);
   }
   (globalThis as Record<string, unknown>).DOMMatrix ??= DOMMatrix;
   (globalThis as Record<string, unknown>).ImageData ??= ImageData;
@@ -148,7 +203,9 @@ import {
 // Canvas seam backed by @napi-rs/canvas; keep the raw canvases so tests can
 // sample pixels (redaction verification).
 const rawCanvases: Canvas[] = [];
-setPdfWorkerSource(resolve(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"));
+// Load the worker through the test wrapper, which polyfills the worker
+// realm for Node 22 CI (see src/test/pdfjs-worker.mjs).
+setPdfWorkerSource(resolve(process.cwd(), "src/test/pdfjs-worker.mjs"));
 setPdfCanvasFactory((width, height) => {
   const canvas = createCanvas(width, height);
   rawCanvases.push(canvas);
@@ -462,7 +519,7 @@ describe("PDF Studio functional test pass", () => {
     await expect(CantooDocument.load(protectedBytes, { password: "wrong" })).rejects.toThrow();
   }, 120000);
 
-  it.skip("OCR: an image-only scan becomes a searchable PDF with recovered text", async () => {
+  it("OCR: an image-only scan becomes a searchable PDF with recovered text", async () => {
     const scan = await scannedPdf();
     const before = await exportPdfToText(scan);
     expect(before.toUpperCase()).not.toContain("ROOFER");
@@ -472,7 +529,7 @@ describe("PDF Studio functional test pass", () => {
     expect(await pdfPageCount(outcome.bytes)).toBe(1);
     const after = await exportPdfToText(outcome.bytes);
     expect(after.toUpperCase()).toContain("ROOFER");
-  }, 300000);
+  }, 180000);
 
   it("studio shell: every result can be downloaded and reopened in the studio", () => {
     const source = readFileSync(
