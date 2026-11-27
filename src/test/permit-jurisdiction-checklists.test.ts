@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BROWARD_COUNTY_PROFILE,
+  BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
@@ -227,5 +228,57 @@ describe("additional Broward city roofing profiles", () => {
       expect(result.authorityConfirmed).toBe(false);
       expect(result.items).toHaveLength(0);
     }
+  });
+});
+
+
+describe("Coral Springs residential reroof checklist", () => {
+  it("requires city parcel confirmation and exposes only source-backed city checklist items", () => {
+    const unverified = getPermitChecklist({
+      profileId: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "tile",
+      asOfDate: "2026-11-26",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.items.map((item) => item.id)).toContain("zoning-addendum");
+    expect(unverified.items.map((item) => item.id)).toContain("asbestos-srra");
+    expect(unverified.items.map((item) => item.id)).toContain("preapproved-roof-materials");
+    expect(unverified.items.map((item) => item.id)).toContain("roof-to-wall-interpretation");
+
+    const verified = getPermitChecklist({
+      profileId: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    expect(verified.authorityConfirmed).toBe(true);
+    expect(verified.items.map((item) => item.id)).toContain("notice-of-commencement");
+  });
+
+  it("does not apply the residential reroof profile to repairs, new roofs, or commercial reroofs", () => {
+    for (const projectKind of ["repair", "new_roof", "commercial_reroof"] as const) {
+      const result = getPermitChecklist({
+        profileId: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id,
+        projectKind,
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-11-26",
+      });
+      expect(result.authorityConfirmed).toBe(false);
+      expect(result.items).toHaveLength(0);
+    }
+  });
+
+  it("suppresses the 8th Edition checklist after December 30, 2026", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(result.codeReferenceCurrent).toBe(false);
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.items).toHaveLength(0);
   });
 });
