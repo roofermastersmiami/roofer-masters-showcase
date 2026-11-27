@@ -273,10 +273,12 @@ export function Permitting({ leads }: { leads: Lead[] }) {
             Next permitting capabilities
           </CardTitle>
           <CardDescription className="leading-relaxed">
-            Detailed permit applications, jurisdiction directories, verified NOA / Florida Product
-            Approval records, NOC tracking, and saved PDF packets require dedicated company-scoped
-            records and private document storage. They are not represented as active until those
-            foundations and access policies are implemented and tested.
+            Company-scoped permit applications, jurisdiction checklists, inspection milestones,
+            private permit documents, product-approval evidence, NOC tracking, and permit-summary
+            PDFs are available in Permit Records. The CRM prepares and tracks the filing package;
+            staff must verify the authority, approve the documents, submit through the official
+            portal, and record the authority's actual response. Portal submission and appointment
+            confirmation are not automated without a supported official integration.
           </CardDescription>
         </CardHeader>
       </Card>
