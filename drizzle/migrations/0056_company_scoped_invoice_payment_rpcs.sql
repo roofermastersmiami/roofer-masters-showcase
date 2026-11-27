@@ -1,3 +1,4 @@
+-- tenant-audit: reviewed — SECURITY DEFINER RPCs bind invoice/payment writes to the locked invoice company; authenticated accounting membership is checked for manual actions, and settlement is service_role-only after trusted webhook verification. Grants explicitly exclude browser roles from settlement.
 -- Enforce company authorization inside accounting RPCs, not only in app handlers.
 -- Payment settlement remains a trusted server/webhook operation and is not callable
 -- by browser roles. Company ownership is inherited from the locked invoice row.
