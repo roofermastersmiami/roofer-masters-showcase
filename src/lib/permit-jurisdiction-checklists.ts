@@ -212,6 +212,10 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
+  if (profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) {
+    authorityConfirmed = false;
+    warnings.push("Verify the property is inside City of Sunrise limits and confirm its current checklist with the Sunrise Building Division before filing.");
+  }
   if (profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id && request.projectKind !== "reroof") {
     authorityConfirmed = false;
     warnings.push("The Sunrise source covers residential structural roof / reroof work only; confirm requirements for this different project type.");
