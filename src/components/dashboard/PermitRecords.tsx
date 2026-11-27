@@ -3,6 +3,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CalendarPlus, ClipboardList, Download, FileText, Plus, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createPermitPacketPdf } from "@/lib/permit-packet";
+import {
+  BROWARD_COUNTY_PROFILE,
+  BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
+  BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
+  BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
+  BROWARD_WESTON_ROOFING_PROFILE,
+  BROWARD_DAVIE_ROOFING_PROFILE,
+  BROWARD_MARGATE_ROOFING_PROFILE,
+  BROWARD_HALLANDALE_ROOFING_PROFILE,
+  BROWARD_HOLLYWOOD_ROOFING_PROFILE,
+  BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
+  BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
+  BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
+  getPermitChecklist,
+  MIAMI_DADE_UNINCORPORATED_PROFILE,
+  CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE,
+  CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE,
+  CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE,
+} from "@/lib/permit-jurisdiction-checklists";
+import type { PermitProjectKind, RoofingSystem } from "@/lib/permit-jurisdiction-checklists";
 import { buildPermitDocumentPath, validatePermitDocument } from "@/lib/permit-document-validation";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +53,12 @@ export function PermitRecords() {
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["permit-workspace"], queryFn: () => getPermitWorkspace() });
   const [jobId, setJobId] = useState("");
-  const [jurisdiction, setJurisdiction] = useState("Miami-Dade County");
+  const [jurisdiction, setJurisdiction] = useState("Miami-Dade County — unincorporated area");
+  const [jurisdictionProfileId, setJurisdictionProfileId] = useState(MIAMI_DADE_UNINCORPORATED_PROFILE.id);
+  const [propertyFolio, setPropertyFolio] = useState("");
+  const [parcelAuthorityVerified, setParcelAuthorityVerified] = useState(false);
+  const [roofingSystem, setRoofingSystem] = useState<RoofingSystem>("metal");
+  const [projectKind, setProjectKind] = useState<PermitProjectKind>("reroof");
   const [permitType, setPermitType] = useState("Roof replacement");
   const [portalUrl, setPortalUrl] = useState("");
   const [permitFee, setPermitFee] = useState("");
@@ -55,17 +80,25 @@ export function PermitRecords() {
     mutationFn: () => createPermitApplication({
       roof_job_id: jobId,
       jurisdiction_name: jurisdiction,
+      jurisdiction_code: jurisdictionProfileId,
       permit_type: permitType,
       application_status: "draft",
       portal_url: portalUrl.trim() || null,
       fee_cents: permitFee.trim() ? Math.round(Number(permitFee) * 100) : null,
-      notes: applicationNotes,
+      notes: [
+        `Project type: ${projectKind}`,
+        `Roofing system: ${roofingSystem}`,
+        propertyFolio.trim() ? `Property folio: ${propertyFolio.trim()}` : "",
+        parcelAuthorityVerified ? (jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id ? "User confirmed the folio and unincorporated Miami-Dade parcel authority against property records." : `User attested that the property is within ${jurisdiction}. Verify against official parcel records; this is not municipal approval.`) : "",
+        applicationNotes.trim(),
+      ].filter(Boolean).join("\n\n"),
     }),
     onSuccess: async () => {
       toast.success("Permit application draft saved.");
       setPortalUrl("");
       setPermitFee("");
       setApplicationNotes("");
+      setParcelAuthorityVerified(false);
       await refresh();
     },
     onError: (error) => toast.error(error.message || "Could not save permit application."),
@@ -87,6 +120,13 @@ export function PermitRecords() {
   const applications = workspace.data?.applications ?? [];
   const inspections = workspace.data?.inspections ?? [];
   const jobs = workspace.data?.jobs ?? [];
+  const jurisdictionChecklist = getPermitChecklist({
+    profileId: jurisdictionProfileId,
+    roofingSystem,
+    projectKind,
+    folio: propertyFolio,
+    parcelAuthorityVerified: parcelAuthorityVerified,
+  });
 
   const markReady = useMutation({
     mutationFn: (id: string) => updatePermitApplication({ id, changes: { application_status: "ready_to_submit" } }),
@@ -295,20 +335,124 @@ export function PermitRecords() {
                 <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); createApplication.mutate(); }}>
                   <div>
                     <label className={labelClass} htmlFor="permit-job">Roofing job</label>
-                    <select id="permit-job" className={inputClass} value={jobId} onChange={(event) => setJobId(event.target.value)} required>
+                    <select id="permit-job" className={inputClass} value={jobId} onChange={(event) => { setJobId(event.target.value); setParcelAuthorityVerified(false); }} required>
                       <option value="">Choose a job…</option>
                       {jobs.map((job) => <option key={job.id} value={job.id}>{job.title}{job.address ? ` — ${job.address}` : ""}</option>)}
                     </select>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div><label className={labelClass} htmlFor="permit-jurisdiction">Jurisdiction</label><Input id="permit-jurisdiction" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)} maxLength={160} required /></div>
+                    <div>
+                      <label className={labelClass} htmlFor="permit-profile">Permit authority / checklist</label>
+                      <select id="permit-profile" className={inputClass} value={jurisdictionProfileId} onChange={(event) => {
+                        const profileId = event.target.value;
+                        setJurisdictionProfileId(profileId);
+                        setParcelAuthorityVerified(false);
+                        if (profileId === CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id || profileId === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami Gardens, Miami-Dade County");
+                        else if (profileId === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami, Miami-Dade County");
+                        else if (profileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) setJurisdiction("Miami-Dade County — unincorporated area");
+                        else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
+                        else if (profileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Sunrise, Broward County");
+                        else if (profileId === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Pembroke Pines, Broward County");
+                        else if (profileId === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Coral Springs, Broward County");
+                        else if (profileId === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id) setJurisdiction("City of Pompano Beach, Broward County");
+                        else if (profileId === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id) setJurisdiction("City of Fort Lauderdale, Broward County");
+                        else if (profileId === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miramar, Broward County");
+                        else if (profileId === BROWARD_WESTON_ROOFING_PROFILE.id) setJurisdiction("City of Weston, Broward County");
+                        else if (profileId === BROWARD_DAVIE_ROOFING_PROFILE.id) setJurisdiction("Town of Davie, Broward County");
+                        else if (profileId === BROWARD_MARGATE_ROOFING_PROFILE.id) setJurisdiction("City of Margate, Broward County");
+                        else if (profileId === BROWARD_HALLANDALE_ROOFING_PROFILE.id) setJurisdiction("City of Hallandale Beach, Broward County");
+                        else setJurisdiction("City of Hollywood, Broward County");
+                      }}>
+                        <option value={CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id}>Miami-Dade — City of Miami residential reroof</option>
+                        <option value={CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id}>Miami-Dade — Miami Gardens residential reroof</option>
+                        <option value={CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id}>Miami-Dade — Miami Gardens commercial reroof</option>
+                        <option value={MIAMI_DADE_UNINCORPORATED_PROFILE.id}>Miami-Dade — unincorporated</option>
+                        <option value={BROWARD_COUNTY_PROFILE.id}>Broward — county routing only</option>
+                        <option value={BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id}>Broward — City of Sunrise residential reroof</option>
+                        <option value={BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id}>Broward — Pembroke Pines residential reroof</option>
+                        <option value={BROWARD_HOLLYWOOD_ROOFING_PROFILE.id}>Broward — City of Hollywood roofing</option>
+                        <option value={BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id}>Broward — Coral Springs residential reroof</option>
+                        <option value={BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id}>Broward — Pompano Beach roofing</option>
+                        <option value={BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id}>Broward — Fort Lauderdale roofing</option>
+                        <option value={BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id}>Broward — Miramar residential roofing</option>
+                        <option value={BROWARD_WESTON_ROOFING_PROFILE.id}>Broward — Weston roofing</option>
+                        <option value={BROWARD_DAVIE_ROOFING_PROFILE.id}>Broward — Town of Davie roofing</option>
+                        <option value={BROWARD_MARGATE_ROOFING_PROFILE.id}>Broward — Margate roofing</option>
+                        <option value={BROWARD_HALLANDALE_ROOFING_PROFILE.id}>Broward — Hallandale Beach roofing</option>
+                      </select>
+                    </div>
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>
                   </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className={labelClass} htmlFor="permit-project-kind">Project type</label>
+                      <select id="permit-project-kind" className={inputClass} value={projectKind} onChange={(event) => setProjectKind(event.target.value as PermitProjectKind)}>
+                        <option value="reroof">Single-family residential reroof</option>
+                        <option value="multifamily_reroof">Multifamily / condominium reroof</option>
+                        <option value="new_roof">New roof / new construction</option>
+                        <option value="repair">Roof repair</option>
+                        <option value="commercial_reroof">Commercial reroof</option>
+                        <option value="unknown">Not determined</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass} htmlFor="permit-roof-system">Roof system</label>
+                      <select id="permit-roof-system" className={inputClass} value={roofingSystem} onChange={(event) => setRoofingSystem(event.target.value as RoofingSystem)}>
+                        <option value="low_slope">Low slope / flat</option>
+                        <option value="asphalt_shingle">Asphalt shingles</option>
+                        <option value="tile">Concrete / clay tile</option>
+                        <option value="metal">Metal roof</option>
+                        <option value="wood_shake">Wood shingles / shakes</option>
+                        <option value="other">Other / mixed</option>
+                      </select>
+                    </div>
+                    {jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id && (
+                      <div><label className={labelClass} htmlFor="permit-folio">Property folio</label><Input id="permit-folio" value={propertyFolio} onChange={(event) => setPropertyFolio(event.target.value)} placeholder="Required to confirm County jurisdiction" maxLength={40} /></div>
+                    )}
+                  </div>
+                  {(jurisdictionProfileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_WESTON_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_DAVIE_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_MARGATE_ROOFING_PROFILE.id || jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) && (
+                    <label className="flex items-start gap-2 rounded-md border border-input p-3 text-xs">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={parcelAuthorityVerified}
+                        onChange={(event) => setParcelAuthorityVerified(event.target.checked)}
+                      />
+                      <span>{jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id ? "I checked the property record, confirmed the folio begins with 30, and verified this address is in unincorporated Miami-Dade. This is an internal intake confirmation, not County approval." : `I verified this property address is within ${jurisdiction} limits and checked the current requirements with its Building Division. This is an internal intake confirmation, not municipal approval.`}</span>
+                    </label>
+                  )}
+                  <div>
+                    <label className={labelClass} htmlFor="permit-jurisdiction">Jurisdiction name</label>
+                    <Input id="permit-jurisdiction" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)} maxLength={160} required />
+                  </div>
+                  <Card className="border-dashed">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Source-backed preparation checklist</CardTitle>
+                      <CardDescription>{jurisdictionChecklist.profile.authorityScope} Code reference: {jurisdictionChecklist.profile.codeEdition}, referenced through {jurisdictionChecklist.profile.codeEditionEffectiveThrough}.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-xs">
+                      <p className={jurisdictionChecklist.authorityConfirmed ? "font-medium text-emerald-700 dark:text-emerald-400" : "font-medium text-amber-700 dark:text-amber-400"}>
+                        {jurisdictionChecklist.authorityConfirmed ? "Checklist scope matches the selected inputs; verify the parcel authority before filing." : "Authority / project scope is not confirmed. Do not treat this checklist as filing-ready."}
+                      </p>
+                      {jurisdictionChecklist.warnings.map((warning) => <p key={warning} className="text-amber-700 dark:text-amber-400">{warning}</p>)}
+                      <p className="text-muted-foreground">
+                        Reference links: {jurisdictionChecklist.profile.sourceUrls.map((url, index) => <a key={url} className="mr-2 text-primary underline" href={url} target="_blank" rel="noreferrer">Source {index + 1}</a>)}
+                      </p>
+                      {jurisdictionChecklist.requiredRoofingSections.length > 0 && <p><strong>Roof application sections:</strong> {jurisdictionChecklist.requiredRoofingSections.join(", ")}</p>}
+                      {jurisdictionChecklist.items.length === 0 ? (
+                        <p className="text-muted-foreground">No generic checklist is loaded for this selection. Confirm the exact local authority and current permit packet before filing.</p>
+                      ) : (
+                        <ul className="list-disc space-y-1 pl-5">
+                          {jurisdictionChecklist.items.map((item) => <li key={item.id}><strong>{item.label}.</strong> {item.detail} <span className="text-muted-foreground">({item.appliesWhen})</span> <a className="text-primary underline" href={item.sourceUrl} target="_blank" rel="noreferrer">Official source</a></li>)}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div><label className={labelClass} htmlFor="permit-fee">Permit fee (USD)</label><Input id="permit-fee" type="number" min="0" step="0.01" value={permitFee} onChange={(event) => setPermitFee(event.target.value)} /></div>
                   </div>
                   <div><label className={labelClass} htmlFor="permit-portal">Official portal link (optional)</label><Input id="permit-portal" type="url" placeholder="https://" value={portalUrl} onChange={(event) => setPortalUrl(event.target.value)} /></div>
-                  <div><label className={labelClass} htmlFor="permit-notes">Application notes / correction details</label><Input id="permit-notes" value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} maxLength={10000} /></div>
+                  <div><label className={labelClass} htmlFor="permit-notes">Application notes / correction details</label><Input id="permit-notes" value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} maxLength={9000} /></div>
                   <Button type="submit" disabled={!jobId || !jurisdiction.trim() || !permitType.trim() || (permitFee.trim() !== "" && (!Number.isFinite(Number(permitFee)) || Number(permitFee) < 0)) || createApplication.isPending}>
                     {createApplication.isPending ? "Saving…" : "Save draft"}
                   </Button>
