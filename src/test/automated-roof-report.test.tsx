@@ -201,6 +201,42 @@ describe("AutomatedRoofReport background job analysis", () => {
     render(<AutomatedRoofReport address="123 Main Street, Miami, FL" onApply={vi.fn()} />);
 
     expect(await screen.findByText(/Downloading USGS LiDAR tiles — 42 MB of 178 MB/)).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("24%");
+    // The big number is the overall measurement progress, not the raw
+    // tile fraction: 24% through the download band (14–76%) reads 29%.
+    expect(screen.getByRole("status").textContent).toContain("29%");
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("29");
+  });
+
+  it("shows a low overall percent while the job is queued", async () => {
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/v1/roof/analyze/jobs") && init?.method === "POST") {
+        return jsonResponse(202, { job_id: "job-1", status: "queued" });
+      }
+      if (url.endsWith("/v1/roof/analyze/jobs/job-1")) {
+        return jsonResponse(200, {
+          job_id: "job-1",
+          status: "queued",
+          stage: "queued",
+          detail: "Waiting for a worker",
+          download_fraction: null,
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    render(
+      <AutomatedRoofReport
+        address="123 Main Street, Miami, FL"
+        roofType="shingle"
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText(/Waiting for a worker/)).toBeTruthy();
+    const shown = Number(screen.getByRole("progressbar").getAttribute("aria-valuenow"));
+    expect(shown).toBeGreaterThanOrEqual(1);
+    expect(shown).toBeLessThanOrEqual(3);
+    expect(screen.getByRole("status").textContent).toContain("Elapsed");
   });
 });
