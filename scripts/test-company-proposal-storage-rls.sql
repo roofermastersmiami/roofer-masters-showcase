@@ -3,14 +3,14 @@
 \set ON_ERROR_STOP on
 \ir test-secondary-operational-company-ownership.sql
 
-DO $$ BEGIN
+DO $role_setup$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     CREATE ROLE authenticated NOLOGIN;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role NOLOGIN BYPASSRLS;
   END IF;
-END $$;
+END $role_setup$;
 CREATE SCHEMA storage;
 CREATE TABLE storage.buckets (
   id text PRIMARY KEY, name text NOT NULL, public boolean NOT NULL DEFAULT false
