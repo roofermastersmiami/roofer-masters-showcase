@@ -63,6 +63,19 @@ import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 
 const Scene = lazy(() => import("./RoofScene"));
 
+/**
+ * Deepest zoom the editor allows on a geo-referenced drawing. Esri
+ * imagery tiles stop at SATELLITE_MAX_ZOOM (z20); past that the tile
+ * mosaic is upscaled (blurrier, but present) while the drawing overlay
+ * keeps projecting with exact Mercator math at the deeper level, so
+ * the sketch stays registered to the imagery at every zoom. z24 is
+ * 16x closer than z20 — at the deepest level a single roof facet
+ * fills the whole editor view, which is what precise edge work needs.
+ */
+const SKETCH_MAX_GEO_ZOOM = 24;
+/** Deepest local (non-geo) scale, px per foot — same idea as z24. */
+const SKETCH_MAX_LOCAL_SCALE = 160;
+
 const PENETRATION_LABELS: Record<Penetration["kind"], string> = {
   pipe: "Pipe",
   vent: "Vent",
@@ -81,9 +94,7 @@ const MODE_BUTTONS: { mode: SketchMode; label: string; icon: typeof PenTool }[] 
 type SelectedEdge = { planeId: string; edgeIndex: number };
 
 type DragState =
-  | { kind: "vertex"; planeId: string; vertexIndex: number }
-  | { kind: "pin"; pinId: string }
-  | null;
+  { kind: "vertex"; planeId: string; vertexIndex: number } | { kind: "pin"; pinId: string } | null;
 
 /**
  * Edit Sketch: a RoofSnap-style sketch editor for one roof drawing.
@@ -217,10 +228,12 @@ export function SketchEditor({
   function zoomBy(direction: 1 | -1) {
     if (geoRef) {
       setGeoZoom((zoom) =>
-        Math.max(SATELLITE_MIN_ZOOM, Math.min(SATELLITE_MAX_ZOOM, zoom + direction)),
+        Math.max(SATELLITE_MIN_ZOOM, Math.min(SKETCH_MAX_GEO_ZOOM, zoom + direction)),
       );
     } else {
-      setLocalScale(Math.max(0.25, Math.min(80, scale * (direction > 0 ? 1.3 : 1 / 1.3))));
+      setLocalScale(
+        Math.max(0.25, Math.min(SKETCH_MAX_LOCAL_SCALE, scale * (direction > 0 ? 1.3 : 1 / 1.3))),
+      );
     }
   }
 
@@ -243,7 +256,7 @@ export function SketchEditor({
         const threshold = event.ctrlKey ? 12 : 60;
         while (accum <= -threshold) {
           accum += threshold;
-          setGeoZoom((zoom) => Math.min(SATELLITE_MAX_ZOOM, zoom + 1));
+          setGeoZoom((zoom) => Math.min(SKETCH_MAX_GEO_ZOOM, zoom + 1));
         }
         while (accum >= threshold) {
           accum -= threshold;
@@ -252,7 +265,7 @@ export function SketchEditor({
       } else {
         setLocalScale((current) => {
           const base = current ?? zoomRef.current.scale;
-          return Math.max(0.25, Math.min(80, base * Math.exp(-delta * 0.0015)));
+          return Math.max(0.25, Math.min(SKETCH_MAX_LOCAL_SCALE, base * Math.exp(-delta * 0.0015)));
         });
       }
     };
@@ -430,7 +443,43 @@ export function SketchEditor({
     }
     const pan = panRef.current;
     panRef.current = null;
-    if (pan && !pan.moved && (mode === "draw" || mode === "pins")) handleCanvasClick(event);
+    if (pan && !pan.moved) {
+      if (mode === "draw" || mode === "pins") handleCanvasClick(event);
+      else if (mode === "edges") selectNearestEdge(event);
+    }
+  }
+
+  /**
+   * Edges-mode click on the roof body: the natural place to click for an
+   * edge is on the facet right next to it, and the facet fill is not a
+   * hit target outside Facets mode — so select the edge nearest to the
+   * click (within a generous on-screen distance) instead of doing
+   * nothing. Without this, clicks that miss the thin edge band by a few
+   * pixels silently select nothing and the Edge Actions look dead.
+   */
+  function selectNearestEdge(event: ReactPointerEvent) {
+    const { px, py } = pointerPosition(event);
+    let best: { planeId: string; edgeIndex: number; distance: number } | null = null;
+    for (const plane of drawing.planes) {
+      const projected = plane.points.map((point) => project(point));
+      for (let edgeIndex = 0; edgeIndex < projected.length; edgeIndex++) {
+        const a = projected[edgeIndex]!;
+        const b = projected[(edgeIndex + 1) % projected.length]!;
+        const dx = b.px - a.px;
+        const dy = b.py - a.py;
+        const lengthSq = dx * dx + dy * dy;
+        const t =
+          lengthSq === 0
+            ? 0
+            : Math.min(1, Math.max(0, ((px - a.px) * dx + (py - a.py) * dy) / lengthSq));
+        const distance = Math.hypot(px - (a.px + t * dx), py - (a.py + t * dy));
+        if (!best || distance < best.distance) best = { planeId: plane.id, edgeIndex, distance };
+      }
+    }
+    if (best && best.distance <= 48) {
+      setSelectedPlaneId(best.planeId);
+      setSelectedEdge({ planeId: best.planeId, edgeIndex: best.edgeIndex });
+    }
   }
 
   /* ---------------- derived render data ---------------- */
@@ -449,10 +498,22 @@ export function SketchEditor({
     if (!geoRef || view !== "sketch") return null;
     const layerW = Math.ceil(size.w * 1.5) + 256;
     const layerH = Math.ceil(size.h * 1.5) + 256;
+    // Past the deepest real tile level, fetch the z20 mosaic for the
+    // (proportionally smaller) viewport it has to cover and upscale it
+    // by `upscale` when rendering, so the backdrop survives deep zoom.
+    const tileZoom = Math.min(geoZoom, SATELLITE_MAX_ZOOM);
+    const upscale = 2 ** (geoZoom - tileZoom);
     return {
       width: layerW,
       height: layerH,
-      tiles: satelliteMapTiles(geoCenter.lat, geoCenter.lon, geoZoom, layerW, layerH),
+      upscale,
+      tiles: satelliteMapTiles(
+        geoCenter.lat,
+        geoCenter.lon,
+        tileZoom,
+        layerW / upscale,
+        layerH / upscale,
+      ),
     };
   }, [geoRef, view, size, geoCenter, geoZoom]);
 
@@ -644,7 +705,12 @@ export function SketchEditor({
                       alt=""
                       draggable={false}
                       className="absolute max-w-none select-none"
-                      style={{ left: tile.left, top: tile.top, width: 256, height: 256 }}
+                      style={{
+                        left: tile.left * tileLayer.upscale,
+                        top: tile.top * tileLayer.upscale,
+                        width: 256 * tileLayer.upscale,
+                        height: 256 * tileLayer.upscale,
+                      }}
                     />
                   ))}
                 </div>
@@ -678,6 +744,11 @@ export function SketchEditor({
                     strokeWidth="1"
                   />
                 ))}
+                {/* Paint order matters: facet fills first, then every
+                  edge and vertex above them. A later facet's fill used to
+                  paint over (and, in Edges mode, hit-test over) the edges
+                  of the facets drawn before it, so shared edges could not
+                  be clicked and the Edge Actions looked dead. */}
                 {drawing.planes.map((plane, planeIndex) => {
                   const projected = plane.points.map((point) => project(point));
                   const polygonPoints = projected.map((p) => `${p.px},${p.py}`).join(" ");
@@ -691,6 +762,7 @@ export function SketchEditor({
                         fill={ROOF_FACE_COLORS[planeIndex % ROOF_FACE_COLORS.length]}
                         fillOpacity={plane.id === selectedPlaneId ? 0.3 : 0.16}
                         stroke="none"
+                        pointerEvents={mode === "facets" ? "auto" : "none"}
                         onPointerDown={(event) => {
                           if (mode !== "facets") return;
                           event.stopPropagation();
@@ -698,13 +770,40 @@ export function SketchEditor({
                         }}
                         style={{ cursor: mode === "facets" ? "pointer" : undefined }}
                       />
+                      {mode === "facets" && (
+                        <text
+                          x={centroidPx.px}
+                          y={centroidPx.py}
+                          textAnchor="middle"
+                          fontSize="12"
+                          fontWeight="700"
+                          fill="#ffffff"
+                          stroke="rgba(0,0,0,0.7)"
+                          strokeWidth="3"
+                          paintOrder="stroke"
+                          pointerEvents="none"
+                        >
+                          {plane.name}
+                          {info
+                            ? ` · ${info.pitch.toFixed(1)}/12 · ${Math.round(info.area)} sf`
+                            : ""}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+                {drawing.planes.map((plane) => {
+                  const projected = plane.points.map((point) => project(point));
+                  return (
+                    <g key={plane.id}>
                       {plane.points.map((point, edgeIndex) => {
                         const a = projected[edgeIndex]!;
                         const b = projected[(edgeIndex + 1) % projected.length]!;
                         const type = plane.edges[edgeIndex] ?? "other";
                         const style = SKETCH_EDGE_STYLES[type];
                         const isSelected =
-                          selectedEdge?.planeId === plane.id &&
+                          selectedEdge !== null &&
+                          selectedEdge.planeId === plane.id &&
                           selectedEdge.edgeIndex === edgeIndex;
                         const mid = { px: (a.px + b.px) / 2, py: (a.py + b.py) / 2 };
                         return (
@@ -715,7 +814,7 @@ export function SketchEditor({
                               x2={b.px}
                               y2={b.py}
                               stroke="transparent"
-                              strokeWidth="14"
+                              strokeWidth="18"
                               onPointerDown={(event) => {
                                 if (mode !== "edges") return;
                                 event.stopPropagation();
@@ -827,25 +926,6 @@ export function SketchEditor({
                           </g>
                         );
                       })}
-                      {mode === "facets" && (
-                        <text
-                          x={centroidPx.px}
-                          y={centroidPx.py}
-                          textAnchor="middle"
-                          fontSize="12"
-                          fontWeight="700"
-                          fill="#ffffff"
-                          stroke="rgba(0,0,0,0.7)"
-                          strokeWidth="3"
-                          paintOrder="stroke"
-                          pointerEvents="none"
-                        >
-                          {plane.name}
-                          {info
-                            ? ` · ${info.pitch.toFixed(1)}/12 · ${Math.round(info.area)} sf`
-                            : ""}
-                        </text>
-                      )}
                       {projected.map((position, vertexIndex) => (
                         <circle
                           key={vertexIndex}
