@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BROWARD_COUNTY_PROFILE,
   BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
+  BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -323,3 +324,32 @@ describe("Pompano Beach roofing checklist", () => {
   });
 });
 
+
+describe("Fort Lauderdale roofing permit profile", () => {
+  it("includes City-listed roofing forms and mandatory rooftop equipment affidavit", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    expect(result.authorityConfirmed).toBe(true);
+    expect(result.items.map((item) => item.id)).toContain("city-roofing-checklist");
+    expect(result.items.map((item) => item.id)).toContain("hvzh-roofing-application");
+    expect(result.items.map((item) => item.id)).toContain("rooftop-equipment-affidavit");
+    expect(result.items.find((item) => item.id === "rooftop-equipment-affidavit")?.appliesWhen).toContain("all roofing applications");
+  });
+
+  it("suppresses Fort Lauderdale's 8th Edition checklist after December 30, 2026", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(result.codeReferenceCurrent).toBe(false);
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.items).toHaveLength(0);
+  });
+});
