@@ -5,7 +5,6 @@ import {
   Download,
   Eye,
   FileText,
-  Loader2,
   MapPin,
   PenLine,
   Search,
@@ -15,7 +14,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -26,68 +24,14 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
 import { EditSketchButton } from "./EditSketchButton";
-import { useAutoFinishReports, type AutoFinishUiState } from "./use-auto-finish";
-import { formatElapsedClock } from "@/lib/analysis-progress";
+import { useAutoFinishReports } from "./use-auto-finish";
+import { AutoFinishStatus } from "./AutoFinishStatus";
 import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
 import { downloadPdf } from "./proposal-data";
 import { Empty, SectionHeading } from "./CrmControls";
 import { useCrm } from "./CrmContext";
-
-function AutoFinishStatus({ state, date }: { state: AutoFinishUiState; date: string }) {
-  if (state.phase === "measuring") {
-    return (
-      <div className="mt-3" role="status">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <Loader2 className="size-3.5 animate-spin" />
-          Measuring automatically · {state.percent}% · {formatElapsedClock(state.elapsedSeconds)}
-          {" · "}
-          {date}
-        </p>
-        <Progress
-          value={state.percent}
-          className="mt-2"
-          aria-label="Automatic measurement progress"
-        />
-        {state.detail && <p className="mt-1.5 text-xs text-muted-foreground">{state.detail}</p>}
-      </div>
-    );
-  }
-  if (state.phase === "saving" || state.phase === "building-pdf") {
-    return (
-      <p
-        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-foreground"
-        role="status"
-      >
-        <Loader2 className="size-3.5 animate-spin" />
-        {state.phase === "saving" ? "Saving the measurement…" : "Generating the report PDF…"} ·{" "}
-        {date}
-      </p>
-    );
-  }
-  if (state.phase === "candidates") {
-    return (
-      <p className="mt-3 text-xs text-amber-700" role="status">
-        The measurement found more than one building at this address — open the report to pick the
-        right one. · {date}
-      </p>
-    );
-  }
-  if (state.phase === "unmeasurable") {
-    return (
-      <p className="mt-3 text-xs text-amber-700" role="status">
-        This roof could not be measured automatically: {state.message} · {date}
-      </p>
-    );
-  }
-  return (
-    <p className="mt-3 text-xs text-destructive" role="status">
-      Automatic measurement stopped: {state.message} Open the report to try from the workspace. ·{" "}
-      {date}
-    </p>
-  );
-}
 
 export function RoofReports({
   onOpenMeasurement,
