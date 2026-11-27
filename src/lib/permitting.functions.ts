@@ -235,6 +235,13 @@ const productApprovalInput = z.object({
   system_description: z.string().max(4000).optional(),
   installation_limitations: z.string().max(4000).optional(),
   source_url: z.string().url().max(2048).nullable().optional(),
+  code_edition: z.enum(["2023_8th", "2026_9th", "legacy", "unknown"]).default("unknown"),
+  code_edition_source_url: z.string().url().max(2048).nullable().optional(),
+  code_edition_notes: z.string().max(2000).optional(),
+}).superRefine((value, context) => {
+  if (value.code_edition !== "unknown" && !value.code_edition_source_url) {
+    context.addIssue({ code: "custom", path: ["code_edition_source_url"], message: "Cite the source that identifies the code edition for this approval." });
+  }
 });
 
 export const createRoofProductApproval = createServerFn({ method: "POST" })
