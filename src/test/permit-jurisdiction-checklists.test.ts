@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BROWARD_COUNTY_PROFILE,
+  BROWARD_HOLLYWOOD_ROOFING_PROFILE,
+  BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
   getPermitChecklist,
   MIAMI_DADE_UNINCORPORATED_PROFILE,
@@ -159,5 +161,71 @@ describe("Broward authority routing", () => {
       projectKind: "new_roof",
     });
     expect(result.items).toHaveLength(0);
+  });
+});
+
+
+describe("additional Broward city roofing profiles", () => {
+  it("keeps Pembroke Pines checklist limited to residential reroof and requires parcel verification", () => {
+    const unverified = getPermitChecklist({
+      profileId: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.items.map((item) => item.id)).toContain("hoa-awareness");
+    expect(unverified.items.map((item) => item.id)).toContain("hvzh-roofing-package");
+
+    const verified = getPermitChecklist({
+      profileId: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+    });
+    expect(verified.authorityConfirmed).toBe(true);
+
+    const commercial = getPermitChecklist({
+      profileId: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id,
+      projectKind: "commercial_reroof",
+      parcelAuthorityVerified: true,
+    });
+    expect(commercial.authorityConfirmed).toBe(false);
+    expect(commercial.items).toHaveLength(0);
+  });
+
+  it("supports Hollywood residential and commercial roofing with an explicit city-boundary check", () => {
+    const residential = getPermitChecklist({
+      profileId: BROWARD_HOLLYWOOD_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+    });
+    expect(residential.authorityConfirmed).toBe(false);
+    expect(residential.requiredRoofingSections).toHaveLength(0);
+    expect(residential.items.map((item) => item.id)).toContain("asbestos-certificate");
+    expect(residential.items.map((item) => item.id)).toContain("historic-district-photos");
+
+    const verified = getPermitChecklist({
+      profileId: BROWARD_HOLLYWOOD_ROOFING_PROFILE.id,
+      projectKind: "commercial_reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+    });
+    expect(verified.authorityConfirmed).toBe(true);
+    expect(verified.items.map((item) => item.id)).toContain("roof-testing-calculations");
+  });
+
+  it("suppresses the older-code city checklists after December 30, 2026", () => {
+    for (const profileId of [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id, BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]) {
+      const result = getPermitChecklist({
+        profileId,
+        projectKind: "reroof",
+        roofingSystem: "metal",
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-12-31",
+      });
+      expect(result.codeReferenceCurrent).toBe(false);
+      expect(result.authorityConfirmed).toBe(false);
+      expect(result.items).toHaveLength(0);
+    }
   });
 });
