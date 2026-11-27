@@ -6,6 +6,7 @@ import { createPermitPacketPdf } from "@/lib/permit-packet";
 import {
   BROWARD_COUNTY_PROFILE,
   BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
+  BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -344,6 +345,7 @@ export function PermitRecords() {
                         else if (profileId === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Pembroke Pines, Broward County");
                         else if (profileId === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Coral Springs, Broward County");
                         else if (profileId === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id) setJurisdiction("City of Pompano Beach, Broward County");
+                        else if (profileId === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id) setJurisdiction("City of Fort Lauderdale, Broward County");
                         else setJurisdiction("City of Hollywood, Broward County");
                       }}>
                         <option value={MIAMI_DADE_UNINCORPORATED_PROFILE.id}>Miami-Dade — unincorporated</option>
@@ -353,6 +355,7 @@ export function PermitRecords() {
                         <option value={BROWARD_HOLLYWOOD_ROOFING_PROFILE.id}>Broward — City of Hollywood roofing</option>
                         <option value={BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id}>Broward — Coral Springs residential reroof</option>
                         <option value={BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id}>Broward — Pompano Beach roofing</option>
+                        <option value={BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id}>Broward — Fort Lauderdale roofing</option>
                       </select>
                     </div>
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>
@@ -383,7 +386,7 @@ export function PermitRecords() {
                       <div><label className={labelClass} htmlFor="permit-folio">Property folio</label><Input id="permit-folio" value={propertyFolio} onChange={(event) => setPropertyFolio(event.target.value)} placeholder="Required to confirm County jurisdiction" maxLength={40} /></div>
                     )}
                   </div>
-                  {(jurisdictionProfileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) && (
+                  {(jurisdictionProfileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || jurisdictionProfileId === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || jurisdictionProfileId === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) && (
                     <label className="flex items-start gap-2 rounded-md border border-input p-3 text-xs">
                       <input
                         type="checkbox"
