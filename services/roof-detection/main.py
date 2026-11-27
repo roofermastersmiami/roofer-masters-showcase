@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import math
 import os
 import re
@@ -3408,6 +3409,38 @@ def _repair_boundaries_for_converter(
             facet["boundary_latlon"] = boundary
 
 
+def _copc_item_horizontal_crs(item: Any) -> CRS | None:
+    """Resolve a COPC item's horizontal CRS from its STAC projection fields.
+
+    Items published with an explicit EPSG code (proj:epsg / proj:code)
+    resolve exactly as they always have. A large share of the USGS
+    LAS_2019 conversions, however, publish ONLY proj:projjson — a compound
+    CRS (horizontal + NAVD88 height) with no EPSG code at all — and the
+    horizontal CRS must be read out of it. Skipping those items silently
+    zeroed every measurement under them (observed in Broward: a footprint
+    whose only COPC item was projjson-only read as stac_items=1,
+    tiles_used=0, 0 building points). Returns None only when no
+    projection field yields a CRS.
+    """
+    properties = getattr(item, "properties", None) or {}
+    epsg_value = properties.get("proj:epsg") or properties.get("proj:code")
+    if epsg_value:
+        try:
+            return CRS.from_user_input(str(epsg_value))
+        except Exception:  # noqa: BLE001 — fall through to projjson
+            pass
+    projjson = properties.get("proj:projjson")
+    if projjson:
+        try:
+            crs = CRS.from_json(json.dumps(projjson))
+        except Exception:  # noqa: BLE001 — unresolvable CRS: caller skips
+            return None
+        if crs.is_compound and crs.sub_crs_list:
+            return crs.sub_crs_list[0]
+        return crs
+    return None
+
+
 def _read_lidar_facets(
     polygon: Polygon, footprint_provider: str | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -3432,16 +3465,12 @@ def _read_lidar_facets(
     vertical_unit_factors: set[float] = set()
 
     for item in items:
-        epsg_value = item.properties.get("proj:epsg")
-        if not epsg_value:
-            epsg_value = item.properties.get("proj:code", "")
-        try:
-            epsg = int(str(epsg_value).split(":")[-1])
-        except (TypeError, ValueError):
+        tile_crs = _copc_item_horizontal_crs(item)
+        if tile_crs is None:
             continue
-        projected_polygon, _, _ = _project_polygon(polygon, epsg)
-        projected_crs = CRS.from_epsg(epsg)
-        meters_per_unit = projected_crs.axis_info[0].unit_conversion_factor if projected_crs.axis_info else 1.0
+        to_tile = Transformer.from_crs("EPSG:4326", tile_crs, always_xy=True)
+        projected_polygon = _transform_polygon(polygon, to_tile)
+        meters_per_unit = tile_crs.axis_info[0].unit_conversion_factor if tile_crs.axis_info else 1.0
         if not meters_per_unit or not math.isfinite(meters_per_unit):
             continue
         # Include class-6 roof returns just beyond the ground footprint so
@@ -3494,7 +3523,7 @@ def _read_lidar_facets(
             # Convert every tile into one local metric coordinate system before
             # combining. This lets overlapping tiles be deduplicated and avoids
             # counting the same roof facet once per COPC tile.
-            to_wgs84 = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
+            to_wgs84 = Transformer.from_crs(tile_crs, "EPSG:4326", always_xy=True)
             lon, lat = to_wgs84.transform(fit_coords[:, 0], fit_coords[:, 1])
             local_x, local_y = to_local.transform(lon, lat)
             tile_points.append(np.column_stack((local_x, local_y, fit_coords[:, 2])))
@@ -3964,6 +3993,42 @@ def _tnm_points_local(
     }
 
 
+def _tnm_project_key(item: dict[str, Any]) -> str:
+    parts = str(item.get("title", "")).split()
+    return parts[4] if len(parts) > 4 else ""
+
+
+def _tnm_project_groups(
+    laz_items: list[dict[str, Any]],
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    """Group TNM LAZ items into survey projects, newest project first.
+
+    Tiles from different surveys of the same ground must never be mixed
+    into one point set, so each project is attempted on its own. Within a
+    project the established discipline applies unchanged: tiles over the
+    download size limit are excluded and at most MAX_TNM_TILES are used.
+    A project whose tiles are all over the limit groups to an empty list.
+    """
+    by_project: dict[str, list[dict[str, Any]]] = {}
+    for item in laz_items:
+        by_project.setdefault(_tnm_project_key(item), []).append(item)
+
+    def project_newest(group: list[dict[str, Any]]) -> str:
+        return max(str(item.get("dateCreated") or "") for item in group)
+
+    groups: list[tuple[str, list[dict[str, Any]]]] = []
+    for project, group in sorted(
+        by_project.items(), key=lambda entry: project_newest(entry[1]), reverse=True
+    ):
+        usable = [
+            item
+            for item in group
+            if float(item.get("sizeInBytes") or 0) <= MAX_TNM_TILE_MB * 1_000_000
+        ][:MAX_TNM_TILES]
+        groups.append((project, usable))
+    return groups
+
+
 async def _read_lidar_facets_tnm(
     polygon: Polygon,
     footprint_provider: str | None = None,
@@ -4051,20 +4116,11 @@ async def _read_lidar_facets_tnm(
             "reason": reason,
         }
 
-    def project_key(item: dict[str, Any]) -> str:
-        parts = str(item.get("title", "")).split()
-        return parts[4] if len(parts) > 4 else ""
-
-    # Prefer the newest survey project; older legacy tiles of the same ground
-    # must not be mixed into one point set.
-    newest = max(laz_items, key=lambda item: str(item.get("dateCreated") or ""))
-    project = project_key(newest)
-    tiles = [
-        item for item in laz_items
-        if project_key(item) == project
-        and float(item.get("sizeInBytes") or 0) <= MAX_TNM_TILE_MB * 1_000_000
-    ][:MAX_TNM_TILES]
-    if not tiles:
+    # Prefer the newest survey project; older legacy tiles of the same
+    # ground must not be mixed into one point set. Projects are attempted
+    # newest first, one at a time (see the attempt loop below).
+    groups = _tnm_project_groups(laz_items)
+    if not any(tiles for _project, tiles in groups):
         return [], {
             "tnm_products": len(items),
             "reason": "USGS Lidar tiles for this footprint exceed the download size limit.",
@@ -4117,35 +4173,79 @@ async def _read_lidar_facets_tnm(
     # A tile that fails to download must not zero the measurement when a
     # sibling tile already covers the footprint (points are clipped to the
     # footprint later, and most footprints need only one of their tiles).
-    # Only when every tile failed does the first error propagate, keeping
-    # the failure loud instead of silently measuring nothing.
-    gathered = await asyncio.gather(
-        *[ensure_tile(item) for item in tiles], return_exceptions=True
-    )
-    tile_paths: list[Path] = []
-    download_errors: list[str] = []
-    for item, outcome in zip(tiles, gathered):
-        if isinstance(outcome, Path):
-            tile_paths.append(outcome)
-        else:
-            download_errors.append(
-                f"{str(item['downloadURL']).rsplit('/', 1)[-1]}: {type(outcome).__name__}"
-            )
-    if not tile_paths:
-        first_error = next(
-            (outcome for outcome in gathered if isinstance(outcome, BaseException)), None
+    #
+    # Projects are attempted newest first and never mixed. A survey whose
+    # tile grid covers the footprint on paper can still yield no roof
+    # points for it — a neighbouring county's tile bbox spills across the
+    # county line while its flown coverage stops at the border (observed
+    # with a Miami-Dade D23 tile over a Broward footprint in West Park,
+    # where the 2018 Southeast survey covers the house fully). When a
+    # project yields no facets, the next survey is tried instead of
+    # reporting the address unmeasurable while a covering survey sits
+    # unused. Only when no project could be read at all does the first
+    # download error propagate, keeping that failure loud instead of
+    # silently measuring nothing.
+    projects_tried: list[str] = []
+    attempt_metas: list[dict[str, Any]] = []
+    first_download_error: BaseException | None = None
+    for project, tiles in groups:
+        if not tiles:
+            continue
+        projects_tried.append(project)
+        gathered = await asyncio.gather(
+            *[ensure_tile(item) for item in tiles], return_exceptions=True
         )
-        raise first_error if first_error else RuntimeError("All tile downloads failed")
+        tile_paths: list[Path] = []
+        download_errors: list[str] = []
+        for item, outcome in zip(tiles, gathered):
+            if isinstance(outcome, Path):
+                tile_paths.append(outcome)
+            else:
+                download_errors.append(
+                    f"{str(item['downloadURL']).rsplit('/', 1)[-1]}: {type(outcome).__name__}"
+                )
+        if not tile_paths:
+            error = next(
+                (outcome for outcome in gathered if isinstance(outcome, BaseException)),
+                None,
+            )
+            if first_download_error is None and error is not None:
+                first_download_error = error
+            attempt_metas.append(
+                {"tnm_project": project, "tile_download_failures": download_errors}
+            )
+            continue
+        if report is not None:
+            report("fitting_planes", "Fitting roof planes to the LiDAR points", None)
+        facets, meta = _tnm_points_local(polygon, tile_paths, footprint_provider)
+        if facets:
+            return facets, {
+                "source": "USGS National Map (TNM) Lidar Point Cloud LAZ",
+                "tnm_project": project,
+                "tnm_products": len(items),
+                **(
+                    {"tnm_projects_tried": projects_tried}
+                    if len(projects_tried) > 1
+                    else {}
+                ),
+                **({"tile_download_failures": download_errors} if download_errors else {}),
+                **meta,
+            }
+        attempt_metas.append({"tnm_project": project, **meta})
 
-    if report is not None:
-        report("fitting_planes", "Fitting roof planes to the LiDAR points", None)
-    facets, meta = _tnm_points_local(polygon, tile_paths, footprint_provider)
-    return facets, {
-        "source": "USGS National Map (TNM) Lidar Point Cloud LAZ",
-        "tnm_project": project,
+    if attempt_metas and all("tiles_used" not in meta for meta in attempt_metas):
+        # No project could even be read (every download failed): keep the
+        # failure loud, exactly as the single-project path did.
+        raise first_download_error if first_download_error else RuntimeError(
+            "All tile downloads failed"
+        )
+    return [], {
         "tnm_products": len(items),
-        **({"tile_download_failures": download_errors} if download_errors else {}),
-        **meta,
+        "tnm_projects_attempted": attempt_metas,
+        "reason": (
+            "No USGS Lidar survey project yielded enough building-classified "
+            "or elevated non-ground points for this footprint."
+        ),
     }
 
 

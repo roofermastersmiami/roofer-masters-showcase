@@ -1849,3 +1849,286 @@ def test_analyze_endpoint_steers_footprint_selection_with_pin(monkeypatch):
     assert plain.status_code == 200
     assert seen_points[-1] == (25.00005, -79.99995)
     assert "point_hint" not in plain.json()["footprint"]
+
+
+# --- West Park regression: COPC items that publish only proj:projjson -----
+# The USGS LAS_2019 COPC conversions covering Broward carry no proj:epsg /
+# proj:code (only a compound proj:projjson) and no ASPRS class 6 at all.
+# The COPC path used to skip such items outright (stac_items=1,
+# tiles_used=0) and, even had it read them, filtered to class 6 only —
+# while the same surveys measure fine through the TNM path's elevated
+# non-ground fallback. Both defects are pinned here.
+
+def _compound_projjson() -> dict:
+    import json as _json
+
+    from pyproj import CRS
+
+    return _json.loads(CRS.from_user_input("EPSG:26917+5703").to_json())
+
+
+def test_copc_item_crs_resolves_epsg_code_and_projjson():
+    from types import SimpleNamespace
+
+    epsg_item = SimpleNamespace(properties={"proj:epsg": 26917})
+    assert roof_service._copc_item_horizontal_crs(epsg_item).to_epsg() == 26917
+
+    code_item = SimpleNamespace(properties={"proj:code": "EPSG:26917"})
+    assert roof_service._copc_item_horizontal_crs(code_item).to_epsg() == 26917
+
+    projjson_item = SimpleNamespace(properties={"proj:projjson": _compound_projjson()})
+    crs = roof_service._copc_item_horizontal_crs(projjson_item)
+    assert crs is not None
+    assert crs.to_epsg() == 26917
+    assert crs.axis_info[0].unit_conversion_factor == 1.0
+
+    bare_item = SimpleNamespace(properties={})
+    assert roof_service._copc_item_horizontal_crs(bare_item) is None
+
+
+def _copc_regression_scene(roof_class: int):
+    """A synthetic gable roof + ground in EPSG:26917 around a test footprint.
+
+    Returns (footprint_lonlat, cloud) where cloud carries x/y/z/
+    classification arrays in tile coordinates. Roof points carry
+    `roof_class` (1 = unclassified delivery, 6 = building-classified).
+    """
+    from pyproj import CRS, Transformer
+
+    center_x, center_y = 581300.0, 2873900.0
+    half_x, half_y = 8.0, 5.5
+    to_lonlat = Transformer.from_crs("EPSG:26917", "EPSG:4326", always_xy=True)
+    corners = [
+        to_lonlat.transform(center_x + dx, center_y + dy)
+        for dx, dy in [(-half_x, -half_y), (half_x, -half_y), (half_x, half_y), (-half_x, half_y)]
+    ]
+    footprint = Polygon(corners)
+
+    rng = np.random.default_rng(7)
+    xs, ys, zs, classes = [], [], [], []
+    # Classified ground around and under the building (z = 2.3 m).
+    for gx in np.arange(-17.0, 18.0, 2.0):
+        for gy in np.arange(-14.0, 15.0, 2.0):
+            xs.append(center_x + gx)
+            ys.append(center_y + gy)
+            zs.append(2.3)
+            classes.append(2)
+    # Gable roof: eaves at z = 5.0, ridge (along x) at z = 5.9.
+    for xi in np.arange(-7.8, 7.9, 0.6):
+        for t in np.linspace(0.0, 1.0, 10):
+            for sign in (-1.0, 1.0):
+                xs.append(center_x + xi)
+                ys.append(center_y + sign * t * half_y)
+                zs.append(5.9 - t * 0.9 + rng.normal(0.0, 0.01))
+                classes.append(roof_class)
+    # A few low unclassified returns (driveway clutter) that the elevated
+    # fallback must reject: below ground + 2 m.
+    for xi in np.arange(-6.0, 6.5, 1.5):
+        xs.append(center_x + xi)
+        ys.append(center_y)
+        zs.append(2.5)
+        classes.append(1)
+    cloud = type(
+        "Cloud",
+        (),
+        {
+            "x": np.array(xs),
+            "y": np.array(ys),
+            "z": np.array(zs),
+            "classification": np.array(classes),
+        },
+    )()
+    return footprint, cloud
+
+
+def _run_copc_scene(monkeypatch, roof_class: int):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from pyproj import CRS
+
+    footprint, cloud = _copc_regression_scene(roof_class)
+    header = SimpleNamespace(
+        parse_crs=lambda: CRS.from_user_input("EPSG:26917+5703")
+    )
+    reader = SimpleNamespace(header=header, query=lambda bounds=None: cloud)
+
+    class _FakeCopcReader:
+        @staticmethod
+        def open(_href):
+            @contextmanager
+            def _ctx():
+                yield reader
+
+            return _ctx()
+
+    item = SimpleNamespace(
+        id="USGS_LPC_FL_Southeast_B1_2018_e1590n0458_LAS_2019",
+        properties={"proj:projjson": _compound_projjson()},
+        assets={"data": SimpleNamespace(href="https://example.invalid/tile.copc.laz")},
+    )
+
+    class _FakeSearch:
+        def items(self):
+            return [item]
+
+    class _FakeCatalog:
+        def search(self, collections=None, bbox=None, max_items=None):
+            return _FakeSearch()
+
+    monkeypatch.setattr(
+        roof_service, "Client", SimpleNamespace(open=lambda _url: _FakeCatalog())
+    )
+    monkeypatch.setattr(roof_service.planetary_computer, "sign", lambda href: href)
+    monkeypatch.setattr(roof_service.laspy, "CopcReader", _FakeCopcReader)
+    return roof_service._read_lidar_facets(footprint, "Broward County Building Footprints")
+
+
+def test_copc_projjson_item_with_building_class_points_measures(monkeypatch):
+    # The CRS regression: this item used to be skipped before a single
+    # point was read, because it publishes no proj:epsg / proj:code.
+    facets, meta = _run_copc_scene(monkeypatch, roof_class=6)
+    assert facets, "projjson-only COPC item with class-6 points must measure"
+    assert meta["tiles_used"] == 1
+    assert meta["building_class_points"] >= 80
+    total = sum(facet["area_sqft"] for facet in facets)
+    # True gable surface for the synthetic scene is ~1,920 sf.
+    assert 1500 < total < 2300
+
+
+def test_copc_unclassified_delivery_defers_to_tnm_fallback(monkeypatch):
+    # The LAS_2019 deliveries carry no building classification at all.
+    # The COPC path deliberately keeps its class-6 discipline and yields
+    # nothing, so the analysis falls back to the TNM path — which owns
+    # the elevated non-ground fallback for these surveys and holds the
+    # validated numbers for them (e.g. Miramar). Measuring them here as
+    # well would silently replace those validated results.
+    facets, meta = _run_copc_scene(monkeypatch, roof_class=1)
+    assert facets == []
+    assert meta["tiles_used"] == 0
+    assert meta["building_class_points"] == 0
+
+
+# --- West Park regression: TNM must not bet everything on the newest -----
+# survey project. A newer neighbouring-county project can list a tile
+# whose grid covers the footprint while yielding no roof points for it;
+# the next covering project must be attempted before giving up.
+
+def _tnm_item(project: str, tile: str, created: str, size: int = 50_000_000) -> dict:
+    return {
+        "title": f"USGS Lidar Point Cloud {project} {tile}",
+        "dateCreated": created,
+        "sizeInBytes": size,
+        "downloadURL": f"https://example.invalid/USGS_LPC_{project}_{tile}.laz",
+    }
+
+
+def test_tnm_project_groups_orders_newest_first_and_applies_limits():
+    items = [
+        _tnm_item("FL_Older_2018", "tileB", "2023-06-04"),
+        _tnm_item("FL_Newest_2024", "tileA", "2025-09-03"),
+        _tnm_item("FL_Newest_2024", "tileA2", "2025-09-03"),
+        _tnm_item("FL_Newest_2024", "tileA3", "2025-09-03"),
+        _tnm_item("FL_Huge_2026", "tileH", "2026-01-01", size=900_000_000),
+    ]
+    groups = roof_service._tnm_project_groups(items)
+    assert [project for project, _tiles in groups] == [
+        "FL_Huge_2026",
+        "FL_Newest_2024",
+        "FL_Older_2018",
+    ]
+    by_project = dict(groups)
+    assert by_project["FL_Huge_2026"] == []  # over the size limit
+    assert len(by_project["FL_Newest_2024"]) == 2  # MAX_TNM_TILES cap
+    assert len(by_project["FL_Older_2018"]) == 1
+
+
+def _run_tnm_with_projects(monkeypatch, tmp_path, points_local, download_tile=None):
+    import asyncio
+    from types import SimpleNamespace
+
+    payload = {
+        "items": [
+            _tnm_item("FL_Newest_2024", "tileA", "2025-09-03"),
+            _tnm_item("FL_Older_2018", "tileB", "2023-06-04"),
+        ]
+    }
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, _url, params=None):
+            return _FakeResponse()
+
+    async def fake_download(url, dest, on_progress=None):
+        dest.write_bytes(b"LASF" + b"\0" * 64)
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(roof_service, "LIDAR_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(
+        roof_service, "_download_tile", download_tile or fake_download
+    )
+    monkeypatch.setattr(roof_service, "_tnm_points_local", points_local)
+    polygon = Polygon(
+        [(-80.0, 25.0), (-79.9999, 25.0), (-79.9999, 25.0001), (-80.0, 25.0001)]
+    )
+    return asyncio.run(roof_service._read_lidar_facets_tnm(polygon))
+
+
+def test_tnm_falls_back_to_next_project_when_newest_yields_no_facets(monkeypatch, tmp_path):
+    def points_local(_polygon, tile_paths, _provider=None):
+        if any("Older" in path.name for path in tile_paths):
+            return (
+                [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+                {"tiles_used": 1, "building_class_points": 500},
+            )
+        return [], {"tiles_used": 0, "building_class_points": 0, "reason": "no points"}
+
+    facets, meta = _run_tnm_with_projects(monkeypatch, tmp_path, points_local)
+    assert len(facets) == 1
+    assert meta["tnm_project"] == "FL_Older_2018"
+    assert meta["tnm_projects_tried"] == ["FL_Newest_2024", "FL_Older_2018"]
+
+
+def test_tnm_first_project_success_does_not_try_older_projects(monkeypatch, tmp_path):
+    calls = []
+
+    def points_local(_polygon, tile_paths, _provider=None):
+        calls.append([path.name for path in tile_paths])
+        return (
+            [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+            {"tiles_used": 1, "building_class_points": 500},
+        )
+
+    facets, meta = _run_tnm_with_projects(monkeypatch, tmp_path, points_local)
+    assert len(facets) == 1
+    assert meta["tnm_project"] == "FL_Newest_2024"
+    assert "tnm_projects_tried" not in meta
+    assert len(calls) == 1
+
+
+def test_tnm_raises_first_download_error_when_no_project_can_be_read(monkeypatch, tmp_path):
+    async def failing_download(url, dest, on_progress=None):
+        raise RuntimeError(f"boom: {url.rsplit('/', 1)[-1]}")
+
+    def points_local(_polygon, tile_paths, _provider=None):  # pragma: no cover
+        raise AssertionError("must not be called when downloads fail")
+
+    with pytest.raises(RuntimeError, match="boom: USGS_LPC_FL_Newest_2024_tileA.laz"):
+        _run_tnm_with_projects(
+            monkeypatch, tmp_path, points_local, download_tile=failing_download
+        )
