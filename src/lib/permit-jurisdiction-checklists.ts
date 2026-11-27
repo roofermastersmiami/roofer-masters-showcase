@@ -263,6 +263,29 @@ export const BROWARD_POMPANO_BEACH_ROOFING_PROFILE: JurisdictionPermitProfile = 
   checklist: pompanoBeachRoofingChecklist,
 };
 
+
+const fortLauderdaleRoofingChecklist: ChecklistItem[] = [
+  { id: "broward-uniform-application", label: "Broward Uniform Building Permit Application", detail: "Complete the current Broward Uniform Building Permit Application for the City submission.", appliesWhen: "Required application form listed by the City for permitting.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms" },
+  { id: "city-roofing-checklist", label: "City Roofing Permit Checklist", detail: "Download and complete the current City Roofing Permit Checklist; the City states the package must contain all applicable items before processing.", appliesWhen: "Roofing permit applications; verify the latest revision and project-specific applicability.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms" },
+  { id: "hvzh-roofing-application", label: "HVHZ Uniform Permit Application / Roofing Application Packet", detail: "Complete the current High Velocity Hurricane Zone Uniform Permit Application and City Roofing Application Packet.", appliesWhen: "Roofing applications; use current forms from the City documents library.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms" },
+  { id: "rooftop-equipment-affidavit", label: "Rooftop Equipment and Gas Vent Affidavit", detail: "Complete the affidavit. If mechanical equipment is relocated or replaced, obtain the required mechanical permit; new or altered equipment curbs/stands require engineered attachment plans. Existing gas vents must be inspected for leaks before roofing final.", appliesWhen: "Required by the City for all roofing applications.", sourceUrl: "https://www.fortlauderdale.gov/home/showpublisheddocument/1610/637372380321770000" },
+  { id: "contractor-registration", label: "City contractor registration", detail: "Register the licensed professional and upload the state license or county certificate of competency, liability insurance, and workers' compensation certificate or exemption as applicable.", appliesWhen: "Before a contractor applies for permits through LauderBuild.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Permitting-Services/Contractors-Licensed-Professionals" },
+  { id: "notice-of-commencement", label: "Notice of Commencement", detail: "Check the current statutory and City requirements, and record/display the NOC when applicable before the first inspection.", appliesWhen: "When required by project value and applicable law; confirm current threshold and recording instructions.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms" },
+  { id: "wind-load-calculations", label: "Wind-load calculations", detail: "Use the City's wind-load calculation form when calculations are required for the proposed roof assembly or project review.", appliesWhen: "When required by the applicable code, assembly, or plan reviewer; the form listing alone does not make it universal.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms" },
+];
+
+export const BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-fort-lauderdale-roofing",
+  label: "City of Fort Lauderdale — roofing",
+  county: "Broward",
+  authorityScope: "City of Fort Lauderdale roofing permit intake. City permitting guidance lists Re-Roof — SFR, Duplex, Townhouse as a residential structural permit type; confirm separate commercial and multifamily requirements directly with the City.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Fort Lauderdale limits. The official documents library may update form revisions; check the live Roofing Permit Checklist and application packet before filing. This CRM profile does not replace City review.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms", "https://www.fortlauderdale.gov/Government/Departments/Development-Services/Permitting-Services", "https://www.fortlauderdale.gov/Government/Departments/Development-Services/LauderBuild", "https://www.fortlauderdale.gov/home/showpublisheddocument/1610/637372380321770000"],
+  checklist: fortLauderdaleRoofingChecklist,
+};
+
 export type PermitChecklistRequest = {
   profileId: string;
   roofingSystem?: RoofingSystem;
@@ -306,6 +329,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
     [BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id]: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
     [BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id]: BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
+    [BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id]: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -380,4 +404,5 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   floridaBuildingCodeMilestones: FBC_CODE_URL,
   coralSpringsResidentialReroofChecklist: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf",
   pompanoBeachRoofingChecklist: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf",
+  fortLauderdaleRoofingChecklist: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms",
 } as const;
