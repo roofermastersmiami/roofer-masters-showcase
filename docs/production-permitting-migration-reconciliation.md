@@ -319,3 +319,50 @@ These findings increase confidence in the live drift map but do not authorize pr
 5. Re-run all checks and compare row counts and object ownership before proposing production execution.
 
 **Status:** CI for the integrated branch is green as of run 45938675718, but this reconciliation matrix is still an engineering plan. No merge, migration, or deployment is authorized or performed.
+
+
+## Repeat production preflight — 2026-11-27
+
+This section records a fresh read-only query against the connected Roofer Masters Lovable/Supabase production project. No production DDL, DML, storage mutation, migration-ledger edit, or deployment was executed.
+
+### Confirmed live state
+
+- PostgreSQL database is enabled and reachable.
+- `drizzle.__drizzle_migrations`: 30 rows; latest timestamp `2026-11-21 03:35:20 UTC`.
+- Exactly one company exists: `b54b9973-66bc-4cc9-aa33-5020d6f8a7e1`.
+- Exactly one membership exists: creator `1c633ded-fb54-455c-939a-9af3321c6016`, role `owner`.
+- Legacy `user_roles` contains the same user with global `admin` role. No additional legacy role rows were returned.
+- Operational counts: leads 11, customers 22, properties 19, roof jobs 4, roof report orders 4. The previously noted 3-vs-12 report discrepancy is resolved for this current connection/snapshot: exact count is 4.
+- Operational tables `leads`, `crm_customers`, `crm_properties`, `roof_jobs`, and `roof_report_orders` still have no `company_id`. RLS is enabled but not FORCE on all five.
+- Company foundation tables exist but do not match historical migration 0038/0039 definitions. Preserve them.
+- Permit application, inspection, document, product approval, NOC tracking, and company permit settings tables are all absent.
+- Storage buckets currently present: private `crm-company-branding`, `roof-job-photos`, `roofing-proposals`. `permit-documents` and `signed-contracts` are absent.
+- Parent integrity checks returned zero missing customer/lead/property/report/job relationships and zero duplicate normalized property-address groups.
+
+### Critical security findings — still release blockers
+
+Current live policies on the five operational tables are legacy global-role policies. Several are permissive policies that OR together. Adding company-membership policies without dropping/replacing the legacy policies would not isolate tenants.
+
+The following live SECURITY DEFINER functions remain globally authorized or unscoped:
+
+- `save_crm_customer(jsonb)`: checks global office/sales roles and mutates customer plus linked lead without company scope.
+- Three `create_roof_report_request` overloads: two address-first overloads perform global normalized-address matching; the six-argument overload can update customer/lead contact details; the customer-ID overload does not check company membership.
+- `capture_instant_roof_lead(jsonb,jsonb,text,bigint)`: currently inserts lead/job without company ownership. The production definition differs from the repository's trusted-company implementation.
+- `sync_lead_customer()` trigger: creates/updates customer and property rows without company ownership.
+- `delete_crm_customer(uuid)` was not returned in the live function inventory; confirm every application caller before deciding whether to create or remove a legacy client path.
+
+Storage remains globally role-scoped for job photos, proposals, and accounting receipts. The company-branding policies are company-aware. Because storage policies are also permissive, tenant policies must replace the legacy role policies, not merely be added alongside them.
+
+### Cutover plan and stop conditions
+
+1. Do not replay migrations 0038/0039 or run the full Drizzle journal. The live company foundation is already materially different.
+2. Prepare a new forward-only reconciliation migration based on the current catalog, preserving company and branding rows.
+3. Before adding NOT NULL ownership columns, deploy/prepare compatible versions of the lead synchronization trigger and every write path. The current lead trigger and public instant-estimate RPC would otherwise fail when the ownership columns become mandatory.
+4. Replace the three report RPC overloads and customer-save path with membership-derived company authorization. Never accept a caller-supplied company ID as proof of authority. Address matching must be scoped to the authenticated company.
+5. Public lead intake must resolve the target company from trusted server-side configuration; the current live public RPC does not do this. Confirm all edge-function/server callers and secrets before enabling it.
+6. Preserve the role matrix intentionally: the only current membership is owner, but global roles do not prove company membership. Do not automatically enroll users based only on legacy role values.
+7. Drop/recreate the operational-table and storage policies as a coordinated cutover. Review grants, FORCE RLS behavior, SECURITY DEFINER ownership/search_path, and service-role-only paths.
+8. Validate against a production clone with the exact current schema and data shape; test owner, nonmember, two-company cross-tenant reads/writes, RPC overloads, public intake, job-photo/proposal/receipt storage, and permit documents.
+9. Only after clone tests and app caller compatibility pass, apply the reviewed forward migration during an approved maintenance window, verify row counts and tenant isolation, then enable the permitting UI and storage bucket.
+
+**Decision:** production reconciliation is now evidence-backed, but production migration/security cutover is not yet safe to execute. The missing application write-path compatibility and tenant-aware RPC/storage replacement are hard blockers. No production data or permissions have been changed.
