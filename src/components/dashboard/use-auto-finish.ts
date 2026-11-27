@@ -187,6 +187,63 @@ function refreshSuppression() {
   else syncQueue();
 }
 
+// ---------------------------------------------------------------------------
+// Per-report workspace exclusions (the shell-level hand-off).
+//
+// The measurements tab hands a report to its open workspace by
+// disabling its own mount, which suppresses the whole engine. The
+// CRM shell has no mount it can disable — it is the always-on
+// runner — but it knows which report's workspace is open (the
+// measurements section's selected report in CrmContext) and
+// registers that report here. An excluded report is never STARTED by
+// the engine: the workspace's own chain owns it, mirroring the tab's
+// hand-off one report at a time instead of stopping everything.
+// Registering an exclusion also hands off a finish already in
+// flight for that report: the run aborts (its attempt is forgotten,
+// never recorded as an error — the same interruption semantics as
+// the tab's suppression), the service job keeps running server-side,
+// and if the aborted chain was already attaching its PDF, that
+// attach reconciles through the finish chain's stale-attach
+// recovery instead of failing the report. Lifting the exclusion
+// re-queues the report, so the engine picks it up if the workspace
+// did not finish it.
+// ---------------------------------------------------------------------------
+
+const exclusionSources = new Set<ReadonlySet<string>>();
+
+function isAutoFinishExcluded(id: string): boolean {
+  for (const source of exclusionSources) if (source.has(id)) return true;
+  return false;
+}
+
+/**
+ * Register report ids the background engine must not start (their
+ * workspace is open in the shell). Returns an unregister function;
+ * unregistering re-queues the reports.
+ */
+export function setAutoFinishExclusions(reportIds: readonly string[]): () => void {
+  const source: ReadonlySet<string> = new Set(reportIds);
+  exclusionSources.add(source);
+  if (source.size > 0) {
+    queuedIds = queuedIds.filter((id) => !source.has(id));
+    for (const id of source) controllers.get(id)?.abort();
+  }
+  return () => {
+    exclusionSources.delete(source);
+    syncQueue();
+  };
+}
+
+/** Hook form of setAutoFinishExclusions for the CRM shell. The
+ * effect re-registers only when the id set actually changes. */
+export function useAutoFinishExclusions(reportIds: readonly string[]) {
+  const joined = reportIds.join("\n");
+  useEffect(() => {
+    if (!joined) return;
+    return setAutoFinishExclusions(joined.split("\n"));
+  }, [joined]);
+}
+
 function pump() {
   if (engineSuppressed || !engineRuntime) return;
   const runtime = engineRuntime;
@@ -194,6 +251,9 @@ function pump() {
     const id = queuedIds.shift()!;
     const order = latestInputs.orders?.find((item) => item.id === id);
     if (!order || !reportNeedsAutoFinish(order)) continue;
+    // A report whose workspace is open belongs to the workspace's
+    // own chain — the engine never starts it (shell hand-off).
+    if (isAutoFinishExcluded(order.id)) continue;
     // Another surface may have started this report version while it
     // waited in the queue — never submit it twice.
     if (startedAttempts.has(attemptKey(order))) continue;
@@ -265,6 +325,7 @@ function syncQueue() {
   if (!latestInputs.orders) return;
   for (const order of latestInputs.orders) {
     if (!reportNeedsAutoFinish(order)) continue;
+    if (isAutoFinishExcluded(order.id)) continue;
     if (startedAttempts.has(attemptKey(order))) continue;
     if (controllers.has(order.id) || queuedIds.includes(order.id)) continue;
     queuedIds.push(order.id);
@@ -285,7 +346,9 @@ function syncQueue() {
  * surface hand over to an open report workspace: the tab passes false
  * while a workspace is open, which suppresses the shared engine
  * exactly like every surface unmounting, so the workspace owns the
- * report until Fredy returns to the grid.
+ * report until Fredy returns to the grid. The shell cannot disable
+ * its always-on mount, so it hands over one report at a time through
+ * useAutoFinishExclusions instead (see the exclusions block above).
  */
 export function useAutoFinishReports(
   orders: RoofOrder[] | undefined,

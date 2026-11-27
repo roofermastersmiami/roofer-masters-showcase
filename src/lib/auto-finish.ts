@@ -201,6 +201,74 @@ async function collectReportPhotos(
   return photos;
 }
 
+/** The stale-version rejection attachRoofOrderPdf raises when the
+ * order's updated_at has moved since the caller read it (see
+ * src/lib/roof-orders.functions.ts). The finish chain treats it as a
+ * race to reconcile, not a failure — see attachReportPdf below. */
+const STALE_ATTACH_MESSAGE = "Reload the report request before attaching this PDF";
+
+function isStaleAttachError(cause: unknown): boolean {
+  return cause instanceof Error && cause.message.includes(STALE_ATTACH_MESSAGE);
+}
+
+type OrderAttachState = {
+  updated_at: string;
+  file_path: string | null;
+  status: string;
+};
+
+/** Re-read the order fields the attach decision needs. */
+async function readOrderAttachState(orderId: string): Promise<OrderAttachState> {
+  const { data, error } = await supabase
+    .from("roof_report_orders")
+    .select("updated_at, file_path, status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (error || !data) throw new Error("Could not refresh the roof report before attaching its PDF");
+  return data;
+}
+
+/**
+ * Attach the generated PDF, reconciling the engine-vs-workspace
+ * race: a report's own workspace runs the same finish chain outside
+ * this engine, so the order can move — and even be finished — while
+ * this chain is still generating its PDF.
+ *
+ * Returns "attached" when this chain's PDF is the one on the order,
+ * and "already-attached" when the order already carries a PDF (the
+ * workspace attached first; the caller drops this chain's duplicate
+ * upload and the finish resolves as done — the report IS finished).
+ * A stale rejection with the order still PDF-less earns exactly one
+ * retry against the freshly read version; a second stale rejection
+ * is a genuine failure, worded honestly.
+ */
+async function attachReportPdf(
+  deps: AutoFinishDeps,
+  order: RoofReportOrderRow,
+  path: string,
+): Promise<"attached" | "already-attached"> {
+  const fresh = await readOrderAttachState(order.id);
+  try {
+    await deps.attachPdf({ data: { id: order.id, path, updated_at: fresh.updated_at } });
+    return "attached";
+  } catch (cause) {
+    if (!isStaleAttachError(cause)) throw cause;
+  }
+  const current = await readOrderAttachState(order.id);
+  if (current.file_path || current.status !== "requested") return "already-attached";
+  try {
+    await deps.attachPdf({ data: { id: order.id, path, updated_at: current.updated_at } });
+    return "attached";
+  } catch (cause) {
+    if (isStaleAttachError(cause)) {
+      throw new Error(
+        "The report changed while it was finishing — reload the report request before attaching this PDF.",
+      );
+    }
+    throw cause;
+  }
+}
+
 /** Generate the report PDF from a saved drawing and attach it to the
  * order, mirroring the workspace export's report branch: upload under
  * roof-report/<id>/, then attach against the order's fresh
@@ -227,7 +295,8 @@ async function generateAndAttachReportPdf(
     // Classic theme, medium logo).
     { theme: "roofsnap", logoScale: 1 },
   );
-  let path: string | null = `roof-report/${order.id}/${crypto.randomUUID()}.pdf`;
+  const path = `roof-report/${order.id}/${crypto.randomUUID()}.pdf`;
+  let attached = false;
   try {
     const { error: uploadError } = await supabase.storage
       .from("roofing-proposals")
@@ -235,25 +304,22 @@ async function generateAndAttachReportPdf(
         contentType: "application/pdf",
       });
     if (uploadError) throw uploadError;
-    const { data: currentReport, error: currentReportError } = await supabase
-      .from("roof_report_orders")
-      .select("updated_at")
-      .eq("id", order.id)
-      .maybeSingle();
-    if (currentReportError || !currentReport)
-      throw new Error("Could not refresh the roof report before attaching its PDF");
-    await deps.attachPdf({
-      data: { id: order.id, path, updated_at: currentReport.updated_at },
-    });
-    path = null;
+    attached = (await attachReportPdf(deps, order, path)) === "attached";
   } catch (cause) {
-    if (path) {
-      await supabase.storage
-        .from("roofing-proposals")
-        .remove([path])
-        .then(undefined, () => undefined);
-    }
+    await supabase.storage
+      .from("roofing-proposals")
+      .remove([path])
+      .then(undefined, () => undefined);
     throw cause;
+  }
+  if (!attached) {
+    // The workspace finished the report while this chain worked:
+    // the order carries that PDF, so this chain's upload is a
+    // duplicate — remove it and let the finish report success.
+    await supabase.storage
+      .from("roofing-proposals")
+      .remove([path])
+      .then(undefined, () => undefined);
   }
 }
 
