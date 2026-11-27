@@ -15,7 +15,7 @@ CREATE TABLE crm_invoices(
   environment text NOT NULL
 );
 CREATE TABLE invoice_checkouts(
-  id uuid PRIMARY KEY, company_id uuid NOT NULL, invoice_id uuid NOT NULL,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL, invoice_id uuid NOT NULL,
   session_id text, environment text NOT NULL, amount_cents bigint NOT NULL,
   status text NOT NULL
 );
