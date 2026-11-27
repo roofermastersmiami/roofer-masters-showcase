@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { createPermitPacketPdf } from "@/lib/permit-packet";
 import {
   BROWARD_COUNTY_PROFILE,
+  BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
@@ -340,6 +341,7 @@ export function PermitRecords() {
                         else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
                         else if (profileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Sunrise, Broward County");
                         else if (profileId === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Pembroke Pines, Broward County");
+                        else if (profileId === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Coral Springs, Broward County");
                         else setJurisdiction("City of Hollywood, Broward County");
                       }}>
                         <option value={MIAMI_DADE_UNINCORPORATED_PROFILE.id}>Miami-Dade — unincorporated</option>
@@ -347,6 +349,7 @@ export function PermitRecords() {
                         <option value={BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id}>Broward — City of Sunrise residential reroof</option>
                         <option value={BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id}>Broward — Pembroke Pines residential reroof</option>
                         <option value={BROWARD_HOLLYWOOD_ROOFING_PROFILE.id}>Broward — City of Hollywood roofing</option>
+                        <option value={BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id}>Broward — Coral Springs residential reroof</option>
                       </select>
                     </div>
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>
