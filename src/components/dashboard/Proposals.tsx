@@ -84,7 +84,8 @@ export function Proposals({
       const { error: deleteError } = await supabase
         .from("proposals")
         .delete()
-        .eq("id", proposal.id);
+        .eq("id", proposal.id)
+        .eq("company_id", proposal.company_id);
       if (deleteError) throw deleteError;
       if (proposal.file_path)
         await supabase.storage.from("roofing-proposals").remove([proposal.file_path]);
