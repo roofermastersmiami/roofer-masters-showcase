@@ -1,3 +1,4 @@
+// tenant-audit: reviewed — public checkout operations are capability-token scoped to an issued invoice; checkout reservation/settlement runs server-side, validates invoice/session/environment association, and cancellation requires same-company accounting membership. Confirm/reconcile must still rely on Stripe server-side verification.
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
