@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Save, Trash2, Upload } from "lucide-react";
+import { Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { money } from "@/lib/crm-schema";
@@ -28,65 +28,60 @@ export function Expenses() {
     let record: ReturnType<typeof prepareExpenseRecord>;
     try {
       record = prepareExpenseRecord(form);
+      if (receipt && (receipt.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(receipt.type)))
+        throw new Error("Receipt must be a PDF or image under 10 MB");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Enter valid expense details");
       return;
     }
     setBusy(true);
-    let path: string | null = null;
+    let expenseId: string | null = null;
+    let uploadedPath: string | null = null;
     try {
-      if (receipt) {
-        if (
-          receipt.size > 10 * 1024 * 1024 ||
-          !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(receipt.type)
-        )
-          throw new Error("Receipt must be a PDF or image under 10 MB");
-        path = `expense-${crypto.randomUUID()}/${receipt.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-        const { error } = await supabase.storage.from("roofing-proposals").upload(path, receipt);
-        if (error) throw error;
-      }
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) throw new Error("Sign in to record an expense");
       let companyId: string | null = null;
       if (record.job_id) {
-        const { data: job, error: jobError } = await supabase
-          .from("roof_jobs")
-          .select("company_id")
-          .eq("id", record.job_id)
-          .maybeSingle();
+        const { data: job, error: jobError } = await supabase.from("roof_jobs").select("company_id").eq("id", record.job_id).maybeSingle();
         if (jobError || !job?.company_id) throw new Error("Could not verify project company");
         companyId = job.company_id;
       } else {
-        const { data: memberships, error: membershipError } = await supabase
-          .from("crm_company_memberships")
-          .select("company_id,role")
-          .eq("user_id", auth.user.id)
-          .in("role", ["owner", "admin", "accounting"]);
-        if (membershipError || memberships?.length !== 1)
-          throw new Error("A single accounting company membership is required");
+        const { data: memberships, error: membershipError } = await supabase.from("crm_company_memberships")
+          .select("company_id,role").eq("user_id", auth.user.id).in("role", ["owner", "admin", "accounting"]);
+        if (membershipError || memberships?.length !== 1) throw new Error("A single accounting company membership is required");
         companyId = memberships[0].company_id;
       }
-      const { data: membership, error: membershipError } = await supabase
-        .from("crm_company_memberships")
-        .select("role")
-        .eq("company_id", companyId)
-        .eq("user_id", auth.user.id)
-        .in("role", ["owner", "admin", "accounting"])
-        .maybeSingle();
+      const { data: membership, error: membershipError } = await supabase.from("crm_company_memberships")
+        .select("role").eq("company_id", companyId).eq("user_id", auth.user.id)
+        .in("role", ["owner", "admin", "accounting"]).maybeSingle();
       if (membershipError || !membership) throw new Error("You cannot record expenses for this company");
-      const { error } = await supabase.from("crm_expenses").insert({
-        ...record,
-        company_id: companyId,
-        receipt_path: path,
-      });
-      if (error) throw error;
+
+      // Persist the financial record first. A receipt failure must never erase it.
+      const { data: expense, error: insertError } = await supabase.from("crm_expenses")
+        .insert({ ...record, company_id: companyId, receipt_path: null }).select("id").single();
+      if (insertError || !expense) throw insertError ?? new Error("Could not save expense");
+      expenseId = expense.id;
+
+      if (receipt) {
+        const filename = receipt.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "receipt";
+        uploadedPath = `expense/${companyId}/${expense.id}/${crypto.randomUUID()}-${filename}`;
+        const { error: uploadError } = await supabase.storage.from("roofing-proposals").upload(uploadedPath, receipt, { upsert: false });
+        if (uploadError) throw uploadError;
+        const { data: attached, error: attachError } = await supabase.from("crm_expenses")
+          .update({ receipt_path: uploadedPath }).eq("id", expense.id).eq("company_id", companyId)
+          .select("id").maybeSingle();
+        if (attachError || !attached) throw attachError ?? new Error("Could not attach receipt to expense");
+      }
       await qc.invalidateQueries({ queryKey: ["crm-expenses"] });
       setForm({ ...form, description: "", amount: 0 });
       setReceipt(null);
       toast.success("Recorded expense saved");
     } catch (e) {
-      if (path) await supabase.storage.from("roofing-proposals").remove([path]);
-      toast.error(e instanceof Error ? e.message : "Could not record expense");
+      if (uploadedPath) await supabase.storage.from("roofing-proposals").remove([uploadedPath]);
+      if (expenseId) {
+        await qc.invalidateQueries({ queryKey: ["crm-expenses"] });
+        toast.error("Expense was saved, but its receipt could not be attached. The expense record was preserved.");
+      } else toast.error(e instanceof Error ? e.message : "Could not record expense");
     } finally {
       setBusy(false);
     }
@@ -201,26 +196,7 @@ export function Expenses() {
                       Receipt
                     </Button>
                   )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    title="Remove recorded expense"
-                    aria-label="Remove recorded expense"
-                    onClick={async () => {
-                      if (!confirm("Remove this recorded expense? Financial totals will change."))
-                        return;
-                      const { error } = await supabase.from("crm_expenses").delete().eq("id", e.id).eq("company_id", e.company_id);
-                      if (error) toast.error("Could not remove expense");
-                      else {
-                        if (e.receipt_path)
-                          await supabase.storage.from("roofing-proposals").remove([e.receipt_path]);
-                        await qc.invalidateQueries({ queryKey: ["crm-expenses"] });
-                      }
-                    }}
-                  >
-                    <Trash2 />
-                  </Button>
-                </td>
+               </td>
               </tr>
             ))}
           </tbody>
