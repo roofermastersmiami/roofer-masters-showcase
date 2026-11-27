@@ -13,21 +13,25 @@ export const createClientPortal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ leadId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales"],
-    });
-    if (roleError || !owner) throw new Error("You do not have access to this action");
     const { data: lead, error: leadError } = await context.supabase
       .from("leads")
-      .select("id")
+      .select("id,company_id")
       .eq("id", data.leadId)
       .maybeSingle();
     if (leadError) throw new Error("Could not verify customer record");
-    if (!lead) throw new Error("Customer not found");
+    if (!lead?.company_id) throw new Error("Customer is not assigned to a company");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", lead.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify company permissions");
+    if (!membership) throw new Error("You do not have access to this company's customer portal");
     const { data: link, error } = await context.supabase
       .from("client_portal_links")
-      .insert({ lead_id: lead.id })
+      .insert({ lead_id: lead.id, company_id: lead.company_id })
       .select("id,token,expires_at,revoked_at")
       .single();
     if (error || !link) throw new Error("Could not create customer portal");
@@ -38,15 +42,26 @@ export const revokeClientPortal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales"],
-    });
-    if (roleError || !owner) throw new Error("You do not have access to this action");
+    const { data: link, error: linkError } = await context.supabase
+      .from("client_portal_links")
+      .select("id,company_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (linkError || !link?.company_id) throw new Error("Could not verify customer portal");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", link.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify company permissions");
+    if (!membership) throw new Error("You do not have access to this company's customer portal");
     const { data: revoked, error } = await context.supabase
       .from("client_portal_links")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", data.id)
+      .eq("company_id", link.company_id)
       .select("id")
       .maybeSingle();
     if (error || !revoked) throw new Error("Could not revoke customer portal");
