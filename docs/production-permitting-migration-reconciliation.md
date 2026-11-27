@@ -211,3 +211,39 @@ The live read-only checks also verified the immediate ownership-backfill precond
 - The current lead synchronization trigger exists for INSERT and UPDATE, so 0043's function replacement has an existing trigger to update.
 
 These checks reduce uncertainty for the data-integrity portions of 0042, 0043, and 0047, but they do **not** authorize running those migrations. They do not reconcile pending historical migrations 0031–0041, validate every constraint/trigger/function changed by those migrations, prove the full authorization cutover, or establish two-company compatibility. Keep production writes blocked.
+
+---
+
+## Migration-journal and live company-schema reconciliation — 2026-11-27
+
+**Method:** read-only inspection of the current main Drizzle journal and the connected production Supabase catalog. PostgreSQL catalog/version queries only; no DDL, DML, migration execution, storage mutation, or deployment.
+
+### Confirmed migration sequence
+
+- Production is PostgreSQL **17.12** (server_version_num=170012), satisfying the PostgreSQL 15+ syntax prerequisite used by the ownership migration.
+- The live drizzle.__drizzle_migrations table has **30 rows**, IDs 1–30. Its timestamps match Drizzle journal entries 0000–0029 exactly.
+- The current repository journal contains entries 0000–0041. Therefore, journal entries **0030–0041 are not represented in the live Drizzle migration ledger**. Do not infer that these migrations ran merely because some similarly named objects exist in the catalog.
+- The presence of company tables is not proof that migration 0039 ran: the live table definitions differ materially from the repository's 0039 SQL.
+
+### Material production/repository company-schema divergence
+
+The current live catalog shows:
+
+- crm_companies has id, name, slug, created_by, created_at; it does not match the repository 0039 definition, which includes updated_at and does not define slug.
+- crm_company_memberships.role is text, not public.crm_company_role; its live columns and constraints need explicit reconciliation against the current SQL.
+- crm_company_branding is keyed by company_id and contains logo_path, updated_by, updated_at, theme_palette, theme_accent, and sidebar_appearance. This differs from migration 0038's owner_user_id key and company_name column.
+- The live company tables have company-aware RLS policies with names and expressions that differ from the historical migration SQL.
+- The catalog query found no triggers on crm_companies, crm_company_memberships, or crm_company_branding, whereas the historical migrations define update triggers on company and branding records.
+- The company table's current schema and policies are therefore a separate live implementation or forward change not represented by the 30-row Drizzle ledger. Preserve it; do not attempt to recreate these tables from historical migrations.
+
+### Specific historical objects still absent
+
+The fresh catalog check did not find public relations appointments, receptionist_logs, or pdf_sign_templates. The signed-contracts storage bucket was also absent. These absences are consistent with those parts of migrations 0035–0037 not having been applied, but must be verified against exact migration history and storage policies before a forward repair is designed.
+
+The crm-company-branding bucket exists, but its live size and MIME settings differ from the values in migration 0038. Do not overwrite its settings without reviewing current uploads and application behavior.
+
+### Release consequence and next action
+
+This confirms the production problem is not simply “apply missing migrations 0030–0041.” The ledger records only 0000–0029, while the live company schema already contains a materially different implementation. The next safe task is to build a per-object reconciliation matrix from live DDL, constraints, indexes, triggers, function bodies, grants, RLS flags, policy expressions, and storage policies, then write **new forward-only migrations** for only the missing invariants. Historical migration files and ledger rows must not be rewritten or fabricated.
+
+PostgreSQL version compatibility is confirmed. Migration-history/schema reconciliation, company authorization cutover, and two-company production-like validation remain release blockers.
