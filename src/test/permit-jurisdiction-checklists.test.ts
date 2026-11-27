@@ -341,6 +341,17 @@ describe("Fort Lauderdale roofing permit profile", () => {
     expect(result.items.find((item) => item.id === "rooftop-equipment-affidavit")?.appliesWhen).toContain("all roofing applications");
   });
 
+  it("does not confirm Fort Lauderdale city authority without parcel-boundary verification", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      asOfDate: "2026-11-26",
+    });
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.warnings.join(" ")).toContain("inside City of Fort Lauderdale limits");
+  });
+
   it("suppresses Fort Lauderdale's 8th Edition checklist after December 30, 2026", () => {
     const result = getPermitChecklist({
       profileId: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id,
