@@ -104,3 +104,12 @@ At the audited application revision, generated Supabase row/insert/update types 
 Before these functions can be safely tightened, the release must provide: (a) applied and verified core ownership schema; (b) membership/role helper that accepts a company UUID and checks `auth.uid()`; (c) company-scoped RPCs for invoice status and settlement; (d) service-role write functions that resolve company only from trusted stored parents; and (e) tests with at least two companies proving same-company success and cross-company denial.
 
 **No code path in this review was represented as fixed. No production migration, deployment, or live data mutation was performed.**
+
+
+## CI refresh — 2026-11-27
+
+Workflow run **46026211638** on commit `ea8547650445bc6de751fa8e7ed18696f96c787c` completed the substantive pipeline successfully: dependency installation, migration journal validation, privileged-code tenant audit, the existing company/permit PostgreSQL integration suites, lint, application tests, and production build all reported success.
+
+**Coverage limitation:** the current workflow does not execute migration `0055_secondary_operational_company_ownership.sql` against a dedicated fixture schema, and it does not run the required two-company tests for the 13 secondary operational tables. Therefore the green run validates the existing tested company/permit migrations and application baseline; it does **not** validate 0055's backfill, composite constraints, future insert/update behavior, or cross-company denial for invoices, expenses, tasks, proposals, shares, portal links, messages, checkouts, payments, project links, change orders, or estimates.
+
+Before 0055 can be considered merge-ready, add a dedicated PostgreSQL integration test that builds the exact prerequisite schema, applies 0055, asserts all legacy rows survive and receive the expected company, then verifies same-company writes succeed and cross-company parent combinations fail. Also test inserts/updates with missing company_id: the current migration has no ownership-derivation triggers, so NOT NULL will reject legacy application write payloads that omit the field. Do not deploy this migration until those write paths and trigger/RPC behaviors are addressed.
