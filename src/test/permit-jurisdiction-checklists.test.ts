@@ -113,6 +113,7 @@ describe("Broward authority routing", () => {
       projectKind: "commercial_reroof",
     });
     expect(commercial.authorityConfirmed).toBe(false);
+    expect(commercial.items).toHaveLength(0);
     expect(commercial.warnings.join(" ")).toContain("residential structural roof / reroof");
   });
 
@@ -130,6 +131,6 @@ describe("Broward authority routing", () => {
       profileId: BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id,
       projectKind: "new_roof",
     });
-    expect(result.items.some((item) => item.id === "owner-roofing-notification")).toBe(false);
+    expect(result.items).toHaveLength(0);
   });
 });
