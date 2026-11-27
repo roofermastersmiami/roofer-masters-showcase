@@ -1,5 +1,11 @@
 name: Roofer Masters Roof Tests
 
+# A branch push and its pull_request event otherwise run the same expensive
+# PostgreSQL + build suite twice. Keep only the newest run for each branch.
+concurrency:
+  group: roof-tests-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050]
