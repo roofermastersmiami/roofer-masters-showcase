@@ -4,6 +4,7 @@ import {
   BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
+  BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
   BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
   getPermitChecklist,
   MIAMI_DADE_UNINCORPORATED_PROFILE,
@@ -283,3 +284,42 @@ describe("Coral Springs residential reroof checklist", () => {
     expect(result.items).toHaveLength(0);
   });
 });
+
+describe("Pompano Beach roofing checklist", () => {
+  it("provides city-source requirements for residential and commercial roofing while requiring parcel verification", () => {
+    const unverified = getPermitChecklist({
+      profileId: BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id,
+      projectKind: "commercial_reroof",
+      roofingSystem: "low_slope",
+      asOfDate: "2026-11-26",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.items.map((item) => item.id)).toContain("hvzh-roofing-application");
+    expect(unverified.items.map((item) => item.id)).toContain("wind-load-verification");
+    expect(unverified.items.map((item) => item.id)).toContain("commercial-site-plan");
+    expect(unverified.items.map((item) => item.id)).toContain("moisture-survey");
+
+    const verified = getPermitChecklist({
+      profileId: BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    expect(verified.authorityConfirmed).toBe(true);
+    expect(verified.items.map((item) => item.id)).toContain("windstorm-mitigation-affidavit");
+  });
+
+  it("suppresses the 2023-code Pompano checklist after December 30, 2026", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(result.codeReferenceCurrent).toBe(false);
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.items).toHaveLength(0);
+  });
+});
+
