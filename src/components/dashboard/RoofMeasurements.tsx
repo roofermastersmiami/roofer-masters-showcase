@@ -60,6 +60,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
+import { parseMeasurementPin } from "@/lib/roof-order-notes";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { loadReportAerial } from "@/lib/report-aerial.functions";
 import type { AerialPhoto } from "@/lib/aerial-photo";
@@ -1837,6 +1838,7 @@ export function RoofMeasurements({
       </details>
       <AutomatedRoofReport
         address={workspaceAddress}
+        pointHint={report ? parseMeasurementPin(report.notes) : null}
         roofType={d.roof_type}
         onApply={(detectedDrawing) => {
           const hasExistingWork =

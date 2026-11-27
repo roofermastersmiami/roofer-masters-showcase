@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, MapPin, Plus, Ruler } from "lucide-react";
+import { ArrowLeft, Building, Building2, Home, MapPin, Plus, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -24,8 +25,10 @@ import {
   SATELLITE_DEFAULT_ZOOM,
   SATELLITE_MAX_ZOOM,
   SATELLITE_MIN_ZOOM,
+  type LatLon,
 } from "@/lib/satellite-map";
-import { SatelliteMap } from "./SatelliteMap";
+import { BUILDING_TYPES, composeRoofOrderNotes, type BuildingType } from "@/lib/roof-order-notes";
+import { SatelliteMap, type SatelliteMapPin } from "./SatelliteMap";
 import { Empty, Field, SectionHeading } from "./CrmControls";
 
 type LocatedAddress = { matchedAddress: string; lat: number; lon: number };
@@ -57,6 +60,10 @@ export function RoofMeasurementsTab({
   const [lookupBusy, setLookupBusy] = useState(false);
   const [mapZoom, setMapZoom] = useState(SATELLITE_DEFAULT_ZOOM);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
+  const [mapCenter, setMapCenter] = useState<LatLon | null>(null);
+  const [pins, setPins] = useState<LatLon[]>([]);
+  const [buildingType, setBuildingType] = useState<BuildingType>("single_family");
+  const [includeOutbuilding, setIncludeOutbuilding] = useState(false);
   const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
   const [addressError, setAddressError] = useState("");
   const [form, setForm] = useState({
@@ -93,6 +100,9 @@ export function RoofMeasurementsTab({
     }
     setForm((current) => ({ ...current, address: initialAddress }));
     setOriginalCrmAddress(initialAddress);
+    setLocatedAddress(null);
+    setMapCenter(null);
+    setPins([]);
     setAdding(true);
     onRequestHandled();
   }, [
@@ -103,6 +113,26 @@ export function RoofMeasurementsTab({
     onSelectReport,
     onRequestHandled,
   ]);
+
+  function openOrderDialog() {
+    setForm({
+      address: "",
+      title: "",
+      customer_phone: "",
+      customer_email: "",
+      provider: "manual",
+      notes: "",
+    });
+    setOriginalCrmAddress("");
+    setLocatedAddress(null);
+    setMapCenter(null);
+    setPins([]);
+    setBuildingType("single_family");
+    setIncludeOutbuilding(false);
+    setMapZoom(SATELLITE_DEFAULT_ZOOM);
+    setAddressError("");
+    setAdding(true);
+  }
 
   const report = orders.data?.find((item) => item.id === activeId);
   const drawing = report
@@ -118,6 +148,8 @@ export function RoofMeasurementsTab({
     setLookupBusy(true);
     setAddressError("");
     setLocatedAddress(null);
+    setPins([]);
+    setMapCenter(null);
     try {
       const result = await lookup({ data: { address } });
       if ("error" in result) {
@@ -125,6 +157,10 @@ export function RoofMeasurementsTab({
         return;
       }
       setLocatedAddress(result);
+      // The map flies to the property and pin 1 drops on the
+      // geocoded point; Fredy can drag it onto the right building.
+      setMapCenter({ lat: result.lat, lon: result.lon });
+      setPins([{ lat: result.lat, lon: result.lon }]);
       setMapZoom(SATELLITE_DEFAULT_ZOOM);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
@@ -137,36 +173,96 @@ export function RoofMeasurementsTab({
     }
   }
 
+  const MAX_PINS = 6;
+  const mapPins: SatelliteMapPin[] = pins.map((pin, index) => ({
+    id: index,
+    lat: pin.lat,
+    lon: pin.lon,
+  }));
+
+  function movePin(id: number, point: LatLon) {
+    setPins((current) => current.map((pin, index) => (index === id ? point : pin)));
+  }
+
+  function addPin(point: LatLon) {
+    if (pins.length >= MAX_PINS) {
+      toast.error(`Up to ${MAX_PINS} buildings per order — double-click a pin to remove one first`);
+      return;
+    }
+    setPins((current) => [...current, point]);
+  }
+
+  function removePin(id: number) {
+    setPins((current) => current.filter((_, index) => index !== id));
+  }
+
   async function createReport() {
     if (!locatedAddress || form.address.trim() !== locatedAddress.matchedAddress) {
       toast.error("Locate and confirm the property address before creating the report");
       return;
     }
-    const parsed = roofOrderSchema.safeParse({
-      ...form,
-      // Client name is optional in the form: the report is titled by
-      // its address until a client is linked.
-      title: form.title.trim() || locatedAddress.matchedAddress,
-      // Preserve the exact saved CRM address so the server reuses its property record.
-      address: originalCrmAddress || locatedAddress.matchedAddress,
-    });
-    if (!parsed.success) {
-      toast.error("Enter the complete property address");
+    if (pins.length === 0) {
+      toast.error("Click the map to drop a pin on at least one building first");
       return;
     }
+    // Client name is optional in the form: the report is titled by
+    // its address until a client is linked.
+    const baseTitle = form.title.trim() || locatedAddress.matchedAddress;
     setBusy(true);
+    const createdIds: string[] = [];
     try {
-      const created = await create({ data: parsed.data });
+      // One report per pin, same address: each report's workspace
+      // measures its own building hands-off, steered by the pin
+      // recorded in its notes.
+      for (let index = 0; index < pins.length; index++) {
+        const parsed = roofOrderSchema.safeParse({
+          ...form,
+          title: pins.length > 1 ? `${baseTitle.slice(0, 165)} · Building ${index + 1}` : baseTitle,
+          // Preserve the exact saved CRM address so the server reuses its property record.
+          address: originalCrmAddress || locatedAddress.matchedAddress,
+          notes: composeRoofOrderNotes({
+            buildingType,
+            includeOutbuilding,
+            pin: pins[index]!,
+            notes: form.notes,
+          }),
+        });
+        if (!parsed.success) {
+          toast.error("Enter the complete property address");
+          return;
+        }
+        const created = await create({ data: parsed.data });
+        createdIds.push(created.id);
+      }
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
         qc.invalidateQueries({ queryKey: ["crm-properties"] }),
       ]);
       setAdding(false);
-      setActiveId(created.id);
-      onSelectReport(created.id);
-      toast.success("Property report created. Continue with roof measurements.");
+      const first = createdIds[0];
+      if (first) {
+        setActiveId(first);
+        onSelectReport(first);
+      }
+      toast.success(
+        createdIds.length > 1
+          ? `${createdIds.length} building reports created. Building 1 is open and measuring automatically; each other report measures automatically when you open it.`
+          : "Property report created. Continue with roof measurements.",
+      );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create roof report");
+      if (createdIds.length > 0) {
+        // Keep the reports that did get created — they are saved and
+        // measurable — and say plainly that the rest did not happen.
+        await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
+        setAdding(false);
+        setActiveId(createdIds[0]!);
+        onSelectReport(createdIds[0]!);
+        toast.error(
+          `Created ${createdIds.length} of ${pins.length} reports before an error stopped the rest. The created reports are saved.`,
+        );
+      } else {
+        toast.error(error instanceof Error ? error.message : "Could not create roof report");
+      }
     } finally {
       setBusy(false);
     }
@@ -193,19 +289,7 @@ export function RoofMeasurementsTab({
               onClick={() => {
                 setActiveId(null);
                 onSelectReport(null);
-                setForm({
-                  address: "",
-                  title: "",
-                  customer_phone: "",
-                  customer_email: "",
-                  provider: "manual",
-                  notes: "",
-                });
-                setOriginalCrmAddress("");
-                setLocatedAddress(null);
-                setMapZoom(SATELLITE_DEFAULT_ZOOM);
-                setAddressError("");
-                setAdding(true);
+                openOrderDialog();
               }}
             >
               <Plus /> Create report by address
@@ -263,23 +347,7 @@ export function RoofMeasurementsTab({
       <SectionHeading
         title="Roof measurements"
         action={
-          <Button
-            onClick={() => {
-              setForm({
-                address: "",
-                title: "",
-                customer_phone: "",
-                customer_email: "",
-                provider: "manual",
-                notes: "",
-              });
-              setOriginalCrmAddress("");
-              setLocatedAddress(null);
-              setMapZoom(SATELLITE_DEFAULT_ZOOM);
-              setAddressError("");
-              setAdding(true);
-            }}
-          >
+          <Button onClick={openOrderDialog}>
             <Plus /> Create report by address
           </Button>
         }
@@ -342,22 +410,25 @@ export function RoofMeasurementsTab({
           setAdding(open);
           if (!open) {
             setLocatedAddress(null);
+            setMapCenter(null);
+            setPins([]);
             setAddressError("");
           }
         }}
       >
         <DialogContent className="max-h-[94dvh] w-[min(96vw,980px)] max-w-[980px] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create roof report by address</DialogTitle>
+            <DialogTitle>New measurement order</DialogTitle>
             <DialogDescription>
               {initialCustomer
                 ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
                 : ""}
-              Search for an address and confirm the pin is on the correct building. For apartment
-              complexes or condos, create a separate report for each building. The roof is then
-              measured automatically from public LiDAR data, the report PDF is generated and saved,
-              and a material list is built from the measurement — you can review or adjust every
-              result afterwards.
+              Search for an address and move the pin to the correct building. For apartment
+              complexes or condos, click to drop multiple pins on each structure. Each pin will
+              create a separate report. Double-click a pin to remove it. The roof is then measured
+              automatically from public LiDAR data, the report PDF is generated and saved, and a
+              material list is built from the measurement — you can review or adjust every result
+              afterwards.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -367,121 +438,177 @@ export function RoofMeasurementsTab({
               void createReport();
             }}
           >
-            <Field label="Customer property address">
-              <Input
-                required
-                minLength={8}
-                maxLength={250}
-                autoComplete="street-address"
-                placeholder="123 Main Street, Miami, FL 33130"
-                value={form.address}
-                onChange={(event) => {
-                  setForm({ ...form, address: event.target.value });
-                  setOriginalCrmAddress("");
-                  setLocatedAddress(null);
-                  setAddressError("");
-                }}
-              />
-            </Field>
-            {locatedAddress ? (
-              <section className="space-y-2" aria-label="Property satellite map">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold">Confirm building location</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Red pin marks the matched address · zoom or scroll to verify the correct
-                      structure
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      aria-label="Zoom map in"
-                      disabled={mapZoom >= SATELLITE_MAX_ZOOM}
-                      onClick={() => setMapZoom((z) => Math.min(SATELLITE_MAX_ZOOM, z + 1))}
-                    >
-                      +
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      aria-label="Zoom map out"
-                      disabled={mapZoom <= SATELLITE_MIN_ZOOM}
-                      onClick={() => setMapZoom((z) => Math.max(SATELLITE_MIN_ZOOM, z - 1))}
-                    >
-                      −
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setMapZoom(SATELLITE_DEFAULT_ZOOM)}
-                    >
-                      Reset
-                    </Button>
-                  </div>
-                </div>
-                <div className="relative h-[min(58vh,520px)] min-h-[300px] overflow-hidden rounded-md border border-border bg-muted">
+            <section className="space-y-2" aria-label="Property satellite map">
+              <div className="relative h-[min(64vh,560px)] min-h-[340px] overflow-hidden rounded-md border border-border bg-muted">
+                {locatedAddress && mapCenter ? (
                   <SatelliteMap
-                    latitude={locatedAddress.lat}
-                    longitude={locatedAddress.lon}
+                    center={mapCenter}
                     zoom={mapZoom}
-                    label={`Satellite map centered on ${locatedAddress.matchedAddress}`}
+                    pins={mapPins}
+                    label={`Satellite map of ${locatedAddress.matchedAddress}`}
                     onZoomChange={setMapZoom}
+                    onCenterChange={setMapCenter}
+                    onPinMove={movePin}
+                    onMapClick={addPin}
+                    onPinDoubleClick={removePin}
                   />
-                  <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
-                    <MapPin className="h-10 w-10 fill-red-600 text-white drop-shadow-lg" />
+                ) : (
+                  <div className="grid h-full place-items-center p-6 text-center">
+                    <div className="max-w-sm">
+                      <MapPin className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                      <p className="font-semibold">Property map</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Search an address and select “Locate” to load satellite imagery and drop the
+                        first pin on the building.
+                      </p>
+                    </div>
                   </div>
-                  <div className="absolute bottom-3 left-3 max-w-[85%] rounded bg-background/95 px-3 py-2 text-xs shadow">
-                    <strong className="block">Address pin</strong>
-                    {locatedAddress.matchedAddress}
-                  </div>
-                  <div className="absolute right-3 top-3 rounded bg-background/95 px-2 py-1 text-[11px] font-medium shadow">
-                    Satellite imagery · Esri
-                  </div>
+                )}
+                <div className="absolute inset-x-3 top-3 z-20 flex gap-2">
+                  <Input
+                    aria-label="Customer property address"
+                    className="bg-background shadow"
+                    required
+                    minLength={8}
+                    maxLength={250}
+                    autoComplete="street-address"
+                    placeholder="123 Main Street, Miami, FL 33130"
+                    value={form.address}
+                    onChange={(event) => {
+                      setForm({ ...form, address: event.target.value });
+                      setOriginalCrmAddress("");
+                      setLocatedAddress(null);
+                      setMapCenter(null);
+                      setPins([]);
+                      setAddressError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void locateAddress();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    className="shadow"
+                    disabled={lookupBusy || form.address.trim().length < 8}
+                    onClick={() => void locateAddress()}
+                  >
+                    <MapPin /> {lookupBusy ? "Locating…" : "Locate"}
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}. The
-                  pin is the geocoded address point, not a roof outline or verified measurement.
+                {locatedAddress && (
+                  <>
+                    <div className="absolute right-3 top-[68px] z-20 flex flex-col gap-1">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        aria-label="Zoom map in"
+                        disabled={mapZoom >= SATELLITE_MAX_ZOOM}
+                        onClick={() => setMapZoom((z) => Math.min(SATELLITE_MAX_ZOOM, z + 1))}
+                      >
+                        +
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        aria-label="Zoom map out"
+                        disabled={mapZoom <= SATELLITE_MIN_ZOOM}
+                        onClick={() => setMapZoom((z) => Math.max(SATELLITE_MIN_ZOOM, z - 1))}
+                      >
+                        −
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setMapZoom(SATELLITE_DEFAULT_ZOOM);
+                          setMapCenter({ lat: locatedAddress.lat, lon: locatedAddress.lon });
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                    <div className="absolute bottom-3 left-3 z-20 max-w-[85%] rounded bg-background/95 px-3 py-2 text-xs shadow">
+                      <strong className="block">
+                        {pins.length === 1 ? "1 building pin" : `${pins.length} building pins`}
+                      </strong>
+                      {locatedAddress.matchedAddress}
+                    </div>
+                    <div className="absolute bottom-3 right-3 z-20 rounded bg-background/95 px-2 py-1 text-[11px] font-medium shadow">
+                      Satellite imagery · Esri
+                    </div>
+                  </>
+                )}
+              </div>
+              {addressError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {addressError}
                 </p>
-              </section>
-            ) : (
-              <div className="grid min-h-[230px] place-items-center rounded-md border border-dashed border-border bg-muted/40 p-6 text-center">
-                <div className="max-w-sm">
-                  <MapPin className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-                  <p className="font-semibold">Property map</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Search an address and select “Locate exact address” to load satellite imagery
-                    and place the property pin.
+              )}
+              {locatedAddress && (
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-semibold">Address matched</p>
+                  <p className="mt-1">{locatedAddress.matchedAddress}</p>
+                  {pins.map((pin, index) => (
+                    <p key={index} className="mt-1 text-xs text-muted-foreground">
+                      Pin {index + 1}: {pin.lat.toFixed(6)}, {pin.lon.toFixed(6)}
+                      {index === 0 &&
+                      pin.lat === locatedAddress.lat &&
+                      pin.lon === locatedAddress.lon
+                        ? " · geocoded address point"
+                        : ""}
+                    </p>
+                  ))}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Drag a pin onto the correct building — each measurement uses its pin’s final
+                    position. Drag the map to look around, scroll to zoom, click to add a pin for
+                    another structure, and double-click a pin to remove it.
                   </p>
                 </div>
+              )}
+            </section>
+            <Field label="Select Building Type">
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Building type">
+                {BUILDING_TYPES.map((type) => {
+                  const Icon =
+                    type.value === "single_family"
+                      ? Home
+                      : type.value === "multi_family"
+                        ? Building2
+                        : Building;
+                  const selected = buildingType === type.value;
+                  return (
+                    <button
+                      key={type.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setBuildingType(type.value)}
+                      className={`flex flex-col items-center gap-2 rounded-md border px-3 py-4 text-sm font-medium ${
+                        selected
+                          ? "border-primary bg-primary/5 text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                      }`}
+                    >
+                      <Icon className="size-6" />
+                      {type.label}
+                    </button>
+                  );
+                })}
               </div>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={lookupBusy || form.address.trim().length < 8}
-              onClick={() => void locateAddress()}
-            >
-              <MapPin /> {lookupBusy ? "Locating property…" : "Locate exact address"}
-            </Button>
-            {addressError && (
-              <p role="alert" className="text-sm text-destructive">
-                {addressError}
-              </p>
-            )}
-            {locatedAddress && (
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-                <p className="font-semibold">Address matched</p>
-                <p className="mt-1">{locatedAddress.matchedAddress}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Coordinates: {locatedAddress.lat.toFixed(6)}, {locatedAddress.lon.toFixed(6)}
-                </p>
-              </div>
-            )}
+            </Field>
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={includeOutbuilding}
+                onCheckedChange={(checked) => setIncludeOutbuilding(checked === true)}
+              />
+              Include outbuilding
+            </label>
             <Field label="Client name (optional)">
               <Input
                 maxLength={180}
@@ -510,10 +637,11 @@ export function RoofMeasurementsTab({
                 onChange={(event) => setForm({ ...form, customer_email: event.target.value })}
               />
             </Field>
-            <Field label="Inspection notes">
+            <Field label="Notes (Optional)">
               <Textarea
                 value={form.notes}
                 maxLength={4000}
+                placeholder="(i.e. dormer pitch 6/12, include detached shed, do not include metal awnings, flat section only, etc.)"
                 onChange={(event) => setForm({ ...form, notes: event.target.value })}
               />
             </Field>
@@ -522,11 +650,17 @@ export function RoofMeasurementsTab({
                 busy ||
                 lookupBusy ||
                 !locatedAddress ||
+                pins.length === 0 ||
                 form.address.trim() !== locatedAddress.matchedAddress
               }
               type="submit"
             >
-              <Plus /> {busy ? "Creating…" : "Create and measure roof"}
+              <Plus />{" "}
+              {busy
+                ? "Creating…"
+                : pins.length > 1
+                  ? `Create ${pins.length} reports and measure roofs`
+                  : "Create and measure roof"}
             </Button>
           </form>
         </DialogContent>
