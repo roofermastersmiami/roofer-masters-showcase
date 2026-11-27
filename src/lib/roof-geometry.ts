@@ -124,11 +124,23 @@ export function planeInfo(p: RoofPlane) {
       if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0)
         throw new Error(`${p.name}: roof edges cross`);
     }
-  const a = p.points[0],
-    b = p.points[1],
-    c = p.points[2];
-  if (!a || !b || !c) throw new Error("A plane needs three vertices");
-  const n = cross(sub(b, a), sub(c, a));
+  const a = p.points[0];
+  if (!a || p.points.length < 3) throw new Error("A plane needs three vertices");
+  // Plane normal by Newell's method over the whole ring: the previous
+  // first-three-vertices normal collapsed whenever a ring happened to
+  // start with three collinear points — common in densified LiDAR hull
+  // boundaries, whose first edge often runs straight along a seam — and
+  // reported a healthy facet as "zero area or vertical plane".
+  const n = { x: 0, y: 0, z: 0 };
+  for (let i = 0; i < p.points.length; i++) {
+    const current = p.points[i];
+    const next = p.points[(i + 1) % p.points.length];
+    if (!current || !next) continue;
+    const c = cross(current, next);
+    n.x += c.x;
+    n.y += c.y;
+    n.z += c.z;
+  }
   const mag = Math.hypot(n.x, n.y, n.z);
   if (mag < 0.0001 || Math.abs(n.y) < 0.0001)
     throw new Error(`${p.name}: zero area or vertical plane`);
@@ -336,16 +348,23 @@ export function measureDrawing(raw: RoofDrawing) {
   };
   const measuredEdges: MeasuredEdge[] = [];
   const edgeToleranceFt = 0.05;
+  // Shared segments are matched in PLAN (x, z), not in 3D: the two
+  // sides of a seam share their plan endpoints exactly, but each
+  // side's elevations lie on its own facet's fitted plane, and the
+  // two planes disagree by centimetres at junctions — 3D matching
+  // missed those pairs and counted every seam twice. Lengths below
+  // still use the full 3D distance of the first occurrence.
+  const planDistance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.z - b.z);
   const sameSegment = (a: Point, b: Point, c: Point, d: Point) =>
-    (distance(a, c) <= edgeToleranceFt && distance(b, d) <= edgeToleranceFt) ||
-    (distance(a, d) <= edgeToleranceFt && distance(b, c) <= edgeToleranceFt);
+    (planDistance(a, c) <= edgeToleranceFt && planDistance(b, d) <= edgeToleranceFt) ||
+    (planDistance(a, d) <= edgeToleranceFt && planDistance(b, c) <= edgeToleranceFt);
   const midpoint = (a: Point, b: Point): Point => ({
     x: (a.x + b.x) / 2,
     y: (a.y + b.y) / 2,
     z: (a.z + b.z) / 2,
   });
   const cellKey = (point: Point) =>
-    [point.x, point.y, point.z].map((value) => Math.floor(value / edgeToleranceFt)).join(",");
+    [point.x, point.z].map((value) => Math.floor(value / edgeToleranceFt)).join(",");
   const edgeBuckets = new Map<string, number[]>();
 
   // Count a shared physical boundary once even when separately fitted facets
@@ -362,14 +381,13 @@ export function measureDrawing(raw: RoofDrawing) {
       if (length < 0.01) throw new Error(`${p.name}: roof edges must be at least 0.01 feet long`);
 
       const center = midpoint(a, b);
-      const [cx, cy, cz] = cellKey(center).split(",").map(Number);
+      const [cx, cz] = cellKey(center).split(",").map(Number);
       const candidates: number[] = [];
       for (let dx = -1; dx <= 1; dx++)
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dz = -1; dz <= 1; dz++) {
-            const key = [cx! + dx, cy! + dy, cz! + dz].join(",");
-            candidates.push(...(edgeBuckets.get(key) ?? []));
-          }
+        for (let dz = -1; dz <= 1; dz++) {
+          const key = [cx! + dx, cz! + dz].join(",");
+          candidates.push(...(edgeBuckets.get(key) ?? []));
+        }
       const matches = candidates.flatMap((index) => {
         const edge = measuredEdges[index];
         return edge && sameSegment(a, b, edge.a, edge.b) ? [edge] : [];

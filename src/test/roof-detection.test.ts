@@ -260,6 +260,40 @@ describe("LiDAR edge classification for automatic reports", () => {
     expect(edges.other).toBe(0);
   });
 
+  it("trusts drawing_ready geometry: no snap surgery on flagged responses", () => {
+    // Two gable facets whose shared ridge vertices disagree by 0.1 ft
+    // (inside the legacy snap tolerance). Unflagged responses get the
+    // snap (both sides move to the centroid); a drawing_ready
+    // response is an exact service-side partition, so the converter
+    // must leave every vertex exactly where the service put it.
+    const facets = () => [
+      facet("facet-1", 6, [
+        [0, 0, EAVE_M],
+        [40, 0, EAVE_M],
+        [40, 15, RIDGE_M],
+        [0, 15, RIDGE_M],
+      ]),
+      facet("facet-2", 6, [
+        [0.1, 15, RIDGE_M],
+        [40.1, 15, RIDGE_M],
+        [40, 30, EAVE_M],
+        [0, 30, EAVE_M],
+      ]),
+    ];
+    const ridgeStartX = (drawing: ReturnType<typeof detectedFacetsToDrawing>) => {
+      const plane = drawing.planes.find((p) => p.id === "lidar-facet-2")!;
+      return Math.min(...plane.points.filter((p) => Math.abs(p.z - 15) < 0.01).map((p) => p.x));
+    };
+    const legacy = detectedFacetsToDrawing(makeResponse(facets()), "Metal Roof");
+    expect(ridgeStartX(legacy)).toBeCloseTo(0.05, 1);
+    const flagged: RoofDetectionResponse = {
+      ...makeResponse(facets()),
+      roof: { ...makeResponse(facets()).roof, drawing_ready: true },
+    };
+    const trusted = detectedFacetsToDrawing(flagged, "Metal Roof");
+    expect(ridgeStartX(trusted)).toBeCloseTo(0.1, 1);
+  });
+
   it("classifies the trough between two opposing slopes as a valley", () => {
     const drawing = detectedFacetsToDrawing(
       makeResponse([
@@ -293,11 +327,15 @@ describe("LiDAR edge classification for automatic reports", () => {
           [40, 15, RIDGE_M],
           [0, 15, RIDGE_M],
         ]),
-        // Second hull's ridge line sits 0.6 ft off the first facet's, as
-        // independently fitted LiDAR hulls do.
+        // Second hull's ridge line sits 0.1 ft off the first facet's —
+        // the centimetre-scale residue the emission round-trip leaves
+        // between two copies of a junction the service already
+        // conflated. (The snap tolerance is deliberately this small:
+        // at the old 1 ft it braided independently placed seam
+        // vertices of neighbouring facets around each other.)
         facet("facet-2", 6.25, [
-          [0, 15.6, RIDGE_M],
-          [40, 15.6, RIDGE_M],
+          [0, 15.1, RIDGE_M],
+          [40, 15.1, RIDGE_M],
           [40, 30, EAVE_M],
           [0, 30, EAVE_M],
         ]),
@@ -308,5 +346,85 @@ describe("LiDAR edge classification for automatic reports", () => {
     expect(edges.ridge).toBeCloseTo(40, 0);
     expect(edges.eave).toBeCloseTo(80, 0);
     expect(edges.other).toBe(0);
+  });
+});
+
+describe("LiDAR converter vertex snap robustness", () => {
+  const origin = response.location;
+  const lonScale = 111320 * Math.cos((origin.lat * Math.PI) / 180) * (1 / 0.3048);
+  const latScale = 110540 * (1 / 0.3048);
+  const ring = (points: [number, number, number][]) =>
+    points.map(([x, z, elevation]) => [
+      origin.lat - z / latScale,
+      origin.lon + x / lonScale,
+      elevation,
+    ]) as [number, number, number][];
+  const facet = (id: string, points: [number, number, number][]) => ({
+    id,
+    point_count: 500,
+    pitch_degrees: (Math.atan(6 / 12) * 180) / Math.PI,
+    pitch_rise_per_12: 6,
+    azimuth_degrees: 180,
+    area_sqft: 600,
+    squares: 6,
+    boundary_latlon: ring([...points, points[0]!]),
+  });
+  const makeResponse = (facets: ReturnType<typeof facet>[]): RoofDetectionResponse => ({
+    ...response,
+    roof: {
+      ...response.roof,
+      facet_count: facets.length,
+      facets: facets as RoofDetectionResponse["roof"]["facets"],
+    },
+  });
+  // One plane for both facets: elevation (meters) rises 6/12 with z (ft).
+  const elev = (z: number) => 10 + 2.286 * (z / 15);
+
+  it("conflates a vertex bracketed by two vertices of the neighbouring facet to one shared point", () => {
+    // Facet A's seam vertex at (30.05, 10.02) sits within the snap
+    // tolerance of TWO seam vertices of facet B, (30, 9.95) and
+    // (30, 10.09), which are 0.14 ft apart. A sequential midpoint snap
+    // pulled A's vertex twice, leaving the three vertices at two
+    // different positions and the seam unshared; cluster conflation
+    // must land all three on exactly the same point.
+    const drawing = detectedFacetsToDrawing(
+      makeResponse([
+        facet("facet-1", [
+          [0, 0, elev(0)],
+          [30, 0, elev(0)],
+          [30.05, 10.02, elev(10.02)],
+          [30, 20, elev(20)],
+          [0, 20, elev(20)],
+        ]),
+        facet("facet-2", [
+          [30, 0, elev(0)],
+          [60, 0, elev(0)],
+          [60, 20, elev(20)],
+          [30, 20, elev(20)],
+          [30, 10.09, elev(10.09)],
+          [30, 9.95, elev(9.95)],
+        ]),
+      ]),
+      "Metal Roof",
+    );
+    const [planeA, planeB] = drawing.planes;
+    expect(planeA?.points).toHaveLength(5);
+    // Facet B's two bracket vertices collapse onto the shared centroid.
+    expect(planeB?.points).toHaveLength(5);
+    const sharedA = planeA?.points.find(
+      (point) => Math.abs(point.x - 30.02) < 0.1 && Math.abs(point.z - 10.02) < 0.1,
+    );
+    const sharedB = planeB?.points.filter(
+      (point) => Math.abs(point.x - 30.02) < 0.1 && Math.abs(point.z - 10.02) < 0.1,
+    );
+    expect(sharedA).toBeDefined();
+    expect(sharedB).toHaveLength(1);
+    expect(sharedB[0]?.x).toBe(sharedA?.x);
+    expect(sharedB[0]?.z).toBe(sharedA?.z);
+    // And the resulting drawing measures cleanly (no plan overlap).
+    const measured = measureDrawing(drawing);
+    const total = measured.planes.reduce((sum, plane) => sum + plane.area, 0);
+    expect(total).toBeGreaterThan(1250);
+    expect(total).toBeLessThan(1450);
   });
 });
