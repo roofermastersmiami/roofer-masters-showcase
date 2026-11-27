@@ -222,7 +222,9 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   }
 
   const roofSystem = request.roofingSystem ?? "other";
-  const requiredRoofingSections = !codeReferenceCurrent ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
+  const profileScopeSupported = profile.id !== BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || request.projectKind === "reroof";
+  const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
+  const requiredRoofingSections = !checklistEnabled ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
     : profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id
       ? miamiDadeSections[roofSystem]
@@ -231,7 +233,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const allowedIds = profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? new Set(miamiDadeAttachmentIds[roofSystem])
     : new Set(profile.checklist.map((item) => item.id));
-  const items = (codeReferenceCurrent ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
+  const items = (checklistEnabled ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
     if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
