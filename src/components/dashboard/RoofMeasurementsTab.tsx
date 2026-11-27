@@ -20,6 +20,12 @@ import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
+import {
+  SATELLITE_DEFAULT_ZOOM,
+  SATELLITE_MAX_ZOOM,
+  SATELLITE_MIN_ZOOM,
+} from "@/lib/satellite-map";
+import { SatelliteMap } from "./SatelliteMap";
 import { Empty, Field, SectionHeading } from "./CrmControls";
 
 type LocatedAddress = { matchedAddress: string; lat: number; lon: number };
@@ -49,7 +55,7 @@ export function RoofMeasurementsTab({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
-  const [mapZoom, setMapZoom] = useState(250);
+  const [mapZoom, setMapZoom] = useState(SATELLITE_DEFAULT_ZOOM);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
   const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
   const [addressError, setAddressError] = useState("");
@@ -119,7 +125,7 @@ export function RoofMeasurementsTab({
         return;
       }
       setLocatedAddress(result);
-      setMapZoom(250);
+      setMapZoom(SATELLITE_DEFAULT_ZOOM);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
     } catch (error) {
@@ -197,7 +203,7 @@ export function RoofMeasurementsTab({
                 });
                 setOriginalCrmAddress("");
                 setLocatedAddress(null);
-                setMapZoom(250);
+                setMapZoom(SATELLITE_DEFAULT_ZOOM);
                 setAddressError("");
                 setAdding(true);
               }}
@@ -269,7 +275,7 @@ export function RoofMeasurementsTab({
               });
               setOriginalCrmAddress("");
               setLocatedAddress(null);
-              setMapZoom(250);
+              setMapZoom(SATELLITE_DEFAULT_ZOOM);
               setAddressError("");
               setAdding(true);
             }}
@@ -383,7 +389,8 @@ export function RoofMeasurementsTab({
                   <div>
                     <h3 className="font-semibold">Confirm building location</h3>
                     <p className="text-xs text-muted-foreground">
-                      Red pin marks the matched address · zoom to verify the correct structure
+                      Red pin marks the matched address · zoom or scroll to verify the correct
+                      structure
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -392,7 +399,8 @@ export function RoofMeasurementsTab({
                       size="icon"
                       variant="outline"
                       aria-label="Zoom map in"
-                      onClick={() => setMapZoom((z) => Math.min(2000, z * 1.7))}
+                      disabled={mapZoom >= SATELLITE_MAX_ZOOM}
+                      onClick={() => setMapZoom((z) => Math.min(SATELLITE_MAX_ZOOM, z + 1))}
                     >
                       +
                     </Button>
@@ -401,7 +409,8 @@ export function RoofMeasurementsTab({
                       size="icon"
                       variant="outline"
                       aria-label="Zoom map out"
-                      onClick={() => setMapZoom((z) => Math.max(0.5, z / 1.7))}
+                      disabled={mapZoom <= SATELLITE_MIN_ZOOM}
+                      onClick={() => setMapZoom((z) => Math.max(SATELLITE_MIN_ZOOM, z - 1))}
                     >
                       −
                     </Button>
@@ -409,17 +418,19 @@ export function RoofMeasurementsTab({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setMapZoom(250)}
+                      onClick={() => setMapZoom(SATELLITE_DEFAULT_ZOOM)}
                     >
                       Reset
                     </Button>
                   </div>
                 </div>
                 <div className="relative h-[min(58vh,520px)] min-h-[300px] overflow-hidden rounded-md border border-border bg-muted">
-                  <img
-                    alt={`Satellite map centered on ${locatedAddress.matchedAddress}`}
-                    className="h-full w-full object-cover"
-                    src={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${locatedAddress.lon - 0.035 / mapZoom},${locatedAddress.lat - 0.0245 / mapZoom},${locatedAddress.lon + 0.035 / mapZoom},${locatedAddress.lat + 0.0245 / mapZoom}&bboxSR=4326&imageSR=4326&size=1200,760&format=jpg&f=image`}
+                  <SatelliteMap
+                    latitude={locatedAddress.lat}
+                    longitude={locatedAddress.lon}
+                    zoom={mapZoom}
+                    label={`Satellite map centered on ${locatedAddress.matchedAddress}`}
+                    onZoomChange={setMapZoom}
                   />
                   <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
                     <MapPin className="h-10 w-10 fill-red-600 text-white drop-shadow-lg" />
