@@ -380,6 +380,9 @@ export function PermitRecords() {
                         {jurisdictionChecklist.authorityConfirmed ? "Checklist scope matches the selected inputs; verify the parcel authority before filing." : "Authority / project scope is not confirmed. Do not treat this checklist as filing-ready."}
                       </p>
                       {jurisdictionChecklist.warnings.map((warning) => <p key={warning} className="text-amber-700 dark:text-amber-400">{warning}</p>)}
+                      <p className="text-muted-foreground">
+                        Reference links: {jurisdictionChecklist.profile.sourceUrls.map((url, index) => <a key={url} className="mr-2 text-primary underline" href={url} target="_blank" rel="noreferrer">Source {index + 1}</a>)}
+                      </p>
                       {jurisdictionChecklist.requiredRoofingSections.length > 0 && <p><strong>Roof application sections:</strong> {jurisdictionChecklist.requiredRoofingSections.join(", ")}</p>}
                       {jurisdictionChecklist.items.length === 0 ? (
                         <p className="text-muted-foreground">No generic checklist is loaded for this selection. Confirm the exact local authority and current permit packet before filing.</p>
