@@ -10,8 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { analysisProgressPercent, formatElapsedClock } from "@/lib/analysis-progress";
-import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
-import type { RoofDrawing } from "@/lib/roof-geometry";
+import {
+  detectedFacetsToDrawing,
+  structureToDrawing,
+  type RoofDetectionResponse,
+} from "@/lib/roof-detection";
+import type { DetachedStructure, RoofDrawing } from "@/lib/roof-geometry";
 
 type Props = {
   address: string;
@@ -20,8 +24,17 @@ type Props = {
    * pin_lat/pin_lon so footprint selection measures the building
    * the pin sits on rather than the geocoded address point. */
   pointHint?: { lat: number; lon: number } | null;
+  /** The measurement-order form's "Include outbuilding" choice
+   * recorded on the report. When set, the analysis runs in
+   * multi-structure mode: detached structures on the same property
+   * are identified and measured separately, and their drawings are
+   * handed to onApply alongside the main drawing. */
+  includeOutbuilding?: boolean;
   roofType: RoofDrawing["roof_type"];
-  onApply: (drawing: ReturnType<typeof detectedFacetsToDrawing>) => boolean;
+  onApply: (
+    drawing: ReturnType<typeof detectedFacetsToDrawing>,
+    detachedStructures?: DetachedStructure[],
+  ) => boolean;
 };
 
 type BuildingCandidate = {
@@ -303,7 +316,13 @@ const STAGE_LABELS: Record<string, string> = {
   measuring: "Measuring the roof…",
 };
 
-export function AutomatedRoofReport({ address, pointHint, roofType, onApply }: Props) {
+export function AutomatedRoofReport({
+  address,
+  pointHint,
+  includeOutbuilding,
+  roofType,
+  onApply,
+}: Props) {
   const [result, setResult] = useState<RoofDetectionResponse | null>(null);
   const [candidates, setCandidates] = useState<BuildingCandidate[]>([]);
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
@@ -436,6 +455,7 @@ export function AutomatedRoofReport({ address, pointHint, roofType, onApply }: P
             street_address: requestedAddress,
             ...(candidateId ? { footprint_candidate_id: candidateId } : {}),
             ...(pointHint ? { pin_lat: pointHint.lat, pin_lon: pointHint.lon } : {}),
+            ...(includeOutbuilding ? { include_outbuilding: true } : {}),
           },
           controller.signal,
           (next) => {
@@ -472,7 +492,7 @@ export function AutomatedRoofReport({ address, pointHint, roofType, onApply }: P
         }
       }
     },
-    [address, currentAddress, handleProgress, pointHint],
+    [address, currentAddress, handleProgress, pointHint, includeOutbuilding],
   );
 
   // Start public-data analysis once when a new property address is loaded.
@@ -494,7 +514,27 @@ export function AutomatedRoofReport({ address, pointHint, roofType, onApply }: P
     )
       return;
     try {
-      const accepted = onApply(detectedFacetsToDrawing(visibleResult, roofType));
+      // Multi-structure mode: convert every measured detached
+      // structure through the same converter. One structure that
+      // fails conversion must not block the main measurement, so
+      // failures are skipped individually.
+      const detachedStructures: DetachedStructure[] = [];
+      for (const structure of visibleResult.structures ?? []) {
+        if (structure.role !== "detached" || structure.status !== "lidar_facets") continue;
+        try {
+          detachedStructures.push({
+            label: structure.label,
+            candidate_id: structure.candidate_id,
+            drawing: structureToDrawing(visibleResult, structure, roofType),
+          });
+        } catch {
+          // Skip the unconvertible structure; the main drawing applies.
+        }
+      }
+      const accepted = onApply(
+        detectedFacetsToDrawing(visibleResult, roofType),
+        detachedStructures,
+      );
       if (accepted) autoAppliedAddress.current = currentAddress;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Detected facets could not be added.");

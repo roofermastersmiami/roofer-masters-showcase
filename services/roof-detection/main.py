@@ -239,6 +239,16 @@ class AnalyzeRequest(BaseModel):
     # point. Absent pin = the pre-existing behaviour, unchanged.
     pin_lat: float | None = Field(default=None, ge=-90, le=90)
     pin_lon: float | None = Field(default=None, ge=-180, le=180)
+    # Optional multi-structure mode from the CRM measurement-order
+    # form's "Include outbuilding" checkbox. When true, the pipeline
+    # additionally identifies detached structures on the same property
+    # (detached garage, shed, guest house — separate footprints near
+    # the selected main building), measures each one with the same
+    # LiDAR facet pipeline, and returns them in an additive
+    # `structures` array. The top-level response always describes the
+    # main structure exactly as before; with the flag off (the
+    # default) the response is byte-identical to the historical one.
+    include_outbuilding: bool = False
 
     @model_validator(mode="after")
     def validate_location(self):
@@ -291,6 +301,179 @@ def _distance_to_footprint_meters(polygon: Polygon, lat: float, lon: float) -> f
     )
     projected_point = Point(*transformer.transform(lon, lat))
     return float(projected_polygon.distance(projected_point))
+
+
+# Multi-structure identification (detached garages, sheds, guest
+# houses). A detached structure is a SEPARATE footprint standing on
+# the same property as the selected main building: near it, not
+# overlapping it, much smaller than it, and with no evidence it
+# belongs to a different address. Attached additions share the main
+# footprint polygon in every provider layer, so they are part of the
+# main structure by construction and are never split off.
+#
+# The size rules are load-bearing, not decoration: in dense South
+# Florida streets the neighbouring HOUSE stands 3–30 m from the
+# subject house — closer than a backyard garage on a big lot — so
+# distance alone cannot separate "detached garage" from "the
+# neighbour's house". What separates them is scale: garages, sheds
+# and guest houses are a fraction of the main house's footprint,
+# while the neighbour's house is house-sized. (Verified live on
+# 9201 SW 24th Terrace, Miami: four 2,500–3,200 sq ft neighbouring
+# houses sat within 45 m of a 1,827 sq ft main house; the size
+# rules reject all four, a genuine 600 sq ft garage passes.)
+DETACHED_MAX_GAP_M = 45.0
+DETACHED_MAX_CENTROID_M = 40.0
+DETACHED_MAX_STRUCTURES = 4
+DETACHED_OVERLAP_FRACTION = 0.10
+DETACHED_MAX_AREA_FRACTION = 0.6
+DETACHED_MAX_AREA_SQFT = 1500.0
+# Provider tags that mark a footprint as a separate dwelling — never
+# an outbuilding of the subject property, however close it stands.
+DETACHED_DWELLING_TAGS = frozenset(
+    {"house", "detached", "semidetached_house", "residential", "apartments", "bungalow", "terrace"}
+)
+
+
+def _polygon_gap_meters(first: Polygon, second: Polygon) -> float:
+    """Edge-to-edge distance between two footprints, in metres."""
+    center = first.representative_point()
+    local = CRS.from_proj4(
+        f"+proj=aeqd +lat_0={center.y} +lon_0={center.x} +datum=WGS84 +units=m +no_defs"
+    )
+    transformer = Transformer.from_crs("EPSG:4326", local, always_xy=True)
+
+    def project(polygon: Polygon) -> Polygon:
+        return Polygon([transformer.transform(x, y) for x, y in polygon.exterior.coords])
+
+    return float(project(first).distance(project(second)))
+
+
+def _centroid_distance_meters(first: Polygon, second: Polygon) -> float:
+    """Distance between two footprints' centroids, in metres."""
+    center = first.centroid
+    local = CRS.from_proj4(
+        f"+proj=aeqd +lat_0={center.y} +lon_0={center.x} +datum=WGS84 +units=m +no_defs"
+    )
+    transformer = Transformer.from_crs("EPSG:4326", local, always_xy=True)
+    ax, ay = transformer.transform(center.x, center.y)
+    bx, by = transformer.transform(second.centroid.x, second.centroid.y)
+    return float(math.hypot(bx - ax, by - ay))
+
+
+def _classify_detached_structures(
+    main_polygon: Polygon,
+    main_metadata: dict[str, Any],
+    pool: list[tuple[float, Polygon, dict[str, Any]]],
+    street_address: str | None,
+) -> tuple[list[tuple[float, Polygon, dict[str, Any]]], list[dict[str, Any]]]:
+    """Split the footprint candidate pool into detached structures of
+    the main building's property versus everything else.
+
+    Returns (accepted, audit): accepted holds (gap_m, polygon,
+    metadata) sorted by gap to the main footprint, capped at
+    DETACHED_MAX_STRUCTURES; audit records the decision and reasons
+    for EVERY pool candidate so a classification can be reviewed
+    after the fact. Pure geometry/metadata — no provider calls.
+    """
+    main_candidate_id = main_metadata.get("candidate_id")
+    target_address_key = _normalize_street_address(street_address)
+    main_area_sqft = float(main_metadata.get("area_sqft") or 0.0) or _polygon_area_sqft(
+        main_polygon
+    )
+    accepted: list[tuple[float, Polygon, dict[str, Any]]] = []
+    audit: list[dict[str, Any]] = []
+    for _distance, polygon, meta in pool:
+        candidate_id = meta.get("candidate_id")
+        entry: dict[str, Any] = {
+            "candidate_id": candidate_id,
+            "provider": meta.get("provider"),
+            "area_sqft": meta.get("area_sqft"),
+        }
+        if candidate_id == main_candidate_id:
+            entry.update(decision="main", reasons=["selected as the main structure"])
+            audit.append(entry)
+            continue
+        reasons: list[str] = []
+        rejected: str | None = None
+        # A second provider's rendering of the SAME building survives
+        # the IoU dedupe when the two outlines differ enough; a real
+        # detached structure never overlaps the main footprint.
+        try:
+            overlap = polygon.intersection(main_polygon).area
+            smaller = min(polygon.area, main_polygon.area)
+            overlap_fraction = overlap / smaller if smaller > 0 else 0.0
+        except Exception:
+            overlap_fraction = 0.0
+        if overlap_fraction > DETACHED_OVERLAP_FRACTION:
+            rejected = (
+                f"overlaps the main footprint ({overlap_fraction:.0%} of the smaller "
+                "outline) — same building from another source, not a detached structure"
+            )
+        gap_m = _polygon_gap_meters(main_polygon, polygon)
+        entry["gap_to_main_m"] = round(gap_m, 2)
+        if rejected is None and gap_m > DETACHED_MAX_GAP_M:
+            rejected = (
+                f"{gap_m:.1f} m from the main footprint exceeds the "
+                f"{DETACHED_MAX_GAP_M:.0f} m same-property limit"
+            )
+        # Edge gap alone is not enough on wide lots: a wide main
+        # house can sit within 45 m edge-to-edge of the NEXT street's
+        # houses. A genuine outbuilding stands within the same lot,
+        # so its centre stays near the main house's centre.
+        centroid_m = _centroid_distance_meters(main_polygon, polygon)
+        entry["centroid_to_main_m"] = round(centroid_m, 2)
+        if rejected is None and centroid_m > DETACHED_MAX_CENTROID_M:
+            rejected = (
+                f"centre is {centroid_m:.1f} m from the main house's centre, beyond the "
+                f"{DETACHED_MAX_CENTROID_M:.0f} m same-lot limit — a building on another lot"
+            )
+        candidate_area = float(meta.get("area_sqft") or 0.0)
+        if rejected is None and (
+            candidate_area > DETACHED_MAX_AREA_SQFT
+            or candidate_area > DETACHED_MAX_AREA_FRACTION * main_area_sqft
+        ):
+            rejected = (
+                f"footprint area {candidate_area:.0f} sq ft is house-sized (over the "
+                f"{DETACHED_MAX_AREA_SQFT:.0f} sq ft outbuilding cap or "
+                f"{DETACHED_MAX_AREA_FRACTION:.0%} of the main house's "
+                f"{main_area_sqft:.0f} sq ft) — a neighbouring house, not an outbuilding"
+            )
+        tags = meta.get("building_tags") or {}
+        if rejected is None:
+            building_tag = str(tags.get("building") or "").strip().lower()
+            if building_tag in DETACHED_DWELLING_TAGS:
+                rejected = f"provider tags it as a separate dwelling (building={building_tag})"
+        if rejected is None:
+            # A footprint whose own recorded street address differs
+            # from the requested address is the neighbour's building,
+            # however close it stands.
+            recorded_address = _normalize_street_address(tags.get("PROP_ADDR"))
+            if recorded_address and target_address_key and recorded_address != target_address_key:
+                rejected = "recorded street address differs from the requested address"
+            elif recorded_address and target_address_key:
+                reasons.append("recorded street address matches the requested address")
+        if rejected is not None:
+            entry.update(decision="rejected", reasons=[rejected])
+            audit.append(entry)
+            continue
+        reasons.append(f"separate footprint {gap_m:.1f} m from the main structure")
+        reasons.append(f"footprint area {candidate_area:.0f} sq ft")
+        entry.update(decision="detached", reasons=reasons)
+        audit.append(entry)
+        accepted.append((gap_m, polygon, meta))
+    accepted.sort(key=lambda row: (row[0], str(row[2].get("candidate_id"))))
+    if len(accepted) > DETACHED_MAX_STRUCTURES:
+        capped_ids = {row[2].get("candidate_id") for row in accepted[DETACHED_MAX_STRUCTURES:]}
+        for entry in audit:
+            if entry.get("candidate_id") in capped_ids and entry.get("decision") == "detached":
+                entry.update(
+                    decision="rejected",
+                    reasons=[
+                        f"beyond the {DETACHED_MAX_STRUCTURES} nearest detached structures cap"
+                    ],
+                )
+        accepted = accepted[:DETACHED_MAX_STRUCTURES]
+    return accepted, audit
 
 
 async def _geocode_census(address: str) -> tuple[float, float, str]:
@@ -873,6 +1056,13 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
                 },
             )
         _, selected_polygon, selected_metadata = selected[0]
+        # Expose the full post-filter candidate pool to the analysis
+        # layer (internal key, never serialised into a response) so
+        # multi-structure runs can identify detached buildings on the
+        # same property. The pool is captured before any address-match
+        # narrowing: narrowing decides the MAIN building, while the
+        # pool is the evidence for what else stands on the property.
+        selected_metadata["_candidate_pool"] = list(candidates)
         return selected_polygon, selected_metadata
 
     # Hands-off selection (Fredy's rule: address in, report out, no
@@ -887,6 +1077,14 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     # is auditable; an explicit footprint_candidate_id still
     # overrides it. A single exact address-attribute match
     # short-circuits the pool, as before.
+    # Multi-structure evidence pool: every eligible candidate that
+    # survived area/distance filtering, deduplication and parcel
+    # narrowing, captured BEFORE the address-attribute narrowing below
+    # (see the explicit-selection path for the rationale). Attached to
+    # the winning candidate's metadata under an internal key; the
+    # analysis layer pops it and it never reaches a response.
+    candidate_pool = list(candidates)
+
     exact_address_matches = [
         candidate for candidate in candidates
         if candidate[2].get("address_attribute_match") is True
@@ -931,6 +1129,7 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     )
     _, polygon, metadata = scored[0]
     best_score, best_basis = _selection_score(scored[0])
+    metadata["_candidate_pool"] = candidate_pool
     metadata["selection"] = {
         "method": "automatic_score",
         "score": round(best_score, 2),
@@ -4264,7 +4463,88 @@ def _analysis_cache_key(request: AnalyzeRequest) -> str:
     # address run, so it must never share the plain run's cache entry.
     if request.pin_lat is not None and request.pin_lon is not None:
         key += f":pin:{float(request.pin_lat):.6f},{float(request.pin_lon):.6f}"
+    # A multi-structure run returns extra payload the plain run does
+    # not have; the two must never share a cache entry either.
+    if request.include_outbuilding:
+        key += ":structures"
     return key
+
+
+async def _measure_footprint(
+    footprint: Polygon,
+    footprint_provider: Any,
+    report: ProgressReporter | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], Any]:
+    """Measure one building footprint with the LiDAR facet pipeline:
+    the COPC path first, the USGS TNM LAZ tiles as fallback — the
+    exact sequence the main structure has always used, shared so a
+    detached structure is measured identically to the main house.
+    Returns (facets, lidar_meta, edge_lengths_lf); the edge totals
+    are popped out of the metadata exactly as the single-structure
+    flow did."""
+    try:
+        facets, lidar_meta = _read_lidar_facets(footprint, footprint_provider)
+    except Exception as exc:
+        facets, lidar_meta = [], {"reason": f"3DEP lookup failed: {type(exc).__name__}"}
+    if not facets:
+        # The COPC path produced no facets. That covers both "no COPC items
+        # intersect the footprint" (true for most of Miami-Dade) and the
+        # subtler case where an item intersects the search bbox yet yields no
+        # usable roof points (observed in Broward: stac_items=1, tiles_used=0).
+        # Either way, fall back to the same USGS surveys published as LAZ
+        # tiles via The National Map.
+        try:
+            if report is not None:
+                tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
+                    footprint, footprint_provider, report=report
+                )
+            else:
+                tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
+                    footprint, footprint_provider
+                )
+        except Exception as exc:
+            tnm_facets, tnm_meta = [], {"reason": f"TNM lookup failed: {type(exc).__name__}"}
+        if tnm_facets:
+            facets, lidar_meta = tnm_facets, tnm_meta
+        else:
+            lidar_meta = {**lidar_meta, "tnm_fallback": tnm_meta}
+    edge_lengths_lf = lidar_meta.pop("edge_lengths_lf", None)
+    return facets, lidar_meta, edge_lengths_lf
+
+
+def _structure_roof_payload(
+    facets: list[dict[str, Any]], lidar_meta: dict[str, Any], edge_lengths_lf: Any
+) -> dict[str, Any]:
+    """The `roof` object for one structure, shaped exactly like the
+    top-level response's roof object."""
+    area = sum(facet["area_sqft"] for facet in facets)
+    return {
+        "facet_count": len(facets),
+        "area_sqft": round(area, 1) if facets else None,
+        "total_squares": round(area / 100.0, 3) if facets else None,
+        "dominant_pitch_rise_per_12": (
+            max(facets, key=lambda facet: facet["area_sqft"])["pitch_rise_per_12"]
+            if facets
+            else None
+        ),
+        "facets": facets,
+        "edge_lengths_lf": edge_lengths_lf if facets else None,
+        "drawing_ready": bool(lidar_meta.get("drawing_ready")) if facets else False,
+    }
+
+
+def _structure_footprint_payload(polygon: Polygon, meta: dict[str, Any]) -> dict[str, Any]:
+    """The `footprint` object for one structure, shaped exactly like
+    the top-level response's footprint object."""
+    return {
+        "source": meta.get("provider", "Unknown public footprint source"),
+        "source_id": meta.get("source_id"),
+        "osm_way_id": meta.get("source_id") if meta.get("provider") == "OpenStreetMap" else None,
+        "area_sqft": round(_polygon_area_sqft(polygon), 1),
+        **_footprint_match_fields(meta),
+        "polygon_geojson": mapping(polygon),
+        "building_tags": meta.get("building_tags", {}),
+    }
 
 
 async def _run_analysis(
@@ -4304,39 +4584,18 @@ async def _run_analysis(
     if report is not None:
         report("footprint", "Matching the building footprint", None)
     footprint, footprint_meta = await get_footprint(selection_lat, selection_lon, request.street_address, request.footprint_candidate_id)
+    # Internal multi-structure evidence (see get_footprint); popped
+    # unconditionally so it can never leak into a response.
+    candidate_pool = footprint_meta.pop("_candidate_pool", [])
     footprint_sqft = _polygon_area_sqft(footprint)
     footprint_provider = footprint_meta.get("provider")
     if report is not None:
         report("lidar", "Reading public LiDAR coverage for the building", None)
-    try:
-        facets, lidar_meta = _read_lidar_facets(footprint, footprint_provider)
-    except Exception as exc:
-        facets, lidar_meta = [], {"reason": f"3DEP lookup failed: {type(exc).__name__}"}
-    if not facets:
-        # The COPC path produced no facets. That covers both "no COPC items
-        # intersect the footprint" (true for most of Miami-Dade) and the
-        # subtler case where an item intersects the search bbox yet yields no
-        # usable roof points (observed in Broward: stac_items=1, tiles_used=0).
-        # Either way, fall back to the same USGS surveys published as LAZ
-        # tiles via The National Map.
-        try:
-            if report is not None:
-                tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
-                    footprint, footprint_provider, report=report
-                )
-            else:
-                tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
-                    footprint, footprint_provider
-                )
-        except Exception as exc:
-            tnm_facets, tnm_meta = [], {"reason": f"TNM lookup failed: {type(exc).__name__}"}
-        if tnm_facets:
-            facets, lidar_meta = tnm_facets, tnm_meta
-        else:
-            lidar_meta = {**lidar_meta, "tnm_fallback": tnm_meta}
+    facets, lidar_meta, edge_lengths_lf = await _measure_footprint(
+        footprint, footprint_provider, report
+    )
     lidar_area = sum(facet["area_sqft"] for facet in facets)
     status = "lidar_facets" if facets else "footprint_only"
-    edge_lengths_lf = lidar_meta.pop("edge_lengths_lf", None)
     result = {
         "status": status,
         "verification": "unverified_public_data",
@@ -4390,6 +4649,86 @@ async def _run_analysis(
             "or site-verified takeoff. Confirm geometry and quantities before ordering materials or submitting permits."
         ),
     }
+    if request.include_outbuilding:
+        # Multi-structure mode: the top-level payload above always
+        # describes the main structure; this additive block identifies
+        # the detached structures on the same property from the
+        # footprint candidate pool, measures each with the same
+        # pipeline, and reports every structure in the same shape so
+        # the CRM can swap between them without re-measuring.
+        detached, classification_audit = _classify_detached_structures(
+            footprint, footprint_meta, candidate_pool, request.street_address
+        )
+        selection = footprint_meta.get("selection")
+        structures: list[dict[str, Any]] = [
+            {
+                "role": "main",
+                "label": "Main house",
+                "candidate_id": footprint_meta.get("candidate_id"),
+                "status": result["status"],
+                "provider": footprint_provider,
+                "selection_basis": (
+                    selection.get("basis", []) if isinstance(selection, dict) else []
+                ),
+                "distance_to_main_m": 0.0,
+                "location": {
+                    "lat": round(float(footprint.centroid.y), 7),
+                    "lon": round(float(footprint.centroid.x), 7),
+                },
+                "footprint": result["footprint"],
+                "lidar": result["lidar"],
+                "roof": result["roof"],
+            }
+        ]
+        audit_by_candidate = {
+            entry.get("candidate_id"): entry for entry in classification_audit
+        }
+        for index, (gap_m, structure_polygon, structure_meta) in enumerate(detached, start=1):
+            if report is not None:
+                report(
+                    "fitting_planes",
+                    f"Measuring detached structure {index} of {len(detached)}",
+                    None,
+                )
+            s_facets, s_lidar_meta, s_edges = await _measure_footprint(
+                structure_polygon, structure_meta.get("provider"), report
+            )
+            audit_entry = audit_by_candidate.get(structure_meta.get("candidate_id")) or {}
+            structures.append(
+                {
+                    "role": "detached",
+                    "label": f"Detached structure {index}",
+                    "candidate_id": structure_meta.get("candidate_id"),
+                    "status": "lidar_facets" if s_facets else "footprint_only",
+                    "provider": structure_meta.get("provider"),
+                    "selection_basis": audit_entry.get("reasons", []),
+                    "distance_to_main_m": round(gap_m, 2),
+                    "location": {
+                        "lat": round(float(structure_polygon.centroid.y), 7),
+                        "lon": round(float(structure_polygon.centroid.x), 7),
+                    },
+                    "footprint": _structure_footprint_payload(
+                        structure_polygon, structure_meta
+                    ),
+                    "lidar": {
+                        "source": "Microsoft Planetary Computer / USGS 3DEP COPC",
+                        **s_lidar_meta,
+                    },
+                    "roof": _structure_roof_payload(s_facets, s_lidar_meta, s_edges),
+                }
+            )
+        result["structures"] = structures
+        result["structures_audit"] = {
+            "method": "same_property_footprint_classification",
+            "main_candidate_id": footprint_meta.get("candidate_id"),
+            "candidates_considered": len(classification_audit),
+            "detached_max_gap_m": DETACHED_MAX_GAP_M,
+            "detached_max_centroid_m": DETACHED_MAX_CENTROID_M,
+            "detached_max_structures": DETACHED_MAX_STRUCTURES,
+            "detached_max_area_sqft": DETACHED_MAX_AREA_SQFT,
+            "detached_max_area_fraction": DETACHED_MAX_AREA_FRACTION,
+            "candidates": classification_audit,
+        }
     # Only successful measurements are cached. A footprint_only
     # result usually means a transient provider failure (a USGS
     # throttle or 5xx during tile download); caching it for the full

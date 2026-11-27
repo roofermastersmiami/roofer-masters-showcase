@@ -2132,3 +2132,269 @@ def test_tnm_raises_first_download_error_when_no_project_can_be_read(monkeypatch
         _run_tnm_with_projects(
             monkeypatch, tmp_path, points_local, download_tile=failing_download
         )
+# ---------------------------------------------------------------------------
+# Multi-structure identification (include_outbuilding)
+#
+# A detached structure is a separate footprint on the same property as
+# the selected main building: near it, not overlapping it, and with no
+# evidence it belongs to a different address. These tests pin the
+# classification rules and the additive `structures` response block.
+# ---------------------------------------------------------------------------
+
+from main import _classify_detached_structures
+
+
+def _box(west, south, east, north):
+    return Polygon([(west, south), (east, south), (east, north), (west, north)])
+
+
+# ~21 m x ~22 m main house at (25.0, -80.0).
+_MAIN_POLYGON = _box(-80.0002, 24.9999, -80.0, 25.0001)
+_MAIN_META = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 4900.0}
+
+
+def _pool_entry(polygon, candidate_id, area_sqft=500.0, tags=None):
+    return (
+        0.0,
+        polygon,
+        {
+            "candidate_id": candidate_id,
+            "provider": "Test",
+            "area_sqft": area_sqft,
+            "building_tags": tags or {},
+        },
+    )
+
+
+def test_classify_accepts_nearby_detached_shed():
+    # ~10 m east of the main footprint: a classic backyard shed/garage.
+    shed = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(_MAIN_POLYGON, "main-id"), _pool_entry(shed, "shed-id")],
+        "123 Main St",
+    )
+    assert [row[2]["candidate_id"] for row in accepted] == ["shed-id"]
+    decisions = {entry["candidate_id"]: entry["decision"] for entry in audit}
+    assert decisions == {"main-id": "main", "shed-id": "detached"}
+    shed_entry = next(e for e in audit if e["candidate_id"] == "shed-id")
+    assert 5.0 < shed_entry["gap_to_main_m"] < 20.0
+
+
+def test_classify_rejects_distant_neighbour():
+    far = _box(-79.9982, 24.9999, -79.9980, 25.0001)  # ~190 m east
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON, _MAIN_META, [_pool_entry(far, "far-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same-property limit" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_overlapping_duplicate_of_main():
+    # A second provider's rendering of the SAME house, shifted ~2 m.
+    duplicate = _box(-80.00018, 24.99992, -79.99998, 25.00012)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON, _MAIN_META, [_pool_entry(duplicate, "dup-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same building from another source" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_footprint_with_a_different_recorded_address():
+    neighbour = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(neighbour, "nb-id", tags={"PROP_ADDR": "125 Main St"})],
+        "123 Main St, Test City, FL",
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "differs from the requested address" in audit[0]["reasons"][0]
+
+
+def test_classify_accepts_matching_recorded_address():
+    garage = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(garage, "g-id", tags={"PROP_ADDR": "123 Main Street"})],
+        "123 Main St, Test City, FL",
+    )
+    assert [row[2]["candidate_id"] for row in accepted] == ["g-id"]
+    entry = next(e for e in audit if e["candidate_id"] == "g-id")
+    assert any("matches the requested address" in r for r in entry["reasons"])
+
+
+def test_classify_rejects_house_sized_neighbour_next_door():
+    # The dense-street failure mode, verified live at 9201 SW 24th
+    # Terrace: the neighbouring house stands a few metres away but is
+    # house-sized, so it must never become a "detached structure".
+    neighbour = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(neighbour, "nb-id", area_sqft=2600.0)],
+        "123 Main St",
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "house-sized" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_outbuilding_over_fraction_of_a_small_main_house():
+    # A 900 sq ft footprint beside a 1,200 sq ft main house is over
+    # the 60% fraction even though it is under the absolute cap.
+    small_main_meta = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 1200.0}
+    candidate = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        small_main_meta,
+        [_pool_entry(candidate, "big-id", area_sqft=900.0)],
+        "123 Main St",
+    )
+    assert accepted == []
+    assert "house-sized" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_provider_tagged_dwelling():
+    candidate = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(candidate, "osm-id", tags={"building": "house"})],
+        "123 Main St",
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "separate dwelling" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_small_building_beyond_the_same_lot_centre_limit():
+    # A wide main house can be within the edge-gap limit of a small
+    # building on the next lot (verified live at 600 Mendoza Ave:
+    # a 1,227 sq ft building 58 m east on the street setback line).
+    wide_main = _box(-80.0006, 24.9999, -80.0, 25.0001)
+    wide_main_meta = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 12000.0}
+    small = _box(-79.99965, 24.99995, -79.9995, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        wide_main, wide_main_meta, [_pool_entry(small, "far-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same-lot limit" in audit[0]["reasons"][0]
+    assert audit[0]["gap_to_main_m"] < 45.0  # edge gap alone would have passed it
+    assert audit[0]["centroid_to_main_m"] > 40.0
+
+
+def test_classify_caps_detached_structures_at_the_nearest_four():
+    # Six sheds around the main house, all inside the gap, size and
+    # same-lot centre limits.
+    spots = [
+        (-79.99987, 24.99994, 0.00014),  # east
+        (-80.00041, 24.99994, 0.00014),  # west
+        (-80.00017, 25.00023, 0.00014),  # north
+        (-80.00017, 24.99963, 0.00014),  # south
+        (-79.99987, 25.00016, 0.00012),  # north-east
+        (-80.00039, 25.00016, 0.00012),  # north-west
+    ]
+    pool = [
+        _pool_entry(_box(west, south, west + size, south + size), f"shed-{index}")
+        for index, (west, south, size) in enumerate(spots)
+    ]
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON, _MAIN_META, pool, "123 Main St"
+    )
+    assert len(accepted) == 4
+    rejected = [e for e in audit if e["decision"] == "rejected"]
+    assert len(rejected) == 2
+    assert all("nearest detached structures cap" in e["reasons"][0] for e in rejected)
+    gaps = [row[0] for row in accepted]
+    assert gaps == sorted(gaps)
+
+
+def _structures_fakes(monkeypatch, pool):
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Structures test address", {"source": "Test geocoder"}
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        meta = {
+            "provider": "Test Footprints",
+            "candidate_id": "main-id",
+            "address_point_inside_footprint": True,
+            "address_to_footprint_distance_m": 0.0,
+            "building_tags": {},
+            "_candidate_pool": pool,
+        }
+        return _MAIN_POLYGON, meta
+
+    def fake_lidar(polygon, _provider=None):
+        if polygon is _MAIN_POLYGON:
+            return (
+                [{"area_sqft": 2000.0, "pitch_rise_per_12": 6.0}],
+                {"tiles_used": 1, "edge_lengths_lf": {"ridge": 10.0}},
+            )
+        return (
+            [{"area_sqft": 320.0, "pitch_rise_per_12": 4.0}],
+            {"tiles_used": 1, "edge_lengths_lf": {"ridge": 4.0}},
+        )
+
+    async def fake_tnm(_polygon, _provider=None, report=None):
+        return [], {"reason": "test stub"}
+
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(roof_service, "_read_lidar_facets", fake_lidar)
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+
+
+def test_analyze_with_outbuilding_returns_structures(monkeypatch):
+    shed = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    pool = [_pool_entry(_MAIN_POLYGON, "main-id"), _pool_entry(shed, "shed-id")]
+    _structures_fakes(monkeypatch, pool)
+    client = TestClient(roof_service.app)
+
+    response = client.post(
+        "/v1/roof/analyze",
+        json={
+            "street_address": "Unique structures endpoint test address",
+            "include_outbuilding": True,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    # Headline numbers still describe the main structure only.
+    assert payload["roof"]["area_sqft"] == 2000.0
+    structures = payload["structures"]
+    assert [s["role"] for s in structures] == ["main", "detached"]
+    assert structures[0]["label"] == "Main house"
+    assert structures[0]["roof"]["area_sqft"] == payload["roof"]["area_sqft"]
+    assert structures[0]["footprint"]["area_sqft"] == payload["footprint"]["area_sqft"]
+    assert structures[1]["label"] == "Detached structure 1"
+    assert structures[1]["candidate_id"] == "shed-id"
+    assert structures[1]["status"] == "lidar_facets"
+    assert structures[1]["roof"]["area_sqft"] == 320.0
+    assert structures[1]["distance_to_main_m"] > 0
+    audit = payload["structures_audit"]
+    assert audit["main_candidate_id"] == "main-id"
+    assert audit["candidates_considered"] == 2
+
+
+def test_analyze_without_outbuilding_flag_has_no_structures(monkeypatch):
+    shed = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    pool = [_pool_entry(_MAIN_POLYGON, "main-id"), _pool_entry(shed, "shed-id")]
+    _structures_fakes(monkeypatch, pool)
+    client = TestClient(roof_service.app)
+
+    response = client.post(
+        "/v1/roof/analyze",
+        json={"street_address": "Unique plain endpoint test address"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "structures" not in payload
+    assert "structures_audit" not in payload
+    assert payload["roof"]["area_sqft"] == 2000.0

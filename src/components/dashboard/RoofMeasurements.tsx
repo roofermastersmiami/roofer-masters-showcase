@@ -23,7 +23,13 @@ import { useCrm } from "./CrmContext";
 import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
-import { parseMeasurementPin } from "@/lib/roof-order-notes";
+import { parseIncludeOutbuilding, parseMeasurementPin } from "@/lib/roof-order-notes";
+import {
+  ALL_STRUCTURES_KEY,
+  pickedStructureDrawing,
+  structureEntries,
+  structurePdfTitle,
+} from "@/lib/roof-structures";
 import { REPORT_STATUS_LABELS } from "@/lib/roof-order-schema";
 import { loadReportAerial } from "@/lib/report-aerial.functions";
 import type { AerialPhoto } from "@/lib/aerial-photo";
@@ -77,6 +83,11 @@ export function RoofMeasurements({
     [zoomKey, setZoomKey] = useState(0),
     [media] = useState<Media[]>(() => restoreRoofDrawingMedia(initialDrawing?.media));
   const [aerialImageUrl, setAerialImageUrl] = useState("");
+  // Multi-structure picker: "main" (the report's own drawing), a
+  // detached structure's candidate key, or "all" (combined view).
+  // Picking swaps the displayed drawing + measurements instantly
+  // from the stored per-structure data — nothing is re-measured.
+  const [pickedStructureKey, setPickedStructureKey] = useState("main");
   const aerialGroundImage = media.find(
     (item) =>
       item.category === "aerial" &&
@@ -253,6 +264,48 @@ export function RoofMeasurements({
         wastePercent: d.waste,
       })
     : null;
+  // Multi-structure display: the picker swaps which structure's
+  // drawing the scene, headline stats and plane table describe.
+  // Saving, the material list and the report PDF on file always stay
+  // with the main drawing `d`; only a manual Download PDF follows
+  // the picker (labeled, download-only — see exportPdf).
+  const entries = structureEntries(d);
+  const picked = pickedStructureDrawing(entries, pickedStructureKey);
+  const displayDrawing = picked?.drawing ?? d;
+  let displayMeasurement: ReturnType<typeof measureDrawing> | null = measurement;
+  if (picked) {
+    try {
+      displayMeasurement = measureDrawing(displayDrawing);
+    } catch {
+      displayMeasurement = null;
+    }
+  }
+  const displaySummary = picked
+    ? displayMeasurement
+      ? calculateRoofSummary({
+          facets: displayMeasurement.planes.map((p) => ({
+            id: p.id,
+            name: p.name,
+            surfaceAreaSqFt: p.area,
+            pitchRisePer12: p.pitch,
+          })),
+          edges: measuredEdgeTotalsToInputs(displayMeasurement.edges),
+          wastePercent: displayDrawing.waste,
+        })
+      : null
+    : roofSummary;
+  const pickChangeSeen = useRef(false);
+  useEffect(() => {
+    if (!pickChangeSeen.current) {
+      pickChangeSeen.current = true;
+      return;
+    }
+    setSelected(displayDrawing.planes[0]?.id ?? "");
+    setFit((value) => value + 1);
+    // Only the pick itself reframes the view; displayDrawing is
+    // derived from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedStructureKey]);
   const propertyRow = properties.data?.find((p) => p.id === property),
     customer = customers.data?.find((c) => c.id === propertyRow?.customer_id);
   const workspaceAddress = report?.address?.trim() || propertyRow?.address?.trim() || "";
@@ -339,7 +392,92 @@ export function RoofMeasurements({
       );
     }
   }
+  // Structure-specific PDF: when the picker is on a detached
+  // structure (or "All structures"), Download PDF produces THAT
+  // structure's report — its own drawing and numbers, labeled on the
+  // cover and in the document title — as a local download only. The
+  // report PDF stored on the report always remains the main house's,
+  // so structures can never be silently mixed.
+  async function exportStructurePdf(pickedEntry: { label: string; drawing: RoofDrawing }) {
+    setBusy(true);
+    try {
+      const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
+      const photos = [];
+      if (pickedEntry.drawing.geo_reference) {
+        // Narrowed object: roofCoverFraming's parameter does not
+        // accept a full drawing under exactOptionalPropertyTypes.
+        const framing = roofCoverFraming({
+          planes: pickedEntry.drawing.planes,
+          geo_reference: pickedEntry.drawing.geo_reference,
+        });
+        const coverLatitude = framing?.latitude ?? pickedEntry.drawing.geo_reference.originLatitude;
+        const coverLongitude =
+          framing?.longitude ?? pickedEntry.drawing.geo_reference.originLongitude;
+        let aerial: AerialPhoto | null = null;
+        try {
+          const result = await reportAerialFn({
+            data: {
+              latitude: coverLatitude,
+              longitude: coverLongitude,
+              ...(framing ? { halfExtentMeters: framing.halfExtentMeters } : {}),
+            },
+          });
+          if ("imageBase64" in result && result.imageBase64) {
+            const binary = atob(result.imageBase64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            aerial = {
+              bytes,
+              mime: result.mime,
+              category: "aerial",
+              name: "Aerial photo (Esri World Imagery)",
+              source: result.source,
+              latitude: result.latitude,
+              longitude: result.longitude,
+            };
+          }
+        } catch {
+          // Fall through to the client-side stitch.
+        }
+        if (!aerial) {
+          try {
+            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
+            aerial = await fetchAerialPhoto(
+              coverLatitude,
+              coverLongitude,
+              framing?.halfExtentMeters,
+            );
+          } catch {
+            // Imagery is best-effort; never block the report on it.
+          }
+        }
+        if (aerial) photos.unshift(aerial);
+      }
+      const bytes = await roofDrawingPdf(
+        structurePdfTitle(title, pickedEntry.label),
+        pickedEntry.drawing,
+        report?.title || customer?.name || "",
+        workspaceAddress,
+        photos,
+        { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
+        { theme: "roofsnap", logoScale: 1, structureLabel: pickedEntry.label },
+      );
+      const { downloadPdf } = await import("./proposal-data");
+      downloadPdf(bytes, structurePdfTitle(title, pickedEntry.label));
+      toast.success(
+        `${pickedEntry.label} report downloaded. The report PDF on file stays the main house's.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate report");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function exportPdf(share = false, savedSnapshot = false) {
+    if (!share && !savedSnapshot && picked) {
+      await exportStructurePdf(picked);
+      return;
+    }
     if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error("Add measured roof geometry before exporting this property report");
       return;
@@ -566,11 +704,42 @@ export function RoofMeasurements({
             {reportDate && <span>· {reportDate}</span>}
           </p>
         </div>
-        <Button variant="outline" disabled={busy || !measurement} onClick={() => void exportPdf()}>
+        <Button
+          variant="outline"
+          disabled={busy || !displayMeasurement}
+          onClick={() => void exportPdf()}
+        >
           <Download /> Download PDF
         </Button>
       </div>
       <div className="min-w-0 border-b border-border">
+        {entries.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-3">
+            <span className="text-xs font-medium text-muted-foreground">Structure</span>
+            {entries.map((entry) => (
+              <Button
+                key={entry.key}
+                size="sm"
+                variant={pickedStructureKey === entry.key ? "secondary" : "ghost"}
+                onClick={() => setPickedStructureKey(entry.key)}
+              >
+                {entry.label}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant={pickedStructureKey === ALL_STRUCTURES_KEY ? "secondary" : "ghost"}
+              onClick={() => setPickedStructureKey(ALL_STRUCTURES_KEY)}
+            >
+              All structures
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {picked
+                ? `Showing ${picked.label.toLowerCase()} — the drawing and measurements update automatically.`
+                : "Showing the main house."}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between border-b border-border py-3">
           <div className="flex gap-2">
             <WorkspaceViewTabs
@@ -649,7 +818,7 @@ export function RoofMeasurements({
                 fallback={<p className="p-8 text-muted-foreground">Loading drawing workspace…</p>}
               >
                 <Scene
-                  drawing={d}
+                  drawing={displayDrawing}
                   aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
                   aerialImageCenter={
                     aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined
@@ -695,37 +864,37 @@ export function RoofMeasurements({
           {error}
         </p>
       )}
-      {measurement && (
+      {displayMeasurement && (
         <div className="grid grid-cols-2 gap-4 border-b border-border py-5 sm:grid-cols-4">
           <div>
             <p className="text-xs text-muted-foreground">Measured roof area</p>
-            <p className="text-xl font-bold">{measurement.area.toFixed(1)} sq ft</p>
+            <p className="text-xl font-bold">{displayMeasurement.area.toFixed(1)} sq ft</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Roofing squares</p>
-            <p className="text-xl font-bold">{measurement.squares.toFixed(2)}</p>
+            <p className="text-xl font-bold">{displayMeasurement.squares.toFixed(2)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Ridge / hip / valley</p>
             <p className="text-sm font-bold">
-              {measurement.edges.ridge.toFixed(1)} / {measurement.edges.hip.toFixed(1)} /{" "}
-              {measurement.edges.valley.toFixed(1)} ft
+              {displayMeasurement.edges.ridge.toFixed(1)} / {displayMeasurement.edges.hip.toFixed(1)} /{" "}
+              {displayMeasurement.edges.valley.toFixed(1)} ft
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Eaves / rakes</p>
             <p className="text-sm font-bold">
-              {measurement.edges.eave.toFixed(1)} / {measurement.edges.rake.toFixed(1)} ft
+              {displayMeasurement.edges.eave.toFixed(1)} / {displayMeasurement.edges.rake.toFixed(1)} ft
             </p>
           </div>
         </div>
       )}
-      {roofSummary && (
+      {displaySummary && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Including {d.waste}% waste: {roofSummary.orderSquares.toFixed(2)} order squares
+          Including {displayDrawing.waste}% waste: {displaySummary.orderSquares.toFixed(2)} order squares
         </p>
       )}
-      {measurement && (
+      {displayMeasurement && (
         <section className="my-5 rounded-lg border border-border p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold">Roof plane measurements</h3>
@@ -744,7 +913,7 @@ export function RoofMeasurements({
                 </tr>
               </thead>
               <tbody>
-                {measurement.planes.map((facet) => (
+                {displayMeasurement.planes.map((facet) => (
                   <tr key={facet.id} className="border-b border-border/60">
                     <td className="py-2 pr-3 font-medium">{facet.name}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">
@@ -762,9 +931,9 @@ export function RoofMeasurements({
                   <td className="py-2 pr-3">Total</td>
                   <td className="py-2 pr-3 text-right">—</td>
                   <td className="py-2 pr-3 text-right tabular-nums">
-                    {measurement.area.toFixed(1)}
+                    {displayMeasurement.area.toFixed(1)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">{measurement.squares.toFixed(2)}</td>
+                  <td className="py-2 text-right tabular-nums">{displayMeasurement.squares.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -778,8 +947,9 @@ export function RoofMeasurements({
       <AutomatedRoofReport
         address={workspaceAddress}
         pointHint={report ? parseMeasurementPin(report.notes) : null}
+        includeOutbuilding={report ? parseIncludeOutbuilding(report.notes) : false}
         roofType={d.roof_type}
-        onApply={(detectedDrawing) => {
+        onApply={(detectedDrawing, detachedStructures = []) => {
           const hasExistingWork =
             Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1;
           if (
@@ -795,10 +965,29 @@ export function RoofMeasurements({
               roof_type: d.roof_type,
               waste: d.waste,
               condition: d.condition,
+              // Detached structures measured in the same run ride
+              // inside the main drawing so they save, reload and
+              // delete with the report. They are data for the
+              // structure picker — the main drawing's own planes
+              // stay the main house only.
+              ...(detachedStructures.length
+                ? {
+                    detached_structures: detachedStructures.map((structure) => ({
+                      ...structure,
+                      drawing: {
+                        ...structure.drawing,
+                        roof_type: d.roof_type,
+                        waste: d.waste,
+                        condition: d.condition,
+                      },
+                    })),
+                  }
+                : {}),
             };
             // Validate externally sourced geometry before it enters the editable report.
             measureDrawing(nextDrawing);
             edit(nextDrawing);
+            setPickedStructureKey("main");
             setSelected(nextDrawing.planes[0]?.id ?? "");
             setFit((value) => value + 1);
             toast.success(

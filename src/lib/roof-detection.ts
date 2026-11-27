@@ -32,6 +32,87 @@ const facetSchema = z.object({
     .optional(),
 });
 
+const footprintSchema = z.object({
+  source: z.string(),
+  area_sqft: z.number().finite().positive(),
+  address_point_inside_footprint: z.boolean().optional(),
+  address_to_footprint_distance_m: z.number().finite().nonnegative().optional(),
+  // Echoed by the service when the run was steered by a user-confirmed
+  // pin: the pin is the operator's verification of the building, so the
+  // geocode-distance warning must not fire for those runs.
+  point_hint: z
+    .object({
+      lat: z.number().finite().min(-90).max(90),
+      lon: z.number().finite().min(-180).max(180),
+      source: z.literal("user_pin"),
+    })
+    .optional(),
+  polygon_geojson: z.object({
+    type: z.literal("Polygon"),
+    coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()]))),
+  }),
+});
+
+const lidarSchema = z.object({
+  source: z.string(),
+  stac_items: z.number().int().nonnegative().optional(),
+  tiles_used: z.number().int().nonnegative().optional(),
+  tile_ids_used: z.array(z.string().min(1)).optional(),
+  building_class_points: z.number().int().nonnegative().optional(),
+  raw_building_class_points: z.number().int().nonnegative().optional(),
+  duplicate_points_removed: z.number().int().nonnegative().optional(),
+});
+
+const roofSchema = z.object({
+  facet_count: z.number().int().nonnegative(),
+  area_sqft: z.number().finite().positive().nullable(),
+  total_squares: z.number().finite().positive().nullable(),
+  dominant_pitch_rise_per_12: z.number().finite().nonnegative().nullable(),
+  facets: z.array(facetSchema),
+  edge_lengths_lf: z
+    .object({
+      ridge: z.number().finite().nonnegative(),
+      hip: z.number().finite().nonnegative(),
+      valley: z.number().finite().nonnegative(),
+      eave: z.number().finite().nonnegative(),
+      rake: z.number().finite().nonnegative(),
+      pitch_change: z.number().finite().nonnegative(),
+    })
+    .nullable(),
+  // True when every facet ring is the service's exact outline
+  // partition (see services/roof-detection _drawing_partition):
+  // the converter then skips its snap/trim surgery, which exists
+  // for legacy hull responses and introduces micro-defects into
+  // already exact tilings.
+  drawing_ready: z.boolean().optional(),
+});
+
+/** One building on the analysed property: the main house or a
+ * detached structure (garage, shed, guest house) the service
+ * identified and measured separately in multi-structure mode
+ * (`include_outbuilding`). Each entry mirrors the top-level
+ * footprint/roof shape so it converts to a drawing with the same
+ * converter; the top-level response always describes the main
+ * structure. */
+export const roofStructureSchema = z.object({
+  role: z.enum(["main", "detached"]),
+  label: z.string().min(1).max(80),
+  candidate_id: z.string().min(1).max(128).nullable(),
+  status: z.enum(["lidar_facets", "footprint_only"]),
+  provider: z.string().nullable().optional(),
+  selection_basis: z.array(z.string().max(300)).max(8).optional(),
+  distance_to_main_m: z.number().finite().nonnegative(),
+  location: z.object({
+    lat: z.number().finite().min(-90).max(90),
+    lon: z.number().finite().min(-180).max(180),
+  }),
+  footprint: footprintSchema,
+  lidar: lidarSchema.optional(),
+  roof: roofSchema,
+});
+
+export type RoofStructure = z.infer<typeof roofStructureSchema>;
+
 export const roofDetectionResponseSchema = z.object({
   status: z.enum(["lidar_facets", "footprint_only"]),
   verification: z.literal("unverified_public_data"),
@@ -40,60 +121,12 @@ export const roofDetectionResponseSchema = z.object({
     lat: z.number().finite().min(-90).max(90),
     lon: z.number().finite().min(-180).max(180),
   }),
-  footprint: z.object({
-    source: z.string(),
-    area_sqft: z.number().finite().positive(),
-    address_point_inside_footprint: z.boolean().optional(),
-    address_to_footprint_distance_m: z.number().finite().nonnegative().optional(),
-    // Echoed by the service when the run was steered by a user-confirmed
-    // pin: the pin is the operator's verification of the building, so the
-    // geocode-distance warning must not fire for those runs.
-    point_hint: z
-      .object({
-        lat: z.number().finite().min(-90).max(90),
-        lon: z.number().finite().min(-180).max(180),
-        source: z.literal("user_pin"),
-      })
-      .optional(),
-    polygon_geojson: z.object({
-      type: z.literal("Polygon"),
-      coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()]))),
-    }),
-  }),
-  lidar: z
-    .object({
-      source: z.string(),
-      stac_items: z.number().int().nonnegative().optional(),
-      tiles_used: z.number().int().nonnegative().optional(),
-      tile_ids_used: z.array(z.string().min(1)).optional(),
-      building_class_points: z.number().int().nonnegative().optional(),
-      raw_building_class_points: z.number().int().nonnegative().optional(),
-      duplicate_points_removed: z.number().int().nonnegative().optional(),
-    })
-    .optional(),
-  roof: z.object({
-    facet_count: z.number().int().nonnegative(),
-    area_sqft: z.number().finite().positive().nullable(),
-    total_squares: z.number().finite().positive().nullable(),
-    dominant_pitch_rise_per_12: z.number().finite().nonnegative().nullable(),
-    facets: z.array(facetSchema),
-    edge_lengths_lf: z
-      .object({
-        ridge: z.number().finite().nonnegative(),
-        hip: z.number().finite().nonnegative(),
-        valley: z.number().finite().nonnegative(),
-        eave: z.number().finite().nonnegative(),
-        rake: z.number().finite().nonnegative(),
-        pitch_change: z.number().finite().nonnegative(),
-      })
-      .nullable(),
-    // True when every facet ring is the service's exact outline
-    // partition (see services/roof-detection _drawing_partition):
-    // the converter then skips its snap/trim surgery, which exists
-    // for legacy hull responses and introduces micro-defects into
-    // already exact tilings.
-    drawing_ready: z.boolean().optional(),
-  }),
+  footprint: footprintSchema,
+  lidar: lidarSchema.optional(),
+  roof: roofSchema,
+  // Present only in multi-structure mode; the first entry is the
+  // main structure and mirrors the top-level footprint/roof.
+  structures: z.array(roofStructureSchema).min(1).max(9).optional(),
   fallback: z.object({
     available: z.boolean(),
     mode: z.string().nullable(),
@@ -1492,4 +1525,37 @@ export function detectedFacetsToDrawing(
       originLongitude: originLon,
     },
   };
+}
+
+/** Convert ONE structure of a multi-structure response into a roof
+ * drawing, through the exact same converter as the main structure.
+ * The parent response's location stays the projection origin for
+ * every structure, so all drawings of one property share a single
+ * coordinate frame and can be displayed together (the "All
+ * structures" view) with their true relative positions. Throws for
+ * footprint-only structures, exactly like the main converter. */
+export function structureToDrawing(
+  response: RoofDetectionResponse,
+  structure: RoofStructure,
+  roofType: RoofDrawing["roof_type"],
+): RoofDrawing {
+  return detectedFacetsToDrawing(
+    {
+      status: structure.status,
+      verification: response.verification,
+      matched_address: response.matched_address,
+      location: response.location,
+      footprint: structure.footprint,
+      ...(structure.lidar ? { lidar: structure.lidar } : {}),
+      roof: structure.roof,
+      fallback: {
+        available: structure.status !== "lidar_facets",
+        mode: response.fallback.mode,
+        footprint_area_sqft: structure.footprint.area_sqft,
+        message: response.fallback.message,
+      },
+      disclaimer: response.disclaimer,
+    },
+    roofType,
+  );
 }
