@@ -445,6 +445,11 @@ export function PermitRecords() {
       const relatedInspections = inspections.filter(
         (item) => item.application_id === application.id,
       );
+      const documentFolder = `${application.company_id}/${application.id}`;
+      const { data: storedDocuments, error: documentsError } = await supabase.storage
+        .from("permit-documents")
+        .list(documentFolder, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+      if (documentsError) throw documentsError;
       const bytes = await createPermitPacketPdf({
         jobTitle: job?.title ?? "Roofing job",
         propertyAddress: job?.address ?? "",
@@ -458,7 +463,7 @@ export function PermitRecords() {
         expiresAt: application.expires_at,
         feeCents: application.fee_cents,
         applicationNotes: application.notes,
-        documents: permitFiles[application.id]?.map((file) => file.name) ?? [],
+        documents: (storedDocuments ?? []).filter((file) => file.id && file.name).map((file) => file.name),
         productApprovals: approvals
           .filter((item) => item.permit_application_id === application.id)
           .map((item) => ({
