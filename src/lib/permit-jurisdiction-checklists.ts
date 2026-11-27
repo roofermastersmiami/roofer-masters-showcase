@@ -191,10 +191,11 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   if (!codeReferenceCurrent) {
     warnings.push(`This checklist references ${profile.codeEdition}. That reference expired after ${profile.codeEditionEffectiveThrough}; verify the current code edition and updated local forms before using any checklist item.`);
   }
+  let authorityConfirmed = codeReferenceCurrent;
   if (!request.projectKind || request.projectKind === "unknown") {
+    authorityConfirmed = false;
     warnings.push("Set the project type so reroof-only documents are not treated as universally required.");
   }
-  let authorityConfirmed = codeReferenceCurrent;
   if (profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id) {
     if (!request.folio?.trim()) {
       authorityConfirmed = false;
