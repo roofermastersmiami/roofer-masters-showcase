@@ -17,6 +17,7 @@ import {
   Package,
   Upload,
   MapPin,
+  Pencil,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -59,6 +60,7 @@ import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { RoofImageTrace } from "./RoofImageTrace";
 import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
+import { SketchEditor } from "./SketchEditor";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
 import { loadReportAerial } from "@/lib/report-aerial.functions";
@@ -119,6 +121,13 @@ export function RoofMeasurements({
   );
   const [logoSize, setLogoSize] = useState("1");
   const userEditedDrawing = useRef(false);
+  const [sketchOpen, setSketchOpen] = useState(false);
+  // Edit Sketch's Done applies the edited drawing through edit()
+  // (dirty + unreviewed, like every other measurement edit) and arms
+  // this flag; the effect below then persists it as a new revision
+  // through the same save() the Save revision button uses, once the
+  // fresh drawing state is in place.
+  const sketchSaveArmed = useRef(false);
   // Hands-off flow: when the automated measurement applies a drawing
   // inside a report workspace, the revision save (which also generates
   // and attaches the report PDF) runs by itself and the material list
@@ -284,6 +293,14 @@ export function RoofMeasurements({
       setAutoSaving(false);
     })();
   }, [autoSaving, busy, d, dirty, measurement, property, report]);
+  // Persist an Edit Sketch result as a new revision. If save() is
+  // blocked (e.g. no property chosen yet) its toast explains why and
+  // the drawing stays dirty for the manual Save revision button.
+  useEffect(() => {
+    if (!sketchSaveArmed.current || !dirty || busy || autoSaving) return;
+    sketchSaveArmed.current = false;
+    void saveRef.current();
+  }, [autoSaving, busy, d, dirty]);
   async function downloadAutoTakeoff() {
     if (!autoMaterials || !autoMaterials.lines.length) return;
     try {
@@ -1045,6 +1062,9 @@ export function RoofMeasurements({
                 onClick={() => setView("plan")}
               >
                 2D Plan
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setSketchOpen(true)}>
+                <Pencil /> Edit sketch
               </Button>
               <Button
                 size="icon"
@@ -2059,6 +2079,18 @@ export function RoofMeasurements({
           <FileText /> Prepare customer report
         </Button>
       </section>
+      {sketchOpen && (
+        <SketchEditor
+          drawing={d}
+          onCancel={() => setSketchOpen(false)}
+          onDone={(next, changed) => {
+            setSketchOpen(false);
+            if (!changed) return;
+            edit(next);
+            sketchSaveArmed.current = true;
+          }}
+        />
+      )}
     </div>
   );
 }
