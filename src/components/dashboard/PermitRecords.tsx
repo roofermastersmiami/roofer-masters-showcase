@@ -370,7 +370,8 @@ export function PermitRecords() {
                     <div>
                       <label className={labelClass} htmlFor="permit-project-kind">Project type</label>
                       <select id="permit-project-kind" className={inputClass} value={projectKind} onChange={(event) => setProjectKind(event.target.value as PermitProjectKind)}>
-                        <option value="reroof">Residential reroof</option>
+                        <option value="reroof">Single-family residential reroof</option>
+                        <option value="multifamily_reroof">Multifamily / condominium reroof</option>
                         <option value="new_roof">New roof / new construction</option>
                         <option value="repair">Roof repair</option>
                         <option value="commercial_reroof">Commercial reroof</option>
