@@ -15,13 +15,26 @@ const fixture = readFileSync(
 );
 
 describe("company-aware lead/customer synchronization", () => {
-  it("registers migration 0043 after ownership foundation 0042", () => {
-    expect(journal.entries.at(-1)).toMatchObject({
-      idx: 43,
-      tag: "0043_company_aware_lead_customer_sync",
-      when: expect.any(Number),
-    });
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when);
+  it("registers migration 0043 after ownership foundation 0042 and before 0044", () => {
+    const ownershipIndex = journal.entries.findIndex(
+      (entry: { tag: string }) => entry.tag === "0042_crm_company_ownership_foundation",
+    );
+    const leadSyncIndex = journal.entries.findIndex(
+      (entry: { tag: string }) => entry.tag === "0043_company_aware_lead_customer_sync",
+    );
+    const customerSaveIndex = journal.entries.findIndex(
+      (entry: { tag: string }) => entry.tag === "0044_company_scoped_customer_save",
+    );
+
+    expect(ownershipIndex).toBeGreaterThanOrEqual(0);
+    expect(leadSyncIndex).toBe(ownershipIndex + 1);
+    expect(customerSaveIndex).toBe(leadSyncIndex + 1);
+    expect(journal.entries[leadSyncIndex].when).toBeGreaterThan(
+      journal.entries[ownershipIndex].when,
+    );
+    expect(journal.entries[customerSaveIndex].when).toBeGreaterThan(
+      journal.entries[leadSyncIndex].when,
+    );
   });
 
   it("requires a source company and propagates it to customers and properties", () => {

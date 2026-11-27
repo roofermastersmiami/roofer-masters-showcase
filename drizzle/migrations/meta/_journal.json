@@ -309,6 +309,13 @@
       "when": 1795661000000,
       "tag": "0043_company_aware_lead_customer_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1795662000000,
+      "tag": "0044_company_scoped_customer_save",
+      "breakpoints": true
     }
   ]
 }
