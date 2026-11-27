@@ -305,6 +305,40 @@ const westonRoofingChecklist: ChecklistItem[] = [
   { id: "weston-broward-rooftop-equipment", label: "Broward County Rooftop Mounted Equipment Affidavit", detail: "Complete the Broward County rooftop mounted equipment affidavit.", appliesWhen: "Weston lists this for reroofs other than single-family residences; verify current applicability with the City.", sourceUrl: "https://www.westonfl.org/government/forms-for-download" },
 ];
 
+const davieRoofingChecklist: ChecklistItem[] = [
+  { id: "davie-online-submittal", label: "Town of Davie Online Application Submittal (OAS)", detail: "Start the permit request through the Town's OAS process; the Town states this is the required method for new permit and Building Division service requests from January 12, 2026, with plans and documents uploaded through ProjectDox after invitation.", appliesWhen: "Required by the current Town of Davie Building Division submission instructions; paper and direct-email submissions are not accepted.", sourceUrl: "https://www.davie-fl.gov/Pages/DavieFL_BuildngDpt/index" },
+  { id: "davie-building-application", label: "Broward County Uniform Building Permit Application", detail: "Complete the current Broward County uniform building permit application.", appliesWhen: "Required by the Town of Davie roofing checklist; use the current revision from the Town's forms page.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/1836/Building-Permit-Application-" },
+  { id: "davie-notarized-addendum", label: "Signed and notarized Town Addendum Form", detail: "Have the contractor or owner complete, sign, and notarize the Town addendum.", appliesWhen: "Required by the Town of Davie roofing checklist.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-owner-builder-disclosure", label: "Owner-Builder Disclosure Statement", detail: "Submit the Town's owner-builder disclosure when the permit is filed as owner-builder.", appliesWhen: "Only when the owner is acting as contractor.", sourceUrl: "https://www.davie-fl.gov/1301/Building-Forms" },
+  { id: "davie-property-ownership", label: "Broward County Property Appraiser ownership / property search", detail: "Include a copy of the property search or ownership record.", appliesWhen: "Listed in the Town of Davie roofing checklist.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-roofing-package", label: "HVHZ Uniform Roofing Package", detail: "Complete the applicable roofing package sections for the selected system and work type. The current package includes low-slope, metal, tile, shingle, and wood systems, plus new roof, repair, maintenance, reroof, and recovery scope selections.", appliesWhen: "Required for roofing permit intake; complete only sections applicable to the proposed roof system and scope.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package" },
+  { id: "davie-rooftop-equipment", label: "Mandatory Rooftop Mounted Equipment Affidavit", detail: "Identify all existing rooftop-mounted equipment, including applicable A/C equipment, photovoltaic panels, solar thermal, gas vents, waterlines, and electrical conduits. Separate permits may be required for removal and reinstallation of specified equipment.", appliesWhen: "Required with the HVHZ Uniform Roofing Permit Application for all rooftop equipment; submit the affidavit even when no equipment is present.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/18920/Rooftop-Mounted-Equipment-Affidavit---Roofing" },
+  { id: "davie-product-approvals", label: "Roof-system product approvals / NOAs", detail: "Provide applicable product approvals for the installed roof assembly and components.", appliesWhen: "Required by the Town of Davie roofing checklist.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-tile-uplift-test", label: "Adhesive-set tile uplift test", detail: "Arrange the required job-site uplift test for tile installed with adhesive.", appliesWhen: "Only when the proposed roof is tile set with adhesive.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-workers-compensation", label: "Workers' compensation coverage and subcontractor documentation", detail: "Provide workers' compensation coverage showing the Town as certificate holder. If a subcontractor performs roofing work, include that subcontractor's workers' compensation policy and the contractor/subcontractor agreement.", appliesWhen: "Required by the Town roofing checklist; subcontractor documents apply when a subcontractor performs the work.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-contractor-registration", label: "Town contractor registration and current credentials", detail: "Confirm Town registration and current state license or county certificate of competency, liability insurance, workers' compensation certificate or exemption, and business tax receipt.", appliesWhen: "For contractors not already registered with the Town; keep all applicable credentials current.", sourceUrl: "https://www.davie-fl.gov/1813/Contractor-Information" },
+  { id: "davie-notice-of-commencement", label: "Notice of Commencement", detail: "Record and post the Notice of Commencement before the first inspection when the applicable value threshold and statutory conditions are met. The Town's general guidance cites an estimated value exceeding $5,000; verify current law and project applicability.", appliesWhen: "Conditional on project valuation and current statutory requirements; Town guidance states over $5,000.", sourceUrl: "https://www.davie-fl.gov/1224/General-Information" },
+  { id: "davie-hurricane-mitigation-retrofit", label: "Single-family hurricane mitigation retrofit affidavit", detail: "Complete the Town's single-family residential hurricane mitigation retrofit form when applicable to the reroof scope.", appliesWhen: "Single-family residential reroofs only; confirm applicability under the current Florida Existing Building Code.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/20330/Roofing-Hurricane-Mitigation-Form" },
+  { id: "davie-roof-to-wall-connection", label: "Roof-to-wall connection affidavit / retrofit documentation", detail: "Review the Town's current roof-to-wall form and provide the required affidavit, retrofit permit application, plans, photos, or value / permit-age documentation when the existing-building criteria apply.", appliesWhen: "Conditional under FBC Existing Building Section 706.8, including the applicable deck type, insured or just value, and prior permit history; do not treat as universally required.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/20331/Roof-to-Wall-Connection-Affidavit" },
+  { id: "davie-asbestos-responsibilities", label: "Broward Statement of Responsibilities Regarding Asbestos", detail: "Obtain the asbestos responsibilities form from Broward County Development and Regulation Division.", appliesWhen: "Town roofing checklist lists this for reroofs other than single-family residences.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-anchor-spacing-calculations", label: "Engineering calculations for anchor spacing", detail: "Provide engineering calculations for anchor spacing when required for the proposed roof assembly.", appliesWhen: "Town roofing checklist lists this for reroofs other than single-family residences, where required.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-commercial-reroof-statement", label: "Commercial reroofing statement and structural / drainage review", detail: "Complete the commercial-only reroofing statement. Where a non-Group R-3 building changes roofing system or uses recovery, include signed and sealed supporting-structure and drainage calculations and the required professional statement.", appliesWhen: "Commercial reroof applications only; additional calculations depend on occupancy, roof-system change, and recovery scope.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package" },
+  { id: "davie-tin-cap-inspection", label: "Tin-cap inspection before peel-and-stick", detail: "Obtain approval of the tin-cap inspection before installing any peel-and-stick underlayment.", appliesWhen: "Inspection sequencing item where tin cap / peel-and-stick work is part of the roofing assembly.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+  { id: "davie-peel-stick-inspection", label: "Peel-and-stick inspection", detail: "Schedule the inspection one day ahead, during installation, or after installation but before loading tiles; if inspected during installation, the Town checklist describes minimum visible installation coverage and detailing.", appliesWhen: "Inspection sequencing item when peel-and-stick underlayment is installed.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
+];
+
+export const BROWARD_DAVIE_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-davie-roofing",
+  label: "Town of Davie — roofing",
+  county: "Broward",
+  authorityScope: "Town of Davie Building Division Roofing Checklist and Roofing Package. The Roofing Package was revised May 12, 2026; the checklist PDF is undated, so verify current forms and intake instructions before filing.",
+  authorityWarning: "Use only after verifying the parcel is inside Town of Davie limits. The checklist and package are Town-specific CRM preparation aids, not municipal approval; confirm current requirements with the Town Building Division.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist", "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package", "https://www.davie-fl.gov/Pages/DavieFL_BuildngDpt/index", "https://www.davie-fl.gov/1225/Structural", "https://www.davie-fl.gov/1813/Contractor-Information", "https://www.davie-fl.gov/1224/General-Information"],
+  checklist: davieRoofingChecklist,
+};
+
 export const BROWARD_WESTON_ROOFING_PROFILE: JurisdictionPermitProfile = {
   id: "broward-weston-roofing",
   label: "City of Weston — roofing",
@@ -387,6 +421,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id]: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
     [BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id]: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
     [BROWARD_WESTON_ROOFING_PROFILE.id]: BROWARD_WESTON_ROOFING_PROFILE,
+    [BROWARD_DAVIE_ROOFING_PROFILE.id]: BROWARD_DAVIE_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -422,7 +457,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
   const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
@@ -444,7 +479,9 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const items = (checklistEnabled ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
     if (item.id === "owner-roofing-notification") return ["reroof", "multifamily_reroof", "commercial_reroof"].includes(request.projectKind ?? "unknown");
     if (item.id === "commercial-reroof-statement") return request.projectKind === "commercial_reroof";
-    if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment"].includes(item.id)) return request.projectKind === "multifamily_reroof" || request.projectKind === "commercial_reroof";
+    if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment", "davie-asbestos-responsibilities", "davie-anchor-spacing-calculations"].includes(item.id)) return request.projectKind === "multifamily_reroof" || request.projectKind === "commercial_reroof";
+    if (item.id === "davie-hurricane-mitigation-retrofit") return request.projectKind === "reroof";
+    if (item.id === "davie-commercial-reroof-statement") return request.projectKind === "commercial_reroof";
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
@@ -463,4 +500,6 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   coralSpringsResidentialReroofChecklist: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf",
   pompanoBeachRoofingChecklist: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf",
   fortLauderdaleRoofingChecklist: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms",
+  davieRoofingChecklist: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist",
+  davieRoofingPackage: "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package",
 } as const;

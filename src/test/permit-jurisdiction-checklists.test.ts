@@ -5,6 +5,7 @@ import {
   BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
   BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
   BROWARD_WESTON_ROOFING_PROFILE,
+  BROWARD_DAVIE_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -419,6 +420,72 @@ describe("Miramar residential roofing permit profile", () => {
   });
 });
 
+
+describe("Town of Davie roofing permit profile", () => {
+  it("includes the Town's current roofing package and permit intake requirements", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_DAVIE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const ids = result.items.map((item) => item.id);
+    expect(result.authorityConfirmed).toBe(true);
+    expect(ids).toContain("davie-online-submittal");
+    expect(ids).toContain("davie-roofing-package");
+    expect(ids).toContain("davie-rooftop-equipment");
+    expect(ids).toContain("davie-product-approvals");
+    expect(ids).toContain("davie-tin-cap-inspection");
+    expect(ids).toContain("davie-peel-stick-inspection");
+    expect(ids).toContain("davie-hurricane-mitigation-retrofit");
+    expect(ids).not.toContain("davie-asbestos-responsibilities");
+  });
+
+  it("includes the Town's non-single-family reroof and commercial-only documents conditionally", () => {
+    const multifamily = getPermitChecklist({
+      profileId: BROWARD_DAVIE_ROOFING_PROFILE.id,
+      projectKind: "multifamily_reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const multiIds = multifamily.items.map((item) => item.id);
+    expect(multiIds).toContain("davie-asbestos-responsibilities");
+    expect(multiIds).toContain("davie-anchor-spacing-calculations");
+    expect(multiIds).not.toContain("davie-hurricane-mitigation-retrofit");
+    expect(multiIds).not.toContain("davie-commercial-reroof-statement");
+
+    const commercial = getPermitChecklist({
+      profileId: BROWARD_DAVIE_ROOFING_PROFILE.id,
+      projectKind: "commercial_reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const commercialIds = commercial.items.map((item) => item.id);
+    expect(commercialIds).toContain("davie-asbestos-responsibilities");
+    expect(commercialIds).toContain("davie-commercial-reroof-statement");
+  });
+
+  it("requires explicit Town parcel verification and suppresses expired code references", () => {
+    const unverified = getPermitChecklist({
+      profileId: BROWARD_DAVIE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      asOfDate: "2026-11-26",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.warnings.join(" ")).toContain("inside Town of Davie limits");
+
+    const expired = getPermitChecklist({
+      profileId: BROWARD_DAVIE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(expired.codeReferenceCurrent).toBe(false);
+    expect(expired.authorityConfirmed).toBe(false);
+    expect(expired.items).toHaveLength(0);
+  });
+});
 
 describe("Weston roofing permit profile", () => {
   it("includes the City-listed roofing application and product approval requirements", () => {
