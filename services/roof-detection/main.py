@@ -5,9 +5,11 @@ import hashlib
 import math
 import os
 import re
+import threading
+import uuid
 from pathlib import Path
-from typing import Any
-from time import monotonic
+from typing import Any, Callable
+from time import monotonic, time as epoch_seconds
 
 import httpx
 import laspy
@@ -180,6 +182,35 @@ CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
 _RESPONSE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+# --- Asynchronous analysis jobs -------------------------------------------
+# A cold-cache analysis is dominated by USGS tile downloads (~180 MB at
+# throttled per-connection speeds) and can run far longer than any HTTP
+# request window on the free hosting tier — a synchronous POST dies at the
+# platform's ~271 s wall before the download finishes. The jobs API splits
+# submission from execution: POST /v1/roof/analyze/jobs returns 202 with a
+# job id immediately, the analysis runs on a worker thread with its own
+# event loop (so status polls stay responsive while the pipeline blocks on
+# CPU fitting), and GET /v1/roof/analyze/jobs/{id} reports progress and,
+# when complete, the exact payload the synchronous endpoint returns.
+# Job state is deliberately in-memory only: the free tier has no durable
+# disk, so a job lost to an instance restart cannot be recovered — instead
+# it fails loudly (the id simply stops existing, GET answers 404
+# job_not_found) and the CRM resubmits automatically. No human retries.
+JOB_TTL_SECONDS = max(300, int(os.getenv("JOB_TTL_SECONDS", "1800")))
+MAX_STORED_JOBS = max(10, int(os.getenv("MAX_STORED_JOBS", "100")))
+MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MAX_CONCURRENT_JOBS", "2")))
+_JOBS: dict[str, dict[str, Any]] = {}
+_JOBS_LOCK = threading.Lock()
+_JOB_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_JOBS)
+# Tile download acceleration: the USGS host (rockyweb) honours HTTP Range
+# requests but throttles each connection, so a large tile is fetched as
+# several byte ranges in parallel and reassembled. Any failure in the
+# ranged path falls back to the original single-stream download.
+TILE_DOWNLOAD_CHUNKS = max(1, int(os.getenv("TILE_DOWNLOAD_CHUNKS", "4")))
+TILE_DOWNLOAD_RANGED_MIN_BYTES = max(
+    1, int(float(os.getenv("TILE_DOWNLOAD_RANGED_MIN_MB", "16")) * 1_000_000)
+)
+ProgressReporter = Callable[[str, "str | None", "float | None"], None]
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
 origins = [item.strip() for item in os.getenv("CORS_ORIGINS", "*").split(",") if item.strip()]
@@ -3503,7 +3534,26 @@ def _read_lidar_facets(
         "vertical_unit_to_meters_factors": sorted(vertical_unit_factors),
     }
 
-async def _download_tile(url: str, dest: Path) -> None:
+def _plan_ranges(size: int, chunks: int) -> list[tuple[int, int]]:
+    """Split [0, size) into at most `chunks` contiguous inclusive byte ranges."""
+    if size <= 0 or chunks <= 1:
+        return [(0, size - 1)] if size > 0 else []
+    count = min(chunks, size)
+    step = size // count
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    for index in range(count):
+        end = size - 1 if index == count - 1 else start + step - 1
+        ranges.append((start, end))
+        start = end + 1
+    return ranges
+
+
+async def _download_tile_single_stream(
+    url: str,
+    dest: Path,
+    on_progress: Callable[[int, "int | None"], None] | None = None,
+) -> None:
     """Stream a LAZ tile into the local cache; a partial file is never kept.
 
     USGS rate-limits aggressive clients (HTTP 429) and occasionally answers
@@ -3524,9 +3574,16 @@ async def _download_tile(url: str, dest: Path) -> None:
             ) as client:
                 async with client.stream("GET", url) as response:
                     response.raise_for_status()
+                    headers = getattr(response, "headers", None) or {}
+                    total_header = headers.get("content-length") if hasattr(headers, "get") else None
+                    total = int(total_header) if total_header and str(total_header).isdigit() else None
+                    downloaded = 0
                     with open(tmp, "wb") as handle:
                         async for chunk in response.aiter_bytes(1 << 20):
                             handle.write(chunk)
+                            downloaded += len(chunk)
+                            if on_progress:
+                                on_progress(downloaded, total)
             with open(tmp, "rb") as handle:
                 signature = handle.read(4)
             if signature != b"LASF":
@@ -3545,6 +3602,162 @@ async def _download_tile(url: str, dest: Path) -> None:
             ):
                 raise
     raise last_error if last_error else RuntimeError(f"Tile download failed: {url}")
+
+
+async def _download_tile_ranged(
+    url: str,
+    dest: Path,
+    size: int,
+    on_progress: Callable[[int, "int | None"], None] | None = None,
+) -> None:
+    """Fetch a tile as parallel byte ranges and reassemble it in order.
+
+    The USGS download host throttles per connection, so one stream crawls;
+    ranges multiply throughput. Every chunk is retried on transient errors,
+    the assembled file must match the advertised size and carry the LASF
+    signature, and no partial file is ever left where the cache can see it.
+    """
+    ranges = _plan_ranges(size, TILE_DOWNLOAD_CHUNKS)
+    part_paths = [
+        dest.with_suffix(dest.suffix + f".part{index}") for index in range(len(ranges))
+    ]
+    downloaded_per_chunk = [0] * len(ranges)
+
+    def report_chunk_progress() -> None:
+        if on_progress:
+            on_progress(sum(downloaded_per_chunk), size)
+
+    async def fetch_chunk(index: int, start: int, end: int) -> None:
+        expected = end - start + 1
+        last_error: Exception | None = None
+        # Stagger chunk starts: the USGS front door answers bursts of
+        # simultaneous connections with an HTML interstitial challenge
+        # (observed live: parallel requests got a 476-byte spinner page
+        # while a single request seconds later got real bytes). A small
+        # per-chunk offset plus backoff retries ride out the challenge
+        # instead of tripping it repeatedly.
+        if index:
+            await asyncio.sleep(1.0 * index)
+        for attempt in range(3):
+            if attempt:
+                await asyncio.sleep(10 * attempt)
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(900.0, connect=15.0),
+                    follow_redirects=True,
+                    headers={"User-Agent": USER_AGENT, "Range": f"bytes={start}-{end}"},
+                ) as client:
+                    async with client.stream("GET", url) as response:
+                        if response.status_code != 206:
+                            raise httpx.HTTPStatusError(
+                                f"Range request answered {response.status_code}, expected 206",
+                                request=response.request,
+                                response=response,
+                            )
+                        written = 0
+                        with open(part_paths[index], "wb") as handle:
+                            async for chunk in response.aiter_bytes(1 << 20):
+                                handle.write(chunk)
+                                written += len(chunk)
+                                downloaded_per_chunk[index] = written
+                                report_chunk_progress()
+                if written != expected:
+                    raise ValueError(
+                        f"Range {start}-{end} delivered {written} of {expected} bytes"
+                    )
+                return
+            except (httpx.HTTPStatusError, httpx.TransportError, ValueError) as exc:
+                last_error = exc
+                downloaded_per_chunk[index] = 0
+                part_paths[index].unlink(missing_ok=True)
+                # A non-206 answer from a host whose HEAD advertised ranges
+                # is the USGS interstitial challenge (HTTP 200 + HTML) or a
+                # transient throttle — both decay, so both are retried with
+                # backoff. Only a hard client error (the tile is gone or
+                # forbidden) aborts the chunk immediately.
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (
+                    400,
+                    401,
+                    403,
+                    404,
+                    410,
+                ):
+                    raise
+        raise last_error if last_error else RuntimeError(f"Range download failed: {url}")
+
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    try:
+        # A TaskGroup, not a bare gather: when one chunk fails, gather
+        # would raise while its sibling chunks kept downloading detached
+        # — writing into part files the cleanup below had already
+        # unlinked and inflating the reported progress with bytes going
+        # nowhere (observed live on the first cold Annel run). TaskGroup
+        # cancels the siblings and waits for them before propagating.
+        async with asyncio.TaskGroup() as group:
+            for index, (start, end) in enumerate(ranges):
+                group.create_task(fetch_chunk(index, start, end))
+        with open(tmp, "wb") as out:
+            for part in part_paths:
+                with open(part, "rb") as handle:
+                    while block := handle.read(1 << 22):
+                        out.write(block)
+        if tmp.stat().st_size != size:
+            raise ValueError(f"Assembled tile is {tmp.stat().st_size} bytes, expected {size}")
+        with open(tmp, "rb") as handle:
+            if handle.read(4) != b"LASF":
+                raise ValueError(f"Downloaded tile did not have a LASF signature: {url}")
+        tmp.rename(dest)
+    finally:
+        for part in part_paths:
+            part.unlink(missing_ok=True)
+        if dest.exists():
+            tmp.unlink(missing_ok=True)
+
+
+async def _download_tile(
+    url: str,
+    dest: Path,
+    on_progress: Callable[[int, "int | None"], None] | None = None,
+) -> None:
+    """Download a LAZ tile into the cache, ranged-parallel when possible.
+
+    A HEAD probe decides: when the host advertises byte ranges and the tile
+    is large enough for per-connection throttling to dominate, fetch it in
+    parallel ranges; any failure in that path (or a host without range
+    support) falls back to the single-stream download, so the ranged path
+    can only ever make a download faster, never fail one that would have
+    succeeded slowly.
+    """
+    size: int | None = None
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            follow_redirects=True,
+            headers={"User-Agent": USER_AGENT},
+        ) as client:
+            head = await client.head(url)
+        length = head.headers.get("content-length", "")
+        if (
+            head.status_code == 200
+            and "bytes" in head.headers.get("accept-ranges", "").lower()
+            and length.isdigit()
+        ):
+            size = int(length)
+    except Exception:  # noqa: BLE001 — the probe is best-effort; any failure means "stream it"
+        size = None
+    if size is not None and size >= TILE_DOWNLOAD_RANGED_MIN_BYTES and TILE_DOWNLOAD_CHUNKS > 1:
+        # Two ranged attempts: a chunk failure is usually the USGS
+        # interstitial challenge, which decays over seconds, so one
+        # paused retry is worthwhile before giving up to the slow stream.
+        for attempt in range(2):
+            if attempt:
+                await asyncio.sleep(20)
+            try:
+                await _download_tile_ranged(url, dest, size, on_progress)
+                return
+            except Exception:  # noqa: BLE001 — ranged failure must never fail the download
+                dest.with_suffix(dest.suffix + ".part").unlink(missing_ok=True)
+    await _download_tile_single_stream(url, dest, on_progress)
 
 
 def _select_building_points(
@@ -3740,7 +3953,9 @@ def _tnm_points_local(
 
 
 async def _read_lidar_facets_tnm(
-    polygon: Polygon, footprint_provider: str | None = None
+    polygon: Polygon,
+    footprint_provider: str | None = None,
+    report: ProgressReporter | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Fallback LiDAR source: USGS Lidar Point Cloud tiles via The National Map.
 
@@ -3752,20 +3967,37 @@ async def _read_lidar_facets_tnm(
     minx, miny, maxx, maxy = polygon.bounds
 
     async def search_tiles(bbox: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0, connect=10.0), headers={"User-Agent": USER_AGENT}
-        ) as client:
-            response = await client.get(
-                TNM_PRODUCTS_URL,
-                params={
-                    "datasets": "Lidar Point Cloud (LPC)",
-                    "bbox": bbox,
-                    "max": 12,
-                    "outputFormat": "JSON",
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
+        # One retry with a pause: the product search answers transient
+        # 429/5xx under load, and an unretried HTTP error here zeroes the
+        # whole measurement (observed live: a single USGS HTTP error
+        # briefly turned a validated address footprint_only). A hands-off
+        # pipeline absorbs the transient instead of surfacing it.
+        last_error: Exception | None = None
+        payload: dict[str, Any] = {}
+        for attempt in range(2):
+            if attempt:
+                await asyncio.sleep(15)
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(30.0, connect=10.0),
+                    headers={"User-Agent": USER_AGENT},
+                ) as client:
+                    response = await client.get(
+                        TNM_PRODUCTS_URL,
+                        params={
+                            "datasets": "Lidar Point Cloud (LPC)",
+                            "bbox": bbox,
+                            "max": 12,
+                            "outputFormat": "JSON",
+                        },
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                break
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_error = exc
+        else:
+            raise last_error if last_error else RuntimeError("TNM product search failed")
         items = payload.get("items", [])
         laz = [
             item for item in items
@@ -3827,8 +4059,32 @@ async def _read_lidar_facets_tnm(
         }
 
     LIDAR_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    tile_paths: list[Path] = []
-    for item in tiles:
+    # Tiles are fetched concurrently: each tile's download is independent,
+    # and the USGS host throttles per connection, so serial downloads of a
+    # two-tile footprint multiply the cold-cache wait for no reason.
+    download_progress: dict[str, tuple[int, int | None]] = {}
+    last_reported_fraction = -1.0
+
+    def tile_progress(url: str, downloaded: int, total: int | None) -> None:
+        nonlocal last_reported_fraction
+        if report is None:
+            return
+        download_progress[url] = (downloaded, total)
+        done = sum(done for done, _ in download_progress.values())
+        known_total = sum(total for _, total in download_progress.values() if total)
+        fraction = (done / known_total) if known_total else None
+        if fraction is not None and fraction - last_reported_fraction < 0.01 and fraction < 1.0:
+            return
+        if fraction is not None:
+            last_reported_fraction = fraction
+        report(
+            "downloading_tiles",
+            f"Downloading USGS LiDAR tiles — {done / 1_000_000:.0f} MB"
+            + (f" of {known_total / 1_000_000:.0f} MB" if known_total else ""),
+            fraction,
+        )
+
+    async def ensure_tile(item: dict[str, Any]) -> Path:
         url = str(item["downloadURL"])
         dest = LIDAR_CACHE_DIR / url.rsplit("/", 1)[-1]
         if dest.exists():
@@ -3841,14 +4097,42 @@ async def _read_lidar_facets_tnm(
                 if handle.read(4) != b"LASF":
                     dest.unlink(missing_ok=True)
         if not dest.exists():
-            await _download_tile(url, dest)
-        tile_paths.append(dest)
+            await _download_tile(
+                url, dest, on_progress=lambda done, total: tile_progress(url, done, total)
+            )
+        return dest
 
+    # A tile that fails to download must not zero the measurement when a
+    # sibling tile already covers the footprint (points are clipped to the
+    # footprint later, and most footprints need only one of their tiles).
+    # Only when every tile failed does the first error propagate, keeping
+    # the failure loud instead of silently measuring nothing.
+    gathered = await asyncio.gather(
+        *[ensure_tile(item) for item in tiles], return_exceptions=True
+    )
+    tile_paths: list[Path] = []
+    download_errors: list[str] = []
+    for item, outcome in zip(tiles, gathered):
+        if isinstance(outcome, Path):
+            tile_paths.append(outcome)
+        else:
+            download_errors.append(
+                f"{str(item['downloadURL']).rsplit('/', 1)[-1]}: {type(outcome).__name__}"
+            )
+    if not tile_paths:
+        first_error = next(
+            (outcome for outcome in gathered if isinstance(outcome, BaseException)), None
+        )
+        raise first_error if first_error else RuntimeError("All tile downloads failed")
+
+    if report is not None:
+        report("fitting_planes", "Fitting roof planes to the LiDAR points", None)
     facets, meta = _tnm_points_local(polygon, tile_paths, footprint_provider)
     return facets, {
         "source": "USGS National Map (TNM) Lidar Point Cloud LAZ",
         "tnm_project": project,
         "tnm_products": len(items),
+        **({"tile_download_failures": download_errors} if download_errors else {}),
         **meta,
     }
 
@@ -3858,25 +4142,43 @@ def health():
     return {"status": "ok", "service": APP_NAME, "lidar_collection": STAC_COLLECTION}
 
 
-@app.post("/v1/roof/analyze")
-async def analyze_roof(request: AnalyzeRequest):
-    cache_key = (
+def _analysis_cache_key(request: AnalyzeRequest) -> str:
+    return (
         request.street_address.strip().casefold()
         if request.street_address
         else f"{float(request.lat):.6f},{float(request.lon):.6f}"
     ) + (f":candidate:{request.footprint_candidate_id}" if request.footprint_candidate_id else "")
+
+
+async def _run_analysis(
+    request: AnalyzeRequest, report: ProgressReporter | None = None
+) -> dict[str, Any]:
+    """The full address → measurement pipeline behind both analyze APIs.
+
+    The synchronous endpoint awaits this inline; the jobs API runs it on a
+    worker thread. `report` receives coarse progress (stage, detail,
+    download fraction) so a polling client can show what a long cold-cache
+    run is doing instead of a silent spinner.
+    """
+    cache_key = _analysis_cache_key(request)
     cached = _RESPONSE_CACHE.get(cache_key)
     if cached and cached[0] > monotonic():
         return cached[1]
+    if report is not None:
+        report("geocoding", "Locating the address", None)
     if request.street_address:
         lat, lon, matched_address, address_provenance = await geocode_with_provenance(request.street_address)
     else:
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
         address_provenance = {"source": "User-provided coordinates"}
+    if report is not None:
+        report("footprint", "Matching the building footprint", None)
     footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
     footprint_sqft = _polygon_area_sqft(footprint)
     footprint_provider = footprint_meta.get("provider")
+    if report is not None:
+        report("lidar", "Reading public LiDAR coverage for the building", None)
     try:
         facets, lidar_meta = _read_lidar_facets(footprint, footprint_provider)
     except Exception as exc:
@@ -3889,7 +4191,14 @@ async def analyze_roof(request: AnalyzeRequest):
         # Either way, fall back to the same USGS surveys published as LAZ
         # tiles via The National Map.
         try:
-            tnm_facets, tnm_meta = await _read_lidar_facets_tnm(footprint, footprint_provider)
+            if report is not None:
+                tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
+                    footprint, footprint_provider, report=report
+                )
+            else:
+                tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
+                    footprint, footprint_provider
+                )
         except Exception as exc:
             tnm_facets, tnm_meta = [], {"reason": f"TNM lookup failed: {type(exc).__name__}"}
         if tnm_facets:
@@ -3952,3 +4261,183 @@ async def analyze_roof(request: AnalyzeRequest):
             _RESPONSE_CACHE.pop(expired_or_oldest, None)
         _RESPONSE_CACHE[cache_key] = (monotonic() + CACHE_TTL_SECONDS, result)
     return result
+
+
+@app.post("/v1/roof/analyze")
+async def analyze_roof(request: AnalyzeRequest):
+    return await _run_analysis(request)
+
+
+def _job_envelope(job: dict[str, Any]) -> dict[str, Any]:
+    envelope: dict[str, Any] = {
+        "job_id": job["job_id"],
+        "status": job["status"],
+        "stage": job["stage"],
+        "detail": job["detail"],
+        "download_fraction": job["download_fraction"],
+        "created_at": job["created_at"],
+        "updated_at": job["updated_at"],
+        "elapsed_seconds": round(job["updated_at"] - job["created_at"], 1),
+    }
+    if job["status"] == "complete":
+        envelope["result"] = job["result"]
+    if job["status"] == "failed":
+        envelope["error"] = job["error"]
+        envelope["error_status"] = job["error_status"]
+        envelope["error_detail"] = job["error_detail"]
+    return envelope
+
+
+def _sweep_jobs() -> None:
+    """Drop finished jobs past their TTL and cap the store's size.
+
+    Queued/running jobs are never swept — only finished ones can expire.
+    A swept job id answers 404 job_not_found, which the CRM treats as
+    "lost, resubmit automatically" (the same contract as a job lost to an
+    instance restart), so expiry never needs a human either.
+    """
+    now = epoch_seconds()
+    with _JOBS_LOCK:
+        expired = [
+            job_id
+            for job_id, job in _JOBS.items()
+            if job["status"] in ("complete", "failed")
+            and now - job["updated_at"] > JOB_TTL_SECONDS
+        ]
+        for job_id in expired:
+            _JOBS.pop(job_id, None)
+        if len(_JOBS) > MAX_STORED_JOBS:
+            finished = sorted(
+                (job for job in _JOBS.values() if job["status"] in ("complete", "failed")),
+                key=lambda job: job["updated_at"],
+            )
+            for job in finished[: len(_JOBS) - MAX_STORED_JOBS]:
+                _JOBS.pop(job["job_id"], None)
+
+
+def _update_job(job_id: str, **fields: Any) -> None:
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if job is None:
+            return
+        job.update(fields)
+        job["updated_at"] = epoch_seconds()
+
+
+def _job_reporter(job_id: str) -> ProgressReporter:
+    def report(stage: str, detail: str | None, download_fraction: float | None) -> None:
+        _update_job(
+            job_id, stage=stage, detail=detail, download_fraction=download_fraction
+        )
+
+    return report
+
+
+def _execute_job(job_id: str, request: AnalyzeRequest) -> None:
+    """Run one analysis job on its own thread with its own event loop.
+
+    A dedicated thread keeps the server's event loop free for health
+    checks and status polls while the pipeline blocks on CPU fitting and
+    long downloads, and asyncio.run gives the job's httpx clients a loop
+    of their own. The semaphore caps how many heavyweight analyses run at
+    once on the small free-tier instance; the rest stay visibly queued.
+    """
+    with _JOB_SEMAPHORE:
+        _update_job(job_id, status="running", stage="starting", detail="Analysis started")
+        try:
+            result = asyncio.run(_run_analysis(request, report=_job_reporter(job_id)))
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, (str, dict, list)) else str(exc.detail)
+            _update_job(
+                job_id,
+                status="failed",
+                stage="failed",
+                detail=None,
+                error=detail if isinstance(detail, str) else "Analysis request was rejected.",
+                error_status=exc.status_code,
+                error_detail=detail,
+            )
+        except Exception as exc:  # noqa: BLE001 — the job must fail loudly, never hang
+            _update_job(
+                job_id,
+                status="failed",
+                stage="failed",
+                detail=None,
+                error=f"{type(exc).__name__}: {exc}",
+                error_status=None,
+                error_detail=None,
+            )
+        else:
+            _update_job(
+                job_id,
+                status="complete",
+                stage="complete",
+                detail="Measurement complete",
+                download_fraction=None,
+                result=result,
+            )
+
+
+@app.post("/v1/roof/analyze/jobs", status_code=202)
+async def submit_analysis_job(request: AnalyzeRequest):
+    """Submit an analysis to run outside this request's lifecycle.
+
+    Returns 202 immediately with a job id. Identical submissions dedupe
+    onto the job already queued or running for them, and a submission
+    whose result is already in the response cache completes on the first
+    poll — the client flow is identical either way: submit, poll, read
+    the result from the completed job.
+    """
+    _sweep_jobs()
+    cache_key = _analysis_cache_key(request)
+    with _JOBS_LOCK:
+        for job in _JOBS.values():
+            if job["cache_key"] == cache_key and job["status"] in ("queued", "running"):
+                return _job_envelope(job)
+        job_id = uuid.uuid4().hex
+        now = epoch_seconds()
+        job = {
+            "job_id": job_id,
+            "cache_key": cache_key,
+            "status": "queued",
+            "stage": "queued",
+            "detail": "Waiting for a worker",
+            "download_fraction": None,
+            "created_at": now,
+            "updated_at": now,
+            "result": None,
+            "error": None,
+            "error_status": None,
+            "error_detail": None,
+        }
+        _JOBS[job_id] = job
+        envelope = _job_envelope(job)
+    thread = threading.Thread(target=_execute_job, args=(job_id, request), daemon=True)
+    thread.start()
+    return envelope
+
+
+@app.get("/v1/roof/analyze/jobs/{job_id}")
+async def get_analysis_job(job_id: str):
+    """Report a job's progress, or its result once complete.
+
+    An unknown id — never submitted, expired, or lost when the instance
+    restarted (job state is in-memory on a tier with no durable disk) —
+    answers 404 with code job_not_found so the client resubmits
+    automatically instead of waiting on a job that will never finish.
+    """
+    _sweep_jobs()
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if job is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "job_not_found",
+                    "message": (
+                        "This analysis job no longer exists (it expired or the "
+                        "service restarted). Resubmit the address to start a new one."
+                    ),
+                },
+            )
+        return _job_envelope(job)
