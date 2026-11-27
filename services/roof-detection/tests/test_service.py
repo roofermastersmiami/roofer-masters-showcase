@@ -505,6 +505,91 @@ def test_merge_fragmented_candidates_keeps_distinct_faces_apart():
     assert len(_merge_fragmented_candidates([main_slope, lower_step], None)) == 2
 
 
+def test_overhang_ring_points_extend_eave_facet_only_when_on_plane(monkeypatch):
+    # One sloped face whose eave side is the footprint's east edge. The
+    # fitting pool stops at the footprint + 0.75 m clip, but the true
+    # roof continues past it (a wide overhang) and its returns arrive
+    # only as ring points. On-plane ring points must extend the facet
+    # past the clip; off-plane ring points (a taller neighbouring
+    # surface crossing the plane's extension) must not move it at all.
+    # The ring lever is inert at its default width (see OVERHANG_RING_M),
+    # so the test enables it explicitly.
+    import main as service
+
+    monkeypatch.setattr(service, "OVERHANG_RING_M", 1.5)
+    rng = np.random.default_rng(31)
+    footprint = Polygon([(0, 0), (20, 0), (20, 10), (0, 10)])
+    x, y = np.meshgrid(np.arange(0.25, 20.5, 0.5), np.arange(0.25, 9.75, 0.5))
+    face = np.column_stack((x.ravel(), y.ravel(), (20.0 - 0.5 * x).ravel()))
+    face[:, 2] += rng.normal(0, 0.02, len(face))
+
+    control = _fit_facets(face, footprint)
+    assert len(control) == 1
+    control_area = control[0]["area_sqft"]
+    control_max_x = max(point[0] for point in control[0]["boundary_xy"])
+    # Without ring evidence the facet stops at its outermost returns,
+    # short of the 20.75 m clip.
+    assert control_max_x < 20.75
+
+    x_ring, y_ring = np.meshgrid(
+        np.arange(21.0, 21.5, 0.25), np.arange(0.5, 9.75, 0.5)
+    )
+    on_plane = np.column_stack(
+        (x_ring.ravel(), y_ring.ravel(), (20.0 - 0.5 * x_ring).ravel())
+    )
+    on_plane[:, 2] += rng.normal(0, 0.02, len(on_plane))
+    grown = _fit_facets(face, footprint, ring_points=on_plane)
+    assert len(grown) == 1
+    grown_max_x = max(point[0] for point in grown[0]["boundary_xy"])
+    assert grown_max_x > control_max_x + 0.3
+    assert grown[0]["area_sqft"] > control_area + 40.0
+
+    off_plane = on_plane.copy()
+    off_plane[:, 2] += 2.0
+    blocked = _fit_facets(face, footprint, ring_points=off_plane)
+    assert len(blocked) == 1
+    assert blocked[0]["area_sqft"] == pytest.approx(control_area, rel=0.02)
+
+
+def test_competing_planes_both_survive_with_split_boundary():
+    # Two genuinely different planes facing the same way over one roof
+    # section (the Miramar SE pattern): a broad 4.3/12 detection spanning
+    # the whole section and a steeper 5.6/12 surface occupying its
+    # eastern part. Sequential RANSAC fits the broad plane first and
+    # consumes the band where the two planes agree, so the steep
+    # candidate's hull ends up entirely inside the winner's — plain
+    # largest-first resolution drops it as a duplicate and loses a real
+    # roof plane. The steep plane's own points, which the broad plane
+    # misses by decimetres away from the intersection line, must rescue
+    # it: both facets survive, split where the planes cross.
+    rng = np.random.default_rng(41)
+    x_w, y_w = np.meshgrid(np.arange(0.0, 20.25, 0.5), np.arange(0.0, 10.25, 0.5))
+    broad = np.column_stack((x_w.ravel(), y_w.ravel(), (0.36 * x_w + 12.0).ravel()))
+    x_c, y_c = np.meshgrid(np.arange(12.0, 20.25, 0.5), np.arange(0.0, 10.25, 0.5))
+    steep = np.column_stack((x_c.ravel(), y_c.ravel(), (0.47 * x_c + 10.6).ravel()))
+    points = np.vstack((broad, steep))
+    points[:, 2] += rng.normal(0, 0.02, len(points))
+
+    facets = _fit_facets(points)
+
+    assert len(facets) == 2
+    by_pitch = sorted(facets, key=lambda facet: facet["pitch_rise_per_12"])
+    assert by_pitch[0]["pitch_rise_per_12"] == pytest.approx(4.32, abs=0.3)
+    assert by_pitch[1]["pitch_rise_per_12"] == pytest.approx(5.64, abs=0.3)
+    steep_polygon = Polygon(by_pitch[1]["boundary_xy"])
+    broad_polygon = Polygon(by_pitch[0]["boundary_xy"])
+    # The steep facet keeps the eastern ground its points occupy (its
+    # hull starts where the broad fit stopped consuming its returns,
+    # east of the planes' crossing at x ≈ 12.7); the broad facet keeps
+    # the west and does not double-count the east.
+    steep_min_x = min(point[0] for point in by_pitch[1]["boundary_xy"])
+    assert steep_min_x >= 13.0
+    assert steep_polygon.covers(Point(18.0, 5.0))
+    assert broad_polygon.covers(Point(4.0, 5.0))
+    assert not steep_polygon.covers(Point(4.0, 5.0))
+    assert steep_polygon.intersection(broad_polygon).area == pytest.approx(0, abs=0.01)
+
+
 def test_street_address_normalization_matches_directional_and_suffix_variants():
     from main import _normalize_street_address
 

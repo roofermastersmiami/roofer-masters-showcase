@@ -83,6 +83,42 @@ COVERAGE_EVIDENCE_RESIDUAL_M = float(os.getenv("COVERAGE_EVIDENCE_RESIDUAL_M", "
 MERGE_NORMAL_ANGLE_DEG = float(os.getenv("MERGE_NORMAL_ANGLE_DEG", "4"))
 MERGE_PLANE_OFFSET_M = float(os.getenv("MERGE_PLANE_OFFSET_M", "0.107"))
 MERGE_HULL_GAP_M = float(os.getenv("MERGE_HULL_GAP_M", "1.0"))
+# Overhang ring evidence: the fitting pool stops at the footprint + 0.75 m
+# clip, but a roof's eaves can extend past it, and that outer strip then has
+# no points a facet may grow on — Miramar's remaining deficit includes
+# ~250 sq ft of exactly that ring. Both LiDAR paths can therefore also
+# gather building points in the ring out to OVERHANG_RING_M. Ring points
+# never enter plane fitting; they only evidence facet growth into the ring
+# (see _grow_into_overhang_ring), and only where they lie on the facet's own
+# plane, connect back to the facet in steps of at most
+# RING_EVIDENCE_ADJACENCY_M, and stay below the facet's own highest fitted
+# elevation plus RING_EVIDENCE_Z_CAP_M (a taller neighbouring roof that
+# merely crosses the plane's extension is not this roof's overhang).
+# The default keeps the ring AT the clip width (0.75 m — lever inert):
+# five-house validation showed the growth is worth a great deal where the
+# county footprint traces the wall line (Broward: Miramar's total error
+# went to -0.4% with the ring at 1.5 m) but annexes non-roof surface where
+# the footprint already traces the roof outline (Miami-Dade's LiDAR-derived
+# footprints: at Annel's house a same-pitch surface beyond the eave — a
+# patio cover or similar — added +92 sq ft the FirstMeasure report does
+# not count, and the growth also filled a valley line at Miramar). Until
+# an automatic guard can tell the two footprint kinds apart, enabling the
+# ring is a deliberate per-deployment choice: OVERHANG_RING_M=1.5.
+OVERHANG_RING_M = float(os.getenv("OVERHANG_RING_M", "0.75"))
+RING_EVIDENCE_ADJACENCY_M = float(os.getenv("RING_EVIDENCE_ADJACENCY_M", "1.0"))
+RING_EVIDENCE_Z_CAP_M = float(os.getenv("RING_EVIDENCE_Z_CAP_M", "0.25"))
+# Competing planes: largest-first resolution drops a candidate that keeps
+# less than MIN_FACET_REMAINING_FRACTION of its hull as a duplicate. Two
+# genuinely different planes can face the same way over one roof section
+# (Miramar's SE section holds a 4.26/12 and a 5.64/12 surface); the loser
+# is then not a duplicate but a real plane whose points the winner does
+# not explain. A dropped candidate with at least
+# COMPETING_PLANE_MIN_POINTS such points — fitting its own plane within
+# COMPETING_PLANE_RESIDUAL_M while every accepted plane misses them by
+# more than that — is rescued: the contested ground is split along the
+# planes' intersection lines (see _competing_plane_share).
+COMPETING_PLANE_MIN_POINTS = int(os.getenv("COMPETING_PLANE_MIN_POINTS", "150"))
+COMPETING_PLANE_RESIDUAL_M = float(os.getenv("COMPETING_PLANE_RESIDUAL_M", "0.20"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -1037,6 +1073,147 @@ def _complete_coverage(
                 grow(owners[0], evidenced_leftover)
 
 
+def _grow_into_overhang_ring(
+    records: list[dict[str, Any]],
+    footprint: Polygon,
+    ring_points: np.ndarray,
+) -> None:
+    """Extend facets into the eave overhang ring on ring-point evidence.
+
+    Facet hulls are clipped at footprint + 0.75 m and the fitting pool
+    stops there too, so roof surface beyond the clip (a wide eave
+    overhang) is structurally unmeasurable even when LiDAR returns exist
+    for it. The gathering paths therefore also return the building points
+    in the ring out to OVERHANG_RING_M, kept out of plane fitting. An
+    uncovered part of the ring-side margin (the annulus beyond the clip,
+    plus any still-uncovered strip inside it that connects to the
+    annulus) is split among the adjacent facets along the planes'
+    intersection lines — but a facet may only grow across ground
+    bracketed by ring points that lie on its own plane: chained in steps
+    of at most RING_EVIDENCE_ADJACENCY_M back to the facet (a detached
+    neighbouring structure across a point-free gap cannot extend it),
+    within COVERAGE_EVIDENCE_RESIDUAL_M of the plane, and no higher than
+    the facet's own highest fitted elevation plus
+    RING_EVIDENCE_Z_CAP_M. The growth zone is the convex hull of the
+    facet plus its accepted ring points, so growth stops at the
+    outermost returns — a house whose eaves end inside the clip has no
+    on-plane ring points and does not grow. Facet point counts and fit
+    RMSE are untouched, as in coverage completion.
+    """
+    from shapely.ops import unary_union
+
+    if not records or ring_points is None or len(ring_points) == 0:
+        return
+    inner_clip = footprint.buffer(0.75)
+    outer_clip = footprint.buffer(OVERHANG_RING_M)
+    annulus = outer_clip.difference(inner_clip)
+    if annulus.is_empty:
+        return
+    covered = unary_union([record["polygon"] for record in records])
+    target = outer_clip.difference(covered)
+    if target.is_empty:
+        return
+    ring_rows = [
+        (float(point[0]), float(point[1]), float(point[2])) for point in ring_points
+    ]
+    for component in _polygon_parts(target):
+        if component.is_empty or component.area <= 1e-6:
+            continue
+        if not component.intersects(annulus):
+            # Purely interior leftovers are coverage completion's domain;
+            # ring evidence must not drag growth across the roof.
+            continue
+        owners = [
+            record
+            for record in records
+            if record["polygon"].distance(component) <= COVERAGE_GAP_ADJACENCY_M
+        ]
+        if not owners:
+            continue
+        owners.sort(key=lambda record: -record["point_count"])
+        zones: dict[int, Any] = {}
+        for index, owner in enumerate(owners):
+            a, b, c = owner["a"], owner["b"], owner["c"]
+            # The facet's highest fitted elevation, from its plane over
+            # its own boundary; ring evidence above it (plus the cap) is
+            # some taller surface, not this facet's overhang.
+            z_cap = max(
+                a * x + b * y + c for x, y in owner["polygon"].exterior.coords
+            ) + RING_EVIDENCE_Z_CAP_M
+            pool = [
+                (x, y)
+                for x, y, z in ring_rows
+                if z <= z_cap
+                and abs(z - (a * x + b * y + c)) <= COVERAGE_EVIDENCE_RESIDUAL_M
+            ]
+            if not pool:
+                continue
+            accepted: list[tuple[float, float]] = []
+            progressed = True
+            while progressed:
+                progressed = False
+                for point_xy in list(pool):
+                    near_facet = (
+                        owner["polygon"].distance(Point(*point_xy))
+                        <= RING_EVIDENCE_ADJACENCY_M
+                    )
+                    near_accepted = any(
+                        math.hypot(point_xy[0] - ax, point_xy[1] - ay)
+                        <= RING_EVIDENCE_ADJACENCY_M
+                        for ax, ay in accepted
+                    )
+                    if near_facet or near_accepted:
+                        accepted.append(point_xy)
+                        pool.remove(point_xy)
+                        progressed = True
+            if not accepted:
+                continue
+            hull = MultiPoint(
+                accepted + list(owner["polygon"].exterior.coords)
+            ).convex_hull
+            if hull.geom_type == "Polygon" and not hull.is_empty:
+                zone = hull.intersection(component)
+                if not zone.is_empty:
+                    zones[index] = zone
+        if not zones:
+            continue
+
+        def grow(owner: dict[str, Any], geometry: Any) -> None:
+            # Same merge discipline as coverage completion: a growth
+            # piece meeting the facet at a single point is expanded by
+            # 2 cm so the union stays one valid ring; a piece that still
+            # cannot merge cleanly is left unassigned.
+            for piece in _polygon_parts(geometry):
+                merged = owner["polygon"].union(piece)
+                if merged.geom_type != "Polygon" or not merged.is_valid:
+                    merged = owner["polygon"].union(piece.buffer(0.02))
+                if merged.geom_type == "Polygon" and merged.is_valid:
+                    owner["polygon"] = merged
+
+        remainder: Any = component
+        for index, owner in enumerate(owners):
+            if remainder.is_empty or remainder.area <= 1e-9:
+                break
+            if index not in zones:
+                continue
+            part = _upper_envelope_part(
+                remainder, owner, [other for other in owners if other is not owner]
+            )
+            if part is None or part.is_empty:
+                continue
+            part = part.intersection(zones[index])
+            if part.is_empty:
+                continue
+            grow(owner, part)
+            remainder = remainder.difference(part)
+        if not remainder.is_empty and remainder.area > 1e-9:
+            evidenced_leftover = remainder.intersection(
+                unary_union(list(zones.values()))
+            )
+            if not evidenced_leftover.is_empty:
+                grow(owners[0], evidenced_leftover)
+
+
 def _plane_normal(a: float, b: float) -> np.ndarray:
     """Unit normal of the plane z = a*x + b*y + c."""
     normal = np.array([-a, -b, 1.0])
@@ -1191,7 +1368,106 @@ def _merge_fragmented_candidates(
     return merged
 
 
-def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
+def _competing_plane_share(
+    candidate: dict[str, Any],
+    accepted: list[dict[str, Any]],
+) -> tuple[Any, np.ndarray] | None:
+    """The claimed ground that really belongs to a "duplicate" candidate,
+    plus the points that prove it — or None when it is a true duplicate.
+
+    Largest-first resolution drops a candidate whose hull is mostly
+    claimed, assuming a re-detection of the winner's plane. That
+    assumption fails when two genuinely different planes face the same
+    way over one roof section: the loser's own points are real returns
+    the winner's plane does not explain (Miramar's SE section: the
+    5.64/12 candidate's points sit decimetres off the winning 4.26/12
+    plane away from their intersection line). When at least
+    COMPETING_PLANE_MIN_POINTS of the candidate's points fit its own
+    plane within COMPETING_PLANE_RESIDUAL_M while every accepted plane
+    misses them by more than that, the contested ground is split along
+    the planes' intersection lines — the same split coverage completion
+    uses — and the candidate keeps its own side: the side its
+    unexplained points actually occupy.
+    """
+    from shapely.ops import unary_union
+
+    cluster = candidate["cluster"]
+    if len(cluster) < COMPETING_PLANE_MIN_POINTS or not accepted:
+        return None
+    a, b = float(candidate["a"]), float(candidate["b"])
+    c = float(candidate["model"].intercept_)
+    xs, ys, zs = cluster[:, 0], cluster[:, 1], cluster[:, 2]
+    unexplained = np.abs(zs - (a * xs + b * ys + c)) <= COMPETING_PLANE_RESIDUAL_M
+    for record in accepted:
+        predicted = record["a"] * xs + record["b"] * ys + record["c"]
+        unexplained &= np.abs(zs - predicted) > COMPETING_PLANE_RESIDUAL_M
+    unique_points = cluster[unexplained]
+    if len(unique_points) < COMPETING_PLANE_MIN_POINTS:
+        return None
+    claimed = unary_union([record["polygon"] for record in accepted])
+    contested = candidate["polygon"].intersection(claimed)
+    if contested.is_empty or contested.area <= 1e-6:
+        return None
+    # The split lines are anchored on the candidate's side by where its
+    # unexplained evidence actually sits, not by its hull's centre: the
+    # hull spans ground the winner legitimately owns too.
+    centroid = unique_points[:, :2].mean(axis=0)
+    owner_view = {
+        "polygon": Point(float(centroid[0]), float(centroid[1])).buffer(0.05),
+        "a": a,
+        "b": b,
+        "c": c,
+    }
+    shares: list[Polygon] = []
+    for part in _polygon_parts(contested):
+        rivals = [
+            record for record in accepted if record["polygon"].intersects(part)
+        ]
+        if not rivals:
+            continue
+        share = _upper_envelope_part(part, owner_view, rivals)
+        if share is not None and not share.is_empty and share.area > 1e-6:
+            shares.extend(_polygon_parts(share))
+    if not shares:
+        return None
+    return unary_union(shares), unique_points
+
+
+def _shrink_accepted(accepted: list[dict[str, Any]], share: Any) -> None:
+    """Cut a rescued competing plane's share out of the accepted facets.
+
+    A record the cut splits in two becomes two records carrying the same
+    fitted-plane statistics (point counts and RMSE describe the fitted
+    points, not the trimmed geometry — the stance coverage completion
+    takes). A record reduced below MIN_FACET_AREA_SQFT of surface is
+    removed: that ground now belongs to the rescued plane.
+    """
+    survivors: list[dict[str, Any]] = []
+    for record in accepted:
+        polygon = record["polygon"]
+        if not polygon.intersects(share):
+            survivors.append(record)
+            continue
+        cos_pitch = max(math.cos(math.radians(float(record["pitch"]))), 1e-6)
+
+        def surface_sqft(part: Polygon) -> float:
+            return float(part.area) / cos_pitch * 10.7639104167
+
+        for part in _polygon_parts(polygon.difference(share)):
+            if not part.is_empty and surface_sqft(part) >= MIN_FACET_AREA_SQFT:
+                trimmed = dict(record)
+                trimmed["polygon"] = part
+                survivors.append(trimmed)
+    accepted[:] = survivors
+
+
+def _fit_facets(
+    points: np.ndarray,
+    footprint: Polygon | None = None,
+    ring_points: np.ndarray | None = None,
+) -> list[dict[str, Any]]:
+    from shapely.ops import unary_union
+
     remaining = points.copy()
     # Clipped hull components from every fitted plane, resolved into facets
     # only after the plane loop (see the overlap pass at the end).
@@ -1314,26 +1590,55 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
             for part in parts
             if not part.is_empty and surface_sqft(part) >= MIN_FACET_AREA_SQFT
         ]
-        if not kept:
-            continue
+        # (part, points to score it with, inclusion buffer, and whether an
+        # empty inclusion may fall back to the whole scoring set — only
+        # rescued share parts, whose evidence points were verified before
+        # the split, may).
+        scored_parts: list[tuple[Polygon, np.ndarray, float, bool]] = [
+            (part, candidate["cluster"], 0.02, False) for part in kept
+        ]
         if (
-            sum(surface_sqft(part) for part in kept)
+            not kept
+            or sum(surface_sqft(part) for part in kept)
             < MIN_FACET_REMAINING_FRACTION * original_surface_sqft
         ):
             # What is left is mostly area earlier facets already claimed;
-            # this detection is a duplicate, not another roof plane.
-            continue
+            # normally this detection is a duplicate, not another roof
+            # plane. The exception is a genuinely different plane facing
+            # the same way over the same ground, proven by a substantial
+            # body of its own points that no accepted plane explains:
+            # rescue it by splitting the contested ground along the
+            # planes' intersection lines.
+            rescue = _competing_plane_share(candidate, resolved) if resolved else None
+            if rescue is None:
+                continue
+            share, unique_points = rescue
+            _shrink_accepted(resolved, share)
+            accepted_union = (
+                unary_union([record["polygon"] for record in resolved])
+                if resolved
+                else None
+            )
+            scored_parts += [
+                (part, unique_points, 0.5, True)
+                for part in _polygon_parts(share)
+                if not part.is_empty and surface_sqft(part) >= MIN_FACET_AREA_SQFT
+            ]
+            if not scored_parts:
+                continue
         model = candidate["model"]
-        for part in kept:
+        for part, stat_points, stat_buffer, stat_fallback in scored_parts:
             if len(resolved) >= MAX_PLANES:
                 break
             part_points = [
                 point
-                for point in candidate["cluster"]
-                if part.buffer(0.02).covers(Point(float(point[0]), float(point[1])))
+                for point in stat_points
+                if part.buffer(stat_buffer).covers(Point(float(point[0]), float(point[1])))
             ]
             if not part_points:
-                continue
+                if not stat_fallback:
+                    continue
+                part_points = [point for point in stat_points]
             part_array = np.asarray(part_points, dtype=float)
             residuals = part_array[:, 2] - model.predict(part_array[:, :2])
             fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
@@ -1356,6 +1661,12 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
     # clipped footprint region so the facets tessellate the roof plan.
     if footprint is not None and resolved:
         _complete_coverage(resolved, footprint.buffer(0.75), points)
+
+    # Roof surface past the fitting clip (wide eave overhang) is invisible
+    # to hulls and coverage completion alike; grow into the overhang ring
+    # where the ring points gathered beyond the clip evidence it.
+    if footprint is not None and resolved and ring_points is not None:
+        _grow_into_overhang_ring(resolved, footprint, ring_points)
 
     facets: list[dict[str, Any]] = []
     for record in resolved:
@@ -1600,11 +1911,14 @@ def _facets_from_local_points(
     polygon: Polygon,
     to_local: Transformer,
     from_local: Transformer,
+    ring_points: np.ndarray | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, float] | None]:
     """Fit roof planes to deduplicated local-metric points and express each
-    facet boundary back in lat/lon with modeled elevations."""
+    facet boundary back in lat/lon with modeled elevations. Ring points
+    (already in local coordinates) never enter fitting; they only evidence
+    overhang growth in _fit_facets."""
     footprint_local = _transform_polygon(polygon, to_local)
-    raw_facets = _fit_facets(unique_points, footprint_local)
+    raw_facets = _fit_facets(unique_points, footprint_local, ring_points=ring_points)
     edge_lengths = _compute_edge_lengths(raw_facets)
     all_facets: list[dict[str, Any]] = []
     for facet in raw_facets:
@@ -1636,6 +1950,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
     to_local = Transformer.from_crs("EPSG:4326", local_crs, always_xy=True)
     from_local = Transformer.from_crs(local_crs, "EPSG:4326", always_xy=True)
     tile_points: list[np.ndarray] = []
+    tile_ring_points: list[np.ndarray] = []
     used_items = 0
     used_tile_ids: list[str] = []
     raw_point_count = 0
@@ -1657,7 +1972,11 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             continue
         # Include class-6 roof returns just beyond the ground footprint so
         # ordinary eave overhang is not discarded before facet fitting.
-        lidar_query_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
+        # Returns in the wider ring out to OVERHANG_RING_M are gathered
+        # too, but kept apart: they never enter fitting and only evidence
+        # overhang growth (see _grow_into_overhang_ring).
+        lidar_query_polygon = projected_polygon.buffer(OVERHANG_RING_M / meters_per_unit)
+        fit_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
         asset = item.assets.get("data") or item.assets.get("copc") or next(
             (candidate for candidate in item.assets.values() if "copc" in candidate.href.lower() or candidate.href.lower().endswith(".laz")),
             None,
@@ -1692,17 +2011,24 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
             coords = np.column_stack((x[mask], y[mask], z[mask]))
             inside = np.array([lidar_query_polygon.covers(Point(px, py)) for px, py in coords[:, :2]])
             coords = coords[inside]
-            if len(coords) < MIN_ROOF_POINTS:
+            in_fit = np.array([fit_polygon.covers(Point(px, py)) for px, py in coords[:, :2]])
+            fit_coords = coords[in_fit]
+            ring_coords = coords[~in_fit]
+            if len(fit_coords) < MIN_ROOF_POINTS:
                 continue
 
             # Convert every tile into one local metric coordinate system before
             # combining. This lets overlapping tiles be deduplicated and avoids
             # counting the same roof facet once per COPC tile.
             to_wgs84 = Transformer.from_crs(f"EPSG:{epsg}", "EPSG:4326", always_xy=True)
-            lon, lat = to_wgs84.transform(coords[:, 0], coords[:, 1])
+            lon, lat = to_wgs84.transform(fit_coords[:, 0], fit_coords[:, 1])
             local_x, local_y = to_local.transform(lon, lat)
-            tile_points.append(np.column_stack((local_x, local_y, coords[:, 2])))
-            raw_point_count += len(coords)
+            tile_points.append(np.column_stack((local_x, local_y, fit_coords[:, 2])))
+            if len(ring_coords):
+                ring_lon, ring_lat = to_wgs84.transform(ring_coords[:, 0], ring_coords[:, 1])
+                ring_x, ring_y = to_local.transform(ring_lon, ring_lat)
+                tile_ring_points.append(np.column_stack((ring_x, ring_y, ring_coords[:, 2])))
+            raw_point_count += len(fit_coords)
             used_items += 1
             used_tile_ids.append(str(item.id))
         except Exception:
@@ -1719,7 +2045,14 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
-    all_facets, edge_lengths = _facets_from_local_points(unique_points, polygon, to_local, from_local)
+    unique_ring_points = (
+        _deduplicate_lidar_points(np.vstack(tile_ring_points))
+        if tile_ring_points
+        else np.empty((0, 3))
+    )
+    all_facets, edge_lengths = _facets_from_local_points(
+        unique_points, polygon, to_local, from_local, ring_points=unique_ring_points
+    )
 
     return all_facets, {
         "edge_lengths_lf": edge_lengths,
@@ -1727,6 +2060,7 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         "tiles_used": used_items,
         "tile_ids_used": used_tile_ids,
         "building_class_points": len(unique_points),
+        "overhang_ring_points": len(unique_ring_points),
         "raw_building_class_points": raw_point_count,
         "duplicate_points_removed": raw_point_count - len(unique_points),
         "tiles_missing_vertical_units": tiles_missing_vertical_units,
@@ -1829,6 +2163,7 @@ def _tnm_points_local(
     to_local = Transformer.from_crs("EPSG:4326", local_crs, always_xy=True)
     from_local = Transformer.from_crs(local_crs, "EPSG:4326", always_xy=True)
     tile_points: list[np.ndarray] = []
+    tile_ring_points: list[np.ndarray] = []
     used_items = 0
     used_tile_ids: list[str] = []
     raw_point_count = 0
@@ -1855,7 +2190,11 @@ def _tnm_points_local(
                     continue
                 to_tile = Transformer.from_crs("EPSG:4326", tile_crs, always_xy=True)
                 projected_polygon = _transform_polygon(polygon, to_tile)
-                query_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
+                # The read window reaches out to the overhang ring; the
+                # fitting pool still ends at the footprint + 0.75 m clip
+                # and ring returns are split off after selection.
+                query_polygon = projected_polygon.buffer(OVERHANG_RING_M / meters_per_unit)
+                fit_polygon = projected_polygon.buffer(0.75 / meters_per_unit)
                 q_minx, q_miny, q_maxx, q_maxy = query_polygon.bounds
                 ground_polygon = projected_polygon.buffer(10.0 / meters_per_unit)
                 g_minx, g_miny, g_maxx, g_maxy = ground_polygon.bounds
@@ -1904,12 +2243,21 @@ def _tnm_points_local(
             )
             if source is None or len(coords) < MIN_ROOF_POINTS:
                 continue
+            in_fit = contains_xy(fit_polygon, coords[:, 0], coords[:, 1])
+            fit_coords = coords[in_fit]
+            ring_coords = coords[~in_fit]
+            if len(fit_coords) < MIN_ROOF_POINTS:
+                continue
             point_sources.add(source)
             to_wgs84 = Transformer.from_crs(tile_crs, "EPSG:4326", always_xy=True)
-            lon, lat = to_wgs84.transform(coords[:, 0], coords[:, 1])
+            lon, lat = to_wgs84.transform(fit_coords[:, 0], fit_coords[:, 1])
             local_x, local_y = to_local.transform(lon, lat)
-            tile_points.append(np.column_stack((local_x, local_y, coords[:, 2])))
-            raw_point_count += len(coords)
+            tile_points.append(np.column_stack((local_x, local_y, fit_coords[:, 2])))
+            if len(ring_coords):
+                ring_lon, ring_lat = to_wgs84.transform(ring_coords[:, 0], ring_coords[:, 1])
+                ring_x, ring_y = to_local.transform(ring_lon, ring_lat)
+                tile_ring_points.append(np.column_stack((ring_x, ring_y, ring_coords[:, 2])))
+            raw_point_count += len(fit_coords)
             used_items += 1
             used_tile_ids.append(path.name)
         except Exception:
@@ -1926,12 +2274,20 @@ def _tnm_points_local(
 
     combined = np.vstack(tile_points)
     unique_points = _deduplicate_lidar_points(combined)
-    all_facets, edge_lengths = _facets_from_local_points(unique_points, polygon, to_local, from_local)
+    unique_ring_points = (
+        _deduplicate_lidar_points(np.vstack(tile_ring_points))
+        if tile_ring_points
+        else np.empty((0, 3))
+    )
+    all_facets, edge_lengths = _facets_from_local_points(
+        unique_points, polygon, to_local, from_local, ring_points=unique_ring_points
+    )
     return all_facets, {
         "edge_lengths_lf": edge_lengths,
         "tiles_used": used_items,
         "tile_ids_used": used_tile_ids,
         "building_class_points": len(unique_points),
+        "overhang_ring_points": len(unique_ring_points),
         "raw_building_class_points": raw_point_count,
         "duplicate_points_removed": raw_point_count - len(unique_points),
         "tiles_missing_vertical_units": tiles_missing_vertical_units,
