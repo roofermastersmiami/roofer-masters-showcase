@@ -399,6 +399,7 @@ export function RoofMeasurements({
           .from("proposals")
           .insert({
             title,
+            company_id: propertyRow?.company_id,
             category: d.roof_type,
             lead_id: customer?.source_lead_id ?? null,
             property_id: property,
@@ -488,6 +489,7 @@ export function RoofMeasurements({
     setBusy(true);
     try {
       const { error } = await supabase.from("roof_estimates").insert({
+        company_id: propertyRow?.company_id,
         lead_id: customer.source_lead_id,
         property_id: property,
         drawing_id: parent,
