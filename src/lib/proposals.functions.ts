@@ -1,3 +1,4 @@
+// tenant-audit: reviewed — share creation/revocation require same-company membership and writes carry company_id; public read/sign endpoints intentionally use expiring, revocable, single-use capability tokens and expose only proposal document/signature data.
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
