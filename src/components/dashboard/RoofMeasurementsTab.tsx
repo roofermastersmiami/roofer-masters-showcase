@@ -21,6 +21,8 @@ import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
+import { useAutoFinishReports } from "./use-auto-finish";
+import { AutoFinishStatus } from "./AutoFinishStatus";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
 import { EditSketchButton } from "./EditSketchButton";
 import {
@@ -147,6 +149,18 @@ export function RoofMeasurementsTab({
   const drawing = report
     ? (drawings.data?.find((item) => item.id === report.drawing_id) ?? null)
     : null;
+  // While the measurements grid is open, every still-awaiting report
+  // finishes itself here too — the same hands-off chain the Roof
+  // reports list runs — so a card never sits at "PDF not generated
+  // yet" waiting for a click. While a workspace is open the finisher
+  // hands over to it (enabled only on the grid), exactly like
+  // leaving the reports list does.
+  const autoFinish = useAutoFinishReports(
+    orders.data,
+    drawings.data,
+    customers.data,
+    activeId === null,
+  );
 
   async function locateAddress() {
     const address = form.address.trim();
@@ -401,6 +415,7 @@ export function RoofMeasurementsTab({
           {rows.map((row) => {
             const customer = customers.data?.find((item) => item.id === row.customer_id);
             const savedDrawing = drawings.data?.find((item) => item.id === row.drawing_id);
+            const autoState = autoFinish.get(row.id);
             return (
               <article
                 key={row.id}
@@ -416,10 +431,17 @@ export function RoofMeasurementsTab({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {customer?.name ?? "Customer property"}
                 </p>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {savedDrawing ? "Saved drawing available" : "No drawing saved yet"} ·{" "}
-                  {row.file_path ? "PDF generated" : "PDF not generated"}
-                </p>
+                {autoState ? (
+                  <AutoFinishStatus
+                    state={autoState}
+                    date={new Date(row.created_at).toLocaleDateString()}
+                  />
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {savedDrawing ? "Saved drawing available" : "No drawing saved yet"} ·{" "}
+                    {row.file_path ? "PDF generated" : "PDF not generated"}
+                  </p>
+                )}
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Button
                     variant="outline"

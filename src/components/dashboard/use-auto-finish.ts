@@ -28,9 +28,17 @@ export type AutoFinishUiState =
 // terminal state (done, needs a building pick, unmeasurable, error)
 // is never silently re-submitted on every list refresh. A run that
 // was aborted because the list unmounted forgets its attempt, so
-// coming back to Roof reports resumes it.
+// coming back to Roof reports resumes it. The set is module-level on
+// purpose: the Roof reports list and the Roof measurements tab are
+// two surfaces over the same reports, and whichever surface sees a
+// report first owns its finish — the other surface must never submit
+// a second measurement for the same report version.
 const startedAttempts = new Set<string>();
 const MAX_CONCURRENT_FINISHES = 3;
+// The concurrency cap is module-level too, so two mounted surfaces
+// together never run more than MAX_CONCURRENT_FINISHES finishes at
+// once.
+let activeFinishCount = 0;
 
 function attemptKey(order: RoofOrder): string {
   return `${order.id}:${order.updated_at}`;
@@ -55,11 +63,18 @@ function progressToUiState(update: AutoFinishProgress): AutoFinishUiState {
  * detection jobs API and runs the full automatic chain — drawing
  * saved, report PDF generated and attached — with per-card live
  * state for the UI. No "Continue measurements" click is involved.
+ *
+ * The same hook backs the Roof measurements tab grid. `enabled`
+ * lets a surface hand over to the report workspace: the tab passes
+ * false while a workspace is open, which stops its in-flight chains
+ * exactly like unmounting the reports list does, so the workspace
+ * owns the report until Fredy returns to the grid.
  */
 export function useAutoFinishReports(
   orders: RoofOrder[] | undefined,
   drawings: DrawingRow[] | undefined,
   customers: CustomerRow[] | undefined,
+  enabled = true,
 ): ReadonlyMap<string, AutoFinishUiState> {
   const qc = useQueryClient();
   const saveFn = useServerFn(saveRoofDrawing);
@@ -68,7 +83,6 @@ export function useAutoFinishReports(
   const [states, setStates] = useState<ReadonlyMap<string, AutoFinishUiState>>(new Map());
   const controllers = useRef(new Map<string, AbortController>());
   const queuedIds = useRef<string[]>([]);
-  const runningCount = useRef(0);
   const latest = useRef({ orders, drawings, customers });
   latest.current = { orders, drawings, customers };
 
@@ -82,10 +96,13 @@ export function useAutoFinishReports(
   }, []);
 
   const pump = useCallback(() => {
-    while (runningCount.current < MAX_CONCURRENT_FINISHES && queuedIds.current.length > 0) {
+    while (activeFinishCount < MAX_CONCURRENT_FINISHES && queuedIds.current.length > 0) {
       const id = queuedIds.current.shift()!;
       const order = latest.current.orders?.find((item) => item.id === id);
       if (!order || !reportNeedsAutoFinish(order)) continue;
+      // Another surface may have started this report version while
+      // it waited in this surface's queue — never submit it twice.
+      if (startedAttempts.has(attemptKey(order))) continue;
       startedAttempts.add(attemptKey(order));
       const drawingRow =
         latest.current.drawings?.find((drawing) => drawing.id === order.drawing_id) ?? null;
@@ -93,7 +110,7 @@ export function useAutoFinishReports(
         latest.current.customers?.find((customer) => customer.id === order.customer_id)?.name ?? "";
       const controller = new AbortController();
       controllers.current.set(id, controller);
-      runningCount.current += 1;
+      activeFinishCount += 1;
       setState(id, { phase: "measuring", percent: 0, detail: null, elapsedSeconds: 0 });
       void (async () => {
         try {
@@ -140,18 +157,18 @@ export function useAutoFinishReports(
           }
         } finally {
           controllers.current.delete(id);
-          runningCount.current -= 1;
+          activeFinishCount -= 1;
           pump();
         }
       })();
     }
   }, [attachPdfFn, aerialFn, qc, saveFn, setState]);
 
-  // Enqueue every eligible report the list shows; guards make this
-  // idempotent across re-renders and query refetches, so each report
-  // is submitted exactly once.
+  // Enqueue every eligible report the surface shows; guards make
+  // this idempotent across re-renders and query refetches, so each
+  // report is submitted exactly once.
   useEffect(() => {
-    if (!orders) return;
+    if (!enabled || !orders) return;
     let added = false;
     for (const order of orders) {
       if (!reportNeedsAutoFinish(order)) continue;
@@ -161,19 +178,24 @@ export function useAutoFinishReports(
       added = true;
     }
     if (added) pump();
-  }, [orders, pump]);
+  }, [enabled, orders, pump]);
 
-  // Leaving Roof reports stops the browser-side chain (the service
-  // job itself keeps running server-side); the attempt is forgotten
-  // on abort above, so returning to the list resumes the finish.
-  useEffect(
-    () => () => {
-      for (const controller of controllers.current.values()) controller.abort();
-      controllers.current.clear();
-      queuedIds.current = [];
-    },
-    [],
-  );
+  // Stopping (the surface unmounts, or the tab hands over to an open
+  // workspace) aborts the browser-side chains — the service jobs
+  // themselves keep running server-side — and each aborted run
+  // forgets its attempt above, so returning to the surface resumes
+  // the finish.
+  const stopAll = useCallback(() => {
+    for (const controller of controllers.current.values()) controller.abort();
+    controllers.current.clear();
+    queuedIds.current = [];
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) stopAll();
+  }, [enabled, stopAll]);
+
+  useEffect(() => () => stopAll(), [stopAll]);
 
   return states;
 }
