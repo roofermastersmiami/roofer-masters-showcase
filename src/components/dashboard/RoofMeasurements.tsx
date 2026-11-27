@@ -877,21 +877,24 @@ export function RoofMeasurements({
           <div>
             <p className="text-xs text-muted-foreground">Ridge / hip / valley</p>
             <p className="text-sm font-bold">
-              {displayMeasurement.edges.ridge.toFixed(1)} / {displayMeasurement.edges.hip.toFixed(1)} /{" "}
+              {displayMeasurement.edges.ridge.toFixed(1)} /{" "}
+              {displayMeasurement.edges.hip.toFixed(1)} /{" "}
               {displayMeasurement.edges.valley.toFixed(1)} ft
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Eaves / rakes</p>
             <p className="text-sm font-bold">
-              {displayMeasurement.edges.eave.toFixed(1)} / {displayMeasurement.edges.rake.toFixed(1)} ft
+              {displayMeasurement.edges.eave.toFixed(1)} /{" "}
+              {displayMeasurement.edges.rake.toFixed(1)} ft
             </p>
           </div>
         </div>
       )}
       {displaySummary && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Including {displayDrawing.waste}% waste: {displaySummary.orderSquares.toFixed(2)} order squares
+          Including {displayDrawing.waste}% waste: {displaySummary.orderSquares.toFixed(2)} order
+          squares
         </p>
       )}
       {displayMeasurement && (
@@ -933,7 +936,9 @@ export function RoofMeasurements({
                   <td className="py-2 pr-3 text-right tabular-nums">
                     {displayMeasurement.area.toFixed(1)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">{displayMeasurement.squares.toFixed(2)}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {displayMeasurement.squares.toFixed(2)}
+                  </td>
                 </tr>
               </tfoot>
             </table>
