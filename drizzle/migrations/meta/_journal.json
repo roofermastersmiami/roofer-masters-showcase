@@ -421,6 +421,13 @@
       "when": 1795790400000,
       "tag": "0059_company_scoped_lead_activity_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1795790500000,
+      "tag": "0060_company_scoped_proposal_storage",
+      "breakpoints": true
     }
   ]
 }
