@@ -365,6 +365,13 @@
       "when": 1795733300000,
       "tag": "0051_company_permit_noc_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795733400000,
+      "tag": "0052_product_approval_code_edition",
+      "breakpoints": true
     }
   ]
 }
