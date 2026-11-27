@@ -67,6 +67,12 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_ownership_test
           psql "postgresql://postgres@localhost:5432/crm_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-crm-company-ownership-migration.sql
+      - name: Run secondary operational company ownership PostgreSQL 16 migration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_secondary_ownership_test
+          psql "postgresql://postgres@localhost:5432/crm_secondary_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-secondary-operational-company-ownership.sql
       - name: Run company-scoped customer delete PostgreSQL integration test
         env:
           PGPASSWORD: postgres
