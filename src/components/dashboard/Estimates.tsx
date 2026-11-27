@@ -59,16 +59,22 @@ export function Estimates({
     }
     setBusy(true);
     try {
+      const selectedLead = leads.find((lead) => lead.id === customer);
+      const existingEstimate = estimates.data?.find((estimate) => estimate.id === selectedEstimateId);
+      const companyId = selectedLead?.company_id ?? (!customer ? existingEstimate?.company_id : null);
+      if (!companyId) throw new Error("Select a customer or load an estimate with verified company ownership");
+      if (existingEstimate && existingEstimate.company_id !== companyId)
+        throw new Error("The selected customer does not belong to this estimate's company");
       const payload = {
         title,
         category,
         lead_id: customer || null,
-        company_id: leads.find((lead) => lead.id === customer)?.company_id ?? leads[0]?.company_id,
+        company_id: companyId,
         inputs: input,
         total_cents: result.total,
       };
       const query = selectedEstimateId
-        ? supabase.from("roof_estimates").update(payload).eq("id", selectedEstimateId)
+        ? supabase.from("roof_estimates").update(payload).eq("id", selectedEstimateId).eq("company_id", companyId)
         : supabase.from("roof_estimates").insert(payload);
       const { data, error } = await query.select("id").single();
       if (error || !data) throw error;
@@ -90,7 +96,11 @@ export function Estimates({
     let id: string | null = null;
     let pdfPath: string | null = null;
     try {
+      const lead = leads.find((item) => item.id === customer);
+      if (!lead?.company_id) throw new Error("Customer company ownership could not be verified");
       const linkedEstimate = estimates.data?.find((e) => e.id === selectedEstimateId);
+      if (linkedEstimate && linkedEstimate.company_id !== lead.company_id)
+        throw new Error("The estimate and customer belong to different companies");
       const scope = `${input.sqft} sq ft (${result.squares.toFixed(2)} roofing squares).\nMaterial allowance: ${result.materialSquares.toFixed(2)} squares, including ${input.waste}% waste.\n${category} roofing work; final scope and measurements subject to inspection. Internal costs and profit are excluded from this customer-facing proposal.`;
       const details = proposalSchema.parse({
         title,
@@ -105,7 +115,7 @@ export function Estimates({
         .from("proposals")
         .insert({
           ...details,
-          company_id: leads.find((lead) => lead.id === customer)?.company_id,
+          company_id: lead.company_id,
           ...(linkedEstimate?.property_id ? { property_id: linkedEstimate.property_id } : {}),
           ...(linkedEstimate?.drawing_id ? { drawing_id: linkedEstimate.drawing_id } : {}),
         })
@@ -123,14 +133,15 @@ export function Estimates({
       const { error: updateError } = await supabase
         .from("proposals")
         .update({ file_path: pdfPath })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("company_id", lead.company_id);
       if (updateError) throw updateError;
       await qc.invalidateQueries({ queryKey: ["proposals"] });
       toast.success("Proposal created from estimate");
       onOpenProposals();
     } catch {
       if (pdfPath) await supabase.storage.from("roofing-proposals").remove([pdfPath]);
-      if (id) await supabase.from("proposals").delete().eq("id", id);
+      if (id) await supabase.from("proposals").delete().eq("id", id).eq("company_id", leads.find((lead) => lead.id === customer)?.company_id ?? "");
       toast.error("Could not create proposal");
     } finally {
       setBusy(false);
@@ -274,7 +285,7 @@ export function Estimates({
               aria-label="Delete estimate"
               onClick={async () => {
                 if (!confirm("Delete this saved estimate?")) return;
-                const { error } = await supabase.from("roof_estimates").delete().eq("id", e.id);
+                const { error } = await supabase.from("roof_estimates").delete().eq("id", e.id).eq("company_id", e.company_id);
                 if (error) toast.error("Could not delete estimate");
                 else await qc.invalidateQueries({ queryKey: ["roof-estimates"] });
               }}
