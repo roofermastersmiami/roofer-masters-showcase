@@ -372,6 +372,20 @@
       "when": 1795733400000,
       "tag": "0052_product_approval_code_edition",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795754100000,
+      "tag": "0053_company_scoped_roof_report_rpcs",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795754200000,
+      "tag": "0054_replace_legacy_tenant_rls_and_storage",
+      "breakpoints": true
     }
   ]
 }
