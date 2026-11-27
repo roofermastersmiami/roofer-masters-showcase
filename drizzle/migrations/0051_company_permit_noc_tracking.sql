@@ -22,6 +22,17 @@ CREATE TABLE public.roof_permit_noc_tracking (
   created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT roof_permit_noc_application_company_key UNIQUE (permit_application_id, company_id),
+  CONSTRAINT roof_permit_noc_assessment_evidence_guard
+    CHECK (
+      assessment_status = 'not_assessed'
+      OR (nullif(trim(assessment_basis), '') IS NOT NULL AND threshold_source_url IS NOT NULL)
+    ),
+  CONSTRAINT roof_permit_noc_required_value_guard
+    CHECK (
+      assessment_status <> 'required'
+      OR (contract_value_cents IS NOT NULL AND threshold_amount_cents IS NOT NULL)
+    ),
   CONSTRAINT roof_permit_noc_application_company_fkey
     FOREIGN KEY (permit_application_id, company_id)
     REFERENCES public.roof_permit_applications(id, company_id) ON DELETE CASCADE,
