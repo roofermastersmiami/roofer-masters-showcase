@@ -23,7 +23,9 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
+import { EditSketchButton } from "./EditSketchButton";
 import { customersQuery } from "./foundation-data";
+import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
 import { downloadPdf } from "./proposal-data";
 import { Empty, SectionHeading } from "./CrmControls";
@@ -36,6 +38,7 @@ export function RoofReports({
 }) {
   const customers = useQuery(customersQuery);
   const orders = useQuery(roofOrdersQuery);
+  const drawings = useQuery(drawingsQuery);
   const [search, setSearch] = useState("");
   const [swipedReportId, setSwipedReportId] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
@@ -126,6 +129,8 @@ export function RoofReports({
             const customerName =
               customers.data?.find((customer) => customer.id === row.customer_id)?.name ??
               "Customer property";
+            const savedDrawing =
+              drawings.data?.find((drawing) => drawing.id === row.drawing_id) ?? null;
             return (
               <div
                 key={row.id}
@@ -196,6 +201,7 @@ export function RoofReports({
                     <Button variant="outline" onClick={() => onOpenMeasurement(row.id)}>
                       {row.file_path ? "Open measurements" : "Continue measurements"} <ArrowRight />
                     </Button>
+                    <EditSketchButton report={row} drawingRow={savedDrawing} />
                     <Button onClick={() => setSigningReport(row)}>
                       <PenLine /> Fill &amp; Sign
                     </Button>

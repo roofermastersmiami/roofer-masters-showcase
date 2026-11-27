@@ -22,6 +22,7 @@ import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
+import { EditSketchButton } from "./EditSketchButton";
 import {
   SATELLITE_DEFAULT_ZOOM,
   SATELLITE_MAX_ZOOM,
@@ -406,6 +407,7 @@ export function RoofMeasurementsTab({
                   >
                     <MapPin /> Open 2D / 3D workspace
                   </Button>
+                  <EditSketchButton report={row} drawingRow={savedDrawing ?? null} />
                   <DeleteRoofReportButton reportId={row.id} address={row.address} />
                 </div>
               </article>
