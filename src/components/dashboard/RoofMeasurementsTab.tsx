@@ -21,6 +21,7 @@ import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery } from "./roof-orders-data";
 import { RoofMeasurements } from "./RoofMeasurements";
+import { LocateProgressIndicator, useLocateProgress } from "./LocateProgress";
 import { useAutoFinishReports } from "./use-auto-finish";
 import { AutoFinishStatus } from "./AutoFinishStatus";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
@@ -63,6 +64,9 @@ export function RoofMeasurementsTab({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lookupBusy, setLookupBusy] = useState(false);
+  // Visible 0–100% for the Locate step: without it the dialog sat
+  // silent through the footprint lookup and looked frozen.
+  const locateProgress = useLocateProgress();
   const [mapZoom, setMapZoom] = useState(SATELLITE_DEFAULT_ZOOM);
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
   const [mapCenter, setMapCenter] = useState<LatLon | null>(null);
@@ -163,12 +167,16 @@ export function RoofMeasurementsTab({
   );
 
   async function locateAddress() {
+    // One locate at a time: the Locate button disables itself while
+    // busy, and this guard covers the address field's Enter key too.
+    if (lookupBusy) return;
     const address = form.address.trim();
     if (address.length < 8) {
       setAddressError("Enter the complete street address, city, state and ZIP code.");
       return;
     }
     setLookupBusy(true);
+    locateProgress.start("geocoding");
     setAddressError("");
     setLocatedAddress(null);
     setPins([]);
@@ -177,11 +185,13 @@ export function RoofMeasurementsTab({
     try {
       const result = await lookup({ data: { address } });
       if ("error" in result) {
+        locateProgress.cancel();
         setAddressError(result.error);
         return;
       }
       setLocatedAddress(result);
       setMapCenter({ lat: result.lat, lon: result.lon });
+      locateProgress.advance("building");
       // Pin 1 belongs on the house, not on the geocoded street
       // point: ask the detection service which footprint it would
       // select for this point and drop the pin on that building's
@@ -202,8 +212,10 @@ export function RoofMeasurementsTab({
       }
       setMapZoom(SATELLITE_DEFAULT_ZOOM);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
+      locateProgress.complete();
       toast.success("Property address located");
     } catch (error) {
+      locateProgress.cancel();
       setAddressError(
         error instanceof Error ? error.message : "Address lookup could not complete.",
       );
@@ -476,6 +488,7 @@ export function RoofMeasurementsTab({
         onOpenChange={(open) => {
           setAdding(open);
           if (!open) {
+            locateProgress.cancel();
             setLocatedAddress(null);
             setMapCenter(null);
             setPins([]);
@@ -567,6 +580,11 @@ export function RoofMeasurementsTab({
                     <MapPin /> {lookupBusy ? "Locating…" : "Locate"}
                   </Button>
                 </div>
+                {locateProgress.state && (
+                  <div className="absolute inset-0 z-30 grid place-items-center bg-background/60 p-6">
+                    <LocateProgressIndicator state={locateProgress.state} />
+                  </div>
+                )}
                 {locatedAddress && (
                   <>
                     <div className="absolute right-3 top-[68px] z-20 flex flex-col gap-1">

@@ -92,3 +92,67 @@ export function formatElapsedClock(totalSeconds: number): string {
   const remainder = seconds % 60;
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
+
+// ---------------------------------------------------------------------------
+// Timed-phase progress: the same honesty rules as the measurement
+// progress above, for waits that have no server-side fraction to
+// report (a single request that is simply in flight). Each phase owns
+// a percentage band; within the band the number creeps asymptotically
+// toward the cap the longer the phase lasts, so a slow step still
+// visibly moves — but it never crosses the cap until the caller
+// advances the phase, never goes backwards across a phase change
+// (callers pass the previous percent back in), and reaches exactly
+// 100 only when the caller says the work completed.
+// ---------------------------------------------------------------------------
+
+export type TimedProgressPhase = {
+  /** First percent of the phase's band. */
+  floor: number;
+  /** Percent the in-phase creep approaches but the phase never passes. */
+  cap: number;
+  /** Asymptotic creep time constant for this phase, seconds. */
+  tauSeconds: number;
+};
+
+export function timedProgressPercent(
+  phase: TimedProgressPhase,
+  phaseElapsedSeconds: number,
+  previousPercent = 0,
+  complete = false,
+): number {
+  if (complete) return 100;
+  const previous = clamp(Math.floor(previousPercent) || 0, 0, 99);
+  const tau = phase.tauSeconds > 0 ? phase.tauSeconds : CREEP_TAU_SECONDS;
+  const factor = 1 - Math.exp(-Math.max(0, phaseElapsedSeconds) / tau);
+  const target = phase.floor + (phase.cap - phase.floor) * factor;
+  return clamp(Math.round(Math.max(previous, target)), 0, 99);
+}
+
+/** The two real steps of the order dialog's Locate address flow: the
+ * address lookup (usually a few seconds), then the detection
+ * service's footprint lookup behind locateBuildingPin (tens of
+ * seconds, slower on a cold service). The building band therefore
+ * gets the larger share and the slower creep. */
+export const LOCATE_PROGRESS_PHASES = {
+  geocoding: { label: "Finding the address…", floor: 0, cap: 40, tauSeconds: 6 },
+  building: { label: "Finding the building on the map…", floor: 40, cap: 97, tauSeconds: 20 },
+} as const satisfies Record<string, TimedProgressPhase & { label: string }>;
+
+export type LocateProgressPhase = keyof typeof LOCATE_PROGRESS_PHASES;
+
+/** Percent for one in-flight Locate step. Exactly 100 only when
+ * `complete` is set — the caller does that once the pin is placed or
+ * the fallback is shown, never before. */
+export function locateProgressPercent(
+  phase: LocateProgressPhase,
+  phaseElapsedSeconds: number,
+  previousPercent = 0,
+  complete = false,
+): number {
+  return timedProgressPercent(
+    LOCATE_PROGRESS_PHASES[phase],
+    phaseElapsedSeconds,
+    previousPercent,
+    complete,
+  );
+}
