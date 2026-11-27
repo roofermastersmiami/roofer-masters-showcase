@@ -106,6 +106,7 @@ describe("Broward authority routing", () => {
     expect(residential.warnings.join(" ")).toContain("inside City of Sunrise limits");
     expect(residential.items.map((item) => item.id)).toContain("asbestos-responsibilities");
     expect(residential.items.map((item) => item.id)).toContain("roof-product-approvals");
+    expect(residential.requiredRoofingSections).toHaveLength(0);
 
     const commercial = getPermitChecklist({
       profileId: BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id,
@@ -115,6 +116,17 @@ describe("Broward authority routing", () => {
     expect(commercial.authorityConfirmed).toBe(false);
     expect(commercial.items).toHaveLength(0);
     expect(commercial.warnings.join(" ")).toContain("residential structural roof / reroof");
+  });
+
+  it("confirms Sunrise parcel authority only after an explicit property-boundary check", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id,
+      roofingSystem: "metal",
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+    });
+    expect(result.authorityConfirmed).toBe(true);
+    expect(result.requiredRoofingSections).toHaveLength(0);
   });
 
   it("does not confirm the Sunrise checklist until the reroof scope is selected", () => {
