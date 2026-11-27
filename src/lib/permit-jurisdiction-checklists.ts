@@ -6,7 +6,7 @@
  * and confirm the current checklist with that building department before filing.
  */
 export type RoofingSystem = "low_slope" | "asphalt_shingle" | "tile" | "metal" | "wood_shake" | "other";
-export type PermitProjectKind = "reroof" | "new_roof" | "repair" | "commercial_reroof" | "unknown";
+export type PermitProjectKind = "reroof" | "multifamily_reroof" | "new_roof" | "repair" | "commercial_reroof" | "unknown";
 
 export type ChecklistItem = {
   id: string;
@@ -442,9 +442,9 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     ? new Set(miamiDadeAttachmentIds[roofSystem])
     : new Set(profile.checklist.map((item) => item.id));
   const items = (checklistEnabled ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
-    if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
+    if (item.id === "owner-roofing-notification") return ["reroof", "multifamily_reroof", "commercial_reroof"].includes(request.projectKind ?? "unknown");
     if (item.id === "commercial-reroof-statement") return request.projectKind === "commercial_reroof";
-    if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment"].includes(item.id)) return request.projectKind === "commercial_reroof";
+    if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment"].includes(item.id)) return request.projectKind === "multifamily_reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
