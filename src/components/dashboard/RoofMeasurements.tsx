@@ -457,8 +457,23 @@ export function RoofMeasurements({
     }
     const target = matchingJobs.find((j) => j.id === jobId);
     if (!target) return;
+    if (!propertyRow?.company_id || target.company_id !== propertyRow.company_id) {
+      toast.error("The selected job and property must belong to the same company");
+      return;
+    }
     setBusy(true);
     try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Sign in to transfer measurements");
+      const { data: membership, error: membershipError } = await supabase
+        .from("crm_company_memberships")
+        .select("role")
+        .eq("user_id", auth.user.id)
+        .eq("company_id", propertyRow.company_id)
+        .in("role", ["owner", "admin", "production_manager"])
+        .maybeSingle();
+      if (membershipError || !membership)
+        throw new Error("You cannot update jobs for this company");
       const report = toMaterialReport(d);
       const lines = materialOrderForTransfer(report);
       const { error } = await supabase
@@ -474,7 +489,8 @@ export function RoofMeasurements({
             updated_at: new Date().toISOString(),
           },
         })
-        .eq("id", target.id);
+        .eq("id", target.id)
+        .eq("company_id", propertyRow.company_id);
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["roof-jobs"] });
       toast.success("Reviewed measurements transferred to material order");
