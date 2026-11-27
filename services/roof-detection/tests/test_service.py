@@ -355,6 +355,156 @@ def test_ransac_overlapping_planes_do_not_double_count_shared_area():
     assert combined_area >= single_area * 0.80
 
 
+def test_ransac_tight_threshold_recovers_true_planes_from_noisy_two_face_data():
+    # Heavily noised two-face gable (sigma 0.12 m — dirty LiDAR). At the old
+    # 0.20 m RANSAC tolerance the refit gathers a band of the opposing face
+    # along the ridge and reports compromise facets with RMSE ~0.09 m; the
+    # tight 0.10 m threshold keeps each fit on its own face, so the facets
+    # come back at the true 6/12 with fit RMSE that honestly reflects the
+    # noise on one plane.
+    rng = np.random.default_rng(11)
+    x_left, y_left = np.meshgrid(
+        np.linspace(0.25, 9.75, 28), np.linspace(0.25, 19.75, 40)
+    )
+    x_right, y_right = np.meshgrid(
+        np.linspace(10.25, 19.75, 28), np.linspace(0.25, 19.75, 40)
+    )
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), (10.0 + 0.5 * x_left).ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), (20.0 - 0.5 * x_right).ravel()))
+    points = np.vstack((left, right))
+    points[:, 2] += rng.normal(0, 0.12, len(points))
+
+    facets = _fit_facets(points)
+
+    assert len(facets) == 2
+    for facet in facets:
+        assert facet["pitch_rise_per_12"] == pytest.approx(6.0, abs=0.25)
+        assert facet["fit_rmse_m"] < 0.07
+        assert facet["point_count"] >= 500
+
+
+def test_coverage_completion_tessellates_evidenced_gap_between_facets():
+    # Gable whose face samples stop 1 m short of the ridge; a sparse row of
+    # mixed returns sits in the band at the two planes' average height
+    # (what a LiDAR pulse straddling the ridge reports). Too sparse to fit
+    # and claimed by neither face, but the returns near the intersection
+    # line fit each plane within tolerance, so they evidence the seam. The
+    # hulls alone leave the band unmeasured; coverage completion must
+    # split it between the two facets along their intersection line
+    # (x = 10), with no overlap and no growth into the evidence-free
+    # margin beyond the footprint.
+    rng = np.random.default_rng(23)
+    footprint = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    x_left, y_left = np.meshgrid(
+        np.arange(0.25, 9.0, 0.5), np.arange(0.25, 19.75, 0.5)
+    )
+    x_right, y_right = np.meshgrid(
+        np.arange(11.0, 19.75, 0.5), np.arange(0.25, 19.75, 0.5)
+    )
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), (10.0 + 0.5 * x_left).ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), (20.0 - 0.5 * x_right).ravel()))
+    left[:, 2] += rng.normal(0, 0.02, len(left))
+    right[:, 2] += rng.normal(0, 0.02, len(right))
+    x_band, y_band = np.meshgrid(
+        np.arange(9.25, 10.75, 0.5), np.arange(1.0, 19.0, 2.0)
+    )
+    band = np.column_stack((x_band.ravel(), y_band.ravel(), np.full(len(x_band.ravel()), 15.0)))
+    band[:, 2] += rng.normal(0, 0.05, len(band))
+
+    facets = _fit_facets(np.vstack((left, right, band)), footprint)
+
+    assert len(facets) == 2
+    polygons = [Polygon(facet["boundary_xy"]) for facet in facets]
+    # No double-counting: the tessellated facets are disjoint apart from
+    # the 2 cm merge bridge along the shared seam (< 0.1 sq ft here),
+    # which is not double-counted roof area in any meaningful sense.
+    assert polygons[0].intersection(polygons[1]).area == pytest.approx(0, abs=0.01)
+    plan_sqft = sum(
+        facet["area_sqft"] * np.cos(np.radians(facet["pitch_degrees"]))
+        for facet in facets
+    )
+    clip_plan_sqft = footprint.buffer(0.75).area * 10.7639104167
+    # The evidenced band is filled (hulls alone cover ~3,480 plan sq ft),
+    # while the total stays bounded by the clipped footprint region.
+    assert plan_sqft > 3800
+    assert plan_sqft <= clip_plan_sqft
+    # The band is split along the planes' intersection line: points just
+    # left and right of the ridge belong to different facets.
+    left_owner = [i for i, polygon in enumerate(polygons) if polygon.covers(Point(9.5, 10.0))]
+    right_owner = [i for i, polygon in enumerate(polygons) if polygon.covers(Point(10.5, 10.0))]
+    assert len(left_owner) == 1
+    assert len(right_owner) == 1
+    assert left_owner != right_owner
+
+
+def _fragment_candidate(x_range, slope, intercept, y_range=(0.0, 10.0), step=0.5):
+    """Build one plane candidate the way the RANSAC loop in _fit_facets
+    does: a fitted LinearRegression, its inlier grid points, and the convex
+    hull of those points."""
+    from sklearn.linear_model import LinearRegression
+    from shapely.geometry import MultiPoint
+
+    x, y = np.meshgrid(
+        np.arange(x_range[0], x_range[1] + 1e-9, step),
+        np.arange(y_range[0], y_range[1] + 1e-9, step),
+    )
+    points = np.column_stack((x.ravel(), y.ravel(), (slope * x + intercept).ravel()))
+    model = LinearRegression().fit(points[:, :2], points[:, 2])
+    a, b = (float(model.coef_[0]), float(model.coef_[1]))
+    fitted_slope = float(np.hypot(a, b))
+    return {
+        "polygon": MultiPoint(points[:, :2]).convex_hull,
+        "cluster": points,
+        "point_count": len(points),
+        "model": model,
+        "a": a,
+        "b": b,
+        "pitch": float(np.degrees(np.arctan(fitted_slope))),
+        "pitch_rise": fitted_slope * 12.0,
+        "azimuth": (float(np.degrees(np.arctan2(-a, -b))) + 360.0) % 360.0,
+    }
+
+
+def test_merge_fragmented_candidates_reunites_split_face():
+    # One true 6/12 face (z = 0.5x + 12 over x in [0, 20]) detected as two
+    # near-parallel fragments: a later RANSAC pass fit the eastern piece
+    # with a slightly different slope and intercept. The fragments cross
+    # inside their overlap (x in [7, 13]) and their hulls overlap, so they
+    # must merge into ONE candidate spanning the whole face — fed into hull
+    # resolution separately, the smaller fragment's unique territory is
+    # dropped as a "duplicate" and the face loses that area.
+    from main import _merge_fragmented_candidates
+
+    west = _fragment_candidate((0.0, 13.0), 0.50, 12.0)
+    east = _fragment_candidate((7.0, 20.0), 0.47, 12.30)
+
+    merged = _merge_fragmented_candidates([west, east], None)
+
+    assert len(merged) == 1
+    xs = merged[0]["cluster"][:, 0]
+    assert xs.min() == pytest.approx(0.0)
+    assert xs.max() == pytest.approx(20.0)
+    assert merged[0]["point_count"] == merged[0]["cluster"].shape[0]
+    # The refit over the pooled points stays close to the true 6/12 plane.
+    assert merged[0]["pitch_rise"] == pytest.approx(6.0, abs=0.35)
+
+
+def test_merge_fragmented_candidates_keeps_distinct_faces_apart():
+    from main import _merge_fragmented_candidates
+
+    # Opposing slopes of a gable: normals far apart, never one face.
+    left = _fragment_candidate((0.0, 13.0), 0.50, 12.0)
+    right = _fragment_candidate((7.0, 20.0), -0.50, 22.0)
+    assert len(_merge_fragmented_candidates([left, right], None)) == 2
+
+    # Parallel planes half a metre apart (a stepped lower roof section
+    # under the main slope): same normal, but the planes do not coincide
+    # where the hulls overlap, so they stay separate.
+    main_slope = _fragment_candidate((0.0, 13.0), 0.50, 12.0)
+    lower_step = _fragment_candidate((7.0, 20.0), 0.50, 12.50)
+    assert len(_merge_fragmented_candidates([main_slope, lower_step], None)) == 2
+
+
 def test_street_address_normalization_matches_directional_and_suffix_variants():
     from main import _normalize_street_address
 

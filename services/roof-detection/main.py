@@ -20,6 +20,7 @@ from pyproj import CRS, Transformer
 from pystac_client import Client
 from shapely import contains_xy
 from shapely.geometry import MultiPoint, Point, Polygon, mapping, shape
+from shapely.ops import nearest_points
 from shapely.validation import make_valid
 from sklearn.cluster import DBSCAN
 from sklearn.linear_model import LinearRegression, RANSACRegressor
@@ -44,6 +45,44 @@ MAX_PLANES = int(os.getenv("MAX_PLANES", "8"))
 # detection of claimed area rather than a distinct roof plane.
 MIN_FACET_AREA_SQFT = float(os.getenv("MIN_FACET_AREA_SQFT", "25"))
 MIN_FACET_REMAINING_FRACTION = float(os.getenv("MIN_FACET_REMAINING_FRACTION", "0.35"))
+# RANSAC plane tolerance. A loose threshold lets one fit gather points from
+# two faces meeting at a hip or ridge and settle on a shallow compromise
+# plane between them: the real Miramar pool reads 3.1-4.1/12 compromise
+# planes at 0.20 m but clean 5.35-5.58/12 faces at 0.10 m. Fit tight first;
+# only when a plane cannot gather MIN_ROOF_POINTS inliers at the tight
+# threshold (sparse or noisy tile) is that plane retried at the fallback.
+RANSAC_RESIDUAL_THRESHOLD_M = float(os.getenv("RANSAC_RESIDUAL_THRESHOLD_M", "0.10"))
+RANSAC_RESIDUAL_THRESHOLD_FALLBACK_M = float(
+    os.getenv("RANSAC_RESIDUAL_THRESHOLD_FALLBACK_M", "0.20")
+)
+# Coverage completion: after hull resolution, parts of the clipped footprint
+# region that no facet claimed are assigned to an adjacent facet along the
+# planes' intersection lines — but only where roof evidence brackets the
+# growth: input points no facet claimed that the growing facet's own plane
+# still predicts (seam points between two planes, a dropped duplicate
+# detection's fringe). Evidence-free overhang/courtyard margins stay
+# unclaimed, so the tessellation completes measured seams along hips,
+# ridges and eaves without inventing roof the point cloud never saw.
+COVERAGE_GAP_ADJACENCY_M = float(os.getenv("COVERAGE_GAP_ADJACENCY_M", "1.0"))
+# An unclaimed point only evidences growth of a facet whose plane actually
+# predicts it (residual within this tolerance, the RANSAC fallback scale).
+# Without the check, a facet annexes any nearby unclaimed surface — a
+# sloped facet growing into an adjacent flat section whose points its
+# plane plainly does not fit.
+COVERAGE_EVIDENCE_RESIDUAL_M = float(os.getenv("COVERAGE_EVIDENCE_RESIDUAL_M", "0.20"))
+# Sequential RANSAC passes can split one physical roof face into several
+# near-parallel fragments: the first pass consumes only part of the face and
+# a later pass fits the rest with a slightly different pitch/offset. Left
+# alone, the fragments' hulls overlap and the resolution pass drops pieces
+# of the face as "duplicates". Candidates whose plane normals agree within
+# MERGE_NORMAL_ANGLE_DEG, whose planes sit within MERGE_PLANE_OFFSET_M of
+# each other (0.107 m ≈ 0.35 ft), and whose clipped hulls overlap or nearly
+# touch (within MERGE_HULL_GAP_M) are therefore merged before resolution:
+# their inlier points are pooled, one plane is refit, and one hull is
+# rebuilt (see _merge_fragmented_candidates).
+MERGE_NORMAL_ANGLE_DEG = float(os.getenv("MERGE_NORMAL_ANGLE_DEG", "4"))
+MERGE_PLANE_OFFSET_M = float(os.getenv("MERGE_PLANE_OFFSET_M", "0.107"))
+MERGE_HULL_GAP_M = float(os.getenv("MERGE_HULL_GAP_M", "1.0"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -793,6 +832,365 @@ def _project_polygon(polygon: Polygon, epsg: int) -> tuple[Polygon, Transformer,
     return _transform_polygon(polygon, to_xy), to_xy, to_ll
 
 
+def _fit_ransac_plane(
+    xy: np.ndarray,
+    z: np.ndarray,
+    residual_threshold_m: float,
+    random_state: int,
+) -> tuple[Any, np.ndarray] | None:
+    """One RANSAC plane hypothesis over the points.
+
+    Returns (fitted LinearRegression, inlier mask), or None when the fit
+    fails or gathers fewer than MIN_ROOF_POINTS inliers.
+    """
+    estimator = RANSACRegressor(
+        estimator=LinearRegression(),
+        # Three non-collinear points are sufficient to hypothesize a
+        # plane. Large random samples can mix both sides of a ridge and
+        # converge on a shallow compromise plane, corrupting pitch.
+        min_samples=3,
+        residual_threshold=residual_threshold_m,
+        max_trials=250,
+        random_state=random_state,
+    )
+    try:
+        estimator.fit(xy, z)
+    except (ValueError, FloatingPointError):
+        return None
+    inliers = estimator.inlier_mask_
+    if inliers is None or int(inliers.sum()) < MIN_ROOF_POINTS:
+        return None
+    return estimator.estimator_, inliers
+
+
+def _polygon_parts(geometry: Any) -> list[Polygon]:
+    if geometry is None or geometry.is_empty:
+        return []
+    if geometry.geom_type == "Polygon":
+        return [geometry]
+    return [
+        part for part in getattr(geometry, "geoms", []) if part.geom_type == "Polygon"
+    ]
+
+
+def _upper_envelope_part(region: Polygon, owner: dict[str, Any], others: list[dict[str, Any]]) -> Polygon | None:
+    """The part of `region` on the owner's own side of the intersection
+    line with every other candidate plane.
+
+    Two roof planes divide the plan along their intersection line; which
+    side belongs to the owner is the side its existing polygon lies on.
+    That one rule reproduces both junction kinds: at a valley the owner's
+    side is where its plane is the higher one (upper envelope), and at a
+    ridge or hip it is where its plane is the lower one — a plane's
+    extension across a peak would poke through the real roof, so a plain
+    "highest plane wins" rule hands ridge gaps to the wrong facet.
+    """
+    part: Any = region
+    min_x, min_y, max_x, max_y = region.bounds
+    span = math.hypot(max_x - min_x, max_y - min_y) + 10.0
+    anchor = owner["polygon"].representative_point()
+    for other in others:
+        da = owner["a"] - other["a"]
+        db = owner["b"] - other["b"]
+        dc = owner["c"] - other["c"]
+        norm = math.hypot(da, db)
+        if norm <= 1e-9:
+            # Parallel planes never intersect; they impose no split line.
+            continue
+        if da * anchor.x + db * anchor.y + dc < 0:
+            # The owner's territory is on the negative side of the line;
+            # flip the constraint so the kept half-plane contains it.
+            da, db, dc = -da, -db, -dc
+        # Half-plane da*x + db*y + dc >= 0, materialized as a rectangle
+        # large enough to cover the region on the kept side of the line.
+        ux, uy = -db / norm, da / norm
+        nx, ny = da / norm, db / norm
+        px, py = -dc * da / (norm * norm), -dc * db / (norm * norm)
+        half_plane = Polygon([
+            (px - span * ux, py - span * uy),
+            (px + span * ux, py + span * uy),
+            (px + span * ux + span * nx, py + span * uy + span * ny),
+            (px - span * ux + span * nx, py - span * uy + span * ny),
+        ])
+        part = part.intersection(half_plane)
+        if part.is_empty:
+            return None
+    return part
+
+
+def _complete_coverage(
+    records: list[dict[str, Any]],
+    clip: Polygon,
+    points: np.ndarray,
+) -> None:
+    """Grow facet polygons so they tessellate the evidenced roof plan.
+
+    Fitted hulls stop where inlier points stop, leaving unclaimed seams
+    along hips, ridges and eaves (and whole fringes whose detection was
+    dropped as a duplicate). An unclaimed part of the clipped footprint
+    region is split among the adjacent facets along the planes'
+    intersection lines and merged into them — but a facet may only grow
+    across ground bracketed by unclaimed input points that the facet's
+    own plane predicts (residual within COVERAGE_EVIDENCE_RESIDUAL_M):
+    its growth zone is the convex hull of its polygon plus those points,
+    so completion follows measured roof surface, never annexes a
+    neighbouring surface the plane does not fit, and never extends past
+    the outermost returns near an eave. Facet point counts and fit RMSE
+    are untouched: they describe the points actually fitted, not the
+    completed geometry.
+    """
+    from shapely.ops import unary_union
+
+    if not records:
+        return
+    covered = unary_union([record["polygon"] for record in records])
+    uncovered = clip.difference(covered)
+    if uncovered.is_empty or uncovered.area <= 1e-6:
+        return
+    # Evidence points are input points no facet polygon claims. Points on
+    # a shared boundary count as claimed (distance zero), so hull vertices
+    # along a facet edge cannot masquerade as evidence for the margin
+    # beyond that edge.
+    unclaimed_rows = [
+        point
+        for point in points
+        if covered.distance(Point(float(point[0]), float(point[1]))) > 0.02
+    ]
+    if not unclaimed_rows:
+        return
+    for component in _polygon_parts(uncovered):
+        if component.is_empty or component.area <= 1e-6:
+            continue
+        owners = [
+            record
+            for record in records
+            if record["polygon"].distance(component) <= COVERAGE_GAP_ADJACENCY_M
+        ]
+        if not owners:
+            owners = [min(records, key=lambda record: record["polygon"].distance(component))]
+        owners.sort(key=lambda record: -record["point_count"])
+        # Each owner's evidence zone inside this component: the convex
+        # hull of the facet's own polygon plus the unclaimed points its
+        # plane predicts. Growth is bracketed by measured points on every
+        # side — a radial buffer around the points would also annex the
+        # strip beyond the outermost returns, overshooting the true roof
+        # edge wherever returns thin out near an eave.
+        zones: dict[int, Any] = {}
+        for index, owner in enumerate(owners):
+            fitting = [
+                (float(point[0]), float(point[1]))
+                for point in unclaimed_rows
+                if abs(
+                    float(point[2])
+                    - (owner["a"] * float(point[0]) + owner["b"] * float(point[1]) + owner["c"])
+                )
+                <= COVERAGE_EVIDENCE_RESIDUAL_M
+            ]
+            if fitting:
+                hull = MultiPoint(
+                    fitting + list(owner["polygon"].exterior.coords)
+                ).convex_hull
+                if hull.geom_type == "Polygon" and not hull.is_empty:
+                    zone = hull.intersection(component)
+                    if not zone.is_empty:
+                        zones[index] = zone
+        if not zones:
+            continue
+        def grow(owner: dict[str, Any], geometry: Any) -> None:
+            # A growth piece that meets the facet at a single point would
+            # leave a self-touching (invalid) ring; a 2 cm expansion of
+            # the piece turns point contacts into edge overlaps. A piece
+            # that still cannot merge cleanly is left unassigned rather
+            # than corrupting the facet boundary.
+            for piece in _polygon_parts(geometry):
+                merged = owner["polygon"].union(piece)
+                if merged.geom_type != "Polygon" or not merged.is_valid:
+                    merged = owner["polygon"].union(piece.buffer(0.02))
+                if merged.geom_type == "Polygon" and merged.is_valid:
+                    owner["polygon"] = merged
+
+        remainder: Any = component
+        for index, owner in enumerate(owners):
+            if remainder.is_empty or remainder.area <= 1e-9:
+                break
+            if index not in zones:
+                continue
+            part = _upper_envelope_part(
+                remainder, owner, [other for other in owners if other is not owner]
+            )
+            if part is None or part.is_empty:
+                continue
+            part = part.intersection(zones[index])
+            if part.is_empty:
+                continue
+            grow(owner, part)
+            remainder = remainder.difference(part)
+        if not remainder.is_empty and remainder.area > 1e-9:
+            # A zone-covered sliver can survive the envelope split (for
+            # example between two owners' zones along a seam); the
+            # largest adjacent facet absorbs that part. Anything outside
+            # every zone stays unclaimed.
+            evidenced_leftover = remainder.intersection(
+                unary_union(list(zones.values()))
+            )
+            if not evidenced_leftover.is_empty:
+                grow(owners[0], evidenced_leftover)
+
+
+def _plane_normal(a: float, b: float) -> np.ndarray:
+    """Unit normal of the plane z = a*x + b*y + c."""
+    normal = np.array([-a, -b, 1.0])
+    return normal / np.linalg.norm(normal)
+
+
+def _candidates_same_face(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    """True when two plane candidates plausibly describe one physical face:
+    near-parallel normals, planes within MERGE_PLANE_OFFSET_M of each other,
+    and clipped hulls that overlap or nearly touch in plan view."""
+    cos_angle = float(np.dot(
+        _plane_normal(first["a"], first["b"]),
+        _plane_normal(second["a"], second["b"]),
+    ))
+    angle_deg = math.degrees(math.acos(max(-1.0, min(1.0, cos_angle))))
+    if angle_deg > MERGE_NORMAL_ANGLE_DEG:
+        return False
+
+    # Two fragments of one face must nearly coincide where they meet, so
+    # the plane separation is measured at the hulls' meeting zone (their
+    # overlap, or the midpoint of the gap between them) — not at each
+    # fragment's own centroid, where two chord fits of one slightly
+    # non-planar face have already diverged by decimetres.
+    intersection = first["polygon"].intersection(second["polygon"])
+    if not intersection.is_empty and intersection.area > 1e-6:
+        anchor = intersection.representative_point()
+    else:
+        near_first, near_second = nearest_points(first["polygon"], second["polygon"])
+        anchor = Point(
+            (near_first.x + near_second.x) / 2.0,
+            (near_first.y + near_second.y) / 2.0,
+        )
+
+    def plane_offset(source: dict[str, Any], target: dict[str, Any]) -> float:
+        # Perpendicular distance from the anchor, lifted onto the source
+        # plane, to the target plane.
+        a, b = target["a"], target["b"]
+        c = float(target["model"].intercept_)
+        z_on_source = (
+            source["a"] * anchor.x + source["b"] * anchor.y
+            + float(source["model"].intercept_)
+        )
+        return abs(a * anchor.x + b * anchor.y + c - z_on_source) / math.sqrt(
+            a * a + b * b + 1.0
+        )
+
+    if max(plane_offset(first, second), plane_offset(second, first)) > MERGE_PLANE_OFFSET_M:
+        return False
+    return first["polygon"].distance(second["polygon"]) <= MERGE_HULL_GAP_M
+
+
+def _candidate_from_points(
+    pooled: np.ndarray,
+    model: LinearRegression,
+    footprint: Polygon | None,
+) -> list[dict[str, Any]]:
+    """Rebuild plane candidates from a pooled point set and one fitted
+    plane, following the same hull/clip/component steps as the RANSAC loop
+    in _fit_facets."""
+    a, b = (float(model.coef_[0]), float(model.coef_[1]))
+    slope = math.hypot(a, b)
+    pitch = math.degrees(math.atan(slope))
+    if pitch > 70:
+        return []
+    hull = MultiPoint(pooled[:, :2]).convex_hull
+    if hull.geom_type != "Polygon" or hull.area <= 1e-4:
+        return []
+    bounded = hull.intersection(footprint.buffer(0.75)) if footprint is not None else hull
+    components = (
+        [bounded]
+        if bounded.geom_type == "Polygon"
+        else [part for part in getattr(bounded, "geoms", []) if part.geom_type == "Polygon"]
+    )
+    rebuilt: list[dict[str, Any]] = []
+    for component in components:
+        if component.is_empty or component.area <= 1e-4:
+            continue
+        component_points = [
+            point
+            for point in pooled
+            if component.buffer(0.02).covers(Point(float(point[0]), float(point[1])))
+        ]
+        if not component_points:
+            continue
+        rebuilt.append({
+            "polygon": component,
+            "cluster": pooled,
+            "point_count": len(component_points),
+            "model": model,
+            "a": a,
+            "b": b,
+            "pitch": pitch,
+            "pitch_rise": slope * 12.0,
+            "azimuth": (math.degrees(math.atan2(-a, -b)) + 360.0) % 360.0,
+        })
+    return rebuilt
+
+
+def _merge_fragmented_candidates(
+    candidates: list[dict[str, Any]],
+    footprint: Polygon | None,
+) -> list[dict[str, Any]]:
+    """Merge plane candidates that are fragments of one physical roof face.
+
+    Candidates linked by _candidates_same_face (transitively) have their
+    inlier points pooled and a single plane refit, so the face enters hull
+    resolution as one candidate spanning the whole face instead of pieces
+    that cannibalize each other as duplicates. Candidates that cannot be
+    refit pass through unchanged.
+    """
+    if len(candidates) < 2:
+        return candidates
+    parent = list(range(len(candidates)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for i in range(len(candidates)):
+        for j in range(i + 1, len(candidates)):
+            if _candidates_same_face(candidates[i], candidates[j]):
+                root_i, root_j = find(i), find(j)
+                if root_i != root_j:
+                    parent[root_j] = root_i
+
+    groups: dict[int, list[int]] = {}
+    for i in range(len(candidates)):
+        groups.setdefault(find(i), []).append(i)
+
+    merged: list[dict[str, Any]] = []
+    for members in groups.values():
+        if len(members) == 1:
+            merged.append(candidates[members[0]])
+            continue
+        pooled = np.unique(
+            np.vstack([candidates[member]["cluster"] for member in members]),
+            axis=0,
+        )
+        rebuilt: list[dict[str, Any]] = []
+        if len(pooled) >= MIN_ROOF_POINTS:
+            try:
+                model = LinearRegression().fit(pooled[:, :2], pooled[:, 2])
+                rebuilt = _candidate_from_points(pooled, model, footprint)
+            except (ValueError, FloatingPointError):
+                rebuilt = []
+        if rebuilt:
+            merged.extend(rebuilt)
+        else:
+            merged.extend(candidates[member] for member in members)
+    return merged
+
+
 def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[dict[str, Any]]:
     remaining = points.copy()
     # Clipped hull components from every fitted plane, resolved into facets
@@ -801,25 +1199,25 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
     for plane_index in range(MAX_PLANES):
         if len(remaining) < MIN_ROOF_POINTS:
             break
-        estimator = RANSACRegressor(
-            estimator=LinearRegression(),
-            # Three non-collinear points are sufficient to hypothesize a
-            # plane. Large random samples can mix both sides of a ridge and
-            # converge on a shallow compromise plane, corrupting pitch.
-            min_samples=3,
-            residual_threshold=0.20,
-            max_trials=250,
-            random_state=plane_index + 13,
+        fitted = _fit_ransac_plane(
+            remaining[:, :2],
+            remaining[:, 2],
+            RANSAC_RESIDUAL_THRESHOLD_M,
+            plane_index + 13,
         )
-        try:
-            estimator.fit(remaining[:, :2], remaining[:, 2])
-        except (ValueError, FloatingPointError):
+        if fitted is None and RANSAC_RESIDUAL_THRESHOLD_FALLBACK_M > RANSAC_RESIDUAL_THRESHOLD_M:
+            # Sparse or noisy pool: retry this plane at the loose threshold
+            # rather than giving up on the facet entirely.
+            fitted = _fit_ransac_plane(
+                remaining[:, :2],
+                remaining[:, 2],
+                RANSAC_RESIDUAL_THRESHOLD_FALLBACK_M,
+                plane_index + 13,
+            )
+        if fitted is None:
             break
-        inliers = estimator.inlier_mask_
-        if inliers is None or int(inliers.sum()) < MIN_ROOF_POINTS:
-            break
+        model, inliers = fitted
         selected = remaining[inliers]
-        model = estimator.estimator_
         a, b = (float(model.coef_[0]), float(model.coef_[1]))
         slope = math.hypot(a, b)
         pitch = math.degrees(math.atan(slope))  # angle from horizontal
@@ -877,6 +1275,12 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
                 })
         remaining = remaining[~inliers]
 
+    # Reunite fragments of one physical face (split across RANSAC passes
+    # into near-parallel candidates) before resolution, so the merged
+    # candidate spans the face instead of its pieces being dropped below
+    # as duplicates of each other.
+    candidates = _merge_fragmented_candidates(candidates, footprint)
+
     # Hulls of different planes routinely overlap in plan view (a fragmented
     # near-parallel detection, or a plane fitted across a ridge, extends under
     # its neighbour), and summing the raw hulls double-counts the overlap —
@@ -884,10 +1288,10 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
     # largest-first: each candidate keeps only the part of its hull that no
     # earlier (larger) facet has claimed, so the accepted hulls tile the roof
     # instead of stacking on top of each other.
-    facets: list[dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
     accepted_union: Any = None
     for candidate in sorted(candidates, key=lambda item: -item["point_count"]):
-        if len(facets) >= MAX_PLANES:
+        if len(resolved) >= MAX_PLANES:
             break
         polygon: Polygon = candidate["polygon"]
         pitch = float(candidate["pitch"])
@@ -921,7 +1325,7 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
             continue
         model = candidate["model"]
         for part in kept:
-            if len(facets) >= MAX_PLANES:
+            if len(resolved) >= MAX_PLANES:
                 break
             part_points = [
                 point
@@ -933,29 +1337,74 @@ def _fit_facets(points: np.ndarray, footprint: Polygon | None = None) -> list[di
             part_array = np.asarray(part_points, dtype=float)
             residuals = part_array[:, 2] - model.predict(part_array[:, :2])
             fit_rmse_m = float(np.sqrt(np.mean(np.square(residuals))))
-            surface_area_sqft = surface_sqft(part)
-            facets.append({
-                "id": f"facet-{len(facets) + 1}",
+            resolved.append({
+                "polygon": part,
                 "point_count": len(part_points),
                 "fit_rmse_m": round(fit_rmse_m, 4),
-                "pitch_degrees": round(pitch, 2),
-                "pitch_rise_per_12": round(float(candidate["pitch_rise"]), 2),
-                "azimuth_degrees": round(float(candidate["azimuth"]), 1),
-                "area_sqft": round(surface_area_sqft, 1),
-                "squares": round(surface_area_sqft / 100.0, 3),
-                "plane_model": {
-                    "z_equals_ax_plus_by_plus_c": [
-                        float(candidate["a"]),
-                        float(candidate["b"]),
-                        float(model.intercept_),
-                    ]
-                },
-                "boundary_xy": [
-                    [round(float(x), 3), round(float(y), 3)]
-                    for x, y in part.exterior.coords
-                ],
+                "pitch": pitch,
+                "pitch_rise": float(candidate["pitch_rise"]),
+                "azimuth": float(candidate["azimuth"]),
+                "a": float(candidate["a"]),
+                "b": float(candidate["b"]),
+                "c": float(model.intercept_),
             })
             accepted_union = part if accepted_union is None else accepted_union.union(part)
+
+    # Hulls end where inlier points end, which is short of the true seams:
+    # points near a hip or ridge fit neither plane exactly, and eave rows
+    # thin out. Complete the coverage over the evidenced part of the
+    # clipped footprint region so the facets tessellate the roof plan.
+    if footprint is not None and resolved:
+        _complete_coverage(resolved, footprint.buffer(0.75), points)
+
+    facets: list[dict[str, Any]] = []
+    for record in resolved:
+        polygon = record["polygon"]
+        if polygon.geom_type != "Polygon":
+            # Coverage growth can in principle leave a disjoint piece;
+            # the boundary schema carries one ring, so keep the largest
+            # piece (its area is what the boundary describes).
+            parts = _polygon_parts(polygon)
+            if not parts:
+                continue
+            polygon = max(parts, key=lambda part: part.area)
+        pitch = float(record["pitch"])
+        cos_pitch = max(math.cos(math.radians(pitch)), 1e-6)
+        surface_area_sqft = float(polygon.area) / cos_pitch * 10.7639104167
+        boundary = [
+            [round(float(x), 3), round(float(y), 3)]
+            for x, y in polygon.exterior.coords
+        ]
+        if not Polygon(boundary).is_valid:
+            # Coverage growth introduces vertices on the planes'
+            # intersection lines, which can land within rounding distance
+            # of an existing edge and make the rounded ring self-touch.
+            # Repair the ring (largest valid part) so emitted boundaries
+            # are always usable geometry.
+            repaired = _polygon_parts(make_valid(Polygon(boundary)))
+            if repaired:
+                boundary = [
+                    [round(float(x), 3), round(float(y), 3)]
+                    for x, y in max(repaired, key=lambda part: part.area).exterior.coords
+                ]
+        facets.append({
+            "id": f"facet-{len(facets) + 1}",
+            "point_count": record["point_count"],
+            "fit_rmse_m": record["fit_rmse_m"],
+            "pitch_degrees": round(pitch, 2),
+            "pitch_rise_per_12": round(float(record["pitch_rise"]), 2),
+            "azimuth_degrees": round(float(record["azimuth"]), 1),
+            "area_sqft": round(surface_area_sqft, 1),
+            "squares": round(surface_area_sqft / 100.0, 3),
+            "plane_model": {
+                "z_equals_ax_plus_by_plus_c": [
+                    float(record["a"]),
+                    float(record["b"]),
+                    float(record["c"]),
+                ]
+            },
+            "boundary_xy": boundary,
+        })
     return facets
 
 def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> np.ndarray:
