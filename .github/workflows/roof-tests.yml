@@ -8,9 +8,9 @@ concurrency:
 
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052]
+    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052, feat/permit-approval-code-edition-0053]
   pull_request:
-    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051]
+    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052]
   workflow_dispatch:
 
 jobs:
