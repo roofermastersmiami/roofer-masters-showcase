@@ -31,7 +31,7 @@ describe("production permitting preflight is read-only and schema-drift tolerant
 
   it("contains no schema or data mutation statements", () => {
     const executable = sql.replace(/^\\echo.*$/gm, "").replace(/^--.*$/gm, "");
-    expect(executable).not.toMatch(/^\\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|CALL|COPY)\\b/im);
+    expect(executable).not.toMatch(/^\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|CALL|COPY)\b/im);
     expect(executable).toContain("SELECT current_database()");
     expect(executable).toContain("\\set ON_ERROR_STOP on");
   });
