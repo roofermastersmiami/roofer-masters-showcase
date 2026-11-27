@@ -435,6 +435,13 @@
       "when": 1795790600000,
       "tag": "0061_company_scoped_expense_receipt_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1795790700000,
+      "tag": "0062_company_owned_drawing_references",
+      "breakpoints": true
     }
   ]
 }
