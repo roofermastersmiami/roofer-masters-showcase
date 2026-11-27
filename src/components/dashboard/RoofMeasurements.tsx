@@ -492,8 +492,6 @@ export function RoofMeasurements({
     }
     if (!propertyRow?.company_id)
       return toast.error("Property company ownership could not be verified");
-    if (customer.company_id && customer.company_id !== propertyRow.company_id)
-      return toast.error("Customer and property belong to different companies");
     setBusy(true);
     try {
       const { error } = await supabase.from("roof_estimates").insert({
