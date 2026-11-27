@@ -386,6 +386,13 @@
       "when": 1795754200000,
       "tag": "0054_replace_legacy_tenant_rls_and_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1795790000000,
+      "tag": "0055_secondary_operational_company_ownership",
+      "breakpoints": true
     }
   ]
 }
