@@ -634,6 +634,21 @@ describe("City of Hallandale Beach roofing permit profile", () => {
     expect(ids).toContain("hallandale-hurricane-mitigation");
   });
 
+  it("does not apply Hallandale reroof-only affidavits to a new roof or repair", () => {
+    for (const projectKind of ["new_roof", "repair"] as const) {
+      const result = getPermitChecklist({
+        profileId: BROWARD_HALLANDALE_ROOFING_PROFILE.id,
+        projectKind,
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-11-26",
+      });
+      const ids = result.items.map((item) => item.id);
+      expect(ids).not.toContain("hallandale-asbestos-certificate");
+      expect(ids).not.toContain("hallandale-rooftop-equipment");
+      expect(ids).not.toContain("hallandale-renailing-affidavit");
+    }
+  });
+
   it("requires City parcel verification and suppresses expired code references", () => {
     const unverified = getPermitChecklist({
       profileId: BROWARD_HALLANDALE_ROOFING_PROFILE.id,

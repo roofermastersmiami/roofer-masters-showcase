@@ -537,6 +537,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     if (item.id === "davie-hurricane-mitigation-retrofit") return request.projectKind === "reroof";
     if (item.id === "davie-commercial-reroof-statement") return request.projectKind === "commercial_reroof";
     if (item.id === "margate-owner-notification") return ["reroof", "multifamily_reroof", "commercial_reroof"].includes(request.projectKind ?? "unknown");
+    if (["hallandale-asbestos-certificate", "hallandale-insulation-replacement", "hallandale-rooftop-equipment", "hallandale-renailing-affidavit", "hallandale-assessed-value", "hallandale-hurricane-mitigation"].includes(item.id)) return ["reroof", "multifamily_reroof", "commercial_reroof"].includes(request.projectKind ?? "unknown");
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
