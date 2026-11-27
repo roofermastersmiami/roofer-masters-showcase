@@ -400,6 +400,13 @@
       "when": 1795790100000,
       "tag": "0056_company_scoped_invoice_payment_rpcs",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795790200000,
+      "tag": "0057_company_scoped_invoice_checkout_reservation",
+      "breakpoints": true
     }
   ]
 }
