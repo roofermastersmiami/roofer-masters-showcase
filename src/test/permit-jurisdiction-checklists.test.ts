@@ -4,6 +4,7 @@ import {
   BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
   BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
+  BROWARD_WESTON_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -408,6 +409,59 @@ describe("Miramar residential roofing permit profile", () => {
   it("suppresses the 8th Edition Miramar package after December 30, 2026", () => {
     const result = getPermitChecklist({
       profileId: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(result.codeReferenceCurrent).toBe(false);
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.items).toHaveLength(0);
+  });
+});
+
+
+describe("Weston roofing permit profile", () => {
+  it("includes the City-listed roofing application and product approval requirements", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_WESTON_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    expect(result.authorityConfirmed).toBe(true);
+    expect(result.items.map((item) => item.id)).toContain("weston-uniform-application");
+    expect(result.items.map((item) => item.id)).toContain("weston-product-approvals");
+    expect(result.items.map((item) => item.id)).toContain("weston-hvhz-roof-application");
+    expect(result.items.map((item) => item.id)).toContain("weston-owner-notification");
+  });
+
+  it("keeps non-single-family Weston reroof documents conditional", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_WESTON_ROOFING_PROFILE.id,
+      projectKind: "commercial_reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const ids = result.items.map((item) => item.id);
+    expect(ids).toContain("weston-asbestos-responsibility");
+    expect(ids).toContain("weston-rooftop-gas-vent");
+    expect(ids).toContain("weston-broward-rooftop-equipment");
+  });
+
+  it("does not confirm Weston jurisdiction without parcel-boundary verification", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_WESTON_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      asOfDate: "2026-11-26",
+    });
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.warnings.join(" ")).toContain("inside City of Weston limits");
+  });
+
+  it("suppresses Weston's 8th Edition checklist after December 30, 2026", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_WESTON_ROOFING_PROFILE.id,
       projectKind: "reroof",
       parcelAuthorityVerified: true,
       asOfDate: "2026-12-31",

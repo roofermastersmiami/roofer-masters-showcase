@@ -291,6 +291,32 @@ const miramarRoofingChecklist: ChecklistItem[] = [
   { id: "notice-of-commencement", label: "Recorded Notice of Commencement", detail: "Record and post the Notice of Commencement before the first inspection when the statutory project-value threshold applies; verify current statutory instructions.", appliesWhen: "The City package cites construction / renovation / alteration values over $5,000; confirm current law and applicability before relying on this threshold.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
 ];
 
+
+const westonRoofingChecklist: ChecklistItem[] = [
+  { id: "weston-uniform-application", label: "Weston Building Code Services Uniform Permit Application Packet", detail: "Complete the City's Uniform Building Permit Application Packet and the Broward County Uniform Building Permit Application (BCUBPA).", appliesWhen: "Required for Weston roofing / reroof applications.", sourceUrl: "https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000" },
+  { id: "weston-contract-valuation", label: "Signed contract and total job cost", detail: "Provide the contract or agreement showing the total project cost; retain the assessed building valuation from the Broward County Property Appraiser for the roofing package.", appliesWhen: "Required for all building permit applications and listed in the Weston roofing package.", sourceUrl: "https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000" },
+  { id: "weston-product-approvals", label: "Roof-system product approvals", detail: "Provide product approvals with the components proposed for installation highlighted.", appliesWhen: "Required for reroof / roofing applications; include approvals for the actual selected roof system and components.", sourceUrl: "https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000" },
+  { id: "weston-hvhz-roof-application", label: "HVHZ Uniform Roof Permit Application — FBC Section 1525", detail: "Complete the applicable HVHZ roofing application sections for the selected roof system.", appliesWhen: "Required roofing application package item; select only sections applicable to the roof assembly.", sourceUrl: "https://www.westonfl.org/government/forms-for-download" },
+  { id: "weston-owner-notification", label: "Owner's Notification Form — FBC Section 1524", detail: "Include the required owner notification form for roofing considerations.", appliesWhen: "Listed in the City's roofing application package; confirm the current form and scope applicability with Building Code Services.", sourceUrl: "https://www.westonfl.org/government/forms-for-download" },
+  { id: "weston-notice-of-commencement", label: "Notice of Commencement", detail: "Record and post the Notice of Commencement before the first inspection when the applicable statutory and City threshold is met. The City's general checklist states over $5,000; verify current Florida law and the project facts before relying on that threshold.", appliesWhen: "Weston's general building-permit checklist states project value over $5,000; statutory applicability must be confirmed for the specific project.", sourceUrl: "https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000" },
+  { id: "weston-asbestos-responsibility", label: "Statement of Responsibilities Regarding Asbestos", detail: "Obtain and complete the asbestos responsibility form through Broward County Development and Regulation Division.", appliesWhen: "Weston lists this for reroofs other than single-family residences.", sourceUrl: "https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000" },
+  { id: "weston-lightweight-concrete", label: "Lightweight Concrete Installation Packet", detail: "Provide the City's referenced lightweight concrete installation packet and supporting documents.", appliesWhen: "Only when lightweight concrete installation is part of the roof scope.", sourceUrl: "https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000" },
+  { id: "weston-rooftop-gas-vent", label: "Weston Rooftop Equipment and Gas Vent Affidavit", detail: "Complete the Weston affidavit for rooftop equipment and gas vents.", appliesWhen: "Weston lists this for reroofs other than single-family residences; verify current applicability with the City.", sourceUrl: "https://www.westonfl.org/government/forms-for-download" },
+  { id: "weston-broward-rooftop-equipment", label: "Broward County Rooftop Mounted Equipment Affidavit", detail: "Complete the Broward County rooftop mounted equipment affidavit.", appliesWhen: "Weston lists this for reroofs other than single-family residences; verify current applicability with the City.", sourceUrl: "https://www.westonfl.org/government/forms-for-download" },
+];
+
+export const BROWARD_WESTON_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-weston-roofing",
+  label: "City of Weston — roofing",
+  county: "Broward",
+  authorityScope: "City of Weston Quick Permit Application Checklist / Requirements, revision May 2026. Covers roofing and reroof permit intake. The City identifies additional asbestos, lightweight concrete, and rooftop-equipment documents for reroofs other than single-family residences.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Weston limits. This is a CRM intake aid, not a municipal determination or approval. Confirm current forms and project-specific requirements with Weston Building Code Services before filing.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.westonfl.org/home/showpublisheddocument/4725/639146974624870000", "https://www.westonfl.org/government/forms-for-download"],
+  checklist: westonRoofingChecklist,
+};
+
 export const BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE: JurisdictionPermitProfile = {
   id: "broward-miramar-residential-roofing",
   label: "City of Miramar — residential roofing",
@@ -360,6 +386,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id]: BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
     [BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id]: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
     [BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id]: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
+    [BROWARD_WESTON_ROOFING_PROFILE.id]: BROWARD_WESTON_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -395,7 +422,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
   const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
