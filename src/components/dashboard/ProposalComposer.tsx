@@ -103,15 +103,16 @@ export function ProposalComposer({
         newPath = await uploadProposalPdf(id, await readProposalPdf(config.fromTemplate.file_path));
         path = newPath;
       }
-      const companyId =
-        config.existing?.company_id ??
-        config.fromTemplate?.company_id ??
-        leads.find((lead) => lead.id === details.lead_id)?.company_id ??
-        leads[0]?.company_id;
-      if (!companyId) throw new Error("Company ownership could not be verified");
+      const selectedLead = leads.find((lead) => lead.id === details.lead_id);
+      const selectedLeadCompanyId = selectedLead?.company_id ?? null;
+      const sourceCompanyId = config.existing?.company_id ?? config.fromTemplate?.company_id ?? null;
+      if (sourceCompanyId && selectedLeadCompanyId && sourceCompanyId !== selectedLeadCompanyId)
+        throw new Error("The selected customer belongs to a different company than this proposal");
+      const companyId = sourceCompanyId ?? selectedLeadCompanyId;
+      if (!companyId) throw new Error("Select a customer or a company-owned template before saving");
       const payload = { ...details, company_id: companyId, file_path: path };
       const result = config.existing
-        ? await supabase.from("proposals").update(payload).eq("id", id).select("*").single()
+        ? await supabase.from("proposals").update(payload).eq("id", id).eq("company_id", companyId).select("*").single()
         : await supabase
             .from("proposals")
             .insert({ ...payload, id })
