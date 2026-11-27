@@ -213,6 +213,15 @@ SELECT to_regclass('storage.buckets') IS NOT NULL AS has_storage_buckets \gset
 SELECT id, name, public, file_size_limit, allowed_mime_types
 FROM storage.buckets
 ORDER BY name;
+-- Expected production buckets, checked by name so a missing bucket is flagged
+-- as drift instead of silently absent from the inventory above.
+SELECT expected.bucket_id AS expected_bucket,
+       (b.id IS NOT NULL) AS bucket_present,
+       b.public AS bucket_public
+FROM (VALUES ('roof-job-photos'), ('roofing-proposals'), ('permit-documents'))
+  AS expected(bucket_id)
+LEFT JOIN storage.buckets b ON b.id = expected.bucket_id
+ORDER BY expected.bucket_id;
 \else
 \echo 'MISSING: storage.buckets'
 \endif
