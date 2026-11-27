@@ -43,6 +43,45 @@ BEGIN
     SELECT 1 FROM public.roof_estimates e LEFT JOIN public.roof_drawings d ON d.id=e.drawing_id
     WHERE e.drawing_id IS NOT NULL AND d.id IS NULL
     UNION ALL
+    SELECT 1 FROM public.client_portal_links x LEFT JOIN public.leads l ON l.id=x.lead_id
+    WHERE x.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.crm_activity a LEFT JOIN public.leads l ON l.id=a.lead_id
+    WHERE a.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.crm_invoices i LEFT JOIN public.leads l ON l.id=i.lead_id
+    WHERE i.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.crm_tasks t LEFT JOIN public.leads l ON l.id=t.lead_id
+    WHERE t.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.invoice_checkouts x LEFT JOIN public.crm_invoices i ON i.id=x.invoice_id
+    WHERE i.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.invoice_payments x LEFT JOIN public.crm_invoices i ON i.id=x.invoice_id
+    WHERE i.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.job_change_orders x LEFT JOIN public.roof_jobs j ON j.id=x.job_id
+    WHERE j.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.lead_messages x LEFT JOIN public.leads l ON l.id=x.lead_id
+    WHERE x.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.proposal_shares x LEFT JOIN public.proposals p ON p.id=x.proposal_id
+    WHERE p.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.proposals p LEFT JOIN public.leads l ON l.id=p.lead_id
+    WHERE p.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.roof_estimates e LEFT JOIN public.leads l ON l.id=e.lead_id
+    WHERE e.lead_id IS NOT NULL AND l.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.roof_estimates e LEFT JOIN public.crm_properties p ON p.id=e.property_id
+    WHERE e.property_id IS NOT NULL AND p.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.roof_estimates e LEFT JOIN public.roof_report_orders r ON r.id=e.report_order_id
+    WHERE e.report_order_id IS NOT NULL AND r.id IS NULL
+    UNION ALL
     SELECT 1 FROM public.proposals p JOIN public.roof_drawings d ON d.id=p.drawing_id
     WHERE p.drawing_id IS NOT NULL AND p.property_id IS NOT NULL
       AND d.property_id IS DISTINCT FROM p.property_id
