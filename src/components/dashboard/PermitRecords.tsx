@@ -76,6 +76,7 @@ export function PermitRecords() {
         `Project type: ${projectKind}`,
         `Roofing system: ${roofingSystem}`,
         propertyFolio.trim() ? `Property folio: ${propertyFolio.trim()}` : "",
+        sunriseParcelVerified ? "User confirmed property is within City of Sunrise limits and current Building Division requirements were checked." : "",
         applicationNotes.trim(),
       ].filter(Boolean).join("\n\n"),
     }),
@@ -84,6 +85,7 @@ export function PermitRecords() {
       setPortalUrl("");
       setPermitFee("");
       setApplicationNotes("");
+      setSunriseParcelVerified(false);
       await refresh();
     },
     onError: (error) => toast.error(error.message || "Could not save permit application."),
@@ -320,7 +322,7 @@ export function PermitRecords() {
                 <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); createApplication.mutate(); }}>
                   <div>
                     <label className={labelClass} htmlFor="permit-job">Roofing job</label>
-                    <select id="permit-job" className={inputClass} value={jobId} onChange={(event) => setJobId(event.target.value)} required>
+                    <select id="permit-job" className={inputClass} value={jobId} onChange={(event) => { setJobId(event.target.value); setSunriseParcelVerified(false); }} required>
                       <option value="">Choose a job…</option>
                       {jobs.map((job) => <option key={job.id} value={job.id}>{job.title}{job.address ? ` — ${job.address}` : ""}</option>)}
                     </select>
@@ -331,6 +333,7 @@ export function PermitRecords() {
                       <select id="permit-profile" className={inputClass} value={jurisdictionProfileId} onChange={(event) => {
                         const profileId = event.target.value;
                         setJurisdictionProfileId(profileId);
+                        setSunriseParcelVerified(false);
                         if (profileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) setJurisdiction("Miami-Dade County — unincorporated area");
                         else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
                         else setJurisdiction("City of Sunrise, Broward County");
