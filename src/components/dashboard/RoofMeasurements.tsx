@@ -395,6 +395,8 @@ export function RoofMeasurements({
       }
 
       if (share) {
+        if (!propertyRow?.company_id)
+          throw new Error("Select a property with verified company ownership before creating a customer report");
         const { data: row, error } = await supabase
           .from("proposals")
           .insert({
@@ -417,7 +419,8 @@ export function RoofMeasurements({
         const { error: updateError } = await supabase
           .from("proposals")
           .update({ file_path: path })
-          .eq("id", row.id);
+          .eq("id", row.id)
+          .eq("company_id", propertyRow.company_id);
         if (updateError) throw updateError;
         await qc.invalidateQueries({ queryKey: ["proposals"] });
         toast.success(
@@ -438,7 +441,8 @@ export function RoofMeasurements({
         );
       }
     } catch (error) {
-      if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);
+      if (proposalId && propertyRow?.company_id)
+        await supabase.from("proposals").delete().eq("id", proposalId).eq("company_id", propertyRow.company_id);
       if (roofReportPdfPath)
         await supabase.storage.from("roofing-proposals").remove([roofReportPdfPath]);
       toast.error(error instanceof Error ? error.message : "Could not generate report");
@@ -486,10 +490,14 @@ export function RoofMeasurements({
       toast.error("Save reviewed measurements and select a customer property first");
       return;
     }
+    if (!propertyRow?.company_id)
+      return toast.error("Property company ownership could not be verified");
+    if (customer.company_id && customer.company_id !== propertyRow.company_id)
+      return toast.error("Customer and property belong to different companies");
     setBusy(true);
     try {
       const { error } = await supabase.from("roof_estimates").insert({
-        company_id: propertyRow?.company_id,
+        company_id: propertyRow.company_id,
         lead_id: customer.source_lead_id,
         property_id: property,
         drawing_id: parent,
