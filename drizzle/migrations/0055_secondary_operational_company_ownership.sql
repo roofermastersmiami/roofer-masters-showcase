@@ -42,6 +42,14 @@ BEGIN
     UNION ALL
     SELECT 1 FROM public.roof_estimates e LEFT JOIN public.roof_drawings d ON d.id=e.drawing_id
     WHERE e.drawing_id IS NOT NULL AND d.id IS NULL
+    UNION ALL
+    SELECT 1 FROM public.proposals p JOIN public.roof_drawings d ON d.id=p.drawing_id
+    WHERE p.drawing_id IS NOT NULL AND p.property_id IS NOT NULL
+      AND d.property_id IS DISTINCT FROM p.property_id
+    UNION ALL
+    SELECT 1 FROM public.roof_estimates e JOIN public.roof_drawings d ON d.id=e.drawing_id
+    WHERE e.drawing_id IS NOT NULL AND e.property_id IS NOT NULL
+      AND d.property_id IS DISTINCT FROM e.property_id
   ) THEN
     RAISE EXCEPTION '0055 found a dangling parent reference; no ownership changes were made';
   END IF;
@@ -75,6 +83,18 @@ BEGIN
     JOIN public.leads l ON l.id=e.lead_id
     WHERE e.property_id IS NOT NULL AND e.lead_id IS NOT NULL
       AND p.company_id IS DISTINCT FROM l.company_id
+    UNION ALL
+    SELECT 1 FROM public.proposals p
+    JOIN public.crm_properties pr ON pr.id=p.property_id
+    JOIN public.roof_drawings d ON d.id=p.drawing_id
+    WHERE p.property_id IS NOT NULL AND p.drawing_id IS NOT NULL
+      AND pr.id IS DISTINCT FROM d.property_id
+    UNION ALL
+    SELECT 1 FROM public.roof_estimates e
+    JOIN public.crm_properties p ON p.id=e.property_id
+    JOIN public.roof_drawings d ON d.id=e.drawing_id
+    WHERE e.property_id IS NOT NULL AND e.drawing_id IS NOT NULL
+      AND p.id IS DISTINCT FROM d.property_id
   ) THEN
     RAISE EXCEPTION '0055 found conflicting parent ownership; resolve before retrying';
   END IF;
