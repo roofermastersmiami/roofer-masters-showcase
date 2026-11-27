@@ -458,6 +458,34 @@ export function PermitRecords() {
         expiresAt: application.expires_at,
         feeCents: application.fee_cents,
         applicationNotes: application.notes,
+        documents: permitFiles[application.id]?.map((file) => file.name) ?? [],
+        productApprovals: approvals
+          .filter((item) => item.permit_application_id === application.id)
+          .map((item) => ({
+            kind: item.approval_kind,
+            number: item.approval_number,
+            manufacturer: item.manufacturer,
+            productName: item.product_name,
+            status: item.approval_status,
+            expiresOn: item.expires_on,
+            hvhzStatus: item.hvhz_status,
+            codeEdition: item.code_edition,
+          })),
+        noticeOfCommencement: (() => {
+          const noc = nocTracking.find((item) => item.permit_application_id === application.id);
+          return noc
+            ? {
+                assessmentStatus: noc.assessment_status,
+                recordingStatus: noc.recording_status,
+                contractValueCents: noc.contract_value_cents,
+                thresholdAmountCents: noc.threshold_amount_cents,
+                recordingCounty: noc.recording_county,
+                instrumentNumber: noc.instrument_number,
+                recordedOn: noc.recorded_on,
+                assessmentBasis: noc.assessment_basis,
+              }
+            : null;
+        })(),
         inspections: relatedInspections.map((item) => ({
           type: item.inspection_type,
           status: item.scheduling_status,
