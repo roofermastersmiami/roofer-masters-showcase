@@ -162,6 +162,8 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       .maybeSingle();
     if (orderError) throw new Error("Could not load report request");
     if (!order) throw new Error("Report request not found");
+    if (order.company_id !== membership.company_id)
+      throw new Error("Report request belongs to another company");
     const report = reviewedReport(order);
 
     const { data: customer, error: customerError } = await context.supabase
@@ -222,6 +224,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
         lead_id: customer.source_lead_id,
         property_id: order.property_id,
         report_order_id: order.id,
+        company_id: membership.company_id,
         inputs: {
           sqft: report.area_sqft,
           waste: report.waste_pct,
