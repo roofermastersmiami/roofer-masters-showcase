@@ -281,3 +281,41 @@ PostgreSQL version compatibility is confirmed. Migration-history/schema reconcil
 5. Migrate storage authorization only after job/permit parent rows have company ownership. Existing permissive policies can OR together, so a new restrictive-looking policy alone does not neutralize legacy access.
 
 These findings increase confidence in the live drift map but do not authorize production writes. A production-like clone and two-company adversarial tests remain mandatory.
+
+## Historical migration 0030–0041 reconciliation matrix — 2026-11-27
+
+**Purpose:** distinguish unapplied historical work from live objects that were created through a different schema path. This is a design/audit artifact, not an executable migration. The source SQL was reviewed against the read-only production catalog observations recorded above. No database writes were performed.
+
+| Migration | Intended change | Live evidence | Disposition |
+|---|---|---|---|
+| 0030 | Address-first roof-report RPC; remove old UUID signature | Three legacy SECURITY DEFINER report RPC overloads remain; live address-based lookup is global and not company-scoped | Reconcile RPC signatures and callers together. Do not replay. |
+| 0031 | Production-manager roof-report storage policy | Live proposal/job-photo policies are legacy role/assignment based; no tenant-scoped parent ownership | Replace as part of coordinated storage cutover; policy creation alone cannot remove permissive legacy access. |
+| 0032 | Customer delete SECURITY DEFINER RPC | Current live customer delete path is not confirmed safe for multi-company ownership | Preserve current behavior while implementing membership-derived company scoping and adversarial tests. |
+| 0033 | Restore address-first report RPC for PostgREST | Live address-based report RPCs exist, but use global address lookup and legacy role checks | Do not replay; fold required PostgREST contract into the tenant-safe replacement. |
+| 0034 | Add customer phone/email to report orders and update CRM contact data | Live report-order contact columns and exact constraints were not verified in the captured catalog output | Verify columns, defaults, nullability, and caller payloads on clone before classifying as present/absent. |
+| 0035 | Private signed-contracts bucket and policies | `signed-contracts` bucket absent in live bucket inventory | Candidate missing object; first map existing signed contract uploads and UI callers, then add only through reviewed forward migration. |
+| 0036 | Appointments, receptionist logs, availability and booking RPCs | `appointments` and `receptionist_logs` absent in live catalog check | Candidate missing objects. Separate from permit release unless required by current CRM app; verify app usage and preserve public/service-role booking behavior. |
+| 0037 | PDF signing templates and storage policies | `pdf_sign_templates` absent in live catalog check | Candidate missing objects. Audit UI routes and existing template files before adding. |
+| 0038 | Owner-user-keyed company branding, policies, branding bucket | Live branding table is company_id-keyed, has a different column set/policy model; branding bucket exists with settings that differ from migration defaults | Do not replay. Preserve live company-linked branding and uploaded assets; reconcile UI field mappings and storage paths. |
+| 0039 | Company table, enum membership role, membership policies, company creation RPC | Live company and membership tables exist but materially differ: slug exists; role is text with CHECK; branding references company_id; live policies differ; expected historical trigger not present | Treat as independently provisioned live foundation. Write compatibility checks/forward invariants; do not recreate table/type or force enum conversion without proving all app dependencies. |
+| 0040 | Theme accent column and palette/accent checks | Live branding has theme_accent; exact check constraints and allowed-value compatibility require catalog verification | Likely partially present; compare exact constraint definitions before any ALTER. |
+| 0041 | Company permit qualifier settings | `crm_company_permit_settings` was absent in the live permit-relations inventory | Candidate missing. Before adding, validate live company FK/role helper signatures and preserve the current text-role membership model. |
+
+### Migration ordering and dependency notes
+
+- The ledger's lack of rows 0030–0041 is not a safe replay instruction. In particular, 0038/0039 would collide with or semantically damage existing live company/branding structures.
+- 0030/0033/0034 are not independent: they alter overloaded RPC signatures and customer contact side effects. Preserve every currently used PostgREST signature until all callers are migrated and tested.
+- 0035/0037 modify shared storage authorization. Supabase storage policies are permissive by default and combine with OR semantics; a new company-scoped policy does not neutralize an older broad policy.
+- 0036 has no direct permit dependency and may be split into a separate CRM release. Its booking RPC is service-role-only and public availability is intentionally exposed, so any replacement must retain safe availability while preventing unauthenticated booking.
+- 0041 depends on the actual live company/member helper contract, not the historical enum contract.
+- 0042–0052 must not be applied as a blind sequence until the above historical drift is reconciled on a production-like clone. Confirm exact current definitions for 0034/0040 constraints and all RPC signatures before preparing a forward-only SQL patch.
+
+### Next verification gate
+
+1. Capture exact live column and constraint definitions for report-order contact fields, theme palette/accent checks, appointments/template objects, and all report RPC overloads.
+2. Inventory application callers for every changed function and bucket path, including server/service-role code.
+3. Build a disposable clone from the live schema/data shape (with sanitized customer data) and apply only reviewed forward migrations there.
+4. Run existing one-company compatibility tests plus two-company isolation tests covering duplicate property addresses, report request overloads, customer update/delete, job photos, proposal files, signed contracts, and permit documents.
+5. Re-run all checks and compare row counts and object ownership before proposing production execution.
+
+**Status:** CI for the integrated branch is green as of run 45938675718, but this reconciliation matrix is still an engineering plan. No merge, migration, or deployment is authorized or performed.
