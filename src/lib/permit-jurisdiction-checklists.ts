@@ -327,6 +327,32 @@ const davieRoofingChecklist: ChecklistItem[] = [
   { id: "davie-peel-stick-inspection", label: "Peel-and-stick inspection", detail: "Schedule the inspection one day ahead, during installation, or after installation but before loading tiles; if inspected during installation, the Town checklist describes minimum visible installation coverage and detailing.", appliesWhen: "Inspection sequencing item when peel-and-stick underlayment is installed.", sourceUrl: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist" },
 ];
 
+const margateRoofingChecklist: ChecklistItem[] = [
+  { id: "margate-uniform-application", label: "Broward County Uniform Building Permit Application", detail: "Complete and notarize the current Broward County Uniform Building Permit Application.", appliesWhen: "Listed as a minimum roofing permit application requirement; use the current revision.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-proof-of-cost", label: "Signed contract / documented labor and material cost", detail: "Provide a signed contract or other documented proof of project cost, including labor and materials. Owner-builders use the City's cost verification form with separate labor and materials amounts.", appliesWhen: "Required for contractor applications; owner-builder cost verification applies when the owner-builder exception is used.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-owner-builder-affidavit", label: "Owner-Builder Affidavit and proof of eligibility", detail: "Submit the City's notarized Owner-Builder Affidavit and supporting proof of ownership / residency when the property owner is acting as contractor.", appliesWhen: "Only for owner-builder applications.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-asbestos-certificate", label: "Broward County Certificate of Asbestos", detail: "Submit the Broward County asbestos certificate with the permit application.", appliesWhen: "Listed as a minimum permit application requirement in the City's roofing packet.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-notice-of-commencement", label: "Recorded Notice of Commencement", detail: "Record and post the Notice of Commencement before the first inspection when the applicable project value threshold is met.", appliesWhen: "The City's checklist states when job value is over $5,000; confirm current statutory applicability and record requirements.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-uniform-roof-package", label: "HVHZ Uniform Roofing Permit Package", detail: "Complete the applicable sections of the Broward County 8th Edition Uniform Roofing Application for the selected system and scope. The packet distinguishes low-slope, asphalt shingle, tile, metal, wood, and other systems.", appliesWhen: "Required minimum roofing submission; complete only sections and attachments applicable to the roof system.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-roof-to-wall-affidavit", label: "Owner's Roof-to-Wall Mitigation Affidavit", detail: "Complete and notarize the owner's roof-to-wall mitigation affidavit included in the City's roofing packet.", appliesWhen: "Listed as a minimum roofing permit application requirement; confirm project-specific applicability with the City.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-owner-notification", label: "HVHZ Owner's Notification for Roofing Considerations", detail: "Obtain signatures from both the owner and contractor on the required roofing considerations notification.", appliesWhen: "Reroofing only, as stated in the City's packet.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-hurricane-preparedness", label: "Hurricane Preparedness and Precautions Form", detail: "Complete the City's Hurricane Preparedness and Precautions form.", appliesWhen: "Listed as a minimum roofing permit application requirement.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-wind-load-calculations", label: "Engineer-signed wind-load calculations", detail: "Provide wind-load calculations signed by an engineer when required for the proposed roof assembly and project conditions.", appliesWhen: "Conditional; the City's packet says if applicable.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-fire-classification", label: "Roof assembly fire-classification / UL listing page", detail: "Include the fire-classification page or UL listing for the proposed roof assembly.", appliesWhen: "Listed in the City's minimum roofing documentation.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+  { id: "margate-product-approvals", label: "Highlighted Notice(s) of Acceptance and product approvals", detail: "Provide highlighted NOA / product approval documents and the applicable system description, limitations, and installation details.", appliesWhen: "Listed in the City's minimum roofing documentation; match approvals to the installed roof assembly and components.", sourceUrl: "https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF" },
+];
+export const BROWARD_MARGATE_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-margate-roofing",
+  label: "City of Margate — roofing",
+  county: "Broward",
+  authorityScope: "City of Margate Roofing Permit Application Checklist and roofing packet, revised March 2024. The embedded Broward County Uniform Building Permit Application was revised January 8, 2026 and effective March 9, 2026; confirm the City's live packet before filing.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Margate limits. This profile is a CRM intake aid, not a municipal determination or approval. Confirm current City forms, fees, and project-specific requirements before filing.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.margatefl.com/DocumentCenter/View/213/Roof-Permit-PDF"],
+  checklist: margateRoofingChecklist,
+};
+
 export const BROWARD_DAVIE_ROOFING_PROFILE: JurisdictionPermitProfile = {
   id: "broward-davie-roofing",
   label: "Town of Davie — roofing",
@@ -422,6 +448,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id]: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
     [BROWARD_WESTON_ROOFING_PROFILE.id]: BROWARD_WESTON_ROOFING_PROFILE,
     [BROWARD_DAVIE_ROOFING_PROFILE.id]: BROWARD_DAVIE_ROOFING_PROFILE,
+    [BROWARD_MARGATE_ROOFING_PROFILE.id]: BROWARD_MARGATE_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -457,7 +484,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
   const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
@@ -482,6 +509,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment", "davie-asbestos-responsibilities", "davie-anchor-spacing-calculations"].includes(item.id)) return request.projectKind === "multifamily_reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "davie-hurricane-mitigation-retrofit") return request.projectKind === "reroof";
     if (item.id === "davie-commercial-reroof-statement") return request.projectKind === "commercial_reroof";
+    if (item.id === "margate-owner-builder-affidavit") return false;
+    if (item.id === "margate-owner-notification") return ["reroof", "multifamily_reroof", "commercial_reroof"].includes(request.projectKind ?? "unknown");
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
