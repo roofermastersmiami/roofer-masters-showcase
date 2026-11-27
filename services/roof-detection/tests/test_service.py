@@ -1360,6 +1360,132 @@ def test_outline_completion_tiles_l_shaped_footprint():
     assert not merged.covers(Point(15, 15))
 
 
+def _outline_evidence_records():
+    # One facet covering the south half of a 20x20 footprint plus a
+    # narrow strip up the middle, so the bare ground falls into two
+    # separate components: a north-west block and a north-east block.
+    record = {
+        "polygon": Polygon([(0, 0), (20, 0), (20, 10), (11, 10), (11, 20), (9, 20), (9, 10), (0, 10)]),
+        "point_count": 500,
+        "a": 0.0, "b": -0.3, "c": 12.0, "pitch": 16.7,
+    }
+    return [record]
+
+
+def test_outline_completion_requires_point_evidence_when_pool_supplied():
+    from main import _complete_outline
+    from shapely.ops import unary_union
+
+    footprint = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    # Pool points cover the fitting facet and the north-west block
+    # (on the facet's plane there); the north-east block was never
+    # observed — a loose lobe of the footprint polygon.
+    xs, ys = np.meshgrid(np.arange(1.0, 8.5, 1.0), np.arange(11.0, 19.5, 1.0))
+    nw_points = np.column_stack((xs.ravel(), ys.ravel(), (12.0 - 0.3 * ys).ravel()))
+    xs, ys = np.meshgrid(np.arange(1.0, 19.5, 1.5), np.arange(1.0, 9.5, 1.5))
+    south_points = np.column_stack((xs.ravel(), ys.ravel(), (12.0 - 0.3 * ys).ravel()))
+    pool = np.vstack((nw_points, south_points))
+
+    records = _outline_evidence_records()
+    _complete_outline(records, footprint, pool)
+    merged = unary_union([r["polygon"] for r in records])
+    # The evidenced block is tiled; the unobserved lobe stays bare.
+    assert merged.covers(Point(4, 15))
+    assert not merged.covers(Point(16, 15))
+
+    # Without a pool the legacy unconditional tiling still applies.
+    records = _outline_evidence_records()
+    _complete_outline(records, footprint)
+    merged = unary_union([r["polygon"] for r in records])
+    assert merged.covers(Point(16, 15))
+
+
+def test_outline_completion_respects_excluded_region():
+    from main import _complete_outline
+    from shapely.ops import unary_union
+
+    footprint = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    # Points everywhere in the north: both blocks are evidenced, but
+    # the north-east block is a demoted facet's decided non-surface
+    # and is passed as an exclusion.
+    xs, ys = np.meshgrid(np.arange(1.0, 19.5, 1.5), np.arange(1.0, 19.5, 1.5))
+    pool = np.column_stack((xs.ravel(), ys.ravel(), (12.0 - 0.3 * ys).ravel()))
+    excluded = Polygon([(11, 10), (20, 10), (20, 20), (11, 20)])
+
+    records = _outline_evidence_records()
+    _complete_outline(records, footprint, pool, exclude=excluded)
+    merged = unary_union([r["polygon"] for r in records])
+    assert merged.covers(Point(4, 15))
+    assert not merged.covers(Point(16, 15))
+
+
+def test_fit_facets_demotes_fill_plateau_between_real_slopes():
+    # A resampled scan lays a dense sheet of fill points at eave height
+    # across a gable it could not observe (the West Park failure): the
+    # flat plane is the strongest RANSAC candidate and its hull spans
+    # the building, yet the real slopes pass above it everywhere
+    # between their eave lines. The flat facet must be demoted, the
+    # two slopes must tessellate the plan, and the seam between them
+    # must read as the ridge it is — not as phantom valleys against a
+    # fictitious flat surface.
+    from main import _compute_edge_lengths
+
+    rng = np.random.default_rng(5)
+    footprint = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    x_left, y_left = np.meshgrid(np.arange(0.25, 10.0, 0.5), np.arange(0.25, 19.75, 0.5))
+    x_right, y_right = np.meshgrid(np.arange(10.25, 19.75, 0.5), np.arange(0.25, 19.75, 0.5))
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), (10.0 + 0.5 * x_left).ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), (20.0 - 0.5 * x_right).ravel()))
+    left[:, 2] += rng.normal(0, 0.02, len(left))
+    right[:, 2] += rng.normal(0, 0.02, len(right))
+    x_fill, y_fill = np.meshgrid(np.arange(0.2, 19.9, 0.4), np.arange(0.2, 19.9, 0.4))
+    fill = np.column_stack((x_fill.ravel(), y_fill.ravel(), np.full(len(x_fill.ravel()), 10.0)))
+    fill[:, 2] += rng.normal(0, 0.01, len(fill))
+
+    pair_classes: dict = {}
+    facets = _fit_facets(
+        np.vstack((left, right, fill)), footprint, pair_classes_out=pair_classes
+    )
+
+    assert len(facets) == 2
+    assert all(facet["pitch_rise_per_12"] > 1.0 for facet in facets)
+    pitches = sorted(facet["pitch_rise_per_12"] for facet in facets)
+    assert pitches == pytest.approx([6.0, 6.0], abs=0.3)
+    # True gable surface: 400 sq m of plan at 6/12 ≈ 4,810 sq ft.
+    total = sum(facet["area_sqft"] for facet in facets)
+    assert 4300 < total < 5300
+    edges = _compute_edge_lengths(facets, frozen_pair_classes=pair_classes)
+    assert edges["valley"] == 0.0
+    assert edges["ridge"] > 50.0
+
+
+def test_fit_facets_keeps_genuine_flat_section_beside_gable():
+    # The demotion must not eat real flat roofs: a flat section beyond
+    # the gable's eave line, where the slope's plane passes BELOW it,
+    # is the top surface and survives with its area intact.
+    rng = np.random.default_rng(9)
+    footprint = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+    x_left, y_left = np.meshgrid(np.arange(0.25, 7.0, 0.5), np.arange(0.25, 19.75, 0.5))
+    x_right, y_right = np.meshgrid(np.arange(7.25, 14.0, 0.5), np.arange(0.25, 19.75, 0.5))
+    left = np.column_stack((x_left.ravel(), y_left.ravel(), (10.0 + 0.5 * x_left).ravel()))
+    right = np.column_stack((x_right.ravel(), y_right.ravel(), (17.0 - 0.5 * x_right).ravel()))
+    left[:, 2] += rng.normal(0, 0.02, len(left))
+    right[:, 2] += rng.normal(0, 0.02, len(right))
+    x_flat, y_flat = np.meshgrid(np.arange(14.25, 19.75, 0.5), np.arange(0.25, 19.75, 0.5))
+    flat = np.column_stack((x_flat.ravel(), y_flat.ravel(), (10.0 + 0.02 * (x_flat - 14.0)).ravel()))
+    flat[:, 2] += rng.normal(0, 0.02, len(flat))
+
+    facets = _fit_facets(np.vstack((left, right, flat)), footprint)
+
+    flat_facets = [facet for facet in facets if facet["pitch_rise_per_12"] <= 1.0]
+    assert len(flat_facets) == 1
+    # The section is 6 m x 20 m in plan ≈ 1,290 sq ft.
+    assert 1000 < flat_facets[0]["area_sqft"] < 1600
+    # Gable (14x20 plan at 6/12 ≈ 3,370 sq ft) plus the flat section.
+    total = sum(facet["area_sqft"] for facet in facets)
+    assert 4200 < total < 5100
+
+
 def test_snap_shared_boundaries_registers_ridge():
     from main import _shared_edge_span, _snap_shared_boundaries
 
@@ -2079,6 +2205,8 @@ def _run_tnm_with_projects(monkeypatch, tmp_path, points_local, download_tile=No
 
     monkeypatch.setattr(roof_service.httpx, "AsyncClient", _FakeAsyncClient)
     monkeypatch.setattr(roof_service, "LIDAR_CACHE_DIR", tmp_path)
+    # ensure_tile retries failed fetches with backoff; keep tests fast.
+    monkeypatch.setattr(roof_service, "ENSURE_TILE_RETRY_DELAY_S", 0.0)
     monkeypatch.setattr(
         roof_service, "_download_tile", download_tile or fake_download
     )
@@ -2132,6 +2260,150 @@ def test_tnm_raises_first_download_error_when_no_project_can_be_read(monkeypatch
         _run_tnm_with_projects(
             monkeypatch, tmp_path, points_local, download_tile=failing_download
         )
+
+
+def test_tnm_download_failure_blocks_fallthrough_to_older_project(monkeypatch, tmp_path):
+    # The Miramar production failure: the modern survey's tile download
+    # failed transiently (FileNotFoundError from a cache race), and the
+    # chain fell through to the coarse legacy scan and measured junk.
+    # A download failure is not evidence of no coverage: the chain must
+    # stop and raise a retryable failure without ever reading the older
+    # project.
+    async def flaky_download(url, dest, on_progress=None):
+        if "Newest" in url:
+            raise FileNotFoundError(url.rsplit("/", 1)[-1])
+        dest.write_bytes(b"LASF" + b"\0" * 64)
+
+    calls = []
+
+    def points_local(_polygon, tile_paths, _provider=None):
+        calls.append([path.name for path in tile_paths])
+        return (
+            [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+            {"tiles_used": 1, "building_class_points": 500},
+        )
+
+    with pytest.raises(roof_service._RetryableLidarFailure, match="FL_Newest_2024"):
+        _run_tnm_with_projects(
+            monkeypatch, tmp_path, points_local, download_tile=flaky_download
+        )
+    assert calls == []
+
+
+def test_tnm_partial_download_failure_with_no_facets_is_retryable(monkeypatch, tmp_path):
+    # One of the modern project's two tiles arrives and yields nothing;
+    # the missing tile may be the one covering the footprint, so the
+    # project is unreadable — the older project must not be substituted.
+    import asyncio
+
+    payload = {
+        "items": [
+            _tnm_item("FL_Newest_2024", "tileA", "2025-09-03"),
+            _tnm_item("FL_Newest_2024", "tileA2", "2025-09-03"),
+            _tnm_item("FL_Older_2018", "tileB", "2023-06-04"),
+        ]
+    }
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, _url, params=None):
+            return _FakeResponse()
+
+    async def partial_download(url, dest, on_progress=None):
+        if "tileA2" in url:
+            raise FileNotFoundError(url.rsplit("/", 1)[-1])
+        dest.write_bytes(b"LASF" + b"\0" * 64)
+
+    calls = []
+
+    def points_local(_polygon, tile_paths, _provider=None):
+        calls.append([path.name for path in tile_paths])
+        if any("Older" in name for name in calls[-1]):
+            return (
+                [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+                {"tiles_used": 1, "building_class_points": 500},
+            )
+        return [], {"tiles_used": 1, "building_class_points": 0}
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(roof_service, "LIDAR_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(roof_service, "ENSURE_TILE_RETRY_DELAY_S", 0.0)
+    monkeypatch.setattr(roof_service, "_download_tile", partial_download)
+    monkeypatch.setattr(roof_service, "_tnm_points_local", points_local)
+    polygon = Polygon(
+        [(-80.0, 25.0), (-79.9999, 25.0), (-79.9999, 25.0001), (-80.0, 25.0001)]
+    )
+    with pytest.raises(roof_service._RetryableLidarFailure, match="FL_Newest_2024"):
+        asyncio.run(roof_service._read_lidar_facets_tnm(polygon))
+    # Only the surviving modern tile was ever read; the older project
+    # was never attempted.
+    assert len(calls) == 1
+    assert any("tileA" in name for name in calls[0])
+
+
+def test_tnm_ensure_tile_retries_transient_download_failure(monkeypatch, tmp_path):
+    # A tile fetch that fails once transiently and then succeeds must
+    # measure normally — the retry absorbs the failure inside the
+    # project attempt instead of surfacing it.
+    attempts = {"count": 0}
+
+    async def fail_once_download(url, dest, on_progress=None):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise FileNotFoundError("simulated cache race")
+        dest.write_bytes(b"LASF" + b"\0" * 64)
+
+    def points_local(_polygon, tile_paths, _provider=None):
+        return (
+            [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+            {"tiles_used": 1, "building_class_points": 500},
+        )
+
+    facets, meta = _run_tnm_with_projects(
+        monkeypatch, tmp_path, points_local, download_tile=fail_once_download
+    )
+    assert len(facets) == 1
+    assert meta["tnm_project"] == "FL_Newest_2024"
+    assert attempts["count"] == 2
+
+
+def test_measure_footprint_turns_retryable_tnm_failure_into_503(monkeypatch):
+    # The retryable failure must reach the caller as HTTP 503 (a failed
+    # job the CRM resubmits), not as a footprint_only 200 that reads as
+    # "unmeasurable".
+    import asyncio
+
+    from fastapi import HTTPException
+
+    def fake_copc(_polygon, _provider=None):
+        return [], {"reason": "no COPC coverage"}
+
+    async def fake_tnm(_polygon, _provider=None, report=None):
+        raise roof_service._RetryableLidarFailure("tile download failed transiently")
+
+    monkeypatch.setattr(roof_service, "_read_lidar_facets", fake_copc)
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+    polygon = Polygon(
+        [(-80.0, 25.0), (-79.9999, 25.0), (-79.9999, 25.0001), (-80.0, 25.0001)]
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(roof_service._measure_footprint(polygon, None))
+    assert excinfo.value.status_code == 503
 # ---------------------------------------------------------------------------
 # Multi-structure identification (include_outbuilding)
 #

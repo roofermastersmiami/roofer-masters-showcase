@@ -121,6 +121,26 @@ RING_EVIDENCE_Z_CAP_M = float(os.getenv("RING_EVIDENCE_Z_CAP_M", "0.25"))
 # planes' intersection lines (see _competing_plane_share).
 COMPETING_PLANE_MIN_POINTS = int(os.getenv("COMPETING_PLANE_MIN_POINTS", "150"))
 COMPETING_PLANE_RESIDUAL_M = float(os.getenv("COMPETING_PLANE_RESIDUAL_M", "0.20"))
+# Overflight demotion: a resampled ("supplemental") scan can lay a dense
+# sheet of fill points at eave height across a roof it could not observe,
+# and a near-flat plane fitted to that sheet is a strong RANSAC candidate
+# — its inliers are numerous and its convex hull, bridged by the real
+# slopes' eave bands, spans the whole building. But the sheet is not a
+# roof surface: the building's real sloped planes pass ABOVE it over the
+# ground it claims. A near-flat facet whose claim is majority-overflown
+# by the adjoining sloped facets (the part of its polygon where a
+# neighbour's plane is the higher one) is therefore dropped after hull
+# resolution, and the completion passes tessellate its ground among the
+# real facets along their intersection lines. A genuine flat section
+# sits beyond its neighbours' eave lines, where their planes pass BELOW
+# it, so it is not overflown and survives untouched; the neighbour
+# restriction (the overflying facet must actually adjoin the flat one)
+# keeps a distant slope's infinite plane extension from casting a vote.
+FLAT_DEMOTE_MAX_RISE_PER_12 = float(os.getenv("FLAT_DEMOTE_MAX_RISE_PER_12", "1.0"))
+FLAT_DEMOTE_MIN_OVERFLIGHT_SHARE = float(
+    os.getenv("FLAT_DEMOTE_MIN_OVERFLIGHT_SHARE", "0.5")
+)
+FLAT_DEMOTE_NEIGHBOUR_M = float(os.getenv("FLAT_DEMOTE_NEIGHBOUR_M", "1.0"))
 # Footprint provenance decides two things in _fit_facets: whether the
 # overhang ring may grow facets past the polygon, and whether facet edges
 # are clipped back to the polygon. Miami-Dade County's building footprints
@@ -211,6 +231,14 @@ TILE_DOWNLOAD_CHUNKS = max(1, int(os.getenv("TILE_DOWNLOAD_CHUNKS", "4")))
 TILE_DOWNLOAD_RANGED_MIN_BYTES = max(
     1, int(float(os.getenv("TILE_DOWNLOAD_RANGED_MIN_MB", "16")) * 1_000_000)
 )
+# Tile fetch retries at the project-attempt level: _download_tile retries
+# inside one call, but a failure that still escapes it (a throttle that
+# outlasts the internal backoff, a FileNotFoundError from two concurrent
+# jobs racing the same cache file) is transient, not evidence that the
+# survey lacks coverage — so ensure_tile retries the whole fetch with
+# backoff before a project attempt may call the tile failed.
+ENSURE_TILE_ATTEMPTS = max(1, int(os.getenv("ENSURE_TILE_ATTEMPTS", "3")))
+ENSURE_TILE_RETRY_DELAY_S = float(os.getenv("ENSURE_TILE_RETRY_DELAY_S", "15"))
 ProgressReporter = Callable[[str, "str | None", "float | None"], None]
 
 app = FastAPI(title=APP_NAME, version="1.0.0")
@@ -1368,6 +1396,7 @@ def _grow_into_overhang_ring(
     footprint: Polygon,
     ring_points: np.ndarray,
     protected_zones: list[Polygon] | None = None,
+    exclude: Any = None,
 ) -> None:
     """Extend facets into the eave overhang ring on ring-point evidence.
 
@@ -1410,6 +1439,10 @@ def _grow_into_overhang_ring(
         return
     covered = unary_union([record["polygon"] for record in records])
     target = outer_clip.difference(covered)
+    if exclude is not None:
+        # A demoted facet's ground (see _demote_overflown_flat_facets)
+        # is not overhang either: growth must not route through it.
+        target = target.difference(exclude)
     if target.is_empty:
         return
     ring_rows = [
@@ -1516,7 +1549,12 @@ def _grow_into_overhang_ring(
                 grow(owners[0], evidenced_leftover)
 
 
-def _complete_outline(records: list[dict[str, Any]], footprint: Polygon) -> None:
+def _complete_outline(
+    records: list[dict[str, Any]],
+    footprint: Polygon,
+    points: np.ndarray | None = None,
+    exclude: Any = None,
+) -> None:
     """Tile whatever part of the footprint the facets still leave bare.
 
     Coverage completion only grows a facet across ground its own points
@@ -1531,6 +1569,17 @@ def _complete_outline(records: list[dict[str, Any]], footprint: Polygon) -> None
     stopped at. Ground beyond the footprint is not touched here: past
     a wall outline that is overhang, claimed only by ring evidence;
     past a roof outline it is not this roof at all.
+
+    Evidence discipline: a county footprint can be drawn looser than
+    the roof it traces (a slab or patio the survey swept into the
+    building polygon). When the caller supplies the fitting pool, a
+    bare component is tiled only if the scan actually saw the roof
+    there — a pool point inside the component, or one within
+    COVERAGE_GAP_ADJACENCY_M of it that an adjacent facet's plane
+    predicts within COVERAGE_EVIDENCE_RESIDUAL_M. A component with no
+    supporting return at all stays unclaimed rather than inventing
+    roof the point cloud never saw. Callers without a pool (unit
+    tests of the tiling itself) keep the unconditional behaviour.
     """
     from shapely.ops import unary_union
 
@@ -1538,6 +1587,10 @@ def _complete_outline(records: list[dict[str, Any]], footprint: Polygon) -> None
         return
     covered = unary_union([record["polygon"] for record in records])
     uncovered = footprint.difference(covered)
+    if exclude is not None:
+        # Ground a demoted facet claimed is a decided non-surface (see
+        # _demote_overflown_flat_facets): never tile it back in here.
+        uncovered = uncovered.difference(exclude)
     if uncovered.is_empty or uncovered.area <= 1e-6:
         return
 
@@ -1550,6 +1603,34 @@ def _complete_outline(records: list[dict[str, Any]], footprint: Polygon) -> None
             if merged.geom_type == "Polygon" and merged.is_valid:
                 owner["polygon"] = merged
 
+    def evidenced(component: Polygon, owners: list[dict[str, Any]]) -> bool:
+        if points is None or len(points) == 0:
+            return True
+        min_x, min_y, max_x, max_y = component.bounds
+        pad = COVERAGE_GAP_ADJACENCY_M
+        near = points[
+            (points[:, 0] >= min_x - pad) & (points[:, 0] <= max_x + pad)
+            & (points[:, 1] >= min_y - pad) & (points[:, 1] <= max_y + pad)
+        ]
+        for point in near:
+            pt = Point(float(point[0]), float(point[1]))
+            if component.covers(pt):
+                return True
+            if component.distance(pt) <= COVERAGE_GAP_ADJACENCY_M and any(
+                abs(
+                    float(point[2])
+                    - (
+                        owner["a"] * float(point[0])
+                        + owner["b"] * float(point[1])
+                        + owner["c"]
+                    )
+                )
+                <= COVERAGE_EVIDENCE_RESIDUAL_M
+                for owner in owners
+            ):
+                return True
+        return False
+
     for component in _polygon_parts(uncovered):
         if component.is_empty or component.area <= 1e-6:
             continue
@@ -1560,6 +1641,8 @@ def _complete_outline(records: list[dict[str, Any]], footprint: Polygon) -> None
         ]
         if not owners:
             owners = [min(records, key=lambda record: record["polygon"].distance(component))]
+        if not evidenced(component, owners):
+            continue
         owners.sort(key=lambda record: -record["point_count"])
         remainder: Any = component
         for owner in owners:
@@ -2327,6 +2410,94 @@ def _shrink_accepted(accepted: list[dict[str, Any]], share: Any) -> None:
     accepted[:] = survivors
 
 
+def _overflight_region(
+    polygon: Polygon, flat: dict[str, Any], other: dict[str, Any]
+) -> Polygon | None:
+    """The part of `polygon` where `other`'s plane is the higher one:
+    the half-plane beyond the two planes' intersection line, on the side
+    where the other plane has risen above the flat one. None when the
+    other plane never rises above the flat one over the polygon (the
+    flat surface is the top surface there — a genuine flat section
+    beyond the other's eave line)."""
+    da = float(other["a"]) - float(flat["a"])
+    db = float(other["b"]) - float(flat["b"])
+    dc = float(other["c"]) - float(flat["c"])
+    norm = math.hypot(da, db)
+    if norm <= 1e-9:
+        # Parallel planes: the higher one overflies everywhere or nowhere.
+        return polygon if dc > 0 else None
+    min_x, min_y, max_x, max_y = polygon.bounds
+    span = math.hypot(max_x - min_x, max_y - min_y) + 10.0
+    ux, uy = -db / norm, da / norm
+    nx, ny = da / norm, db / norm
+    px, py = -dc * da / (norm * norm), -dc * db / (norm * norm)
+    half_plane = Polygon([
+        (px - span * ux, py - span * uy),
+        (px + span * ux, py + span * uy),
+        (px + span * ux + span * nx, py + span * uy + span * ny),
+        (px - span * ux + span * nx, py - span * uy + span * ny),
+    ])
+    region = polygon.intersection(half_plane)
+    return None if region.is_empty else region
+
+
+def _demote_overflown_flat_facets(
+    records: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], Any]:
+    """Drop near-flat facets whose claim is majority-overflown by the
+    sloped facets adjoining them (see FLAT_DEMOTE_MAX_RISE_PER_12).
+
+    The overflown share of a flat facet is the union over its sloped
+    neighbours of the region where the neighbour's plane is the higher
+    one. A filled plateau at eave height is overflown over the whole
+    span between the real slopes' eave lines — a 100% share — while a
+    genuine flat section, sitting where its neighbours' planes pass
+    below it, keeps a share near zero. The drop is all-or-nothing at
+    the majority threshold: a facet that is mostly another surface's
+    underside is not a surface at all, and the completion passes that
+    follow reassign its ground to the real facets; a facet below the
+    threshold is left exactly as fitted.
+
+    Returns the surviving records and the union of the dropped facets'
+    polygons (None when nothing was dropped). The dropped region is a
+    decided non-surface: the evidence-based coverage pass may still
+    grow real facets into parts of it their own points support, but
+    the unconditional passes (outline completion, ring growth) must
+    not silently re-annex the same ground under a neighbour's name —
+    callers pass the region to them as an exclusion.
+    """
+    from shapely.ops import unary_union
+
+    sloped = [
+        record
+        for record in records
+        if float(record["pitch_rise"]) > FLAT_DEMOTE_MAX_RISE_PER_12
+    ]
+    if not sloped:
+        return records, None
+    kept: list[dict[str, Any]] = []
+    dropped: list[Polygon] = []
+    for record in records:
+        if float(record["pitch_rise"]) > FLAT_DEMOTE_MAX_RISE_PER_12:
+            kept.append(record)
+            continue
+        polygon = record["polygon"]
+        regions = [
+            region
+            for other in sloped
+            if other["polygon"].distance(polygon) <= FLAT_DEMOTE_NEIGHBOUR_M
+            for region in [_overflight_region(polygon, record, other)]
+            if region is not None
+        ]
+        if regions and polygon.area > 0:
+            overflown = unary_union(regions).area
+            if overflown >= FLAT_DEMOTE_MIN_OVERFLIGHT_SHARE * polygon.area:
+                dropped.append(polygon)
+                continue
+        kept.append(record)
+    return kept, (unary_union(dropped) if dropped else None)
+
+
 def _fit_facets(
     points: np.ndarray,
     footprint: Polygon | None = None,
@@ -2523,6 +2694,17 @@ def _fit_facets(
             })
             accepted_union = part if accepted_union is None else accepted_union.union(part)
 
+    # A near-flat candidate fitted to a resampled scan's fill sheet can
+    # hold a hull spanning the whole building; drop it when the real
+    # sloped facets adjoining it pass above the majority of its claim
+    # (see _demote_overflown_flat_facets). This runs before coverage
+    # completion, so the freed ground is tessellated among the real
+    # facets by the evidenced passes below, and before pair
+    # classification, so no seam verdict ever involves the fill plane.
+    # The dropped region travels on as an exclusion: outline
+    # completion and ring growth must not re-annex it unconditionally.
+    resolved, demoted_region = _demote_overflown_flat_facets(resolved)
+
     # Hulls end where inlier points end, which is short of the true seams:
     # points near a hip or ridge fit neither plane exactly, and eave rows
     # thin out. Complete the coverage over the evidenced part of the
@@ -2553,7 +2735,7 @@ def _fit_facets(
     # that the roof covers its building's outline, and facet edges
     # should follow that outline rather than the smoother hull line.
     if footprint is not None and resolved:
-        _complete_outline(resolved, footprint)
+        _complete_outline(resolved, footprint, points, exclude=demoted_region)
 
     # Roof surface past the fitting clip (wide eave overhang) is invisible
     # to hulls and coverage completion alike; grow into the overhang ring
@@ -2566,7 +2748,11 @@ def _fit_facets(
     roof_outline = footprint_provider in ROOF_OUTLINE_PROVIDERS
     if footprint is not None and resolved and ring_points is not None and not roof_outline:
         _grow_into_overhang_ring(
-            resolved, footprint, ring_points, protected_zones=valley_zones
+            resolved,
+            footprint,
+            ring_points,
+            protected_zones=valley_zones,
+            exclude=demoted_region,
         )
 
     # Where the footprint traces the roof outline itself, that outline
@@ -4228,6 +4414,20 @@ def _tnm_project_groups(
     return groups
 
 
+class _RetryableLidarFailure(RuntimeError):
+    """A LiDAR source failed transiently — USGS throttling, a tile
+    download that never landed, a cache race between concurrent jobs.
+
+    Transient failure carries no information about whether a survey
+    covers the footprint, so it must never be read as "no data": the
+    measurement fails retryably (HTTP 503, a failed job the CRM
+    resubmits) instead of reporting the address unmeasurable or
+    substituting an older, poorer survey's numbers. Only a tile that
+    was downloaded and read, yet yielded no roof points, is evidence
+    a survey does not cover the footprint.
+    """
+
+
 async def _read_lidar_facets_tnm(
     polygon: Polygon,
     footprint_provider: str | None = None,
@@ -4273,7 +4473,11 @@ async def _read_lidar_facets_tnm(
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_error = exc
         else:
-            raise last_error if last_error else RuntimeError("TNM product search failed")
+            # A search that stays down after the retry is a transient
+            # USGS failure, not evidence that no tiles are published.
+            raise _RetryableLidarFailure(
+                f"USGS TNM product search failed: {last_error}"
+            ) from last_error
         items = payload.get("items", [])
         laz = [
             item for item in items
@@ -4354,20 +4558,46 @@ async def _read_lidar_facets_tnm(
     async def ensure_tile(item: dict[str, Any]) -> Path:
         url = str(item["downloadURL"])
         dest = LIDAR_CACHE_DIR / url.rsplit("/", 1)[-1]
-        if dest.exists():
-            # Self-healing cache: a tile that entered the cache before
-            # the LASF check existed (or was truncated by a crashed
-            # write) must not poison every future analysis of this
-            # area — drop it and download a fresh copy instead of
-            # failing the request. Nobody babysits the cache.
-            with open(dest, "rb") as handle:
-                if handle.read(4) != b"LASF":
-                    dest.unlink(missing_ok=True)
-        if not dest.exists():
-            await _download_tile(
-                url, dest, on_progress=lambda done, total: tile_progress(url, done, total)
-            )
-        return dest
+        last_error: Exception | None = None
+        for attempt in range(ENSURE_TILE_ATTEMPTS):
+            if attempt:
+                await asyncio.sleep(ENSURE_TILE_RETRY_DELAY_S * attempt)
+            try:
+                if dest.exists():
+                    # Self-healing cache: a tile that entered the cache before
+                    # the LASF check existed (or was truncated by a crashed
+                    # write) must not poison every future analysis of this
+                    # area — drop it and download a fresh copy instead of
+                    # failing the request. Nobody babysits the cache.
+                    try:
+                        with open(dest, "rb") as handle:
+                            if handle.read(4) != b"LASF":
+                                dest.unlink(missing_ok=True)
+                    except FileNotFoundError:
+                        # A concurrent job replaced the file between the
+                        # existence check and the read; the download below
+                        # (or its own finished copy) settles it.
+                        pass
+                if not dest.exists():
+                    await _download_tile(
+                        url,
+                        dest,
+                        on_progress=lambda done, total: tile_progress(url, done, total),
+                    )
+                return dest
+            except Exception as exc:  # noqa: BLE001 — retried below, then re-raised
+                last_error = exc
+                # A hard client error means the tile itself is gone or
+                # forbidden; retrying cannot change that answer.
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (
+                    400,
+                    401,
+                    403,
+                    404,
+                    410,
+                ):
+                    raise
+        raise last_error if last_error else RuntimeError(f"Tile download failed: {url}")
 
     # A tile that fails to download must not zero the measurement when a
     # sibling tile already covers the footprint (points are clipped to the
@@ -4381,12 +4611,23 @@ async def _read_lidar_facets_tnm(
     # where the 2018 Southeast survey covers the house fully). When a
     # project yields no facets, the next survey is tried instead of
     # reporting the address unmeasurable while a covering survey sits
-    # unused. Only when no project could be read at all does the first
-    # download error propagate, keeping that failure loud instead of
-    # silently measuring nothing.
+    # unused.
+    #
+    # "Yields no facets" has a strict meaning, though: every tile of the
+    # project was downloaded and read, and the points simply were not
+    # there. A project whose tiles failed to download — all of them, or
+    # some of them while the rest yielded nothing — is UNREADABLE, not
+    # empty: the missing tile may be exactly the one covering the
+    # footprint (observed in production at Miramar, where a transient
+    # FileNotFoundError on the 2018 survey's tile let the chain fall
+    # through to the coarse 2007 county scan and produce a deformed
+    # measurement of a validated address). An unreadable project stops
+    # the chain and raises a retryable failure: no older, poorer survey
+    # may be substituted on the strength of a download error.
     projects_tried: list[str] = []
     attempt_metas: list[dict[str, Any]] = []
-    first_download_error: BaseException | None = None
+    blocked_project: str | None = None
+    blocked_error: BaseException | None = None
     for project, tiles in groups:
         if not tiles:
             continue
@@ -4396,24 +4637,22 @@ async def _read_lidar_facets_tnm(
         )
         tile_paths: list[Path] = []
         download_errors: list[str] = []
+        first_error: BaseException | None = None
         for item, outcome in zip(tiles, gathered):
             if isinstance(outcome, Path):
                 tile_paths.append(outcome)
             else:
+                if first_error is None and isinstance(outcome, BaseException):
+                    first_error = outcome
                 download_errors.append(
                     f"{str(item['downloadURL']).rsplit('/', 1)[-1]}: {type(outcome).__name__}"
                 )
         if not tile_paths:
-            error = next(
-                (outcome for outcome in gathered if isinstance(outcome, BaseException)),
-                None,
-            )
-            if first_download_error is None and error is not None:
-                first_download_error = error
+            blocked_project, blocked_error = project, first_error
             attempt_metas.append(
                 {"tnm_project": project, "tile_download_failures": download_errors}
             )
-            continue
+            break
         if report is not None:
             report("fitting_planes", "Fitting roof planes to the LiDAR points", None)
         facets, meta = _tnm_points_local(polygon, tile_paths, footprint_provider)
@@ -4430,13 +4669,22 @@ async def _read_lidar_facets_tnm(
                 **({"tile_download_failures": download_errors} if download_errors else {}),
                 **meta,
             }
-        attempt_metas.append({"tnm_project": project, **meta})
+        attempt_metas.append(
+            {
+                "tnm_project": project,
+                **meta,
+                **({"tile_download_failures": download_errors} if download_errors else {}),
+            }
+        )
+        if download_errors:
+            blocked_project, blocked_error = project, first_error
+            break
 
-    if attempt_metas and all("tiles_used" not in meta for meta in attempt_metas):
-        # No project could even be read (every download failed): keep the
-        # failure loud, exactly as the single-project path did.
-        raise first_download_error if first_download_error else RuntimeError(
-            "All tile downloads failed"
+    if blocked_project is not None:
+        raise _RetryableLidarFailure(
+            f"USGS LiDAR project {blocked_project} could not be downloaded "
+            f"({blocked_error}); whether it covers this footprint is unknown, "
+            "so no older survey was substituted. Retry the measurement."
         )
     return [], {
         "tnm_products": len(items),
@@ -4502,6 +4750,11 @@ async def _measure_footprint(
                 tnm_facets, tnm_meta = await _read_lidar_facets_tnm(
                     footprint, footprint_provider
                 )
+        except _RetryableLidarFailure as exc:
+            # Transient acquisition failure: fail the request retryably
+            # (a failed job the CRM resubmits, a 503 on the sync path)
+            # instead of letting the address read as unmeasurable.
+            raise HTTPException(503, str(exc)) from exc
         except Exception as exc:
             tnm_facets, tnm_meta = [], {"reason": f"TNM lookup failed: {type(exc).__name__}"}
         if tnm_facets:
