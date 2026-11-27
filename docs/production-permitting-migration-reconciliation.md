@@ -84,7 +84,7 @@ The reviewed production snapshot contained:
 
 ---
 
-## Read-only production refresh — 2026-11-27
+## Read-only production refresh — 2026-11-26 (evening refresh)
 
 **Project:** Roofer Masters CRM and its connected Supabase database.  
 **Method:** SELECT-only inspection through the project's connected database. No DDL, DML, migration execution, storage changes, or deployment was performed.
@@ -109,7 +109,7 @@ The reviewed production snapshot contained:
 | Roof report orders | 4 |
 | Roof jobs | 4 |
 
-**Count drift remains unresolved.** PR #181's baseline note reported 12 roof-report orders; the 2026-11-26 audit note later recorded 3; this 2026-11-27 read-only refresh returned 4. Treat 4 as the latest observed count, not a reconciled historical explanation. Before any ownership backfill, repeat the count against the confirmed project and inspect the rows/filters and timestamps to explain the changes.
+**Count drift remains unresolved.** PR #181's baseline note reported 12 roof-report orders; the 2026-11-26 audit note later recorded 3; this 2026-11-26 (evening refresh) read-only refresh returned 4. Treat 4 as the latest observed count, not a reconciled historical explanation. Before any ownership backfill, repeat the count against the confirmed project and inspect the rows/filters and timestamps to explain the changes.
 
 ### Current permit-related production objects
 
