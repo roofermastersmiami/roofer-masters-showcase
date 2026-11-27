@@ -308,6 +308,18 @@ export function RoofMeasurementsTab({
   }
 
   if (activeId && report) {
+    // The workspace header below shows the address exactly once, so
+    // this page header never prints it (or a title that is the
+    // address) again: it heads with the customer when known, else a
+    // plain label or a client-given title.
+    const headerCustomerName = customers.data?.find(
+      (customer) => customer.id === report.customer_id,
+    )?.name;
+    const titleCarriesAddress =
+      report.address.trim() !== "" &&
+      report.title.trim().toLowerCase().includes(report.address.trim().toLowerCase());
+    const workspaceHeading =
+      headerCustomerName ?? (titleCarriesAddress ? "Roof measurement report" : report.title);
     return (
       <div>
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -315,13 +327,10 @@ export function RoofMeasurementsTab({
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Roof measurements · Linked report
             </p>
-            <h1 className="mt-1 break-words text-lg font-bold">{report.address}</h1>
-            <p className="text-sm text-muted-foreground">
-              {customers.data?.find((customer) => customer.id === report.customer_id)?.name ??
-                "Customer property"}
-              {" · "}
-              {report.title}
-            </p>
+            <h1 className="mt-1 break-words text-lg font-bold">{workspaceHeading}</h1>
+            {headerCustomerName && !titleCarriesAddress && report.title !== headerCustomerName && (
+              <p className="text-sm text-muted-foreground">{report.title}</p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button

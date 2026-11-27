@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  Download,
   Play,
   Pause,
   RotateCcw,
@@ -30,7 +29,6 @@ import { restoreRoofDrawingMedia, type RoofDrawingMedia } from "@/lib/roof-drawi
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { automaticMaterialList, type AutomaticMaterialList } from "@/lib/material-order";
-import { useCrm } from "./CrmContext";
 import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
@@ -39,7 +37,6 @@ import {
   ALL_STRUCTURES_KEY,
   pickedStructureDrawing,
   structureEntries,
-  structurePdfTitle,
 } from "@/lib/roof-structures";
 import { REPORT_STATUS_LABELS } from "@/lib/roof-order-schema";
 import {
@@ -85,7 +82,6 @@ export function RoofMeasurements({
   const autoSaveArmed = useRef(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMaterials, setAutoMaterials] = useState<AutomaticMaterialList | null>(null);
-  const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
     [selected, setSelected] = useState(starting.planes[0]?.id ?? ""),
     [property] = useState(report?.property_id ?? ""),
@@ -298,8 +294,7 @@ export function RoofMeasurements({
   // Multi-structure display: the picker swaps which structure's
   // drawing the scene, headline stats and plane table describe.
   // Saving, the material list and the report PDF on file always stay
-  // with the main drawing `d`; only a manual Download PDF follows
-  // the picker (labeled, download-only — see exportPdf).
+  // with the main drawing `d` — the picker is display-only.
   const entries = structureEntries(d);
   const picked = pickedStructureDrawing(entries, pickedStructureKey);
   const displayDrawing = picked?.drawing ?? d;
@@ -340,6 +335,11 @@ export function RoofMeasurements({
   const propertyRow = properties.data?.find((p) => p.id === property),
     customer = customers.data?.find((c) => c.id === propertyRow?.customer_id);
   const workspaceAddress = report?.address?.trim() || propertyRow?.address?.trim() || "";
+  // The address is shown exactly once in this header: address-created
+  // reports are titled by their address, so when the title already
+  // carries it the subtitle does not repeat it.
+  const titleCarriesAddress =
+    workspaceAddress !== "" && title.trim().toLowerCase().includes(workspaceAddress.toLowerCase());
   async function save(): Promise<boolean> {
     if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error("Run the automatic measurement before saving this report");
@@ -368,7 +368,7 @@ export function RoofMeasurements({
         qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
       ]);
       toast.success(`Drawing revision ${row.revision} saved`);
-      if (report) await exportPdf(false, true);
+      if (report) await attachGeneratedReportPdf();
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save drawing");
@@ -423,107 +423,20 @@ export function RoofMeasurements({
       );
     }
   }
-  // Structure-specific PDF: when the picker is on a detached
-  // structure (or "All structures"), Download PDF produces THAT
-  // structure's report — its own drawing and numbers, labeled on the
-  // cover and in the document title — as a local download only. The
-  // report PDF stored on the report always remains the main house's,
-  // so structures can never be silently mixed.
-  async function exportStructurePdf(pickedEntry: { label: string; drawing: RoofDrawing }) {
-    setBusy(true);
-    try {
-      const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
-      const photos = [];
-      if (pickedEntry.drawing.geo_reference) {
-        // Narrowed object: roofCoverFraming's parameter does not
-        // accept a full drawing under exactOptionalPropertyTypes.
-        const framing = roofCoverFraming({
-          planes: pickedEntry.drawing.planes,
-          geo_reference: pickedEntry.drawing.geo_reference,
-        });
-        const coverLatitude = framing?.latitude ?? pickedEntry.drawing.geo_reference.originLatitude;
-        const coverLongitude =
-          framing?.longitude ?? pickedEntry.drawing.geo_reference.originLongitude;
-        let aerial: AerialPhoto | null = null;
-        try {
-          const result = await reportAerialFn({
-            data: {
-              latitude: coverLatitude,
-              longitude: coverLongitude,
-              ...(framing ? { halfExtentMeters: framing.halfExtentMeters } : {}),
-            },
-          });
-          if ("imageBase64" in result && result.imageBase64) {
-            const binary = atob(result.imageBase64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            aerial = {
-              bytes,
-              mime: result.mime,
-              category: "aerial",
-              name: "Aerial photo (Esri World Imagery)",
-              source: result.source,
-              latitude: result.latitude,
-              longitude: result.longitude,
-            };
-          }
-        } catch {
-          // Fall through to the client-side stitch.
-        }
-        if (!aerial) {
-          try {
-            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
-            aerial = await fetchAerialPhoto(
-              coverLatitude,
-              coverLongitude,
-              framing?.halfExtentMeters,
-            );
-          } catch {
-            // Imagery is best-effort; never block the report on it.
-          }
-        }
-        if (aerial) photos.unshift(aerial);
-      }
-      const bytes = await roofDrawingPdf(
-        structurePdfTitle(title, pickedEntry.label),
-        pickedEntry.drawing,
-        report?.title || customer?.name || "",
-        workspaceAddress,
-        photos,
-        { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
-        { theme: "roofsnap", logoScale: 1, structureLabel: pickedEntry.label },
-      );
-      const { downloadPdf } = await import("./proposal-data");
-      downloadPdf(bytes, structurePdfTitle(title, pickedEntry.label));
-      toast.success(
-        `${pickedEntry.label} report downloaded. The report PDF on file stays the main house's.`,
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not generate report");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function exportPdf(share = false, savedSnapshot = false) {
-    if (!share && !savedSnapshot && picked) {
-      await exportStructurePdf(picked);
-      return;
-    }
-    if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
+  // Automatic report PDF: once the hands-off save lands, the
+  // report PDF is generated from the main drawing and attached to
+  // the report — Roof reports holds the file. The workspace has no
+  // manual PDF download (that was an old-system option), and the
+  // structure picker is display-only, so the PDF on file always
+  // stays the main house's and structures are never silently mixed.
+  async function attachGeneratedReportPdf() {
+    if (!report) return;
+    if (!initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error("Add measured roof geometry before exporting this property report");
       return;
     }
     if (!measurement) return;
-    if (report && (!parent || dirty) && !savedSnapshot) {
-      toast.error("Save the current roof drawing revision before generating its report PDF");
-      return;
-    }
-    if (share && (!parent || dirty || !customer?.source_lead_id)) {
-      toast.error("Save this drawing and link its customer first");
-      return;
-    }
     setBusy(true);
-    let proposalId: string | null = null;
     let roofReportPdfPath: string | null = null;
     try {
       const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
@@ -632,80 +545,35 @@ export function RoofMeasurements({
         { theme: "roofsnap", logoScale: 1 },
       );
 
-      if (report) {
-        roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;
-        const { error: uploadError } = await supabase.storage
-          .from("roofing-proposals")
-          .upload(
-            roofReportPdfPath,
-            new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }),
-            { contentType: "application/pdf" },
-          );
-        if (uploadError) throw uploadError;
-        const { data: currentReport, error: currentReportError } = await supabase
-          .from("roof_report_orders")
-          .select("updated_at")
-          .eq("id", report.id)
-          .maybeSingle();
-        if (currentReportError || !currentReport)
-          throw new Error("Could not refresh the roof report before attaching its PDF");
-        await attachPdfFn({
-          data: {
-            id: report.id,
-            path: roofReportPdfPath,
-            updated_at: currentReport.updated_at,
-          },
-        });
-        roofReportPdfPath = null;
-        if (report.file_path)
-          await supabase.storage.from("roofing-proposals").remove([report.file_path]);
-        await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
-      }
-
-      if (share) {
-        const { data: row, error } = await supabase
-          .from("proposals")
-          .insert({
-            title,
-            category: d.roof_type,
-            lead_id: customer?.source_lead_id ?? null,
-            property_id: property,
-            drawing_id: parent,
-            scope: "Roof measurement report",
-            terms: "",
-            amount: null,
-          })
-          .select("id")
-          .single();
-        if (error || !row) throw error ?? new Error("Could not create customer report");
-        proposalId = row.id;
-        const { uploadProposalPdf } = await import("./proposal-data");
-        const path = await uploadProposalPdf(row.id, bytes);
-        const { error: updateError } = await supabase
-          .from("proposals")
-          .update({ file_path: path })
-          .eq("id", row.id);
-        if (updateError) throw updateError;
-        await qc.invalidateQueries({ queryKey: ["proposals"] });
-        toast.success(
-          report
-            ? "Measurement PDF saved to Roof reports and customer documents"
-            : "Report added to documents; create a private sharing link",
+      roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;
+      const { error: uploadError } = await supabase.storage
+        .from("roofing-proposals")
+        .upload(
+          roofReportPdfPath,
+          new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }),
+          { contentType: "application/pdf" },
         );
-        go("proposals");
-      } else if (savedSnapshot && report) {
-        toast.success("Updated measurement PDF was automatically saved to Roof reports");
-      } else {
-        const { downloadPdf } = await import("./proposal-data");
-        downloadPdf(bytes, title);
-        toast.success(
-          report
-            ? "Measurement PDF saved to Roof reports and downloaded"
-            : "Roof measurement PDF downloaded",
-        );
-      }
+      if (uploadError) throw uploadError;
+      const { data: currentReport, error: currentReportError } = await supabase
+        .from("roof_report_orders")
+        .select("updated_at")
+        .eq("id", report.id)
+        .maybeSingle();
+      if (currentReportError || !currentReport)
+        throw new Error("Could not refresh the roof report before attaching its PDF");
+      await attachPdfFn({
+        data: {
+          id: report.id,
+          path: roofReportPdfPath,
+          updated_at: currentReport.updated_at,
+        },
+      });
+      roofReportPdfPath = null;
+      if (report.file_path)
+        await supabase.storage.from("roofing-proposals").remove([report.file_path]);
+      await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
+      toast.success("Updated measurement PDF was automatically saved to Roof reports");
     } catch (error) {
-      if (proposalId) await supabase.from("proposals").delete().eq("id", proposalId);
       if (roofReportPdfPath)
         await supabase.storage.from("roofing-proposals").remove([roofReportPdfPath]);
       toast.error(error instanceof Error ? error.message : "Could not generate report");
@@ -730,18 +598,11 @@ export function RoofMeasurements({
           <h2 className="text-xl font-bold">{title}</h2>
           <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted-foreground">
             {customer?.name && <span>{customer.name}</span>}
-            {workspaceAddress && <span>· {workspaceAddress}</span>}
+            {workspaceAddress && !titleCarriesAddress && <span>· {workspaceAddress}</span>}
             {statusLabel && <span>· {statusLabel}</span>}
             {reportDate && <span>· {reportDate}</span>}
           </p>
         </div>
-        <Button
-          variant="outline"
-          disabled={busy || !displayMeasurement}
-          onClick={() => void exportPdf()}
-        >
-          <Download /> Download PDF
-        </Button>
       </div>
       <div className="min-w-0 border-b border-border">
         {entries.length > 1 && (
