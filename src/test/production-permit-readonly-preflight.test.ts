@@ -63,6 +63,9 @@ describe("production permitting preflight is read-only and schema-drift tolerant
       "create_roof_report_request",
       "p.proacl AS raw_acl",
       "pg_get_function_identity_arguments",
+      "roof-job-photos",
+      "roofing-proposals",
+      "permit-documents",
     ])
       expect(sql).toContain(evidence);
 

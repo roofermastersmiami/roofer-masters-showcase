@@ -92,6 +92,12 @@ export type RoofReportOptions = {
   theme?: RoofReportThemeId;
   /** Page-1 logo size multiplier (0.5–1.6). Default 1. */
   logoScale?: number;
+  /** Which structure of a multi-structure property this report
+   * covers (e.g. "Detached structure 1", "All structures"). Drawn
+   * on the cover so a printed report can never be mistaken for a
+   * different structure's numbers. Absent = the main house, the
+   * historical default, unlabeled. */
+  structureLabel?: string;
 };
 
 export type RoofPdfLayout = {
@@ -151,7 +157,11 @@ export async function roofDrawingPdf(
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${title} - Roofer Masters`);
   pdf.setAuthor("Roofer Masters");
-  pdf.setSubject("Roof measurement and material report");
+  pdf.setSubject(
+    options.structureLabel
+      ? `Roof measurement and material report — ${options.structureLabel}`
+      : "Roof measurement and material report",
+  );
 
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -513,6 +523,15 @@ export async function roofDrawingPdf(
     font: bold,
     color: BLUE,
   });
+  if (options.structureLabel) {
+    firstPage.drawText(`Structure: ${safe(options.structureLabel)}`, {
+      x: 30,
+      y: 250,
+      size: 11,
+      font: bold,
+      color: BLACK,
+    });
+  }
   const infoBlock = (label: string, lines: string[], x: number, width: number) => {
     firstPage.drawText(label, { x, y: 232, size: 8, font: bold, color: BLUE });
     let lineY = 216;

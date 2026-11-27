@@ -8,13 +8,33 @@ import {
   MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
-import type { RoofDrawing } from "@/lib/roof-geometry";
+import { Progress } from "@/components/ui/progress";
+import { analysisProgressPercent, formatElapsedClock } from "@/lib/analysis-progress";
+import {
+  detectedFacetsToDrawing,
+  structureToDrawing,
+  type RoofDetectionResponse,
+} from "@/lib/roof-detection";
+import type { DetachedStructure, RoofDrawing } from "@/lib/roof-geometry";
 
 type Props = {
   address: string;
+  /** The measurement-order pin recorded on the report, when the
+   * order form placed one. Sent to the detection service as
+   * pin_lat/pin_lon so footprint selection measures the building
+   * the pin sits on rather than the geocoded address point. */
+  pointHint?: { lat: number; lon: number } | null;
+  /** The measurement-order form's "Include outbuilding" choice
+   * recorded on the report. When set, the analysis runs in
+   * multi-structure mode: detached structures on the same property
+   * are identified and measured separately, and their drawings are
+   * handed to onApply alongside the main drawing. */
+  includeOutbuilding?: boolean;
   roofType: RoofDrawing["roof_type"];
-  onApply: (drawing: ReturnType<typeof detectedFacetsToDrawing>) => boolean;
+  onApply: (
+    drawing: ReturnType<typeof detectedFacetsToDrawing>,
+    detachedStructures?: DetachedStructure[],
+  ) => boolean;
 };
 
 type BuildingCandidate = {
@@ -146,6 +166,9 @@ async function requestAnalysis(
   onProgress: (progress: AnalysisProgress) => void,
 ): Promise<AnalysisOutcome> {
   const legacy = async (): Promise<AnalysisOutcome> => {
+    // The legacy service reports no stages; the progress display creeps
+    // on elapsed time in the wide "measuring" band instead.
+    onProgress({ stage: "measuring", detail: null, downloadFraction: null });
     const legacyController = new AbortController();
     const linkAbort = () => legacyController.abort();
     if (signal.aborted) legacyController.abort();
@@ -290,9 +313,16 @@ const STAGE_LABELS: Record<string, string> = {
   downloading_tiles: "Downloading USGS LiDAR tiles…",
   fitting_planes: "Fitting roof planes to the LiDAR points…",
   resubmitting: "Resubmitting the measurement…",
+  measuring: "Measuring the roof…",
 };
 
-export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
+export function AutomatedRoofReport({
+  address,
+  pointHint,
+  includeOutbuilding,
+  roofType,
+  onApply,
+}: Props) {
   const [result, setResult] = useState<RoofDetectionResponse | null>(null);
   const [candidates, setCandidates] = useState<BuildingCandidate[]>([]);
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
@@ -305,6 +335,65 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
   const activeController = useRef<AbortController | null>(null);
   const autoAnalyzedAddress = useRef("");
   const autoAppliedAddress = useRef("");
+  // Overall-progress clock: the percent is derived from the job's stage
+  // (see analysis-progress.ts) and must never rewind within one attempt,
+  // so the last shown value and the current stage's start are kept here.
+  const progressClock = useRef({
+    stage: null as string | null,
+    stageSince: 0,
+    percent: 0,
+    downloadFraction: null as number | null,
+  });
+  const runStartedAt = useRef(0);
+  const [percent, setPercent] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const refreshPercent = useCallback(() => {
+    const clock = progressClock.current;
+    if (!clock.stageSince) return;
+    const next = analysisProgressPercent(
+      {
+        status: "running",
+        stage: clock.stage,
+        downloadFraction: clock.downloadFraction,
+        stageElapsedSeconds: (Date.now() - clock.stageSince) / 1000,
+      },
+      clock.percent,
+    );
+    clock.percent = next;
+    setPercent(next);
+    setElapsedSeconds(Math.max(0, (Date.now() - runStartedAt.current) / 1000));
+  }, []);
+
+  const handleProgress = useCallback(
+    (next: AnalysisProgress) => {
+      const clock = progressClock.current;
+      if (next.stage === "resubmitting") {
+        // A fresh attempt starts: the number restarts honestly with it.
+        clock.stage = "queued";
+        clock.stageSince = Date.now();
+        clock.percent = 0;
+        clock.downloadFraction = null;
+      } else if (next.stage !== clock.stage) {
+        clock.stage = next.stage;
+        clock.stageSince = Date.now();
+        clock.downloadFraction = next.downloadFraction;
+      } else if (next.downloadFraction != null) {
+        clock.downloadFraction = next.downloadFraction;
+      }
+      setProgress(next);
+      refreshPercent();
+    },
+    [refreshPercent],
+  );
+
+  // Keep the number creeping (and the elapsed clock ticking) between the
+  // ~3s job polls, so a long stage never looks frozen.
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setInterval(refreshPercent, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading, refreshPercent]);
 
   // Cancel work for the previous property and prevent stale responses or loading state.
   useEffect(() => {
@@ -344,6 +433,15 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
       const requestedAddress = address.trim();
       setLoading(true);
       setLoadingAddress(requestedAddress);
+      progressClock.current = {
+        stage: "queued",
+        stageSince: Date.now(),
+        percent: 0,
+        downloadFraction: null,
+      };
+      runStartedAt.current = Date.now();
+      setPercent(analysisProgressPercent({ status: "queued", stage: "queued" }));
+      setElapsedSeconds(0);
       setProgress(null);
       setError("");
       setErrorAddress("");
@@ -356,10 +454,12 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
           {
             street_address: requestedAddress,
             ...(candidateId ? { footprint_candidate_id: candidateId } : {}),
+            ...(pointHint ? { pin_lat: pointHint.lat, pin_lon: pointHint.lon } : {}),
+            ...(includeOutbuilding ? { include_outbuilding: true } : {}),
           },
           controller.signal,
           (next) => {
-            if (activeRequest === requestId.current) setProgress(next);
+            if (activeRequest === requestId.current) handleProgress(next);
           },
         );
         if (activeRequest !== requestId.current) return;
@@ -392,7 +492,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
         }
       }
     },
-    [address, currentAddress],
+    [address, currentAddress, handleProgress, pointHint, includeOutbuilding],
   );
 
   // Start public-data analysis once when a new property address is loaded.
@@ -414,7 +514,27 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
     )
       return;
     try {
-      const accepted = onApply(detectedFacetsToDrawing(visibleResult, roofType));
+      // Multi-structure mode: convert every measured detached
+      // structure through the same converter. One structure that
+      // fails conversion must not block the main measurement, so
+      // failures are skipped individually.
+      const detachedStructures: DetachedStructure[] = [];
+      for (const structure of visibleResult.structures ?? []) {
+        if (structure.role !== "detached" || structure.status !== "lidar_facets") continue;
+        try {
+          detachedStructures.push({
+            label: structure.label,
+            candidate_id: structure.candidate_id,
+            drawing: structureToDrawing(visibleResult, structure, roofType),
+          });
+        } catch {
+          // Skip the unconvertible structure; the main drawing applies.
+        }
+      }
+      const accepted = onApply(
+        detectedFacetsToDrawing(visibleResult, roofType),
+        detachedStructures,
+      );
       if (accepted) autoAppliedAddress.current = currentAddress;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Detected facets could not be added.");
@@ -437,19 +557,23 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
         </Button>
       </div>
       {isLoading && (
-        <div className="space-y-1" role="status">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Activity className="size-4" />
-            {progress?.detail ??
-              (progress?.stage ? STAGE_LABELS[progress.stage] : undefined) ??
-              "Finding available roof data…"}
-            {progress?.downloadFraction != null
-              ? ` (${Math.round(progress.downloadFraction * 100)}%)`
-              : ""}
+        <div className="space-y-2" role="status">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Activity className="size-4 shrink-0" />
+              <span>
+                {progress?.detail ??
+                  (progress?.stage ? STAGE_LABELS[progress.stage] : undefined) ??
+                  "Finding available roof data…"}
+              </span>
+            </div>
+            <span className="text-lg font-semibold tabular-nums">{percent}%</span>
           </div>
+          <Progress value={percent} aria-label="Measurement progress percent" />
           <p className="text-xs text-muted-foreground">
-            Large LiDAR downloads can take several minutes on a first measurement — the analysis
-            keeps running on the service, no need to retry.
+            Elapsed {formatElapsedClock(elapsedSeconds)} · Large LiDAR downloads can take several
+            minutes on a first measurement — the analysis keeps running on the service, no need to
+            retry.
           </p>
         </div>
       )}
@@ -497,21 +621,23 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
       )}
       {visibleResult && (
         <div className="space-y-3">
-          {visibleResult.footprint.address_point_inside_footprint === false && (
-            <div
-              role="alert"
-              className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800"
-            >
-              <strong>Verify the selected building before using these measurements.</strong>
-              <p className="mt-1">
-                The geocoded address point is outside the selected building outline
-                {visibleResult.footprint.address_to_footprint_distance_m !== undefined
-                  ? ` by ${visibleResult.footprint.address_to_footprint_distance_m.toFixed(1)} m`
-                  : ""}
-                . The match is approximate; confirm this is the correct property.
-              </p>
-            </div>
-          )}
+          {visibleResult.footprint.address_point_inside_footprint === false &&
+            !pointHint &&
+            !visibleResult.footprint.point_hint && (
+              <div
+                role="alert"
+                className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800"
+              >
+                <strong>Verify the selected building before using these measurements.</strong>
+                <p className="mt-1">
+                  The geocoded address point is outside the selected building outline
+                  {visibleResult.footprint.address_to_footprint_distance_m !== undefined
+                    ? ` by ${visibleResult.footprint.address_to_footprint_distance_m.toFixed(1)} m`
+                    : ""}
+                  . The match is approximate; confirm this is the correct property.
+                </p>
+              </div>
+            )}
           {visibleResult.status === "lidar_facets" ? (
             <div className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />

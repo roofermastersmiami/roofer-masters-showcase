@@ -1756,3 +1756,645 @@ def test_emission_conflation_does_not_chain_along_a_seam():
     assert result[1].area == pytest.approx(right.area, rel=0.05)
     assert len(_ring_coords(result[0])) >= 25
     assert len(_ring_coords(result[1])) >= 25
+
+
+def test_request_pin_must_be_complete():
+    with pytest.raises(ValueError):
+        AnalyzeRequest(street_address="100 Main Street", pin_lat=25.0)
+    with pytest.raises(ValueError):
+        AnalyzeRequest(street_address="100 Main Street", pin_lon=-80.0)
+    request = AnalyzeRequest(
+        street_address="100 Main Street", pin_lat=25.0, pin_lon=-80.0
+    )
+    assert request.pin_lat == 25.0
+    assert request.pin_lon == -80.0
+
+
+def test_analysis_cache_key_includes_pin():
+    from main import _analysis_cache_key
+
+    plain = AnalyzeRequest(street_address="3062 Southwest 189th Avenue, Miramar, FL 33029")
+    pinned = AnalyzeRequest(
+        street_address="3062 Southwest 189th Avenue, Miramar, FL 33029",
+        pin_lat=25.9,
+        pin_lon=-80.3,
+    )
+    other_pin = AnalyzeRequest(
+        street_address="3062 Southwest 189th Avenue, Miramar, FL 33029",
+        pin_lat=25.91,
+        pin_lon=-80.3,
+    )
+    # The no-pin key keeps its legacy shape so existing cache entries
+    # and behaviour are untouched; a pin always keys separately.
+    assert _analysis_cache_key(plain) == "3062 southwest 189th avenue, miramar, fl 33029"
+    assert _analysis_cache_key(pinned) != _analysis_cache_key(plain)
+    assert _analysis_cache_key(pinned) != _analysis_cache_key(other_pin)
+
+
+def test_analyze_endpoint_steers_footprint_selection_with_pin(monkeypatch):
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+    seen_points: list[tuple[float, float]] = []
+
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Pin steering test address", {"source": "Test geocoder"}
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        seen_points.append((_lat, _lon))
+        return polygon, {"provider": "Test footprints", "building_tags": {}}
+
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(
+        roof_service,
+        "_read_lidar_facets",
+        lambda _polygon, _provider=None: ([], {"stac_items": 0, "tiles_used": 0}),
+    )
+
+    async def fake_tnm(_polygon, _provider=None):
+        return [], {"reason": "test stub"}
+
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+    roof_service._RESPONSE_CACHE.clear()
+
+    client = TestClient(roof_service.app)
+    pinned = client.post(
+        "/v1/roof/analyze",
+        json={
+            "street_address": "Pin steering test address",
+            "pin_lat": 25.00006,
+            "pin_lon": -79.99994,
+        },
+    )
+    assert pinned.status_code == 200
+    # Footprint search/selection ran against the pin, not the geocode.
+    assert seen_points[-1] == (25.00006, -79.99994)
+    payload = pinned.json()
+    assert payload["footprint"]["point_hint"] == {
+        "lat": 25.00006,
+        "lon": -79.99994,
+        "source": "user_pin",
+    }
+    # The response location stays the geocoded address point.
+    assert payload["location"] == {"lat": 25.00005, "lon": -79.99995}
+
+    plain = client.post(
+        "/v1/roof/analyze",
+        json={"street_address": "Pin steering test address"},
+    )
+    assert plain.status_code == 200
+    assert seen_points[-1] == (25.00005, -79.99995)
+    assert "point_hint" not in plain.json()["footprint"]
+
+
+# --- West Park regression: COPC items that publish only proj:projjson -----
+# The USGS LAS_2019 COPC conversions covering Broward carry no proj:epsg /
+# proj:code (only a compound proj:projjson) and no ASPRS class 6 at all.
+# The COPC path used to skip such items outright (stac_items=1,
+# tiles_used=0) and, even had it read them, filtered to class 6 only —
+# while the same surveys measure fine through the TNM path's elevated
+# non-ground fallback. Both defects are pinned here.
+
+def _compound_projjson() -> dict:
+    import json as _json
+
+    from pyproj import CRS
+
+    return _json.loads(CRS.from_user_input("EPSG:26917+5703").to_json())
+
+
+def test_copc_item_crs_resolves_epsg_code_and_projjson():
+    from types import SimpleNamespace
+
+    epsg_item = SimpleNamespace(properties={"proj:epsg": 26917})
+    assert roof_service._copc_item_horizontal_crs(epsg_item).to_epsg() == 26917
+
+    code_item = SimpleNamespace(properties={"proj:code": "EPSG:26917"})
+    assert roof_service._copc_item_horizontal_crs(code_item).to_epsg() == 26917
+
+    projjson_item = SimpleNamespace(properties={"proj:projjson": _compound_projjson()})
+    crs = roof_service._copc_item_horizontal_crs(projjson_item)
+    assert crs is not None
+    assert crs.to_epsg() == 26917
+    assert crs.axis_info[0].unit_conversion_factor == 1.0
+
+    bare_item = SimpleNamespace(properties={})
+    assert roof_service._copc_item_horizontal_crs(bare_item) is None
+
+
+def _copc_regression_scene(roof_class: int):
+    """A synthetic gable roof + ground in EPSG:26917 around a test footprint.
+
+    Returns (footprint_lonlat, cloud) where cloud carries x/y/z/
+    classification arrays in tile coordinates. Roof points carry
+    `roof_class` (1 = unclassified delivery, 6 = building-classified).
+    """
+    from pyproj import CRS, Transformer
+
+    center_x, center_y = 581300.0, 2873900.0
+    half_x, half_y = 8.0, 5.5
+    to_lonlat = Transformer.from_crs("EPSG:26917", "EPSG:4326", always_xy=True)
+    corners = [
+        to_lonlat.transform(center_x + dx, center_y + dy)
+        for dx, dy in [(-half_x, -half_y), (half_x, -half_y), (half_x, half_y), (-half_x, half_y)]
+    ]
+    footprint = Polygon(corners)
+
+    rng = np.random.default_rng(7)
+    xs, ys, zs, classes = [], [], [], []
+    # Classified ground around and under the building (z = 2.3 m).
+    for gx in np.arange(-17.0, 18.0, 2.0):
+        for gy in np.arange(-14.0, 15.0, 2.0):
+            xs.append(center_x + gx)
+            ys.append(center_y + gy)
+            zs.append(2.3)
+            classes.append(2)
+    # Gable roof: eaves at z = 5.0, ridge (along x) at z = 5.9.
+    for xi in np.arange(-7.8, 7.9, 0.6):
+        for t in np.linspace(0.0, 1.0, 10):
+            for sign in (-1.0, 1.0):
+                xs.append(center_x + xi)
+                ys.append(center_y + sign * t * half_y)
+                zs.append(5.9 - t * 0.9 + rng.normal(0.0, 0.01))
+                classes.append(roof_class)
+    # A few low unclassified returns (driveway clutter) that the elevated
+    # fallback must reject: below ground + 2 m.
+    for xi in np.arange(-6.0, 6.5, 1.5):
+        xs.append(center_x + xi)
+        ys.append(center_y)
+        zs.append(2.5)
+        classes.append(1)
+    cloud = type(
+        "Cloud",
+        (),
+        {
+            "x": np.array(xs),
+            "y": np.array(ys),
+            "z": np.array(zs),
+            "classification": np.array(classes),
+        },
+    )()
+    return footprint, cloud
+
+
+def _run_copc_scene(monkeypatch, roof_class: int):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from pyproj import CRS
+
+    footprint, cloud = _copc_regression_scene(roof_class)
+    header = SimpleNamespace(
+        parse_crs=lambda: CRS.from_user_input("EPSG:26917+5703")
+    )
+    reader = SimpleNamespace(header=header, query=lambda bounds=None: cloud)
+
+    class _FakeCopcReader:
+        @staticmethod
+        def open(_href):
+            @contextmanager
+            def _ctx():
+                yield reader
+
+            return _ctx()
+
+    item = SimpleNamespace(
+        id="USGS_LPC_FL_Southeast_B1_2018_e1590n0458_LAS_2019",
+        properties={"proj:projjson": _compound_projjson()},
+        assets={"data": SimpleNamespace(href="https://example.invalid/tile.copc.laz")},
+    )
+
+    class _FakeSearch:
+        def items(self):
+            return [item]
+
+    class _FakeCatalog:
+        def search(self, collections=None, bbox=None, max_items=None):
+            return _FakeSearch()
+
+    monkeypatch.setattr(
+        roof_service, "Client", SimpleNamespace(open=lambda _url: _FakeCatalog())
+    )
+    monkeypatch.setattr(roof_service.planetary_computer, "sign", lambda href: href)
+    monkeypatch.setattr(roof_service.laspy, "CopcReader", _FakeCopcReader)
+    return roof_service._read_lidar_facets(footprint, "Broward County Building Footprints")
+
+
+def test_copc_projjson_item_with_building_class_points_measures(monkeypatch):
+    # The CRS regression: this item used to be skipped before a single
+    # point was read, because it publishes no proj:epsg / proj:code.
+    facets, meta = _run_copc_scene(monkeypatch, roof_class=6)
+    assert facets, "projjson-only COPC item with class-6 points must measure"
+    assert meta["tiles_used"] == 1
+    assert meta["building_class_points"] >= 80
+    total = sum(facet["area_sqft"] for facet in facets)
+    # True gable surface for the synthetic scene is ~1,920 sf.
+    assert 1500 < total < 2300
+
+
+def test_copc_unclassified_delivery_defers_to_tnm_fallback(monkeypatch):
+    # The LAS_2019 deliveries carry no building classification at all.
+    # The COPC path deliberately keeps its class-6 discipline and yields
+    # nothing, so the analysis falls back to the TNM path — which owns
+    # the elevated non-ground fallback for these surveys and holds the
+    # validated numbers for them (e.g. Miramar). Measuring them here as
+    # well would silently replace those validated results.
+    facets, meta = _run_copc_scene(monkeypatch, roof_class=1)
+    assert facets == []
+    assert meta["tiles_used"] == 0
+    assert meta["building_class_points"] == 0
+
+
+# --- West Park regression: TNM must not bet everything on the newest -----
+# survey project. A newer neighbouring-county project can list a tile
+# whose grid covers the footprint while yielding no roof points for it;
+# the next covering project must be attempted before giving up.
+
+def _tnm_item(project: str, tile: str, created: str, size: int = 50_000_000) -> dict:
+    return {
+        "title": f"USGS Lidar Point Cloud {project} {tile}",
+        "dateCreated": created,
+        "sizeInBytes": size,
+        "downloadURL": f"https://example.invalid/USGS_LPC_{project}_{tile}.laz",
+    }
+
+
+def test_tnm_project_groups_orders_newest_first_and_applies_limits():
+    items = [
+        _tnm_item("FL_Older_2018", "tileB", "2023-06-04"),
+        _tnm_item("FL_Newest_2024", "tileA", "2025-09-03"),
+        _tnm_item("FL_Newest_2024", "tileA2", "2025-09-03"),
+        _tnm_item("FL_Newest_2024", "tileA3", "2025-09-03"),
+        _tnm_item("FL_Huge_2026", "tileH", "2026-01-01", size=900_000_000),
+    ]
+    groups = roof_service._tnm_project_groups(items)
+    assert [project for project, _tiles in groups] == [
+        "FL_Huge_2026",
+        "FL_Newest_2024",
+        "FL_Older_2018",
+    ]
+    by_project = dict(groups)
+    assert by_project["FL_Huge_2026"] == []  # over the size limit
+    assert len(by_project["FL_Newest_2024"]) == 2  # MAX_TNM_TILES cap
+    assert len(by_project["FL_Older_2018"]) == 1
+
+
+def _run_tnm_with_projects(monkeypatch, tmp_path, points_local, download_tile=None):
+    import asyncio
+    from types import SimpleNamespace
+
+    payload = {
+        "items": [
+            _tnm_item("FL_Newest_2024", "tileA", "2025-09-03"),
+            _tnm_item("FL_Older_2018", "tileB", "2023-06-04"),
+        ]
+    }
+
+    class _FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, _url, params=None):
+            return _FakeResponse()
+
+    async def fake_download(url, dest, on_progress=None):
+        dest.write_bytes(b"LASF" + b"\0" * 64)
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(roof_service, "LIDAR_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(
+        roof_service, "_download_tile", download_tile or fake_download
+    )
+    monkeypatch.setattr(roof_service, "_tnm_points_local", points_local)
+    polygon = Polygon(
+        [(-80.0, 25.0), (-79.9999, 25.0), (-79.9999, 25.0001), (-80.0, 25.0001)]
+    )
+    return asyncio.run(roof_service._read_lidar_facets_tnm(polygon))
+
+
+def test_tnm_falls_back_to_next_project_when_newest_yields_no_facets(monkeypatch, tmp_path):
+    def points_local(_polygon, tile_paths, _provider=None):
+        if any("Older" in path.name for path in tile_paths):
+            return (
+                [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+                {"tiles_used": 1, "building_class_points": 500},
+            )
+        return [], {"tiles_used": 0, "building_class_points": 0, "reason": "no points"}
+
+    facets, meta = _run_tnm_with_projects(monkeypatch, tmp_path, points_local)
+    assert len(facets) == 1
+    assert meta["tnm_project"] == "FL_Older_2018"
+    assert meta["tnm_projects_tried"] == ["FL_Newest_2024", "FL_Older_2018"]
+
+
+def test_tnm_first_project_success_does_not_try_older_projects(monkeypatch, tmp_path):
+    calls = []
+
+    def points_local(_polygon, tile_paths, _provider=None):
+        calls.append([path.name for path in tile_paths])
+        return (
+            [{"area_sqft": 1000.0, "pitch_rise_per_12": 3.0}],
+            {"tiles_used": 1, "building_class_points": 500},
+        )
+
+    facets, meta = _run_tnm_with_projects(monkeypatch, tmp_path, points_local)
+    assert len(facets) == 1
+    assert meta["tnm_project"] == "FL_Newest_2024"
+    assert "tnm_projects_tried" not in meta
+    assert len(calls) == 1
+
+
+def test_tnm_raises_first_download_error_when_no_project_can_be_read(monkeypatch, tmp_path):
+    async def failing_download(url, dest, on_progress=None):
+        raise RuntimeError(f"boom: {url.rsplit('/', 1)[-1]}")
+
+    def points_local(_polygon, tile_paths, _provider=None):  # pragma: no cover
+        raise AssertionError("must not be called when downloads fail")
+
+    with pytest.raises(RuntimeError, match="boom: USGS_LPC_FL_Newest_2024_tileA.laz"):
+        _run_tnm_with_projects(
+            monkeypatch, tmp_path, points_local, download_tile=failing_download
+        )
+# ---------------------------------------------------------------------------
+# Multi-structure identification (include_outbuilding)
+#
+# A detached structure is a separate footprint on the same property as
+# the selected main building: near it, not overlapping it, and with no
+# evidence it belongs to a different address. These tests pin the
+# classification rules and the additive `structures` response block.
+# ---------------------------------------------------------------------------
+
+from main import _classify_detached_structures
+
+
+def _box(west, south, east, north):
+    return Polygon([(west, south), (east, south), (east, north), (west, north)])
+
+
+# ~21 m x ~22 m main house at (25.0, -80.0).
+_MAIN_POLYGON = _box(-80.0002, 24.9999, -80.0, 25.0001)
+_MAIN_META = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 4900.0}
+
+
+def _pool_entry(polygon, candidate_id, area_sqft=500.0, tags=None):
+    return (
+        0.0,
+        polygon,
+        {
+            "candidate_id": candidate_id,
+            "provider": "Test",
+            "area_sqft": area_sqft,
+            "building_tags": tags or {},
+        },
+    )
+
+
+def test_classify_accepts_nearby_detached_shed():
+    # ~10 m east of the main footprint: a classic backyard shed/garage.
+    shed = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(_MAIN_POLYGON, "main-id"), _pool_entry(shed, "shed-id")],
+        "123 Main St",
+    )
+    assert [row[2]["candidate_id"] for row in accepted] == ["shed-id"]
+    decisions = {entry["candidate_id"]: entry["decision"] for entry in audit}
+    assert decisions == {"main-id": "main", "shed-id": "detached"}
+    shed_entry = next(e for e in audit if e["candidate_id"] == "shed-id")
+    assert 5.0 < shed_entry["gap_to_main_m"] < 20.0
+
+
+def test_classify_rejects_distant_neighbour():
+    far = _box(-79.9982, 24.9999, -79.9980, 25.0001)  # ~190 m east
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON, _MAIN_META, [_pool_entry(far, "far-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same-property limit" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_overlapping_duplicate_of_main():
+    # A second provider's rendering of the SAME house, shifted ~2 m.
+    duplicate = _box(-80.00018, 24.99992, -79.99998, 25.00012)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON, _MAIN_META, [_pool_entry(duplicate, "dup-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same building from another source" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_footprint_with_a_different_recorded_address():
+    neighbour = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(neighbour, "nb-id", tags={"PROP_ADDR": "125 Main St"})],
+        "123 Main St, Test City, FL",
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "differs from the requested address" in audit[0]["reasons"][0]
+
+
+def test_classify_accepts_matching_recorded_address():
+    garage = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(garage, "g-id", tags={"PROP_ADDR": "123 Main Street"})],
+        "123 Main St, Test City, FL",
+    )
+    assert [row[2]["candidate_id"] for row in accepted] == ["g-id"]
+    entry = next(e for e in audit if e["candidate_id"] == "g-id")
+    assert any("matches the requested address" in r for r in entry["reasons"])
+
+
+def test_classify_rejects_house_sized_neighbour_next_door():
+    # The dense-street failure mode, verified live at 9201 SW 24th
+    # Terrace: the neighbouring house stands a few metres away but is
+    # house-sized, so it must never become a "detached structure".
+    neighbour = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(neighbour, "nb-id", area_sqft=2600.0)],
+        "123 Main St",
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "house-sized" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_outbuilding_over_fraction_of_a_small_main_house():
+    # A 900 sq ft footprint beside a 1,200 sq ft main house is over
+    # the 60% fraction even though it is under the absolute cap.
+    small_main_meta = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 1200.0}
+    candidate = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        small_main_meta,
+        [_pool_entry(candidate, "big-id", area_sqft=900.0)],
+        "123 Main St",
+    )
+    assert accepted == []
+    assert "house-sized" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_provider_tagged_dwelling():
+    candidate = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON,
+        _MAIN_META,
+        [_pool_entry(candidate, "osm-id", tags={"building": "house"})],
+        "123 Main St",
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "separate dwelling" in audit[0]["reasons"][0]
+
+
+def test_classify_rejects_small_building_beyond_the_same_lot_centre_limit():
+    # A wide main house can be within the edge-gap limit of a small
+    # building on the next lot (verified live at 600 Mendoza Ave:
+    # a 1,227 sq ft building 58 m east on the street setback line).
+    wide_main = _box(-80.0006, 24.9999, -80.0, 25.0001)
+    wide_main_meta = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 12000.0}
+    small = _box(-79.99965, 24.99995, -79.9995, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        wide_main, wide_main_meta, [_pool_entry(small, "far-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same-lot limit" in audit[0]["reasons"][0]
+    assert audit[0]["gap_to_main_m"] < 45.0  # edge gap alone would have passed it
+    assert audit[0]["centroid_to_main_m"] > 40.0
+
+
+def test_classify_caps_detached_structures_at_the_nearest_four():
+    # Six sheds around the main house, all inside the gap, size and
+    # same-lot centre limits.
+    spots = [
+        (-79.99987, 24.99994, 0.00014),  # east
+        (-80.00041, 24.99994, 0.00014),  # west
+        (-80.00017, 25.00023, 0.00014),  # north
+        (-80.00017, 24.99963, 0.00014),  # south
+        (-79.99987, 25.00016, 0.00012),  # north-east
+        (-80.00039, 25.00016, 0.00012),  # north-west
+    ]
+    pool = [
+        _pool_entry(_box(west, south, west + size, south + size), f"shed-{index}")
+        for index, (west, south, size) in enumerate(spots)
+    ]
+    accepted, audit = _classify_detached_structures(
+        _MAIN_POLYGON, _MAIN_META, pool, "123 Main St"
+    )
+    assert len(accepted) == 4
+    rejected = [e for e in audit if e["decision"] == "rejected"]
+    assert len(rejected) == 2
+    assert all("nearest detached structures cap" in e["reasons"][0] for e in rejected)
+    gaps = [row[0] for row in accepted]
+    assert gaps == sorted(gaps)
+
+
+def _structures_fakes(monkeypatch, pool):
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Structures test address", {"source": "Test geocoder"}
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        meta = {
+            "provider": "Test Footprints",
+            "candidate_id": "main-id",
+            "address_point_inside_footprint": True,
+            "address_to_footprint_distance_m": 0.0,
+            "building_tags": {},
+            "_candidate_pool": pool,
+        }
+        return _MAIN_POLYGON, meta
+
+    def fake_lidar(polygon, _provider=None):
+        if polygon is _MAIN_POLYGON:
+            return (
+                [{"area_sqft": 2000.0, "pitch_rise_per_12": 6.0}],
+                {"tiles_used": 1, "edge_lengths_lf": {"ridge": 10.0}},
+            )
+        return (
+            [{"area_sqft": 320.0, "pitch_rise_per_12": 4.0}],
+            {"tiles_used": 1, "edge_lengths_lf": {"ridge": 4.0}},
+        )
+
+    async def fake_tnm(_polygon, _provider=None, report=None):
+        return [], {"reason": "test stub"}
+
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(roof_service, "_read_lidar_facets", fake_lidar)
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+
+
+def test_analyze_with_outbuilding_returns_structures(monkeypatch):
+    shed = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    pool = [_pool_entry(_MAIN_POLYGON, "main-id"), _pool_entry(shed, "shed-id")]
+    _structures_fakes(monkeypatch, pool)
+    client = TestClient(roof_service.app)
+
+    response = client.post(
+        "/v1/roof/analyze",
+        json={
+            "street_address": "Unique structures endpoint test address",
+            "include_outbuilding": True,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    # Headline numbers still describe the main structure only.
+    assert payload["roof"]["area_sqft"] == 2000.0
+    structures = payload["structures"]
+    assert [s["role"] for s in structures] == ["main", "detached"]
+    assert structures[0]["label"] == "Main house"
+    assert structures[0]["roof"]["area_sqft"] == payload["roof"]["area_sqft"]
+    assert structures[0]["footprint"]["area_sqft"] == payload["footprint"]["area_sqft"]
+    assert structures[1]["label"] == "Detached structure 1"
+    assert structures[1]["candidate_id"] == "shed-id"
+    assert structures[1]["status"] == "lidar_facets"
+    assert structures[1]["roof"]["area_sqft"] == 320.0
+    assert structures[1]["distance_to_main_m"] > 0
+    audit = payload["structures_audit"]
+    assert audit["main_candidate_id"] == "main-id"
+    assert audit["candidates_considered"] == 2
+
+
+def test_analyze_without_outbuilding_flag_has_no_structures(monkeypatch):
+    shed = _box(-79.9999, 24.99995, -79.9997, 25.00015)
+    pool = [_pool_entry(_MAIN_POLYGON, "main-id"), _pool_entry(shed, "shed-id")]
+    _structures_fakes(monkeypatch, pool)
+    client = TestClient(roof_service.app)
+
+    response = client.post(
+        "/v1/roof/analyze",
+        json={"street_address": "Unique plain endpoint test address"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "structures" not in payload
+    assert "structures_audit" not in payload
+    assert payload["roof"]["area_sqft"] == 2000.0

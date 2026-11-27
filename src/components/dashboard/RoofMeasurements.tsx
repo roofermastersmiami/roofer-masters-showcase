@@ -1,42 +1,16 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  Plus,
-  Save,
-  Download,
-  Undo2,
-  Redo2,
-  RotateCcw,
-  Play,
-  Pause,
-  Trash2,
-  ArrowRight,
-  FileText,
-  Upload,
-  MapPin,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
+import { Download, Play, Pause, RotateCcw, FileDown, Package, ZoomIn, ZoomOut } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import {
   drawingSchema,
   roofPreset,
   measureDrawing,
-  auditRoofReport,
-  toMaterialReport,
-  distance,
   addressPinPosition,
-  rebaseRoofPlanes,
-  EDGE_TYPES,
-  suggestSharedEdgeClassifications,
   type RoofDrawing,
-  type RoofShape,
 } from "@/lib/roof-geometry";
 import { calculateRoofSummary, measuredEdgeTotalsToInputs } from "@/lib/roof-calculations";
 import { roofCoverFraming } from "@/lib/aerial-photo";
@@ -44,38 +18,30 @@ import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
 import { restoreRoofDrawingMedia, type RoofDrawingMedia } from "@/lib/roof-drawing-media";
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
-import { drawingsQuery } from "./roof-data";
-import { jobsQuery } from "./operations-data";
-import { materialOrderForTransfer } from "@/lib/material-order";
-import { Choice, Field, SectionHeading } from "./CrmControls";
+import { automaticMaterialList, type AutomaticMaterialList } from "@/lib/material-order";
 import { useCrm } from "./CrmContext";
 import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
-import { RoofImageTrace } from "./RoofImageTrace";
-import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
-import { loadPublicAerial } from "@/lib/public-aerial.functions";
+import { parseIncludeOutbuilding, parseMeasurementPin } from "@/lib/roof-order-notes";
+import {
+  ALL_STRUCTURES_KEY,
+  pickedStructureDrawing,
+  structureEntries,
+  structurePdfTitle,
+} from "@/lib/roof-structures";
+import { REPORT_STATUS_LABELS } from "@/lib/roof-order-schema";
 import { loadReportAerial } from "@/lib/report-aerial.functions";
 import type { AerialPhoto } from "@/lib/aerial-photo";
-import { findBuildingFootprints } from "@/lib/building-footprint.functions";
-import {
-  footprintToDraftPlane,
-  shouldAutoSearchFootprint,
-  type BuildingFootprint,
-} from "@/lib/building-footprint";
-import {
-  uploadAerialImage,
-  aerialInvocationError,
-  shouldAutoLoadAddressAerial,
-  addressAerialRequestKey,
-} from "@/lib/public-aerial-import";
-import { ACCURACY_LABELS, type Accuracy } from "@/lib/public-aerial";
-import {
-  PENETRATION_COLORS,
-  ROOF_EDGE_STYLES,
-  ROOF_FEATURE_LEGEND,
-} from "@/lib/roof-feature-styles";
+import { ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
+import {
+  HousePhotoView,
+  NAIP_AERIAL_SOURCE_LABEL,
+  WorkspaceViewTabs,
+  type HousePhotoState,
+  type WorkspaceView,
+} from "./HousePhotoView";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
 type Media = RoofDrawingMedia;
@@ -88,53 +54,40 @@ export function RoofMeasurements({
 }) {
   const stored = drawingSchema.safeParse(initialDrawing?.geometry);
   const starting = stored.success ? stored.data : { ...initial, notes: report?.notes ?? "" };
-  const vertices = starting.planes.flatMap((p) => p.points);
-  const startWidth = Math.max(...vertices.map((v) => v.x)) - Math.min(...vertices.map((v) => v.x));
-  const startLength = Math.max(...vertices.map((v) => v.z)) - Math.min(...vertices.map((v) => v.z));
-  let startPitch = 6;
-  try {
-    startPitch = measureDrawing(starting).planes[0]?.pitch ?? 6;
-  } catch {
-    // Keep the default pitch when saved geometry cannot be measured.
-  }
   const properties = useQuery(propertiesQuery),
     customers = useQuery(customersQuery),
-    drawings = useQuery(drawingsQuery),
-    jobs = useQuery(jobsQuery),
     qc = useQueryClient();
   const saveFn = useServerFn(saveRoofDrawing);
   const attachPdfFn = useServerFn(attachRoofOrderPdf);
-  const aerialFn = useServerFn(loadPublicAerial);
   const reportAerialFn = useServerFn(loadReportAerial);
-  const footprintFn = useServerFn(findBuildingFootprints);
-  const [traceIndex, setTraceIndex] = useState(0);
-  const [reportTheme, setReportTheme] = useState<"roofsnap" | "navy" | "charcoal" | "emerald">(
-    "roofsnap",
-  );
-  const [logoSize, setLogoSize] = useState("1");
   const userEditedDrawing = useRef(false);
+  // Hands-off flow: when the automated measurement applies a drawing
+  // inside a report workspace, the revision save (which also generates
+  // and attaches the report PDF) runs by itself and the material list
+  // is built from the saved drawing — no Save click needed.
+  const autoSaveArmed = useRef(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoMaterials, setAutoMaterials] = useState<AutomaticMaterialList | null>(null);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
-    [history, setHistory] = useState<RoofDrawing[]>([]),
-    [future, setFuture] = useState<RoofDrawing[]>([]),
     [selected, setSelected] = useState(starting.planes[0]?.id ?? ""),
-    [property, setProperty] = useState(report?.property_id ?? ""),
-    [title, setTitle] = useState(report?.title ?? "Roof measurement report"),
+    [property] = useState(report?.property_id ?? ""),
+    [title] = useState(report?.title ?? "Roof measurement report"),
     [parent, setParent] = useState<string | null>(initialDrawing?.id ?? null),
     [dirty, setDirty] = useState(!initialDrawing),
     [busy, setBusy] = useState(false),
-    [view, setView] = useState<"3d" | "plan">("3d"),
+    [view, setView] = useState<WorkspaceView>("photo"),
     [autoRotate, setAutoRotate] = useState(true),
     [fit, setFit] = useState(0),
     [zoomDirection, setZoomDirection] = useState<"in" | "out">("in"),
     [zoomKey, setZoomKey] = useState(0),
-    [shape, setShape] = useState<RoofShape>("gable"),
-    [width, setWidth] = useState(startWidth),
-    [length, setLength] = useState(startLength),
-    [pitch, setPitch] = useState(startPitch),
-    [jobId, setJobId] = useState(""),
-    [media, setMedia] = useState<Media[]>(() => restoreRoofDrawingMedia(initialDrawing?.media));
+    [media] = useState<Media[]>(() => restoreRoofDrawingMedia(initialDrawing?.media));
   const [aerialImageUrl, setAerialImageUrl] = useState("");
+  // Multi-structure picker: "main" (the report's own drawing), a
+  // detached structure's candidate key, or "all" (combined view).
+  // Picking swaps the displayed drawing + measurements instantly
+  // from the stored per-structure data — nothing is re-measured.
+  const [pickedStructureKey, setPickedStructureKey] = useState("main");
   const aerialGroundImage = media.find(
     (item) =>
       item.category === "aerial" &&
@@ -168,16 +121,130 @@ export function RoofMeasurements({
       active = false;
     };
   }, [media]);
+  // House photo view: the workspace opens on the property's actual
+  // aerial photo — the same photo the automatic flow prints on the
+  // report PDF cover. Resolution mirrors the cover's own priority:
+  // a stored aerial saved with the drawing first, then the cover
+  // photo cached with the report, then a fresh fetch through the
+  // same server function + framing the PDF export uses (client
+  // stitch as fallback). A photo fetched fresh is cached next to
+  // the report PDF so reopening the report shows it instantly.
+  // View-only: nothing here saves a drawing or touches the
+  // automatic measurement chain.
+  const [photo, setPhoto] = useState<HousePhotoState>({ status: "loading" });
+  const viewPicked = useRef(false);
+  const storedAerialItem = media.find((item) => item.category === "aerial");
+  const coverFraming = roofCoverFraming(d);
+  const coverLatitude = coverFraming?.latitude ?? d.geo_reference?.originLatitude;
+  const coverLongitude = coverFraming?.longitude ?? d.geo_reference?.originLongitude;
+  const photoKey = [
+    storedAerialItem?.path ?? "",
+    report?.id ?? "",
+    coverLatitude?.toFixed(6) ?? "",
+    coverLongitude?.toFixed(6) ?? "",
+    coverFraming?.halfExtentMeters?.toFixed(1) ?? "",
+  ].join("|");
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    const showObjectUrl = (blob: Blob, source: string) => {
+      objectUrl = URL.createObjectURL(blob);
+      if (active) setPhoto({ status: "ready", url: objectUrl, source });
+    };
+    setPhoto({ status: "loading" });
+    void (async () => {
+      if (storedAerialItem) {
+        const { data, error } = await supabase.storage
+          .from("roof-job-photos")
+          .createSignedUrl(storedAerialItem.path, 300);
+        if (active && !error && data?.signedUrl) {
+          setPhoto({
+            status: "ready",
+            url: data.signedUrl,
+            source: storedAerialItem.source ?? "Aerial photo",
+          });
+          return;
+        }
+      }
+      const cachePath = report?.id ? `roof-report/${report.id}/aerial-cover.jpg` : null;
+      if (cachePath) {
+        const { data: cached, error } = await supabase.storage
+          .from("roofing-proposals")
+          .download(cachePath);
+        if (active && !error && cached) {
+          showObjectUrl(cached, NAIP_AERIAL_SOURCE_LABEL);
+          return;
+        }
+      }
+      if (coverLatitude !== undefined && coverLongitude !== undefined) {
+        let bytes: Uint8Array | null = null;
+        let source = NAIP_AERIAL_SOURCE_LABEL;
+        let cacheable = false;
+        try {
+          const result = await reportAerialFn({
+            data: {
+              latitude: coverLatitude,
+              longitude: coverLongitude,
+              ...(coverFraming ? { halfExtentMeters: coverFraming.halfExtentMeters } : {}),
+            },
+          });
+          if ("imageBase64" in result && result.imageBase64) {
+            const binary = atob(result.imageBase64);
+            bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            cacheable = true;
+          }
+        } catch {
+          // Fall through to the client-side stitch, like report generation.
+        }
+        if (!bytes) {
+          try {
+            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
+            const stitched = await fetchAerialPhoto(
+              coverLatitude,
+              coverLongitude,
+              coverFraming?.halfExtentMeters,
+            );
+            if (stitched) {
+              bytes = stitched.bytes;
+              source = stitched.source;
+            }
+          } catch {
+            // Imagery is best-effort; the photo view degrades honestly.
+          }
+        }
+        if (bytes) {
+          const blob = new Blob([Uint8Array.from(bytes)], { type: "image/jpeg" });
+          showObjectUrl(blob, source);
+          if (cacheable && cachePath) {
+            void supabase.storage
+              .from("roofing-proposals")
+              .upload(cachePath, blob, { contentType: "image/jpeg", upsert: true })
+              .then(undefined, () => undefined);
+          }
+          return;
+        }
+      }
+      if (active) setPhoto({ status: "unavailable" });
+    })();
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // reportAerialFn is a stable server-fn handle; the photo key
+    // captures every input that can change the resolved photo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoKey]);
+  // Until Fredy picks a view himself, a property with no aerial
+  // photo opens on the 3D house instead of an empty photo pane.
+  useEffect(() => {
+    if (photo.status === "unavailable" && !viewPicked.current) setView("3d");
+  }, [photo.status]);
   function edit(next: RoofDrawing) {
     userEditedDrawing.current = true;
-    setHistory((h) => [...h.slice(-29), d]);
-    setFuture([]);
     setD({ ...next, verified: false });
     setDirty(true);
   }
-  const plane = d.planes.find((p) => p.id === selected);
-  const sharedEdgeSuggestions = suggestSharedEdgeClassifications(d);
-  const reportAudit = auditRoofReport(d);
   let measurement: ReturnType<typeof measureDrawing> | null = null;
   let error = "";
   try {
@@ -197,25 +264,59 @@ export function RoofMeasurements({
         wastePercent: d.waste,
       })
     : null;
+  // Multi-structure display: the picker swaps which structure's
+  // drawing the scene, headline stats and plane table describe.
+  // Saving, the material list and the report PDF on file always stay
+  // with the main drawing `d`; only a manual Download PDF follows
+  // the picker (labeled, download-only — see exportPdf).
+  const entries = structureEntries(d);
+  const picked = pickedStructureDrawing(entries, pickedStructureKey);
+  const displayDrawing = picked?.drawing ?? d;
+  let displayMeasurement: ReturnType<typeof measureDrawing> | null = measurement;
+  if (picked) {
+    try {
+      displayMeasurement = measureDrawing(displayDrawing);
+    } catch {
+      displayMeasurement = null;
+    }
+  }
+  const displaySummary = picked
+    ? displayMeasurement
+      ? calculateRoofSummary({
+          facets: displayMeasurement.planes.map((p) => ({
+            id: p.id,
+            name: p.name,
+            surfaceAreaSqFt: p.area,
+            pitchRisePer12: p.pitch,
+          })),
+          edges: measuredEdgeTotalsToInputs(displayMeasurement.edges),
+          wastePercent: displayDrawing.waste,
+        })
+      : null
+    : roofSummary;
+  const pickChangeSeen = useRef(false);
+  useEffect(() => {
+    if (!pickChangeSeen.current) {
+      pickChangeSeen.current = true;
+      return;
+    }
+    setSelected(displayDrawing.planes[0]?.id ?? "");
+    setFit((value) => value + 1);
+    // Only the pick itself reframes the view; displayDrawing is
+    // derived from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedStructureKey]);
   const propertyRow = properties.data?.find((p) => p.id === property),
     customer = customers.data?.find((c) => c.id === propertyRow?.customer_id);
   const workspaceAddress = report?.address?.trim() || propertyRow?.address?.trim() || "";
-  const matchingJobs = (jobs.data ?? []).filter(
-    (j) =>
-      customer &&
-      j.lead_id === customer.source_lead_id &&
-      (!j.property_id || j.property_id === property),
-  );
-  async function save() {
+  async function save(): Promise<boolean> {
     if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
-      toast.error(
-        "Add a measured roof dimension or trace the actual roof before saving this report",
-      );
-      return;
+      toast.error("Run the automatic measurement before saving this report");
+      return false;
     }
     if (!measurement || !property) {
       toast.error("Choose a property and correct the drawing first");
-      return;
+      return false;
     }
     setBusy(true);
     try {
@@ -237,13 +338,146 @@ export function RoofMeasurements({
       ]);
       toast.success(`Drawing revision ${row.revision} saved`);
       if (report) await exportPdf(false, true);
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save drawing");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  // Run the armed hands-off save once the automated drawing is in the
+  // editor and measurable. The flag is consumed before saving so the
+  // effect cannot loop; a failed save is surfaced by save()'s toast.
+  useEffect(() => {
+    if (!autoSaveArmed.current || !report || !dirty || busy || autoSaving) return;
+    if (!measurement || !property) return;
+    autoSaveArmed.current = false;
+    setAutoSaving(true);
+    void (async () => {
+      const saved = await saveRef.current();
+      if (saved) {
+        try {
+          setAutoMaterials(automaticMaterialList(d));
+        } catch {
+          setAutoMaterials(null);
+        }
+        toast.success(
+          "Measurement saved, report PDF generated, and material list built automatically.",
+        );
+      }
+      setAutoSaving(false);
+    })();
+  }, [autoSaving, busy, d, dirty, measurement, property, report]);
+  async function downloadAutoTakeoff() {
+    if (!autoMaterials || !autoMaterials.lines.length) return;
+    try {
+      const [{ materialTakeoffPdf }, { downloadPdf }] = await Promise.all([
+        import("@/lib/material-order-pdf"),
+        import("./proposal-data"),
+      ]);
+      const bytes = await materialTakeoffPdf({
+        title,
+        source: "Automatic measurement — generated from the saved roof drawing",
+        report: autoMaterials.report,
+        lines: autoMaterials.lines,
+        warnings: autoMaterials.warnings,
+      });
+      downloadPdf(bytes, `Material Takeoff - ${title}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not generate material takeoff PDF",
+      );
+    }
+  }
+  // Structure-specific PDF: when the picker is on a detached
+  // structure (or "All structures"), Download PDF produces THAT
+  // structure's report — its own drawing and numbers, labeled on the
+  // cover and in the document title — as a local download only. The
+  // report PDF stored on the report always remains the main house's,
+  // so structures can never be silently mixed.
+  async function exportStructurePdf(pickedEntry: { label: string; drawing: RoofDrawing }) {
+    setBusy(true);
+    try {
+      const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
+      const photos = [];
+      if (pickedEntry.drawing.geo_reference) {
+        // Narrowed object: roofCoverFraming's parameter does not
+        // accept a full drawing under exactOptionalPropertyTypes.
+        const framing = roofCoverFraming({
+          planes: pickedEntry.drawing.planes,
+          geo_reference: pickedEntry.drawing.geo_reference,
+        });
+        const coverLatitude = framing?.latitude ?? pickedEntry.drawing.geo_reference.originLatitude;
+        const coverLongitude =
+          framing?.longitude ?? pickedEntry.drawing.geo_reference.originLongitude;
+        let aerial: AerialPhoto | null = null;
+        try {
+          const result = await reportAerialFn({
+            data: {
+              latitude: coverLatitude,
+              longitude: coverLongitude,
+              ...(framing ? { halfExtentMeters: framing.halfExtentMeters } : {}),
+            },
+          });
+          if ("imageBase64" in result && result.imageBase64) {
+            const binary = atob(result.imageBase64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            aerial = {
+              bytes,
+              mime: result.mime,
+              category: "aerial",
+              name: "Aerial photo (Esri World Imagery)",
+              source: result.source,
+              latitude: result.latitude,
+              longitude: result.longitude,
+            };
+          }
+        } catch {
+          // Fall through to the client-side stitch.
+        }
+        if (!aerial) {
+          try {
+            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
+            aerial = await fetchAerialPhoto(
+              coverLatitude,
+              coverLongitude,
+              framing?.halfExtentMeters,
+            );
+          } catch {
+            // Imagery is best-effort; never block the report on it.
+          }
+        }
+        if (aerial) photos.unshift(aerial);
+      }
+      const bytes = await roofDrawingPdf(
+        structurePdfTitle(title, pickedEntry.label),
+        pickedEntry.drawing,
+        report?.title || customer?.name || "",
+        workspaceAddress,
+        photos,
+        { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
+        { theme: "roofsnap", logoScale: 1, structureLabel: pickedEntry.label },
+      );
+      const { downloadPdf } = await import("./proposal-data");
+      downloadPdf(bytes, structurePdfTitle(title, pickedEntry.label));
+      toast.success(
+        `${pickedEntry.label} report downloaded. The report PDF on file stays the main house's.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate report");
     } finally {
       setBusy(false);
     }
   }
   async function exportPdf(share = false, savedSnapshot = false) {
+    if (!share && !savedSnapshot && picked) {
+      await exportStructurePdf(picked);
+      return;
+    }
     if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error("Add measured roof geometry before exporting this property report");
       return;
@@ -361,7 +595,10 @@ export function RoofMeasurements({
         workspaceAddress,
         photos,
         { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
-        { theme: reportTheme, logoScale: Number(logoSize) },
+        // The workspace no longer exposes theme/logo pickers; the PDF
+        // keeps the generator defaults it already used (RoofSnap
+        // Classic theme, medium logo).
+        { theme: "roofsnap", logoScale: 1 },
       );
 
       if (report) {
@@ -450,630 +687,143 @@ export function RoofMeasurements({
       setBusy(false);
     }
   }
-  async function toJob() {
-    if (!parent || dirty || !d.verified || !jobId) {
-      toast.error("Save reviewed measurements and select a job first");
-      return;
-    }
-    const target = matchingJobs.find((j) => j.id === jobId);
-    if (!target) return;
-    if (!propertyRow?.company_id || target.company_id !== propertyRow.company_id) {
-      toast.error("The selected job and property must belong to the same company");
-      return;
-    }
-    setBusy(true);
-    try {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) throw new Error("Sign in to transfer measurements");
-      const { data: membership, error: membershipError } = await supabase
-        .from("crm_company_memberships")
-        .select("role")
-        .eq("user_id", auth.user.id)
-        .eq("company_id", propertyRow.company_id)
-        .in("role", ["owner", "admin", "production_manager"])
-        .maybeSingle();
-      if (membershipError || !membership)
-        throw new Error("You cannot update jobs for this company");
-      const report = toMaterialReport(d);
-      const lines = materialOrderForTransfer(report);
-      const { error } = await supabase
-        .from("roof_jobs")
-        .update({
-          property_id: property,
-          drawing_id: parent,
-          material_order: {
-            report,
-            lines,
-            source: "drawing",
-            drawing_id: parent,
-            updated_at: new Date().toISOString(),
-          },
-        })
-        .eq("id", target.id)
-        .eq("company_id", propertyRow.company_id);
-      if (error) throw error;
-      await qc.invalidateQueries({ queryKey: ["roof-jobs"] });
-      toast.success("Reviewed measurements transferred to material order");
-      go("jobs");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not transfer measurements");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function toEstimate() {
-    if (!parent || dirty || !d.verified || !measurement || !customer?.source_lead_id) {
-      toast.error("Save reviewed measurements and select a customer property first");
-      return;
-    }
-    if (!propertyRow?.company_id)
-      return toast.error("Property company ownership could not be verified");
-    setBusy(true);
-    try {
-      const { error } = await supabase.from("roof_estimates").insert({
-        company_id: propertyRow.company_id,
-        lead_id: customer.source_lead_id,
-        property_id: property,
-        drawing_id: parent,
-        ...(report ? { report_order_id: report.id } : {}),
-        title: `${title} — estimate`,
-        category: d.roof_type,
-        inputs: {
-          sqft: measurement.area,
-          waste: d.waste,
-          material: 0,
-          labor: 0,
-          permits: 0,
-          other: 0,
-          margin: 0,
-        },
-        total_cents: 0,
-      });
-      if (error) throw error;
-      await qc.invalidateQueries({ queryKey: ["roof-estimates"] });
-      toast.success("Measurements transferred; load the estimate to add pricing");
-      go("estimates");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not create linked estimate");
-    } finally {
-      setBusy(false);
-    }
-  }
-  const [aerialError, setAerialError] = useState("");
-  const [aerialStatus, setAerialStatus] = useState("");
-  const [footprintBusy, setFootprintBusy] = useState(false);
-  const [footprintMessage, setFootprintMessage] = useState("");
-  const [footprints, setFootprints] = useState<BuildingFootprint[]>([]);
-  const [footprintAddressCoordinates, setFootprintAddressCoordinates] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
-  async function loadAerial() {
-    const address = report?.address?.trim() || propertyRow?.address;
-    if (!property || !address) return;
-    setBusy(true);
-    setAerialError("");
-    setAerialStatus("Looking up the property address with the free public mapping service…");
-    let stage = "request";
-    try {
-      const r = await aerialFn({ data: { address, spanMeters: 120 } });
-      if ("error" in r) {
-        setAerialError(r.error);
-        setAerialStatus(
-          "The aerial lookup needs attention. You can retry or upload your own image.",
-        );
-        toast.error(r.error);
-        return;
-      }
-      stage = "upload";
-      setAerialStatus("Address located. Downloading and securely saving the public aerial image…");
-      const path = `drawing-${property}/${crypto.randomUUID()}.png`;
-      await uploadAerialImage(r.image, (blob) =>
-        supabase.storage.from("roof-job-photos").upload(path, blob, { contentType: "image/png" }),
-      );
-      const next = [
-        ...media,
-        {
-          path,
-          name: `Public aerial · ${r.matchedAddress}`.slice(0, 200),
-          category: "aerial" as const,
-          source: "USGS National Map NAIP imagery",
-          matched_address: r.matchedAddress,
-          latitude: r.lat,
-          longitude: r.lon,
-        },
-      ];
-      setMedia(next);
-      setTraceIndex(next.length - 1);
-      setD({
-        ...d,
-        accuracy: "photo_estimate",
-        image_credit: r.credit,
-        geo_reference: {
-          // Always refresh the address marker from the latest successful geocode.
-          // Preserve the drawing origin so existing traced geometry stays in place.
-          addressLatitude: r.lat,
-          addressLongitude: r.lon,
-          originLatitude: d.geo_reference?.originLatitude ?? r.lat,
-          originLongitude: d.geo_reference?.originLongitude ?? r.lon,
-        },
-        verified: false,
-      });
-      setDirty(true);
-      setAerialStatus(
-        `Aerial image ready for ${r.matchedAddress}. This resampled public image has no dependable pixel-level measurement scale. Calibrate against a known distance before tracing; review all measurements on site.`,
-      );
-      toast.success("Free public aerial loaded; calibrate a known distance before tracing");
-    } catch (e) {
-      const message =
-        stage === "upload" && e instanceof Error ? e.message : aerialInvocationError(e);
-      setAerialError(message);
-      setAerialStatus("Aerial loading did not finish. Correct the issue and retry.");
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  function applyBuildingFootprint(
-    candidate: BuildingFootprint,
-    addressCoordinates = footprintAddressCoordinates,
-  ) {
-    const hasImportedFootprint = d.planes.some((item) => item.id.startsWith("osm-footprint-"));
-    const replaceStarter = !initialDrawing && (!userEditedDrawing.current || hasImportedFootprint);
-    const existingPlanes = replaceStarter
-      ? []
-      : d.planes.filter((item) => !item.id.startsWith("osm-footprint-"));
-    const plane = {
-      ...footprintToDraftPlane(candidate),
-      id: `osm-footprint-${candidate.id}-${Date.now()}`,
-    };
-    edit({
-      ...d,
-      planes: [...existingPlanes, plane],
-      ...(addressCoordinates
-        ? {
-            geo_reference: {
-              addressLatitude: addressCoordinates.latitude,
-              addressLongitude: addressCoordinates.longitude,
-              originLatitude: candidate.center.lat,
-              originLongitude: candidate.center.lon,
-            },
-          }
-        : {}),
-      accuracy: "photo_estimate",
-      verified: false,
-    });
-    setSelected(plane.id);
-    setFit((value) => value + 1);
-    toast.info(
-      "Preliminary ground outline added. Confirm the actual roof edge, overhangs, and pitch before using quantities.",
-    );
-  }
-  async function searchFootprints() {
-    const address = report?.address?.trim() || propertyRow?.address;
-    if (!address) return;
-    setFootprintBusy(true);
-    setFootprintMessage("Checking free OpenStreetMap building data near this address…");
-    setFootprints([]);
-    try {
-      const result = await footprintFn({ data: { address } });
-      if ("error" in result) {
-        setFootprintMessage(result.error);
-        return;
-      }
-      setFootprints(result.footprints);
-      setFootprintAddressCoordinates(result.addressCoordinates);
-      // Never import the first geocoder/OSM result automatically: an address
-      // point can land on the street and the first footprint may be a neighbor.
-      // Keep every candidate visible and require the estimator to choose it.
-      setFootprintMessage(
-        result.footprints.length
-          ? `Found ${result.footprints.length} nearby mapped building footprint(s). Review the outlines below and choose the correct building explicitly. ${result.attribution}. These are ground outlines only.`
-          : `No mapped building outline was found within 100 meters. ${result.attribution}. You can still trace the aerial manually.`,
-      );
-    } catch {
-      setFootprintMessage("The free footprint lookup could not complete. Try again later.");
-    } finally {
-      setFootprintBusy(false);
-    }
-  }
-  const autoAerialAttempted = useRef("");
-  useEffect(() => {
-    const address = report?.address?.trim() || propertyRow?.address;
-    const requestKey = addressAerialRequestKey(report?.id ?? property, address);
-    if (
-      shouldAutoLoadAddressAerial({
-        address,
-        requestKey: report?.id ?? property,
-        hasAerial: media.some((item) => item.category === "aerial"),
-        attemptedKey: autoAerialAttempted.current,
+  const statusLabel = report
+    ? (REPORT_STATUS_LABELS[report.status as keyof typeof REPORT_STATUS_LABELS] ?? report.status)
+    : null;
+  const reportDate = report
+    ? new Date(report.created_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
       })
-    ) {
-      autoAerialAttempted.current = requestKey;
-      void loadAerial();
-    }
-  }, [
-    report?.id,
-    report?.address,
-    property,
-    propertyRow?.address,
-    initialDrawing?.id,
-    media,
-    loadAerial,
-  ]);
-
-  // Automatically check the free OSM ground outline for address-linked reports.
-  // This is a reference footprint only, never a roof measurement or roof plan.
-  const autoFootprintAttempted = useRef("");
-  useEffect(() => {
-    const address = report?.address?.trim() || propertyRow?.address;
-    const requestKey = report?.id ?? property ?? "";
-    if (!shouldAutoSearchFootprint(address, requestKey, autoFootprintAttempted.current)) return;
-    autoFootprintAttempted.current = requestKey;
-    void searchFootprints();
-  }, [report?.id, report?.address, property, propertyRow?.address, initialDrawing?.id]);
-
-  async function upload(file: File) {
-    if (
-      !property ||
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-      file.size > 10 * 1024 * 1024
-    ) {
-      toast.error("Choose a property and a JPG, PNG or WebP under 10 MB");
-      return;
-    }
-    setBusy(true);
-    const path = `drawing-${property}/${crypto.randomUUID()}.${file.type.split("/")[1]}`;
-    const { error } = await supabase.storage.from("roof-job-photos").upload(path, file);
-    setBusy(false);
-    if (error) toast.error("Could not upload image");
-    else {
-      const uploadedPhoto: Media = { path, name: file.name, category: "aerial" };
-      setTraceIndex(media.length);
-      setMedia([...media, uploadedPhoto]);
-      setDirty(true);
-      toast.success(
-        "Photo uploaded and selected for manual roof tracing. Save drawing to retain it.",
-      );
-    }
-  }
+    : null;
   return (
     <div>
-      <SectionHeading
-        title="Roof reports & 3D drawings"
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              aria-label="Report theme"
-              className="h-9 rounded border bg-background px-2 text-sm"
-              value={reportTheme}
-              onChange={(event) =>
-                setReportTheme(event.target.value as "roofsnap" | "navy" | "charcoal" | "emerald")
-              }
-            >
-              <option value="roofsnap">Theme: RoofSnap Classic</option>
-              <option value="navy">Theme: Navy</option>
-              <option value="charcoal">Theme: Charcoal &amp; Orange</option>
-              <option value="emerald">Theme: Emerald</option>
-            </select>
-            <select
-              aria-label="Logo size"
-              className="h-9 rounded border bg-background px-2 text-sm"
-              value={logoSize}
-              onChange={(event) => setLogoSize(event.target.value)}
-            >
-              <option value="0.7">Logo: Small</option>
-              <option value="1">Logo: Medium</option>
-              <option value="1.3">Logo: Large</option>
-            </select>
-            <Button
-              variant="outline"
-              disabled={busy || !measurement}
-              onClick={() => void exportPdf()}
-            >
-              <Download /> PDF report
-            </Button>
-            <Button
-              disabled={
-                busy ||
-                !measurement ||
-                !property ||
-                (!!report && !initialDrawing && !parent && !userEditedDrawing.current)
-              }
-              onClick={() => void save()}
-            >
-              <Save /> Save revision
-            </Button>
-          </div>
-        }
-      />
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm" role="status">
-        <span className="text-muted-foreground">
-          {reportAudit.planeCount} roof plane{reportAudit.planeCount === 1 ? "" : "s"} ·{" "}
-          {reportAudit.status === "ready"
-            ? "Ready for review"
-            : reportAudit.status === "blocked"
-              ? "Needs correction"
-              : "Review measurements"}
-        </span>
-        <span
-          className={d.verified ? "font-medium text-emerald-700" : "font-medium text-amber-700"}
-        >
-          {d.verified ? "Reviewed" : "Not yet reviewed"}
-        </span>
-      </div>
-      {workspaceAddress && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2.5">
-          <div className="flex min-w-0 items-center gap-2">
-            <MapPin className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Active property · roof workspace
-              </p>
-              <p className="break-words text-sm font-semibold">{workspaceAddress}</p>
-            </div>
-          </div>
-          <a
-            className="shrink-0 text-sm font-medium text-primary underline underline-offset-4"
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workspaceAddress)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Verify map location
-          </a>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted-foreground">
+            {customer?.name && <span>{customer.name}</span>}
+            {workspaceAddress && <span>· {workspaceAddress}</span>}
+            {statusLabel && <span>· {statusLabel}</span>}
+            {reportDate && <span>· {reportDate}</span>}
+          </p>
         </div>
-      )}
-      {report && !initialDrawing && (
-        <p className="mb-5 border-l-2 border-primary pl-3 text-sm text-muted-foreground">
-          Starter geometry only — add measured dimensions or trace the actual roof outline and set
-          its pitch before saving or exporting this property report. Satellite traces are estimates
-          and must be checked against field measurements.
-        </p>
-      )}
-      <div className="mb-5 grid gap-3 md:grid-cols-3">
-        <Choice
-          label="Property"
-          value={property || "none"}
-          onChange={(v) => {
-            if (parent && v !== property && !confirm("Start a new drawing for this property?"))
-              return;
-            if (report && v !== report.property_id) {
-              toast.error("Open or create a report for the other property first");
-              return;
-            }
-            setProperty(v === "none" ? "" : v);
-            setParent(null);
-            setMedia([]);
-            setD({ ...d, verified: false });
-            setDirty(true);
-          }}
-          options={[
-            { value: "none", label: "Choose customer property" },
-            ...(properties.data ?? []).map((p) => ({
-              value: p.id,
-              label: `${customers.data?.find((c) => c.id === p.customer_id)?.name ?? "Customer"} · ${p.label}`,
-            })),
-          ]}
-        />
-        <Field label="Report title">
-          <Input
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              setDirty(true);
-            }}
-          />
-        </Field>
-        <Choice
-          label="Saved drawing"
-          value={parent ?? "new"}
-          onChange={(v) => {
-            if (dirty && !confirm("Discard unsaved changes and load this drawing?")) return;
-            const row = drawings.data?.find((r) => r.id === v);
-            if (!row) return;
-            const parsed = drawingSchema.safeParse(row.geometry);
-            if (!parsed.success) {
-              toast.error("Drawing data could not load");
-              return;
-            }
-            setD(parsed.data);
-            setProperty(row.property_id);
-            setTitle(row.title);
-            setParent(row.id);
-            setDirty(false);
-            setHistory([]);
-            setFuture([]);
-            setSelected(parsed.data.planes[0]?.id ?? "");
-            setMedia(
-              Array.isArray(row.media)
-                ? row.media.flatMap((m) =>
-                    m &&
-                    typeof m === "object" &&
-                    !Array.isArray(m) &&
-                    typeof m["path"] === "string" &&
-                    typeof m["name"] === "string" &&
-                    ["aerial", "before", "after", "diagram"].includes(String(m["category"]))
-                      ? [
-                          {
-                            path: m["path"],
-                            name: m["name"],
-                            category: m["category"] as Media["category"],
-                          },
-                        ]
-                      : [],
-                  )
-                : [],
-            );
-          }}
-          options={[
-            { value: "new", label: "Unsaved drawing" },
-            ...(drawings.data ?? [])
-              .filter((r) => !report || r.report_order_id === report.id)
-              .map((r) => ({ value: r.id, label: `${r.title} · revision ${r.revision}` })),
-          ]}
-        />
-      </div>
-      <div className="flex flex-wrap items-end gap-3 border-y border-border py-4">
-        <div className="w-36">
-          <Choice
-            label="Roof configuration"
-            value={shape}
-            onChange={(v) => setShape(v as RoofShape)}
-            options={["gable", "hip", "flat", "shed", "mansard", "complex"].map((v) => ({
-              value: v,
-              label: v[0]?.toUpperCase() + v.slice(1),
-            }))}
-          />
-        </div>
-        {(
-          [
-            ["Width (ft)", width, setWidth],
-            ["Length (ft)", length, setLength],
-            ["Pitch (rise / 12)", pitch, setPitch],
-          ] as const
-        ).map(([label, value, set]) => (
-          <Field key={label} label={label}>
-            <Input
-              className="w-28"
-              type="number"
-              min={label.includes("Pitch") ? 0 : 1}
-              max={label.includes("Pitch") ? 24 : 500}
-              value={value}
-              onChange={(e) => set(Number(e.target.value))}
-            />
-          </Field>
-        ))}
         <Button
           variant="outline"
-          disabled={width <= 0 || length <= 0 || pitch < 0}
-          onClick={() => {
-            const next = roofPreset(shape, width, length, pitch);
-            edit(next);
-            setSelected(next.planes[0]?.id ?? "");
-            setFit((f) => f + 1);
-          }}
+          disabled={busy || !displayMeasurement}
+          onClick={() => void exportPdf()}
         >
-          Apply shape
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          title="Undo"
-          aria-label="Undo drawing"
-          disabled={!history.length}
-          onClick={() => {
-            const prev = history[history.length - 1];
-            if (!prev) return;
-            setFuture((f) => [d, ...f]);
-            setD({ ...prev, verified: false });
-            setHistory((h) => h.slice(0, -1));
-            setDirty(true);
-          }}
-        >
-          <Undo2 />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          title="Redo"
-          aria-label="Redo drawing"
-          disabled={!future.length}
-          onClick={() => {
-            const next = future[0];
-            if (!next) return;
-            setHistory((h) => [...h, d]);
-            setD({ ...next, verified: false });
-            setFuture((f) => f.slice(1));
-            setDirty(true);
-          }}
-        >
-          <Redo2 />
+          <Download /> Download PDF
         </Button>
       </div>
-      <div className="grid min-w-0 gap-0 border-b border-border xl:grid-cols-[1fr_300px]">
-        <div className="min-w-0">
-          <div className="flex items-center justify-between border-b border-border py-3">
-            <div className="flex gap-2">
+      <div className="min-w-0 border-b border-border">
+        {entries.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-3">
+            <span className="text-xs font-medium text-muted-foreground">Structure</span>
+            {entries.map((entry) => (
               <Button
+                key={entry.key}
                 size="sm"
-                variant={view === "3d" ? "secondary" : "ghost"}
-                onClick={() => setView("3d")}
+                variant={pickedStructureKey === entry.key ? "secondary" : "ghost"}
+                onClick={() => setPickedStructureKey(entry.key)}
               >
-                3D House
+                {entry.label}
               </Button>
-              <Button
-                size="sm"
-                variant={view === "plan" ? "secondary" : "ghost"}
-                onClick={() => setView("plan")}
-              >
-                2D Plan
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                title="Zoom in"
-                aria-label="Zoom in on roof drawing"
-                onClick={() => {
-                  setZoomDirection("in");
-                  setZoomKey((key) => key + 1);
-                }}
-              >
-                <ZoomIn />
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                title="Zoom out"
-                aria-label="Zoom out on roof drawing"
-                onClick={() => {
-                  setZoomDirection("out");
-                  setZoomKey((key) => key + 1);
-                }}
-              >
-                <ZoomOut />
-              </Button>
-            </div>
-            {view === "3d" && (
-              <Button
-                size="sm"
-                variant={autoRotate ? "secondary" : "outline"}
-                onClick={() => setAutoRotate((value) => !value)}
-                aria-label={
-                  autoRotate ? "Pause automatic 3D rotation" : "Start automatic 3D rotation"
-                }
-                title={autoRotate ? "Pause automatic rotation" : "Start automatic rotation"}
-              >
-                {autoRotate ? <Pause /> : <Play />}
-                {autoRotate ? "Pause rotation" : "Auto rotate"}
-              </Button>
-            )}
+            ))}
+            <Button
+              size="sm"
+              variant={pickedStructureKey === ALL_STRUCTURES_KEY ? "secondary" : "ghost"}
+              onClick={() => setPickedStructureKey(ALL_STRUCTURES_KEY)}
+            >
+              All structures
+            </Button>
             <span className="text-xs text-muted-foreground">
-              {dirty ? "Unsaved changes" : "Saved revision"} ·{" "}
-              {d.verified ? "Owner reviewed" : "Unverified"}
+              {picked
+                ? `Showing ${picked.label.toLowerCase()} — the drawing and measurements update automatically.`
+                : "Showing the main house."}
             </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between border-b border-border py-3">
+          <div className="flex gap-2">
+            <WorkspaceViewTabs
+              view={view}
+              onChange={(next) => {
+                viewPicked.current = true;
+                setView(next);
+              }}
+            />
             <Button
               size="icon"
-              variant="ghost"
-              title="Fit drawing"
-              aria-label="Fit drawing"
-              onClick={() => setFit((f) => f + 1)}
+              variant="outline"
+              title="Zoom in"
+              aria-label="Zoom in on roof drawing"
+              onClick={() => {
+                setZoomDirection("in");
+                setZoomKey((key) => key + 1);
+              }}
             >
-              <RotateCcw />
+              <ZoomIn />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              title="Zoom out"
+              aria-label="Zoom out on roof drawing"
+              onClick={() => {
+                setZoomDirection("out");
+                setZoomKey((key) => key + 1);
+              }}
+            >
+              <ZoomOut />
             </Button>
           </div>
-          <p className="px-3 py-2 text-xs text-muted-foreground">
-            3D House shows a simplified building mass beneath the measured roof. 2D Plan shows the
-            roof from directly above. The building shape is generated from traced roof geometry, not
-            a photorealistic model of the actual home.
-          </p>
-          <div className="h-[440px] min-w-0 bg-muted sm:h-[560px]">
+          {view === "3d" && (
+            <Button
+              size="sm"
+              variant={autoRotate ? "secondary" : "outline"}
+              onClick={() => setAutoRotate((value) => !value)}
+              aria-label={
+                autoRotate ? "Pause automatic 3D rotation" : "Start automatic 3D rotation"
+              }
+              title={autoRotate ? "Pause automatic rotation" : "Start automatic rotation"}
+            >
+              {autoRotate ? <Pause /> : <Play />}
+              {autoRotate ? "Pause rotation" : "Auto rotate"}
+            </Button>
+          )}
+          <Button
+            size="icon"
+            variant="ghost"
+            title="Fit drawing"
+            aria-label="Fit drawing"
+            onClick={() => setFit((f) => f + 1)}
+          >
+            <RotateCcw />
+          </Button>
+        </div>
+        <p className="px-3 py-2 text-xs text-muted-foreground">
+          House photo shows the actual aerial photo of this property — the same photo printed on the
+          report cover. 3D House shows a simplified building mass beneath the measured roof. 2D Plan
+          shows the roof from directly above. The building shape is generated from measured roof
+          geometry, not a photorealistic model of the actual home.
+        </p>
+        <div className="h-[440px] min-w-0 bg-muted sm:h-[560px]">
+          {view === "photo" ? (
+            <HousePhotoView
+              photo={photo}
+              zoomDirection={zoomDirection}
+              zoomKey={zoomKey}
+              fitKey={fit}
+            />
+          ) : (
             <DrawingErrorBoundary>
               <Suspense
                 fallback={<p className="p-8 text-muted-foreground">Loading drawing workspace…</p>}
               >
                 <Scene
-                  drawing={d}
-                  edgeSuggestions={sharedEdgeSuggestions}
+                  drawing={displayDrawing}
                   aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
                   aerialImageCenter={
                     aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined
@@ -1088,7 +838,9 @@ export function RoofMeasurements({
                 />
               </Suspense>
             </DrawingErrorBoundary>
-          </div>
+          )}
+        </div>
+        {view !== "photo" && (
           <div
             className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border bg-background px-3 py-3"
             aria-label="Roof feature color legend"
@@ -1106,233 +858,8 @@ export function RoofMeasurements({
                 <span>{feature.label}</span>
               </div>
             ))}
-            {sharedEdgeSuggestions.length > 0 && (
-              <span className="text-xs font-medium text-amber-600">
-                Thicker colored edges are geometry-based suggestions — review before applying
-              </span>
-            )}
           </div>
-        </div>
-        <aside className="min-w-0 border-t border-border py-5 xl:border-l xl:border-t-0 xl:pl-5">
-          <h3 className="mb-4 text-lg font-bold">Roof planes</h3>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {d.planes.map((p) => (
-              <Button
-                key={p.id}
-                size="sm"
-                variant={p.id === selected ? "secondary" : "outline"}
-                onClick={() => setSelected(p.id)}
-              >
-                {p.name}
-              </Button>
-            ))}
-          </div>
-          <div className="mb-3 rounded-md border border-border p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">Geometry-based edge suggestions</p>
-                <p className="text-xs text-muted-foreground">
-                  {sharedEdgeSuggestions.length} suggested classifications. Review highlighted edges
-                  in the drawing before applying.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={sharedEdgeSuggestions.length === 0}
-                onClick={() => {
-                  const nextPlanes = d.planes.map((roofPlane) => ({
-                    ...roofPlane,
-                    edges: roofPlane.edges.map((edge, edgeIndex) => {
-                      const suggestion = sharedEdgeSuggestions.find(
-                        (item) => item.planeId === roofPlane.id && item.edgeIndex === edgeIndex,
-                      );
-                      return suggestion?.type ?? edge;
-                    }),
-                  }));
-                  edit({ ...d, planes: nextPlanes });
-                  toast.success(
-                    `Applied ${sharedEdgeSuggestions.length} geometry-based edge suggestions. Review before using the takeoff.`,
-                  );
-                }}
-              >
-                Apply suggestions
-              </Button>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              const id = crypto.randomUUID();
-              edit({
-                ...d,
-                planes: [
-                  ...d.planes,
-                  {
-                    id,
-                    name: `Plane ${d.planes.length + 1}`,
-                    points: [
-                      { x: 50, y: 10, z: 0 },
-                      { x: 60, y: 10, z: 0 },
-                      { x: 60, y: 10, z: 10 },
-                      { x: 50, y: 10, z: 10 },
-                    ],
-                    edges: ["eave", "eave", "eave", "eave"],
-                  },
-                ],
-              });
-              setSelected(id);
-            }}
-          >
-            <Plus /> Add plane
-          </Button>
-          {plane && (
-            <div className="mt-4">
-              <Field label="Plane name">
-                <Input
-                  value={plane.name}
-                  onChange={(e) =>
-                    edit({
-                      ...d,
-                      planes: d.planes.map((p) =>
-                        p.id === selected ? { ...p, name: e.target.value } : p,
-                      ),
-                    })
-                  }
-                />
-              </Field>
-              <div className="mt-4 max-h-80 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr>
-                      <th>Vertex</th>
-                      <th>X ft</th>
-                      <th>Height ft</th>
-                      <th>Z ft</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plane.points.map((point, i) => (
-                      <tr key={i}>
-                        <td className="pr-1">{i + 1}</td>
-                        {(["x", "y", "z"] as const).map((axis) => (
-                          <td key={axis}>
-                            <Input
-                              className="h-8 px-1 text-xs"
-                              aria-label={`Vertex ${i + 1} ${axis}`}
-                              type="number"
-                              step="0.1"
-                              value={point[axis]}
-                              onChange={(e) =>
-                                edit({
-                                  ...d,
-                                  planes: d.planes.map((p) =>
-                                    p.id === selected
-                                      ? {
-                                          ...p,
-                                          points: p.points.map((v, n) =>
-                                            n === i ? { ...v, [axis]: Number(e.target.value) } : v,
-                                          ),
-                                        }
-                                      : p,
-                                  ),
-                                })
-                              }
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {sharedEdgeSuggestions.length > 0 && (
-                <div className="my-4 rounded-md border border-border p-3">
-                  <p className="text-sm font-semibold">
-                    {sharedEdgeSuggestions.length} roof-edge classification
-                    {sharedEdgeSuggestions.length === 1 ? " suggestion" : " suggestions"} available
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Geometry-based ridge, valley, hip, eave, and rake suggestions. Review every
-                    highlighted edge before applying; these suggestions do not verify measurements.
-                  </p>
-                  <Button
-                    className="mt-3"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const next = {
-                        ...d,
-                        planes: d.planes.map((facet) => ({
-                          ...facet,
-                          edges: facet.edges.map((edge, index) => {
-                            const suggestion = sharedEdgeSuggestions.find(
-                              (item) => item.planeId === facet.id && item.edgeIndex === index,
-                            );
-                            return suggestion?.type ?? edge;
-                          }),
-                        })),
-                      };
-                      edit(next);
-                      toast.success(
-                        "Roof-edge suggestions applied; review every classification before saving",
-                      );
-                    }}
-                  >
-                    Apply shared-edge suggestions
-                  </Button>
-                </div>
-              )}
-              <div className="mt-4 grid gap-2">
-                {plane.edges.map((type, i) => (
-                  <div key={i} className="flex items-end gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="mb-2 h-1.5 w-7 shrink-0 rounded-full"
-                      style={{ backgroundColor: ROOF_EDGE_STYLES[type].color }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <Choice
-                        label={`Edge ${i + 1} → ${i + 1 === plane.edges.length ? 1 : i + 2} · ${ROOF_EDGE_STYLES[type].label} · ${distance(plane.points[i]!, plane.points[(i + 1) % plane.points.length]!).toFixed(1)} ft`}
-                        value={type}
-                        onChange={(value) => {
-                          const edge = EDGE_TYPES.find((e) => e === value);
-                          if (edge)
-                            edit({
-                              ...d,
-                              planes: d.planes.map((p) =>
-                                p.id === selected
-                                  ? { ...p, edges: p.edges.map((v, n) => (n === i ? edge : v)) }
-                                  : p,
-                              ),
-                            });
-                        }}
-                        options={EDGE_TYPES.map((e) => ({
-                          value: e,
-                          label: ROOF_EDGE_STYLES[e].label,
-                        }))}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-3 text-destructive"
-                disabled={d.planes.length <= 1}
-                onClick={() => {
-                  const next = d.planes.filter((p) => p.id !== selected);
-                  edit({ ...d, planes: next });
-                  setSelected(next[0]?.id ?? "");
-                }}
-              >
-                <Trash2 /> Remove plane
-              </Button>
-            </div>
-          )}
-        </aside>
+        )}
       </div>
       {error && (
         <p
@@ -1342,42 +869,45 @@ export function RoofMeasurements({
           {error}
         </p>
       )}
-      {measurement && (
+      {displayMeasurement && (
         <div className="grid grid-cols-2 gap-4 border-b border-border py-5 sm:grid-cols-4">
           <div>
             <p className="text-xs text-muted-foreground">Measured roof area</p>
-            <p className="text-xl font-bold">{measurement.area.toFixed(1)} sq ft</p>
+            <p className="text-xl font-bold">{displayMeasurement.area.toFixed(1)} sq ft</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Roofing squares</p>
-            <p className="text-xl font-bold">{measurement.squares.toFixed(2)}</p>
+            <p className="text-xl font-bold">{displayMeasurement.squares.toFixed(2)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Ridge / hip / valley</p>
             <p className="text-sm font-bold">
-              {measurement.edges.ridge.toFixed(1)} / {measurement.edges.hip.toFixed(1)} /{" "}
-              {measurement.edges.valley.toFixed(1)} ft
+              {displayMeasurement.edges.ridge.toFixed(1)} /{" "}
+              {displayMeasurement.edges.hip.toFixed(1)} /{" "}
+              {displayMeasurement.edges.valley.toFixed(1)} ft
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Eaves / rakes</p>
             <p className="text-sm font-bold">
-              {measurement.edges.eave.toFixed(1)} / {measurement.edges.rake.toFixed(1)} ft
+              {displayMeasurement.edges.eave.toFixed(1)} /{" "}
+              {displayMeasurement.edges.rake.toFixed(1)} ft
             </p>
           </div>
         </div>
       )}
-      {roofSummary && (
+      {displaySummary && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Including {d.waste}% waste: {roofSummary.orderSquares.toFixed(2)} order squares
+          Including {displayDrawing.waste}% waste: {displaySummary.orderSquares.toFixed(2)} order
+          squares
         </p>
       )}
-      {measurement && (
+      {displayMeasurement && (
         <section className="my-5 rounded-lg border border-border p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-bold">Live roof plane measurements</h3>
+            <h3 className="text-lg font-bold">Roof plane measurements</h3>
             <span className="text-xs text-muted-foreground">
-              Updates automatically as the drawing changes
+              Measured automatically from the roof drawing
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -1391,7 +921,7 @@ export function RoofMeasurements({
                 </tr>
               </thead>
               <tbody>
-                {measurement.planes.map((facet) => (
+                {displayMeasurement.planes.map((facet) => (
                   <tr key={facet.id} className="border-b border-border/60">
                     <td className="py-2 pr-3 font-medium">{facet.name}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">
@@ -1409,9 +939,11 @@ export function RoofMeasurements({
                   <td className="py-2 pr-3">Total</td>
                   <td className="py-2 pr-3 text-right">—</td>
                   <td className="py-2 pr-3 text-right tabular-nums">
-                    {measurement.area.toFixed(1)}
+                    {displayMeasurement.area.toFixed(1)}
                   </td>
-                  <td className="py-2 text-right tabular-nums">{measurement.squares.toFixed(2)}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {displayMeasurement.squares.toFixed(2)}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -1422,391 +954,18 @@ export function RoofMeasurements({
           </p>
         </section>
       )}
-      <details className="my-4 rounded-lg border border-border p-4">
-        <summary className="cursor-pointer font-semibold">Additional report settings</summary>
-        <section className="grid gap-6 py-6 lg:grid-cols-2">
-          <div>
-            <h3 className="mb-4 text-lg font-bold">Report details</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Choice
-                label="Roof system"
-                value={d.roof_type}
-                onChange={(v) => edit({ ...d, roof_type: v as RoofDrawing["roof_type"] })}
-                options={["Metal Roof", "Shingle Roof", "Tile Roof", "TPO", "Flat Roof"].map(
-                  (v) => ({
-                    value: v,
-                    label: v,
-                  }),
-                )}
-              />
-              <Field label="Waste (%)">
-                <Input
-                  type="number"
-                  min={0}
-                  max={50}
-                  value={d.waste}
-                  onChange={(e) => edit({ ...d, waste: Number(e.target.value) })}
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label="Roof condition">
-                  <Input
-                    value={d.condition}
-                    onChange={(e) => edit({ ...d, condition: e.target.value })}
-                  />
-                </Field>
-              </div>
-              <div className="sm:col-span-2">
-                <Field label="Inspection notes">
-                  <Textarea
-                    value={d.notes}
-                    onChange={(e) => edit({ ...d, notes: e.target.value })}
-                  />
-                </Field>
-              </div>
-              <label className="flex items-center gap-3 text-sm sm:col-span-2">
-                <Checkbox
-                  checked={d.verified}
-                  onCheckedChange={(v) => {
-                    setD({ ...d, verified: v === true });
-                    setDirty(true);
-                  }}
-                />{" "}
-                Owner reviewed these measurements
-              </label>
-            </div>
-          </div>
-          <div>
-            <h3 className="mb-4 text-lg font-bold">Penetrations</h3>
-            {d.penetrations.map((p) => (
-              <div
-                key={p.id}
-                className="mb-3 grid grid-cols-3 gap-2 rounded-md border border-border p-3"
-              >
-                <div className="col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span
-                    aria-hidden="true"
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: PENETRATION_COLORS[p.kind] }}
-                  />
-                  {p.kind === "pipe"
-                    ? "Pipe identification"
-                    : `${p.kind[0]?.toUpperCase() ?? ""}${p.kind.slice(1)} identification`}
-                </div>
-                <Choice
-                  label="Type"
-                  value={p.kind}
-                  onChange={(v) =>
-                    edit({
-                      ...d,
-                      penetrations: d.penetrations.map((x) =>
-                        x.id === p.id ? { ...x, kind: v as typeof p.kind } : x,
-                      ),
-                    })
-                  }
-                  options={["chimney", "skylight", "vent", "pipe", "other"].map((v) => ({
-                    value: v,
-                    label: v,
-                  }))}
-                />
-                {(["x", "z", "width", "length"] as const).map((k) => (
-                  <Field key={k} label={`${k} (ft)`}>
-                    <Input
-                      type="number"
-                      value={p[k]}
-                      onChange={(e) =>
-                        edit({
-                          ...d,
-                          penetrations: d.penetrations.map((x) =>
-                            x.id === p.id ? { ...x, [k]: Number(e.target.value) } : x,
-                          ),
-                        })
-                      }
-                    />
-                  </Field>
-                ))}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="self-end"
-                  title="Remove penetration"
-                  aria-label="Remove penetration"
-                  onClick={() =>
-                    edit({ ...d, penetrations: d.penetrations.filter((x) => x.id !== p.id) })
-                  }
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                edit({
-                  ...d,
-                  penetrations: [
-                    ...d.penetrations,
-                    { id: crypto.randomUUID(), kind: "pipe", x: 0, z: 0, width: 1, length: 1 },
-                  ],
-                })
-              }
-            >
-              <Plus /> Add penetration
-            </Button>
-          </div>
-        </section>
-      </details>
-      <details className="my-4 rounded-lg border border-border p-4">
-        <summary className="cursor-pointer font-semibold">
-          Manual tracing & photos (optional)
-        </summary>
-        <section className="border-t border-border py-6">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold">Photos & manual roof tracing</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Upload your own overhead roof photo or aerial image, then use the calibrated photo
-                tracer below to draw each roof plane, set its scale and pitch, and classify its
-                edges. You can also load free public aerial imagery in the next section.
-              </p>
-            </div>
-            <Button variant="outline" asChild disabled={busy || !property}>
-              <label>
-                <Upload /> Upload photo to trace
-                <input
-                  type="file"
-                  className="sr-only"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void upload(f);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            </Button>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {media.map((m, i) => (
-              <div key={m.path}>
-                <DrawingImage path={m.path} name={m.name} />
-                {m.source && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {m.source}
-                    {m.matched_address ? ` · Matched: ${m.matched_address}` : ""}
-                    {typeof m.latitude === "number" && typeof m.longitude === "number"
-                      ? ` · ${m.latitude.toFixed(5)}, ${m.longitude.toFixed(5)}`
-                      : ""}
-                  </p>
-                )}
-                <Choice
-                  label="Photo type"
-                  value={m.category}
-                  onChange={(v) => {
-                    setMedia(
-                      media.map((x, n) =>
-                        n === i ? { ...x, category: v as Media["category"] } : x,
-                      ),
-                    );
-                    setDirty(true);
-                  }}
-                  options={["aerial", "before", "after", "diagram"].map((v) => ({
-                    value: v,
-                    label: v,
-                  }))}
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      </details>
-      <details className="my-4 rounded-lg border border-border p-4">
-        <summary className="cursor-pointer font-semibold">
-          Aerial map & building outline tools (optional)
-        </summary>
-        <section className="border-t border-border py-6">
-          <h3 className="mb-2 text-lg font-bold">Free public aerial & accuracy</h3>
-          {aerialError && (
-            <p
-              role="alert"
-              className="mb-3 border-l-2 border-destructive pl-3 text-sm text-destructive"
-            >
-              {aerialError}
-            </p>
-          )}
-          <p className="mb-3 text-sm text-muted-foreground">
-            Looks up the address with the free US Census service and loads public USGS aerial
-            imagery when coverage is available. Image dimensions do not establish ground scale:
-            calibrate against a known measured distance before tracing. Results are estimates, never
-            survey-grade. No paid provider is used.
-          </p>
-          {aerialStatus && (
-            <p
-              className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
-              role="status"
-              aria-live="polite"
-            >
-              {aerialStatus}
-            </p>
-          )}
-          <div className="flex flex-wrap items-end gap-3">
-            <Button
-              variant="outline"
-              disabled={busy || !property || !(report?.address?.trim() || propertyRow?.address)}
-              onClick={() => void loadAerial()}
-            >
-              <Upload /> {busy && aerialStatus ? "Loading aerial…" : "Retry / load public aerial"}
-            </Button>
-            <div className="w-72">
-              <Choice
-                label="Measurement basis"
-                value={d.accuracy ?? "photo_estimate"}
-                onChange={(v) => {
-                  setD({
-                    ...d,
-                    accuracy: v as Accuracy,
-                    verified: v === "site_verified" ? d.verified : d.verified,
-                  });
-                  setDirty(true);
-                }}
-                options={Object.entries(ACCURACY_LABELS).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-              />
-            </div>
-            <Button
-              variant="outline"
-              disabled={
-                footprintBusy || !property || !(report?.address?.trim() || propertyRow?.address)
-              }
-              onClick={() => void searchFootprints()}
-            >
-              {footprintBusy ? "Searching footprints…" : "Find mapped building outline"}
-            </Button>
-            {media.length > 1 && (
-              <div className="w-56">
-                <Choice
-                  label="Photo to trace"
-                  value={String(traceIndex)}
-                  onChange={(v) => setTraceIndex(Number(v))}
-                  options={media.map((m, i) => ({
-                    value: String(i),
-                    label: `${i + 1}. ${m.category} · ${m.name.slice(0, 30)}`,
-                  }))}
-                />
-              </div>
-            )}
-          </div>
-          {footprintMessage && (
-            <p
-              className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
-              role="status"
-            >
-              {footprintMessage}{" "}
-              <a
-                className="underline underline-offset-4"
-                href="https://www.openstreetmap.org/copyright"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                OpenStreetMap attribution and license
-              </a>
-            </p>
-          )}
-          {footprints.length > 0 && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Choose the matching building if several are listed. These mapped outlines show the
-              building footprint, not verified roof edges or roof planes.
-            </p>
-          )}
-          {footprints.length > 0 && (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {footprints.map((footprint) => (
-                <div key={footprint.id} className="rounded-md border border-border p-3 text-sm">
-                  <p className="font-medium">Mapped building #{footprint.id}</p>
-                  <svg
-                    viewBox="0 0 160 100"
-                    role="img"
-                    aria-label={`Approximate mapped ground outline for building ${footprint.id}`}
-                    className="my-2 h-24 w-full rounded bg-muted/40"
-                  >
-                    {(() => {
-                      const cos = Math.cos((footprint.center.lat * Math.PI) / 180);
-                      const xy = footprint.points.map((point) => ({
-                        x: point.lon * cos,
-                        y: -point.lat,
-                      }));
-                      const minX = Math.min(...xy.map((point) => point.x));
-                      const maxX = Math.max(...xy.map((point) => point.x));
-                      const minY = Math.min(...xy.map((point) => point.y));
-                      const maxY = Math.max(...xy.map((point) => point.y));
-                      const width = Math.max(maxX - minX, 1e-9);
-                      const height = Math.max(maxY - minY, 1e-9);
-                      const scale = Math.min(140 / width, 80 / height);
-                      const offsetX = (160 - width * scale) / 2;
-                      const offsetY = (100 - height * scale) / 2;
-                      const points = xy
-                        .map(
-                          (point) =>
-                            `${(offsetX + (point.x - minX) * scale).toFixed(1)},${(offsetY + (point.y - minY) * scale).toFixed(1)}`,
-                        )
-                        .join(" ");
-                      return (
-                        <polygon
-                          points={points}
-                          fill="currentColor"
-                          fillOpacity="0.12"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      );
-                    })()}
-                  </svg>
-                  <p className="text-muted-foreground">
-                    Approx. ground footprint: {footprint.areaSqFt.toLocaleString()} sq ft ·{" "}
-                    {footprint.containsAddress
-                      ? "Address point is inside this outline"
-                      : `${footprint.distanceMeters} m from nearest outline`}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {footprint.points.length} outline corners · OSM building type:{" "}
-                    {footprint.buildingType}
-                  </p>
-                  <Button
-                    className="mt-3 w-full"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => applyBuildingFootprint(footprint)}
-                  >
-                    Use this preliminary outline
-                  </Button>
-                  <a
-                    className="mt-2 inline-flex text-xs font-medium text-primary underline underline-offset-4"
-                    href={`https://www.openstreetmap.org/way/${footprint.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Inspect source outline on OpenStreetMap
-                  </a>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </details>
       <AutomatedRoofReport
         address={workspaceAddress}
+        pointHint={report ? parseMeasurementPin(report.notes) : null}
+        includeOutbuilding={report ? parseIncludeOutbuilding(report.notes) : false}
         roofType={d.roof_type}
-        onApply={(detectedDrawing) => {
+        onApply={(detectedDrawing, detachedStructures = []) => {
           const hasExistingWork =
             Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1;
           if (
             hasExistingWork &&
             !confirm(
-              "Replace the current roof planes with public LiDAR candidates? Existing planes and penetrations will be removed. You can undo immediately afterward.",
+              "Replace the current roof planes with public LiDAR candidates? Existing planes and penetrations will be removed.",
             )
           )
             return false;
@@ -1816,15 +975,38 @@ export function RoofMeasurements({
               roof_type: d.roof_type,
               waste: d.waste,
               condition: d.condition,
+              // Detached structures measured in the same run ride
+              // inside the main drawing so they save, reload and
+              // delete with the report. They are data for the
+              // structure picker — the main drawing's own planes
+              // stay the main house only.
+              ...(detachedStructures.length
+                ? {
+                    detached_structures: detachedStructures.map((structure) => ({
+                      ...structure,
+                      drawing: {
+                        ...structure.drawing,
+                        roof_type: d.roof_type,
+                        waste: d.waste,
+                        condition: d.condition,
+                      },
+                    })),
+                  }
+                : {}),
             };
             // Validate externally sourced geometry before it enters the editable report.
             measureDrawing(nextDrawing);
             edit(nextDrawing);
+            setPickedStructureKey("main");
             setSelected(nextDrawing.planes[0]?.id ?? "");
             setFit((value) => value + 1);
             toast.success(
               "Preliminary LiDAR facets loaded. Review every plane and classify all edges before generating a takeoff.",
             );
+            // Hands-off: the save + report PDF + material list chain
+            // runs by itself for a drawing the automated measurement
+            // just produced inside a report workspace.
+            if (report) autoSaveArmed.current = true;
             return true;
           } catch (cause) {
             toast.error(
@@ -1836,136 +1018,75 @@ export function RoofMeasurements({
           }
         }}
       />
-      <SatelliteRoofTrace
-        key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
-        initialAddress={report?.address?.trim() || propertyRow?.address || ""}
-        onAdd={(newPlanes, geoReference) => {
-          const canAppendToCurrentFrame = Boolean(d.geo_reference);
-          let nextPlanes = newPlanes;
-          let nextGeoReference = geoReference;
-          let nextPenetrations = d.penetrations;
-          let appendToCurrentFrame = false;
-          if (canAppendToCurrentFrame) {
-            try {
-              nextPlanes = rebaseRoofPlanes(newPlanes, geoReference, d.geo_reference!);
-              nextGeoReference = d.geo_reference!;
-              appendToCurrentFrame = true;
-            } catch {
-              if (
-                !confirm(
-                  "This trace cannot be aligned safely with the saved drawing. Replace the current roof planes and penetrations with this trace instead?",
-                )
-              )
-                return false;
-              nextPenetrations = [];
-              nextGeoReference = geoReference;
-            }
-          } else if (
-            (Boolean(initialDrawing) || userEditedDrawing.current || d.planes.length > 1) &&
-            !confirm(
-              "This drawing has no saved map origin, so the new trace cannot be aligned safely. Replace the current roof planes and penetrations? You can undo immediately afterward.",
-            )
-          ) {
-            return false;
-          }
-          const nextDrawing: RoofDrawing = {
-            ...d,
-            planes: appendToCurrentFrame ? [...d.planes, ...nextPlanes] : nextPlanes,
-            penetrations: nextPenetrations,
-            geo_reference: nextGeoReference,
-            accuracy: "photo_estimate",
-            verified: false,
-          };
-          try {
-            // Validate the complete layout, not just each traced facet. A new
-            // facet may be valid alone but overlap an existing plane in plan.
-            measureDrawing(nextDrawing);
-          } catch (cause) {
-            toast.error(
-              cause instanceof Error
-                ? cause.message
-                : "The traced plane would make the roof layout invalid.",
-            );
-            return false;
-          }
-          edit(nextDrawing);
-          setSelected(nextPlanes[0]?.id ?? "");
-          setFit((f) => f + 1);
-          return true;
-        }}
-      />
-      {media[traceIndex] ? (
-        <RoofImageTrace
-          key={media[traceIndex].path}
-          path={media[traceIndex].path}
-          onAdd={(p, replace) => {
-            if (replace && !confirm("Replace the current roof with this traced plane?")) return;
-            edit({ ...d, planes: replace ? [p] : [...d.planes, p] });
-            setSelected(p.id);
-            setFit((f) => f + 1);
-          }}
-        />
-      ) : (
-        <section className="rounded-lg border border-dashed border-primary/40 bg-muted/30 p-4">
-          <h3 className="font-semibold">Trace a roof from your own photo</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Upload an overhead or elevated roof image above. The photo tracing workspace will appear
-            here so you can calibrate a known distance and draw the roof planes yourself.
-          </p>
+      {(autoSaving || autoMaterials) && (
+        <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <Package className="size-5 text-primary" />
+            <h3 className="font-semibold">Material list — generated automatically</h3>
+          </div>
+          {autoSaving ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Saving the measurement, generating the report PDF, and building the material list…
+            </p>
+          ) : autoMaterials ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {autoMaterials.report.roof_type} · {autoMaterials.report.area_sqft.toLocaleString()}{" "}
+                sq ft · +{autoMaterials.wastePct}% waste. Quantities come straight from the
+                automated measurement — the same takeoff printed in the saved report PDF.
+              </p>
+              {autoMaterials.warnings.length > 0 && (
+                <div
+                  role="note"
+                  className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+                >
+                  <ul className="list-disc space-y-1 pl-5">
+                    {autoMaterials.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {autoMaterials.lines.length ? (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {autoMaterials.lines.map((line) => (
+                      <tr key={line.item} className="border-b border-border">
+                        <td className="py-2">
+                          <div>{line.item}</div>
+                          {line.notes && (
+                            <p className="mt-1 text-xs text-muted-foreground">{line.notes}</p>
+                          )}
+                        </td>
+                        <td className="py-2 text-right font-semibold">
+                          {line.qty} {line.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No order-ready quantities yet — see the review note above.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!autoMaterials.lines.length}
+                  onClick={() => void downloadAutoTakeoff()}
+                >
+                  <FileDown /> Takeoff PDF
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Quantities are estimates — confirm with your supplier before ordering. You can edit
+                them any time in the job's Material Order.
+              </p>
+            </>
+          ) : null}
         </section>
       )}
-      <section className="flex flex-wrap items-end gap-3 border-t border-border pt-5">
-        <Button
-          disabled={busy || dirty || !parent || !d.verified}
-          onClick={() => void toEstimate()}
-        >
-          <ArrowRight /> Send to estimator
-        </Button>
-        <div className="w-64">
-          <Choice
-            label="Customer job"
-            value={jobId || "none"}
-            onChange={(v) => setJobId(v === "none" ? "" : v)}
-            options={[
-              { value: "none", label: "Choose job" },
-              ...matchingJobs.map((j) => ({ value: j.id, label: j.title })),
-            ]}
-          />
-        </div>
-        <Button
-          variant="outline"
-          disabled={busy || dirty || !parent || !jobId || !d.verified}
-          onClick={() => void toJob()}
-        >
-          Transfer material measurements
-        </Button>
-        <Button
-          variant="outline"
-          disabled={busy || dirty || !parent}
-          onClick={() => void exportPdf(true)}
-        >
-          <FileText /> Prepare customer report
-        </Button>
-      </section>
     </div>
-  );
-}
-function DrawingImage({ path, name }: { path: string; name: string }) {
-  const image = useQuery({
-    queryKey: ["drawing-image", path],
-    queryFn: async () => {
-      const { data, error } = await supabase.storage
-        .from("roof-job-photos")
-        .createSignedUrl(path, 300);
-      if (error || !data) throw error;
-      return data.signedUrl;
-    },
-  });
-  return image.data ? (
-    <img className="mb-2 aspect-[4/3] w-full rounded-md object-cover" src={image.data} alt={name} />
-  ) : (
-    <p className="p-4 text-xs text-muted-foreground">
-      {image.error ? "Image unavailable" : "Loading image…"}
-    </p>
   );
 }

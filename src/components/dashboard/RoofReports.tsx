@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   Download,
@@ -9,7 +8,6 @@ import {
   MapPin,
   PenLine,
   Search,
-  Trash2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -24,8 +22,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { deleteRoofOrder } from "@/lib/roof-orders.functions";
+import { DeleteRoofReportButton } from "./DeleteRoofReport";
+import { EditSketchButton } from "./EditSketchButton";
 import { customersQuery } from "./foundation-data";
+import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
 import { downloadPdf } from "./proposal-data";
 import { Empty, SectionHeading } from "./CrmControls";
@@ -38,12 +38,9 @@ export function RoofReports({
 }) {
   const customers = useQuery(customersQuery);
   const orders = useQuery(roofOrdersQuery);
-  const qc = useQueryClient();
-  const remove = useServerFn(deleteRoofOrder);
+  const drawings = useQuery(drawingsQuery);
   const [search, setSearch] = useState("");
   const [swipedReportId, setSwipedReportId] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; address: string } | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
   const [signingReport, setSigningReport] = useState<RoofOrder | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -93,30 +90,6 @@ export function RoofReports({
     }
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    setDeleting(true);
-    try {
-      const result = await remove({ data: { id: pendingDelete.id } });
-      await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
-      setSwipedReportId(null);
-      setPendingDelete(null);
-      if (result.fileCleanupPending) {
-        toast.warning(
-          "Roof report record deleted, but its private PDF could not be cleaned up. Ask an administrator to review storage.",
-        );
-      } else {
-        toast.success(
-          "Roof report deleted. Saved drawing revisions and customer property were kept.",
-        );
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not delete roof report");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   const query = search.trim().toLocaleLowerCase();
   const rows = (orders.data ?? []).filter((row) => {
     const customerName =
@@ -139,7 +112,8 @@ export function RoofReports({
           />
         </div>
         <p className="text-sm text-muted-foreground">
-          Roof reports, measurement PDFs, and customer contract signing · Swipe left to delete
+          Roof reports, measurement PDFs, and customer contract signing · Use a card's Delete button
+          to remove a report
         </p>
       </div>
       {orders.error && (
@@ -155,6 +129,8 @@ export function RoofReports({
             const customerName =
               customers.data?.find((customer) => customer.id === row.customer_id)?.name ??
               "Customer property";
+            const savedDrawing =
+              drawings.data?.find((drawing) => drawing.id === row.drawing_id) ?? null;
             return (
               <div
                 key={row.id}
@@ -177,15 +153,12 @@ export function RoofReports({
                 }}
               >
                 <div className="absolute inset-y-0 right-0 flex w-24 items-center justify-center">
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    aria-label={`Delete roof report for ${row.address}`}
-                    title="Delete roof report"
-                    onClick={() => setPendingDelete({ id: row.id, address: row.address })}
-                  >
-                    <Trash2 />
-                  </Button>
+                  <DeleteRoofReportButton
+                    reportId={row.id}
+                    address={row.address}
+                    iconOnly
+                    onDeleted={() => setSwipedReportId(null)}
+                  />
                 </div>
                 <article
                   className="relative flex min-w-0 flex-col rounded-lg border border-border bg-card p-5 transition-transform duration-200 ease-out"
@@ -228,9 +201,11 @@ export function RoofReports({
                     <Button variant="outline" onClick={() => onOpenMeasurement(row.id)}>
                       {row.file_path ? "Open measurements" : "Continue measurements"} <ArrowRight />
                     </Button>
+                    <EditSketchButton report={row} drawingRow={savedDrawing} />
                     <Button onClick={() => setSigningReport(row)}>
                       <PenLine /> Fill &amp; Sign
                     </Button>
+                    <DeleteRoofReportButton reportId={row.id} address={row.address} />
                   </div>
                 </article>
               </div>
@@ -353,31 +328,6 @@ export function RoofReports({
               />
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={!!pendingDelete}
-        onOpenChange={(open) => {
-          if (!open && !deleting) setPendingDelete(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete this roof report?</DialogTitle>
-            <DialogDescription>
-              This permanently removes the report for {pendingDelete?.address ?? "this property"}.
-              The customer and property record, saved roof drawing revisions, and linked estimate
-              records are kept. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled={deleting} onClick={() => setPendingDelete(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>
-              <Trash2 /> {deleting ? "Deleting…" : "Delete report"}
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

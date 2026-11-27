@@ -1,4 +1,4 @@
-// tenant-audit: reviewed — report mutations use the authenticated Supabase client and company membership; the only service-role operation is post-authorization cleanup of the exact report PDF path after the tenant-scoped row delete.
+// tenant-audit: reviewed — report mutations use the authenticated Supabase client and company membership; inside deleteRoofOrder the service-role operations are the delete of the exact report row proven visible by the preceding RLS-scoped read (the live database carries no DELETE RLS policy on roof_report_orders — verified 2026-11-27, only the legacy SELECT policies exist — so an authenticated delete can never match a row) plus the post-authorization cleanups, which touch solely the drawing revisions, drawing_id references, and storage files collected through the tenant-scoped reads of the report being deleted.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -245,56 +245,108 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
     return estimate;
   });
 
-/** Permanently remove one company-owned roof report while preserving the property and drawing history. */
+/**
+ * Permanently remove one company-owned roof report together with its
+ * drawing revisions and stored files. The customer and property records
+ * are preserved. All authorization and record reads run through the
+ * authenticated client (RLS); the service-role client deletes the exact
+ * report row those reads proved visible (no DELETE RLS policy exists on
+ * roof_report_orders in the live database, so the row delete cannot run
+ * under RLS) and cleans up the exact records and files collected from
+ * those tenant-scoped reads.
+ */
 export const deleteRoofOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: membership, error: membershipError } = await context.supabase
-      .from("crm_company_memberships")
-      .select("company_id,role")
-      .eq("user_id", context.userId)
-      .maybeSingle();
-    if (membershipError || !membership) throw new Error("A single company membership is required");
-    if (!["owner", "admin", "office", "sales", "production_manager"].includes(membership.role))
-      throw new Error("You do not have access to delete roof reports");
-
-    const { data: current, error: readError } = await context.supabase
-      .from("roof_report_orders")
-      .select("id,file_path")
-      .eq("id", data.id)
-      .maybeSingle();
-    if (readError) throw new Error("Could not load roof report");
-    if (!current) throw new Error("Roof report was already deleted or does not exist");
-
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    if (
-      current.file_path &&
-      (!current.file_path.startsWith(`roof-report/${data.id}/`) ||
-        !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(current.file_path))
-    ) {
-      throw new Error(
-        "The report contains an unexpected file path. Contact an administrator before deleting it.",
-      );
-    }
-
-    // Delete the database record first. Removing the private PDF first could destroy
-    // the only report copy if the subsequent database delete failed.
-    const { data: deleted, error } = await context.supabase
-      .from("roof_report_orders")
-      .delete()
-      .eq("id", data.id)
-      .select("id")
-      .maybeSingle();
-    if (error || !deleted)
-      throw new Error("Could not delete the roof report. The report PDF was left untouched.");
-
-    let fileCleanupPending = false;
-    if (current.file_path) {
-      const { error: storageError } = await supabaseAdmin.storage
-        .from("roofing-proposals")
-        .remove([current.file_path]);
-      fileCleanupPending = !!storageError;
-    }
-    return { id: deleted.id, fileCleanupPending };
+    const { deleteRoofReportCascade } = await import("./roof-report-delete.server");
+    const auth = context.supabase;
+    return deleteRoofReportCascade(
+      {
+        getMembership: async (userId) => {
+          const { data: membership, error } = await auth
+            .from("crm_company_memberships")
+            .select("company_id,role")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (error) throw new Error("A single company membership is required");
+          return membership;
+        },
+        getReport: async (reportId) => {
+          const { data: current, error } = await auth
+            .from("roof_report_orders")
+            .select("id,file_path")
+            .eq("id", reportId)
+            .maybeSingle();
+          if (error) throw new Error("Could not load roof report");
+          return current;
+        },
+        listReportDrawings: async (reportId) => {
+          const { data: rows, error } = await auth
+            .from("roof_drawings")
+            .select("id,parent_id,media")
+            .eq("report_order_id", reportId);
+          if (error) throw new Error("Could not load the report's saved drawings");
+          return rows ?? [];
+        },
+        deleteReportRow: async (reportId) => {
+          // Service-role on purpose: authorization is already proven by the
+          // membership/role gate and the RLS-scoped getReport read above —
+          // another company's report is invisible there and never reaches
+          // this point. The live database has no DELETE RLS policy on
+          // roof_report_orders, so an authenticated delete silently matches
+          // zero rows; the service-role delete targets the exact proven id.
+          const { data: deleted, error } = await supabaseAdmin
+            .from("roof_report_orders")
+            .delete()
+            .eq("id", reportId)
+            .select("id")
+            .maybeSingle();
+          if (error)
+            throw new Error("Could not delete the roof report. The report PDF was left untouched.");
+          return !!deleted;
+        },
+        listReportPdfPaths: async (reportId) => {
+          const { data: files, error } = await supabaseAdmin.storage
+            .from("roofing-proposals")
+            .list(`roof-report/${reportId}`);
+          if (error || !files) return null;
+          return files
+            .filter((file) => !!file.name)
+            .map((file) => `roof-report/${reportId}/${file.name}`);
+        },
+        removeStorageFiles: async (bucket, paths) => {
+          if (!paths.length) return true;
+          const { error } = await supabaseAdmin.storage.from(bucket).remove(paths);
+          return !error;
+        },
+        clearDrawingReferences: async (drawingIds) => {
+          let ok = true;
+          for (const table of ["roof_estimates", "roof_jobs", "proposals"] as const) {
+            const { error } = await supabaseAdmin
+              .from(table)
+              .update({ drawing_id: null })
+              .in("drawing_id", drawingIds);
+            if (error) ok = false;
+          }
+          return ok;
+        },
+        deleteDrawingRows: async (drawingIds) => {
+          const { error } = await supabaseAdmin.from("roof_drawings").delete().in("id", drawingIds);
+          return !error;
+        },
+        mediaStillReferenced: async (path) => {
+          const { data: rows, error } = await supabaseAdmin
+            .from("roof_drawings")
+            .select("id")
+            .contains("media", [{ path }])
+            .limit(1);
+          // Fail closed: when the check itself fails, keep the file.
+          if (error) return true;
+          return (rows?.length ?? 0) > 0;
+        },
+      },
+      { userId: context.userId, reportId: data.id },
+    );
   });
