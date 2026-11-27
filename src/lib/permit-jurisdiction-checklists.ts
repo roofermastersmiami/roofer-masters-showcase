@@ -183,7 +183,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
 
-  const warnings: string[] = [profile.authorityWarning];
+  const warnings: string[] = [profile.authorityWarning];\n  if (!request.projectKind || request.projectKind === "unknown") {\n    warnings.push("Set the project type so reroof-only documents are not treated as universally required.");\n  }
   let authorityConfirmed = true;
   if (profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id && request.folio) {
     const normalizedFolio = request.folio.replace(/\\D/g, "");
@@ -212,7 +212,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     ? new Set(miamiDadeAttachmentIds[roofSystem])
     : new Set(profile.checklist.map((item) => item.id));
   const items = profile.checklist.filter((item) => allowedIds.has(item.id)).filter((item) => {
-    if (item.id === "owner-roofing-notification") return request.projectKind !== "new_roof";
+    if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
