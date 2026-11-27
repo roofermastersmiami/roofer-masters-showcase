@@ -408,5 +408,13 @@
       "tag": "0057_company_scoped_invoice_checkout_reservation",
       "breakpoints": true
     }
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1795790300000,
+      "tag": "0058_company_scope_instant_estimate_intake",
+      "breakpoints": true
+    }
   ]
 }
