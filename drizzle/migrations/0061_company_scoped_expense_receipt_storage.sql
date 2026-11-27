@@ -15,7 +15,6 @@ CREATE POLICY "Company accounting members read expense receipts" ON storage.obje
       JOIN public.crm_company_memberships m ON m.company_id=e.company_id
       WHERE e.id::text=split_part(name,'/',3)
         AND e.company_id::text=split_part(name,'/',2)
-        AND e.receipt_path=name
         AND m.user_id=auth.uid()
         AND m.role IN ('owner','admin','accounting')
     )
