@@ -98,7 +98,7 @@ END $$;
 
 -- Trusted service reserves checkout using the invoice token and inherits invoice company.
 SELECT set_config('request.jwt.claim.role','service_role',false);
-DO $
+DO $$
 DECLARE reservation jsonb; reservation_id uuid;
 BEGIN
   reservation := public.reserve_invoice_checkout('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','test','deposit');
@@ -109,7 +109,7 @@ BEGIN
     AND amount_cents=2500 AND status='pending') THEN
     RAISE EXCEPTION 'Checkout reservation did not inherit invoice company';
   END IF;
-END $;
+END $$;
 
 -- Trusted payment service can settle, and the payment inherits checkout/invoice company.
 SELECT set_config('request.jwt.claim.role','service_role',false);
