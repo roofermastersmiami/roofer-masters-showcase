@@ -38,9 +38,6 @@ const STAGE_BANDS: Record<string, StageBand> = {
   lidar: { floor: 10, cap: 14 },
   downloading_tiles: { floor: 14, cap: 76 },
   fitting_planes: { floor: 76, cap: 95 },
-  // Legacy synchronous fallback: the service predates the jobs API and
-  // reports nothing, so the whole request is one wide elapsed-time band.
-  measuring: { floor: 5, cap: 90 },
 };
 
 /** How fast the in-band creep approaches the cap (asymptotic time

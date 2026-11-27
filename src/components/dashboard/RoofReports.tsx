@@ -5,6 +5,7 @@ import {
   Download,
   Eye,
   FileText,
+  Loader2,
   MapPin,
   PenLine,
   Search,
@@ -14,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -24,12 +26,68 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
 import { EditSketchButton } from "./EditSketchButton";
+import { useAutoFinishReports, type AutoFinishUiState } from "./use-auto-finish";
+import { formatElapsedClock } from "@/lib/analysis-progress";
 import { customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
 import { downloadPdf } from "./proposal-data";
 import { Empty, SectionHeading } from "./CrmControls";
 import { useCrm } from "./CrmContext";
+
+function AutoFinishStatus({ state, date }: { state: AutoFinishUiState; date: string }) {
+  if (state.phase === "measuring") {
+    return (
+      <div className="mt-3" role="status">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+          <Loader2 className="size-3.5 animate-spin" />
+          Measuring automatically · {state.percent}% · {formatElapsedClock(state.elapsedSeconds)}
+          {" · "}
+          {date}
+        </p>
+        <Progress
+          value={state.percent}
+          className="mt-2"
+          aria-label="Automatic measurement progress"
+        />
+        {state.detail && <p className="mt-1.5 text-xs text-muted-foreground">{state.detail}</p>}
+      </div>
+    );
+  }
+  if (state.phase === "saving" || state.phase === "building-pdf") {
+    return (
+      <p
+        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-foreground"
+        role="status"
+      >
+        <Loader2 className="size-3.5 animate-spin" />
+        {state.phase === "saving" ? "Saving the measurement…" : "Generating the report PDF…"} ·{" "}
+        {date}
+      </p>
+    );
+  }
+  if (state.phase === "candidates") {
+    return (
+      <p className="mt-3 text-xs text-amber-700" role="status">
+        The measurement found more than one building at this address — open the report to pick the
+        right one. · {date}
+      </p>
+    );
+  }
+  if (state.phase === "unmeasurable") {
+    return (
+      <p className="mt-3 text-xs text-amber-700" role="status">
+        This roof could not be measured automatically: {state.message} · {date}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-3 text-xs text-destructive" role="status">
+      Automatic measurement stopped: {state.message} Open the report to try from the workspace. ·{" "}
+      {date}
+    </p>
+  );
+}
 
 export function RoofReports({
   onOpenMeasurement,
@@ -40,6 +98,9 @@ export function RoofReports({
   const orders = useQuery(roofOrdersQuery);
   const { openPdfStudio } = useCrm();
   const drawings = useQuery(drawingsQuery);
+  // Every report still awaiting its measurement finishes itself
+  // while this list is open — no "Continue measurements" click.
+  const autoFinish = useAutoFinishReports(orders.data, drawings.data, customers.data);
   const [search, setSearch] = useState("");
   const [swipedReportId, setSwipedReportId] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
@@ -135,8 +196,9 @@ export function RoofReports({
           />
         </div>
         <p className="text-sm text-muted-foreground">
-          Roof reports, measurement PDFs, and customer contract signing · Use a card's Delete button
-          to remove a report
+          Roof reports, measurement PDFs, and customer contract signing · Measurements finish
+          automatically — a report still measuring completes itself here, no need to open it · Use a
+          card's Delete button to remove a report
         </p>
       </div>
       {orders.error && (
@@ -154,6 +216,8 @@ export function RoofReports({
               "Customer property";
             const savedDrawing =
               drawings.data?.find((drawing) => drawing.id === row.drawing_id) ?? null;
+            const autoState = autoFinish.get(row.id);
+            const reportDate = new Date(row.created_at).toLocaleDateString();
             return (
               <div
                 key={row.id}
@@ -201,15 +265,19 @@ export function RoofReports({
                   </div>
                   <h2 className="mt-3 break-words font-bold">{customerName}</h2>
                   <p className="mt-1 break-words text-sm text-muted-foreground">{row.address}</p>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {row.file_path
-                      ? "PDF generated from the saved roof measurement drawing"
-                      : row.drawing_id
-                        ? "Drawing saved · PDF not generated yet"
-                        : "Awaiting roof measurements"}
-                    {" · "}
-                    {new Date(row.created_at).toLocaleDateString()}
-                  </p>
+                  {autoState ? (
+                    <AutoFinishStatus state={autoState} date={reportDate} />
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {row.file_path
+                        ? "PDF generated from the saved roof measurement drawing"
+                        : row.drawing_id
+                          ? "Drawing saved · PDF not generated yet"
+                          : "Awaiting roof measurements"}
+                      {" · "}
+                      {reportDate}
+                    </p>
+                  )}
                   <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     {row.file_path && (
                       <>

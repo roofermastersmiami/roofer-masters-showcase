@@ -15,7 +15,7 @@ describe("AutomatedRoofReport automatic analysis", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses the published Render service when no frontend environment override is configured", async () => {
+  it("uses the published Render service's jobs API when no frontend environment override is configured", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: false,
       status: 503,
@@ -24,16 +24,20 @@ describe("AutomatedRoofReport automatic analysis", () => {
 
     render(<AutomatedRoofReport address="123 Main Street, Miami, FL" onApply={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
-        "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ street_address: "123 Main Street, Miami, FL" }),
-        }),
-      );
-    });
     expect(await screen.findByRole("alert")).toHaveTextContent("Service temporarily unavailable");
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0]?.[0]).toBe(
+      "https://roofer-masters-roof-detection-w909.onrender.com/v1/roof/analyze/jobs",
+    );
+    expect(calls[0]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ street_address: "123 Main Street, Miami, FL" }),
+    });
+    // The old synchronous endpoint is gone: every attempt goes through
+    // the jobs API (initial submit + the resubmit budget), never the
+    // legacy /v1/roof/analyze request.
+    expect(calls.length).toBe(4);
+    expect(calls.every(([url]) => String(url).endsWith("/v1/roof/analyze/jobs"))).toBe(true);
   });
 
   it("starts analysis automatically when an address and service URL are available", async () => {
@@ -48,7 +52,7 @@ describe("AutomatedRoofReport automatic analysis", () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        "https://roof-detection.example.com/v1/roof/analyze",
+        "https://roof-detection.example.com/v1/roof/analyze/jobs",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ street_address: "456 Oak Avenue, Miami, FL" }),
@@ -178,6 +182,29 @@ describe("AutomatedRoofReport background job analysis", () => {
       await screen.findByText("Footprint found; roof facets were not measurable"),
     ).toBeTruthy();
     expect(submits).toBe(2);
+  });
+
+  it("stops after the resubmit budget when the service keeps losing jobs", async () => {
+    let submits = 0;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/v1/roof/analyze/jobs") && init?.method === "POST") {
+        submits += 1;
+        return jsonResponse(202, { job_id: `job-${submits}`, status: "queued" });
+      }
+      if (url.includes("/v1/roof/analyze/jobs/")) {
+        return jsonResponse(404, {
+          detail: { code: "job_not_found", message: "resubmit" },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    render(<AutomatedRoofReport address="123 Main Street, Miami, FL" onApply={vi.fn()} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("kept restarting");
+    // Initial submission plus the full resubmit budget, then it stops.
+    expect(submits).toBe(4);
   });
 
   it("warns when the geocoded point falls outside the selected building", async () => {
