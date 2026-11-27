@@ -50,12 +50,14 @@ export const updateRoofOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => updateRoofOrderSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales", "production_manager"],
-    });
-    if (roleError) throw new Error("Could not verify report permissions");
-    if (!owner) throw new Error("You do not have access to this action");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("company_id,role")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (membershipError || !membership) throw new Error("A single company membership is required");
+    if (!["owner", "admin", "office", "sales", "production_manager"].includes(membership.role))
+      throw new Error("You do not have access to this action");
 
     const { data: current, error: currentError } = await context.supabase
       .from("roof_report_orders")
@@ -66,8 +68,7 @@ export const updateRoofOrder = createServerFn({ method: "POST" })
     if (!current) throw new Error("Report request not found");
     assertReportStatus({ ...current, ...data });
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: saved, error } = await supabaseAdmin
+    const { data: saved, error } = await context.supabase
       .from("roof_report_orders")
       .update({
         status: data.status,
@@ -92,12 +93,14 @@ export const attachRoofOrderPdf = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales", "production_manager"],
-    });
-    if (roleError) throw new Error("Could not verify report permissions");
-    if (!owner) throw new Error("You do not have access to this action");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("company_id,role")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (membershipError || !membership) throw new Error("A single company membership is required");
+    if (!["owner", "admin", "office", "sales", "production_manager"].includes(membership.role))
+      throw new Error("You do not have access to this action");
     if (
       !data.path.startsWith(`roof-report/${data.id}/`) ||
       !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(data.path)
@@ -111,8 +114,7 @@ export const attachRoofOrderPdf = createServerFn({ method: "POST" })
     if (fileError || !files?.some((f) => f.name === name))
       throw new Error("Upload the report PDF first");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: saved, error } = await supabaseAdmin
+    const { data: saved, error } = await context.supabase
       .from("roof_report_orders")
       .update({ file_path: data.path, status: "received", reviewed_at: null })
       .eq("id", data.id)
@@ -264,7 +266,7 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
 
     // Delete the database record first. Removing the private PDF first could destroy
     // the only report copy if the subsequent database delete failed.
-    const { data: deleted, error } = await supabaseAdmin
+    const { data: deleted, error } = await context.supabase
       .from("roof_report_orders")
       .delete()
       .eq("id", data.id)
