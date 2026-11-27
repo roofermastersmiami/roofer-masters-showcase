@@ -1756,3 +1756,96 @@ def test_emission_conflation_does_not_chain_along_a_seam():
     assert result[1].area == pytest.approx(right.area, rel=0.05)
     assert len(_ring_coords(result[0])) >= 25
     assert len(_ring_coords(result[1])) >= 25
+
+
+def test_request_pin_must_be_complete():
+    with pytest.raises(ValueError):
+        AnalyzeRequest(street_address="100 Main Street", pin_lat=25.0)
+    with pytest.raises(ValueError):
+        AnalyzeRequest(street_address="100 Main Street", pin_lon=-80.0)
+    request = AnalyzeRequest(
+        street_address="100 Main Street", pin_lat=25.0, pin_lon=-80.0
+    )
+    assert request.pin_lat == 25.0
+    assert request.pin_lon == -80.0
+
+
+def test_analysis_cache_key_includes_pin():
+    from main import _analysis_cache_key
+
+    plain = AnalyzeRequest(street_address="3062 Southwest 189th Avenue, Miramar, FL 33029")
+    pinned = AnalyzeRequest(
+        street_address="3062 Southwest 189th Avenue, Miramar, FL 33029",
+        pin_lat=25.9,
+        pin_lon=-80.3,
+    )
+    other_pin = AnalyzeRequest(
+        street_address="3062 Southwest 189th Avenue, Miramar, FL 33029",
+        pin_lat=25.91,
+        pin_lon=-80.3,
+    )
+    # The no-pin key keeps its legacy shape so existing cache entries
+    # and behaviour are untouched; a pin always keys separately.
+    assert _analysis_cache_key(plain) == "3062 southwest 189th avenue, miramar, fl 33029"
+    assert _analysis_cache_key(pinned) != _analysis_cache_key(plain)
+    assert _analysis_cache_key(pinned) != _analysis_cache_key(other_pin)
+
+
+def test_analyze_endpoint_steers_footprint_selection_with_pin(monkeypatch):
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+    seen_points: list[tuple[float, float]] = []
+
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Pin steering test address", {"source": "Test geocoder"}
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        seen_points.append((_lat, _lon))
+        return polygon, {"provider": "Test footprints", "building_tags": {}}
+
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+    monkeypatch.setattr(
+        roof_service,
+        "_read_lidar_facets",
+        lambda _polygon, _provider=None: ([], {"stac_items": 0, "tiles_used": 0}),
+    )
+
+    async def fake_tnm(_polygon, _provider=None):
+        return [], {"reason": "test stub"}
+
+    monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
+    roof_service._RESPONSE_CACHE.clear()
+
+    client = TestClient(roof_service.app)
+    pinned = client.post(
+        "/v1/roof/analyze",
+        json={
+            "street_address": "Pin steering test address",
+            "pin_lat": 25.00006,
+            "pin_lon": -79.99994,
+        },
+    )
+    assert pinned.status_code == 200
+    # Footprint search/selection ran against the pin, not the geocode.
+    assert seen_points[-1] == (25.00006, -79.99994)
+    payload = pinned.json()
+    assert payload["footprint"]["point_hint"] == {
+        "lat": 25.00006,
+        "lon": -79.99994,
+        "source": "user_pin",
+    }
+    # The response location stays the geocoded address point.
+    assert payload["location"] == {"lat": 25.00005, "lon": -79.99995}
+
+    plain = client.post(
+        "/v1/roof/analyze",
+        json={"street_address": "Pin steering test address"},
+    )
+    assert plain.status_code == 200
+    assert seen_points[-1] == (25.00005, -79.99995)
+    assert "point_hint" not in plain.json()["footprint"]

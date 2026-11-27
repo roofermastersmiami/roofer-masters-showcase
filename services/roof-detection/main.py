@@ -228,6 +228,16 @@ class AnalyzeRequest(BaseModel):
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
     footprint_candidate_id: str | None = Field(default=None, min_length=8, max_length=128)
+    # Optional user pin from the CRM measurement-order form. When a
+    # street address is also supplied, the pin steers footprint
+    # candidate search and auto-selection (the candidate containing,
+    # else nearest to, the pin wins the point-based scoring) so moving
+    # the pin to the correct building changes what gets measured. The
+    # geocoded address point remains the response location. Ignored
+    # for coordinates-only requests, where lat/lon already is the
+    # point. Absent pin = the pre-existing behaviour, unchanged.
+    pin_lat: float | None = Field(default=None, ge=-90, le=90)
+    pin_lon: float | None = Field(default=None, ge=-180, le=180)
 
     @model_validator(mode="after")
     def validate_location(self):
@@ -235,6 +245,8 @@ class AnalyzeRequest(BaseModel):
             raise ValueError("Provide street_address or both lat and lon.")
         if (self.lat is None) != (self.lon is None):
             raise ValueError("Latitude and longitude must be provided together.")
+        if (self.pin_lat is None) != (self.pin_lon is None):
+            raise ValueError("Pin latitude and longitude must be provided together.")
         return self
 
 
@@ -4143,11 +4155,16 @@ def health():
 
 
 def _analysis_cache_key(request: AnalyzeRequest) -> str:
-    return (
+    key = (
         request.street_address.strip().casefold()
         if request.street_address
         else f"{float(request.lat):.6f},{float(request.lon):.6f}"
     ) + (f":candidate:{request.footprint_candidate_id}" if request.footprint_candidate_id else "")
+    # A pin-steered run can select a different building than the plain
+    # address run, so it must never share the plain run's cache entry.
+    if request.pin_lat is not None and request.pin_lon is not None:
+        key += f":pin:{float(request.pin_lat):.6f},{float(request.pin_lon):.6f}"
+    return key
 
 
 async def _run_analysis(
@@ -4172,9 +4189,21 @@ async def _run_analysis(
         lat, lon = float(request.lat), float(request.lon)
         matched_address = f"{lat:.7f}, {lon:.7f}"
         address_provenance = {"source": "User-provided coordinates"}
+    # Pin steering: with a street address AND a user pin, the pin —
+    # not the geocoded address point — is the point footprint search
+    # and auto-selection score against (containment first, then
+    # distance), which is what makes the CRM's movable pin meaningful.
+    # The footprint match fields in the response then describe the pin
+    # point, and the response location stays the geocoded point.
+    pin_used = bool(
+        request.street_address and request.pin_lat is not None and request.pin_lon is not None
+    )
+    selection_lat, selection_lon = (
+        (float(request.pin_lat), float(request.pin_lon)) if pin_used else (lat, lon)
+    )
     if report is not None:
         report("footprint", "Matching the building footprint", None)
-    footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
+    footprint, footprint_meta = await get_footprint(selection_lat, selection_lon, request.street_address, request.footprint_candidate_id)
     footprint_sqft = _polygon_area_sqft(footprint)
     footprint_provider = footprint_meta.get("provider")
     if report is not None:
@@ -4220,6 +4249,17 @@ async def _run_analysis(
             "osm_way_id": footprint_meta.get("source_id") if footprint_meta.get("provider") == "OpenStreetMap" else None,
             "area_sqft": round(footprint_sqft, 1),
             **_footprint_match_fields(footprint_meta),
+            **(
+                {
+                    "point_hint": {
+                        "lat": round(selection_lat, 7),
+                        "lon": round(selection_lon, 7),
+                        "source": "user_pin",
+                    }
+                }
+                if pin_used
+                else {}
+            ),
             "polygon_geojson": mapping(footprint),
             "building_tags": footprint_meta.get("building_tags", {}),
         },

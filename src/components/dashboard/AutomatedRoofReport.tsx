@@ -15,6 +15,11 @@ import type { RoofDrawing } from "@/lib/roof-geometry";
 
 type Props = {
   address: string;
+  /** The measurement-order pin recorded on the report, when the
+   * order form placed one. Sent to the detection service as
+   * pin_lat/pin_lon so footprint selection measures the building
+   * the pin sits on rather than the geocoded address point. */
+  pointHint?: { lat: number; lon: number } | null;
   roofType: RoofDrawing["roof_type"];
   onApply: (drawing: ReturnType<typeof detectedFacetsToDrawing>) => boolean;
 };
@@ -298,7 +303,7 @@ const STAGE_LABELS: Record<string, string> = {
   measuring: "Measuring the roof…",
 };
 
-export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
+export function AutomatedRoofReport({ address, pointHint, roofType, onApply }: Props) {
   const [result, setResult] = useState<RoofDetectionResponse | null>(null);
   const [candidates, setCandidates] = useState<BuildingCandidate[]>([]);
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
@@ -430,6 +435,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
           {
             street_address: requestedAddress,
             ...(candidateId ? { footprint_candidate_id: candidateId } : {}),
+            ...(pointHint ? { pin_lat: pointHint.lat, pin_lon: pointHint.lon } : {}),
           },
           controller.signal,
           (next) => {
@@ -466,7 +472,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
         }
       }
     },
-    [address, currentAddress, handleProgress],
+    [address, currentAddress, handleProgress, pointHint],
   );
 
   // Start public-data analysis once when a new property address is loaded.
