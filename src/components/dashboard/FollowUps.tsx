@@ -78,9 +78,39 @@ export function FollowUps({
           onSubmit={(e) => {
             e.preventDefault();
             void mutate(async () => {
+              const { data: auth } = await supabase.auth.getUser();
+              if (!auth.user) throw new Error("Sign in to schedule a follow-up");
+              let companyId: string | null = null;
+              if (customer) {
+                const { data: lead, error: leadError } = await supabase
+                  .from("leads")
+                  .select("company_id")
+                  .eq("id", customer)
+                  .maybeSingle();
+                if (leadError || !lead?.company_id) throw new Error("Could not verify customer company");
+                companyId = lead.company_id;
+              } else {
+                const { data: memberships, error: membershipError } = await supabase
+                  .from("crm_company_memberships")
+                  .select("company_id,role")
+                  .eq("user_id", auth.user.id)
+                  .in("role", ["owner", "admin", "office", "sales"]);
+                if (membershipError || memberships?.length !== 1)
+                  throw new Error("A single office or sales company membership is required");
+                companyId = memberships[0].company_id;
+              }
+              const { data: membership, error: membershipError } = await supabase
+                .from("crm_company_memberships")
+                .select("role")
+                .eq("company_id", companyId)
+                .eq("user_id", auth.user.id)
+                .in("role", ["owner", "admin", "office", "sales"])
+                .maybeSingle();
+              if (membershipError || !membership) throw new Error("You cannot schedule follow-ups for this company");
               const result = await supabase.from("crm_tasks").insert({
                 title: title.trim(),
                 lead_id: customer || null,
+                company_id: companyId,
                 due_at: new Date(due).toISOString(),
               });
               if (!result.error) {
