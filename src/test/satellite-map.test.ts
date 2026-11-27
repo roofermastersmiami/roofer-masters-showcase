@@ -236,7 +236,9 @@ describe("deep zoom past the last real tile level (z21–z24)", () => {
       layerWidth,
     );
     expect(tops[0]).toBeLessThanOrEqual(0);
-    expect(tops[tops.length - 1]! + SATELLITE_TILE_PX * upscale).toBeGreaterThanOrEqual(layerHeight);
+    expect(tops[tops.length - 1]! + SATELLITE_TILE_PX * upscale).toBeGreaterThanOrEqual(
+      layerHeight,
+    );
     for (let i = 1; i < lefts.length; i++)
       expect(lefts[i]! - lefts[i - 1]!).toBeCloseTo(SATELLITE_TILE_PX * upscale, 6);
     for (let i = 1; i < tops.length; i++)
