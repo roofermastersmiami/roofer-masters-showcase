@@ -13,6 +13,8 @@ import {
   Trash2,
   ArrowRight,
   FileText,
+  FileDown,
+  Package,
   Upload,
   MapPin,
   ZoomIn,
@@ -46,7 +48,11 @@ import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { drawingsQuery } from "./roof-data";
 import { jobsQuery } from "./operations-data";
-import { materialOrderForTransfer } from "@/lib/material-order";
+import {
+  automaticMaterialList,
+  materialOrderForTransfer,
+  type AutomaticMaterialList,
+} from "@/lib/material-order";
 import { Choice, Field, SectionHeading } from "./CrmControls";
 import { useCrm } from "./CrmContext";
 import type { RoofOrder } from "./roof-orders-data";
@@ -113,6 +119,13 @@ export function RoofMeasurements({
   );
   const [logoSize, setLogoSize] = useState("1");
   const userEditedDrawing = useRef(false);
+  // Hands-off flow: when the automated measurement applies a drawing
+  // inside a report workspace, the revision save (which also generates
+  // and attaches the report PDF) runs by itself and the material list
+  // is built from the saved drawing — no Save click needed.
+  const autoSaveArmed = useRef(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoMaterials, setAutoMaterials] = useState<AutomaticMaterialList | null>(null);
   const { go } = useCrm();
   const [d, setD] = useState<RoofDrawing>(starting),
     [history, setHistory] = useState<RoofDrawing[]>([]),
@@ -206,16 +219,16 @@ export function RoofMeasurements({
       j.lead_id === customer.source_lead_id &&
       (!j.property_id || j.property_id === property),
   );
-  async function save() {
+  async function save(): Promise<boolean> {
     if (report && !initialDrawing && !parent && !userEditedDrawing.current) {
       toast.error(
         "Add a measured roof dimension or trace the actual roof before saving this report",
       );
-      return;
+      return false;
     }
     if (!measurement || !property) {
       toast.error("Choose a property and correct the drawing first");
-      return;
+      return false;
     }
     setBusy(true);
     try {
@@ -237,10 +250,59 @@ export function RoofMeasurements({
       ]);
       toast.success(`Drawing revision ${row.revision} saved`);
       if (report) await exportPdf(false, true);
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save drawing");
+      return false;
     } finally {
       setBusy(false);
+    }
+  }
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  // Run the armed hands-off save once the automated drawing is in the
+  // editor and measurable. The flag is consumed before saving so the
+  // effect cannot loop; a failed save leaves the manual Save revision
+  // button as the fallback.
+  useEffect(() => {
+    if (!autoSaveArmed.current || !report || !dirty || busy || autoSaving) return;
+    if (!measurement || !property) return;
+    autoSaveArmed.current = false;
+    setAutoSaving(true);
+    void (async () => {
+      const saved = await saveRef.current();
+      if (saved) {
+        try {
+          setAutoMaterials(automaticMaterialList(d));
+        } catch {
+          setAutoMaterials(null);
+        }
+        toast.success(
+          "Measurement saved, report PDF generated, and material list built automatically.",
+        );
+      }
+      setAutoSaving(false);
+    })();
+  }, [autoSaving, busy, d, dirty, measurement, property, report]);
+  async function downloadAutoTakeoff() {
+    if (!autoMaterials || !autoMaterials.lines.length) return;
+    try {
+      const [{ materialTakeoffPdf }, { downloadPdf }] = await Promise.all([
+        import("@/lib/material-order-pdf"),
+        import("./proposal-data"),
+      ]);
+      const bytes = await materialTakeoffPdf({
+        title,
+        source: "Automatic measurement — generated from the saved roof drawing",
+        report: autoMaterials.report,
+        lines: autoMaterials.lines,
+        warnings: autoMaterials.warnings,
+      });
+      downloadPdf(bytes, `Material Takeoff - ${title}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not generate material takeoff PDF",
+      );
     }
   }
   async function exportPdf(share = false, savedSnapshot = false) {
@@ -1801,6 +1863,10 @@ export function RoofMeasurements({
             toast.success(
               "Preliminary LiDAR facets loaded. Review every plane and classify all edges before generating a takeoff.",
             );
+            // Hands-off: the save + report PDF + material list chain
+            // runs by itself for a drawing the automated measurement
+            // just produced inside a report workspace.
+            if (report) autoSaveArmed.current = true;
             return true;
           } catch (cause) {
             toast.error(
@@ -1812,6 +1878,76 @@ export function RoofMeasurements({
           }
         }}
       />
+      {(autoSaving || autoMaterials) && (
+        <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <Package className="size-5 text-primary" />
+            <h3 className="font-semibold">Material list — generated automatically</h3>
+          </div>
+          {autoSaving ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Saving the measurement, generating the report PDF, and building the material list…
+            </p>
+          ) : autoMaterials ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {autoMaterials.report.roof_type} · {autoMaterials.report.area_sqft.toLocaleString()}{" "}
+                sq ft · +{autoMaterials.wastePct}% waste. Quantities come straight from the
+                automated measurement — the same takeoff printed in the saved report PDF.
+              </p>
+              {autoMaterials.warnings.length > 0 && (
+                <div
+                  role="note"
+                  className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+                >
+                  <ul className="list-disc space-y-1 pl-5">
+                    {autoMaterials.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {autoMaterials.lines.length ? (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {autoMaterials.lines.map((line) => (
+                      <tr key={line.item} className="border-b border-border">
+                        <td className="py-2">
+                          <div>{line.item}</div>
+                          {line.notes && (
+                            <p className="mt-1 text-xs text-muted-foreground">{line.notes}</p>
+                          )}
+                        </td>
+                        <td className="py-2 text-right font-semibold">
+                          {line.qty} {line.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No order-ready quantities yet — see the review note above.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  disabled={!autoMaterials.lines.length}
+                  onClick={() => void downloadAutoTakeoff()}
+                >
+                  <FileDown /> Takeoff PDF
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                To attach this list to a customer job, mark the drawing reviewed below and use
+                Transfer material measurements. Quantities are estimates — confirm with your
+                supplier before ordering, and edit them any time in the job's Material Order.
+              </p>
+            </>
+          ) : null}
+        </section>
+      )}
       <SatelliteRoofTrace
         key={report?.id ?? initialDrawing?.id ?? property ?? "new-measurement"}
         initialAddress={report?.address?.trim() || propertyRow?.address || ""}
