@@ -82,3 +82,25 @@ The connected Lovable project revision `9bc3a802d316ad8fce5217cef3a4b34e24232c5e
 5. Only then combine the ownership backfill with the separate RLS policy replacement and storage cutover.
 
 **Important:** migration 0055 remains a draft backfill/FK migration. The source scan confirms it would be unsafe to apply until these write paths and database-side writers are made compatible.
+
+
+## Server-side authorization review (source revision 9bc3a802)
+
+The following files were read directly at the project revision; this review found concrete gaps but intentionally did not patch them against a schema that is not yet deployed:
+
+| File | Observed behavior | Required correction / release dependency |
+|---|---|---|
+| `src/lib/invoices.functions.ts` | `createInvoice` and `changeInvoiceStatus` authorize with global `has_any_role` checks (`admin` / `accounting`). Invoice creation reads lead and proposal relationship, then writes through service-role client. | Verify user membership and role against the specific lead/proposal company; derive invoice company from trusted parent; ensure status RPC independently scopes invoice to caller's company. Requires company ownership columns and scoped helper/RPC contract. |
+| `src/lib/invoice-payments.functions.ts` | Public checkout/confirmation are token-based and confirmation checks that session belongs to the invoice selected by token. Authenticated cancellation uses global `has_any_role` then service-role lookup by invoice ID. | Preserve token capability checks. Cancellation must load invoice company and authorize membership/role for that company before using service role. Checkout/payment rows must inherit company from invoice in DB, not metadata/request. |
+| `src/lib/invoice-payments.server.ts` | Reconciliation retrieves Stripe session, validates amount/currency/environment and checks metadata invoice/checkout IDs against stored checkout before calling settlement RPC. | Settlement RPC must derive company from stored checkout/invoice and remain idempotent; webhook event updates must never accept company from Stripe metadata or request. Add tests for replay, mismatched metadata, and wrong environment. |
+| `src/routes/api/public/payments/webhook.ts` | Verifies Stripe signature; completed events call reconciliation. Expired/failed events update pending checkout by session ID and environment. | Keep signature verification. Confirm checkout is tied to invoice in the DB-side update path; test replay/out-of-order events and never accept tenant identity from event metadata. |
+| `src/lib/proposals.functions.ts` | Share creation/revocation use global `has_any_role` checks; creation reads proposal then inserts share using service role. Public get/sign endpoints use exact capability token and constrain operations to the matched share/proposal. | Scope office/sales authorization to the proposal's company. Keep exact-token public capability model; ensure share row company derives from proposal in DB and signed URL path is bound to that proposal. |
+| `src/lib/change-orders.functions.ts` | Global accounting role check then inserts supplied change-order fields through authenticated client. | Load job by ID, resolve its company, check caller's membership/role for that company, and whitelist fields rather than spreading client data. Database must derive company from job. |
+
+### Why these source changes are gated
+
+At the audited application revision, generated Supabase row/insert/update types and current migration state do not yet provide deployed `company_id` ownership on the parent operational tables. The live database audit also found the ownership migration entries pending. Adding application filters against columns that do not exist in production would break current flows; passing a browser-supplied company UUID would create a tenant-spoofing vulnerability. Therefore these server paths are recorded as release blockers rather than patched speculatively.
+
+Before these functions can be safely tightened, the release must provide: (a) applied and verified core ownership schema; (b) membership/role helper that accepts a company UUID and checks `auth.uid()`; (c) company-scoped RPCs for invoice status and settlement; (d) service-role write functions that resolve company only from trusted stored parents; and (e) tests with at least two companies proving same-company success and cross-company denial.
+
+**No code path in this review was represented as fixed. No production migration, deployment, or live data mutation was performed.**
