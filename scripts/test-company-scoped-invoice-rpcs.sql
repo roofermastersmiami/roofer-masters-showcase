@@ -30,7 +30,8 @@ INSERT INTO crm_company_memberships VALUES
 ('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','accounting');
 INSERT INTO crm_invoices(id,company_id,status,paid_cents,total_cents,environment) VALUES
 ('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','draft',0,10000,'test'),
-('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','issued',0,10000,'test'),
+('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','issued',0,10000,'test');
+INSERT INTO crm_invoices(id,company_id,status,paid_cents,total_cents,deposit_cents,token,expires_at,environment) VALUES
 ('20000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000001','issued',0,10000,2500,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',now()+interval '1 day','test');
 INSERT INTO invoice_checkouts VALUES
 ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','cs_test_1','test',5000,'pending');
