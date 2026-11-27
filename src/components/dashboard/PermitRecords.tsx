@@ -66,6 +66,7 @@ export function PermitRecords() {
     mutationFn: () => createPermitApplication({
       roof_job_id: jobId,
       jurisdiction_name: jurisdiction,
+      jurisdiction_code: jurisdictionProfileId,
       permit_type: permitType,
       application_status: "draft",
       portal_url: portalUrl.trim() || null,
@@ -75,7 +76,7 @@ export function PermitRecords() {
         `Roofing system: ${roofingSystem}`,
         propertyFolio.trim() ? `Property folio: ${propertyFolio.trim()}` : "",
         applicationNotes.trim(),
-      ].filter(Boolean).join("\\n\\n"),
+      ].filter(Boolean).join("\n\n"),
     }),
     onSuccess: async () => {
       toast.success("Permit application draft saved.");
@@ -390,7 +391,7 @@ export function PermitRecords() {
                     <div><label className={labelClass} htmlFor="permit-fee">Permit fee (USD)</label><Input id="permit-fee" type="number" min="0" step="0.01" value={permitFee} onChange={(event) => setPermitFee(event.target.value)} /></div>
                   </div>
                   <div><label className={labelClass} htmlFor="permit-portal">Official portal link (optional)</label><Input id="permit-portal" type="url" placeholder="https://" value={portalUrl} onChange={(event) => setPortalUrl(event.target.value)} /></div>
-                  <div><label className={labelClass} htmlFor="permit-notes">Application notes / correction details</label><Input id="permit-notes" value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} maxLength={10000} /></div>
+                  <div><label className={labelClass} htmlFor="permit-notes">Application notes / correction details</label><Input id="permit-notes" value={applicationNotes} onChange={(event) => setApplicationNotes(event.target.value)} maxLength={9000} /></div>
                   <Button type="submit" disabled={!jobId || !jurisdiction.trim() || !permitType.trim() || (permitFee.trim() !== "" && (!Number.isFinite(Number(permitFee)) || Number(permitFee) < 0)) || createApplication.isPending}>
                     {createApplication.isPending ? "Saving…" : "Save draft"}
                   </Button>
