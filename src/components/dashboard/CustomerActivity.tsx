@@ -15,9 +15,32 @@ export function CustomerActivity({ leadId }: { leadId: string }) {
   async function record() {
     if (!note.trim()) return;
     setBusy(true);
+    const { data: auth } = await supabase.auth.getUser();
+    const { data: lead, error: leadError } = await supabase
+      .from("leads")
+      .select("company_id")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (!auth.user || leadError || !lead?.company_id) {
+      setBusy(false);
+      toast.error("Could not verify customer company");
+      return;
+    }
+    const { data: membership, error: membershipError } = await supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("user_id", auth.user.id)
+      .eq("company_id", lead.company_id)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError || !membership) {
+      setBusy(false);
+      toast.error("You cannot record activity for this company");
+      return;
+    }
     const { error } = await supabase
       .from("crm_activity")
-      .insert({ lead_id: leadId, kind: "call_note", body: note.trim().slice(0, 4000) });
+      .insert({ lead_id: leadId, company_id: lead.company_id, kind: "call_note", body: note.trim().slice(0, 4000) });
     setBusy(false);
     if (error) {
       toast.error("Could not record call note");
