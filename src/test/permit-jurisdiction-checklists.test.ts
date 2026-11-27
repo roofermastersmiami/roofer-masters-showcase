@@ -449,6 +449,19 @@ describe("Weston roofing permit profile", () => {
     expect(ids).toContain("weston-broward-rooftop-equipment");
   });
 
+  it("includes Weston non-single-family documents on a multifamily / condominium reroof", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_WESTON_ROOFING_PROFILE.id,
+      projectKind: "multifamily_reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const ids = result.items.map((item) => item.id);
+    expect(ids).toContain("weston-asbestos-responsibility");
+    expect(ids).toContain("weston-rooftop-gas-vent");
+    expect(ids).toContain("weston-broward-rooftop-equipment");
+  });
+
   it("does not require Weston non-single-family documents on a single-family reroof", () => {
     const result = getPermitChecklist({
       profileId: BROWARD_WESTON_ROOFING_PROFILE.id,
