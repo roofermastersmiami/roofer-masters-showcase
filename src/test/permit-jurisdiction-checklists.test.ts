@@ -100,6 +100,15 @@ describe("Broward authority routing", () => {
     expect(commercial.warnings.join(" ")).toContain("residential structural roof / reroof");
   });
 
+  it("does not confirm the Sunrise checklist until the reroof scope is selected", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id,
+      roofingSystem: "metal",
+    });
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.warnings.join(" ")).toContain("residential structural roof / reroof");
+  });
+
   it("does not apply the Sunrise reroof-only owner notice to new roof construction", () => {
     const result = getPermitChecklist({
       profileId: BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id,
