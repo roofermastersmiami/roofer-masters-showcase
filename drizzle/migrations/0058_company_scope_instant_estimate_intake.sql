@@ -1,3 +1,4 @@
+-- tenant-audit: reviewed — security-definer public intake accepts company_id only from trusted server configuration, verifies the company exists, copies it to lead/estimate/job rows, and remains service_role-only.
 -- Keep trusted instant-estimate intake compatible with mandatory company ownership.
 -- The company UUID continues to come only from server-side configuration.
 CREATE OR REPLACE FUNCTION public.capture_instant_roof_lead(
