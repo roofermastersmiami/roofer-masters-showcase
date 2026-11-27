@@ -234,6 +234,35 @@ export const BROWARD_HOLLYWOOD_ROOFING_PROFILE: JurisdictionPermitProfile = {
   checklist: hollywoodChecklist,
 };
 
+
+const pompanoBeachRoofingChecklist: ChecklistItem[] = [
+  { id: "building-application", label: "Broward County Uniform Building Permit Application", detail: "Complete the current Broward County uniform building application with Building selected.", appliesWhen: "Required for residential and commercial roofing permit applications.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "fire-review-application", label: "Fire Review Application", detail: "Submit the Fire Review Application for multi-family, condominium, and commercial projects.", appliesWhen: "Multi-family, condominium, and commercial projects; excluded for one- and two-family residences.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "hvzh-roofing-application", label: "HVHZ Uniform Permit Application", detail: "Complete the High Velocity Hurricane Zone Uniform Permit Application and all required attachments.", appliesWhen: "All roofing applications covered by the city checklist.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "roof-product-approvals", label: "Roofing product approvals and Fire Directory listings", detail: "Provide current Miami-Dade NOAs or Florida Product Approvals for roofing materials, underlayments, fasteners, and adhesives, including applicable Fire Directory listing pages.", appliesWhen: "For all products in the proposed roofing assembly.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "asbestos-certificate", label: "Broward County Asbestos Certificate of Submittal", detail: "Include the Broward County Asbestos Certificate of Submittal.", appliesWhen: "Listed in the City roofing checklist.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "commercial-site-plan", label: "Roofing site and fire-access plan", detail: "Show dumpster and equipment staging, fire apparatus access, exits, and fire-lane clearance. If using a tar kettle, show its location, LPG cylinders, and fire extinguishers.", appliesWhen: "Multi-family, condominium, and commercial projects; not one- or two-family residences.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "wind-load-verification", label: "Wind-load verification", detail: "Use the city's Fenestration Wind Load and Roof Uplift Chart for one- and two-family dwellings/townhomes; submit engineer-sealed wind-pressure calculations for multi-family, commercial, or non-prescriptive projects.", appliesWhen: "All projects, with documentation type determined by building/project classification.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "windstorm-mitigation-affidavit", label: "Roofing Affidavit for Windstorm Loss Mitigation", detail: "Document roof-to-wall connection compliance and any required enhancements by a licensed contractor.", appliesWhen: "Single-family residential structures and duplexes.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "rooftop-equipment-affidavit", label: "Rooftop Mounted Equipment Affidavit", detail: "Identify all rooftop-mounted equipment.", appliesWhen: "When rooftop equipment is present.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "polyiso-attachment-calculations", label: "Polyisocyanurate board attachment calculations", detail: "Provide calculations demonstrating compliance with fastening and uplift requirements.", appliesWhen: "When installing polyisocyanurate insulation boards.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "field-withdrawal-test", label: "Field withdrawal resistance test report", detail: "Provide test results for existing deck or fastener pull-out strength.", appliesWhen: "When field withdrawal resistance testing is used to verify deck or fastener capacity.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "moisture-survey", label: "Moisture survey report", detail: "Confirm the existing roof substrate is dry and suitable for reuse.", appliesWhen: "Roof recover or renovation projects.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+  { id: "hoa-authorization", label: "Association authorization letter", detail: "Obtain a letter signed by an authorized association representative.", appliesWhen: "When work is proposed on property governed by a condominium or homeowners association.", sourceUrl: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf" },
+];
+
+export const BROWARD_POMPANO_BEACH_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-pompano-beach-roofing",
+  label: "City of Pompano Beach — residential / commercial roofing",
+  county: "Broward",
+  authorityScope: "City of Pompano Beach roofing checklist for residential and commercial roof installation, replacement, and major repair.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Pompano Beach limits. This checklist is an intake aid; confirm current forms, code edition, and project-specific reviews with the City before filing.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf", "https://www.pompanobeachfl.gov/government/building-inspections/applications-and-forms", "https://www.pompanobeachfl.gov/government/building-inspections/apply-for-a-new-permit", FBC_CODE_URL],
+  checklist: pompanoBeachRoofingChecklist,
+};
+
 export type PermitChecklistRequest = {
   profileId: string;
   roofingSystem?: RoofingSystem;
@@ -276,6 +305,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
     [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
     [BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id]: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
+    [BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id]: BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -349,4 +379,5 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   sunriseResidentialRoofChecklist: SUNRISE_CHECKLIST_URL,
   floridaBuildingCodeMilestones: FBC_CODE_URL,
   coralSpringsResidentialReroofChecklist: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf",
+  pompanoBeachRoofingChecklist: "https://cdn.pompanobeachfl.gov/city/pages/building_inspections/submittal_checklists/Roofing.pdf",
 } as const;
