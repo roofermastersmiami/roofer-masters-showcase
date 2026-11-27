@@ -198,3 +198,16 @@ The CI-validated candidate proves the new migrations and tenant-isolation fixtur
 5. Only after approval, perform a staged forward-only migration and deploy a matching app commit; then verify permit creation, document storage, product approval evidence, NOC tracking, and inspection workflow in production.
 
 **This live snapshot supersedes the older row-count observations above for current counts, but does not resolve the historical discrepancy or authorize a write.**
+
+
+### Additional 0042/0043/0047 prerequisite checks — 2026-11-27
+
+The live read-only checks also verified the immediate ownership-backfill preconditions:
+
+- Exactly one company exists, and its creator has an `owner` membership.
+- All current CRM parent links inspected are non-orphaned: customer/source-lead, lead/customer, property/customer, report/customer, report/property, and roof-job/lead/property checks returned zero missing references.
+- No duplicate normalized property-address groups per customer were found.
+- The existing unique constraint `crm_properties(customer_id, address)` is present, which is the conflict target used by the 0043 lead/property synchronization function.
+- The current lead synchronization trigger exists for INSERT and UPDATE, so 0043's function replacement has an existing trigger to update.
+
+These checks reduce uncertainty for the data-integrity portions of 0042, 0043, and 0047, but they do **not** authorize running those migrations. They do not reconcile pending historical migrations 0031–0041, validate every constraint/trigger/function changed by those migrations, prove the full authorization cutover, or establish two-company compatibility. Keep production writes blocked.
