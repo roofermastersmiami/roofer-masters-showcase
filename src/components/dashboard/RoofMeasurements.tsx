@@ -1,7 +1,18 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, Play, Pause, RotateCcw, FileDown, Package, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  Download,
+  Play,
+  Pause,
+  RotateCcw,
+  RotateCw,
+  Compass,
+  FileDown,
+  Package,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +42,12 @@ import {
   structurePdfTitle,
 } from "@/lib/roof-structures";
 import { REPORT_STATUS_LABELS } from "@/lib/roof-order-schema";
+import {
+  PLAN_ROTATION_STEP_DEG,
+  dragPlanRotationDeg,
+  normalizePlanAngleDeg,
+  pointerAngleDeg,
+} from "@/lib/plan-rotation";
 import { loadReportAerial } from "@/lib/report-aerial.functions";
 import type { AerialPhoto } from "@/lib/aerial-photo";
 import { ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
@@ -78,6 +95,11 @@ export function RoofMeasurements({
     [busy, setBusy] = useState(false),
     [view, setView] = useState<WorkspaceView>("photo"),
     [autoRotate, setAutoRotate] = useState(true),
+    // 2D Plan rotation (view-only, session state): how far the plan
+    // is turned from north-up, and whether drag-to-rotate mode owns
+    // the pointer. Never saved — the drawing and PDF keep north-up.
+    [planRotationDeg, setPlanRotationDeg] = useState(0),
+    [planRotateActive, setPlanRotateActive] = useState(false),
     [fit, setFit] = useState(0),
     [zoomDirection, setZoomDirection] = useState<"in" | "out">("in"),
     [zoomKey, setZoomKey] = useState(0),
@@ -133,6 +155,15 @@ export function RoofMeasurements({
   // automatic measurement chain.
   const [photo, setPhoto] = useState<HousePhotoState>({ status: "loading" });
   const viewPicked = useRef(false);
+  // In-flight 2D Plan rotate drag: the pointer's angle around the
+  // viewport centre when the drag began, and the rotation then.
+  const planDrag = useRef<{
+    pointerId: number;
+    centerX: number;
+    centerY: number;
+    startPointerDeg: number;
+    startRotationDeg: number;
+  } | null>(null);
   const storedAerialItem = media.find((item) => item.category === "aerial");
   const coverFraming = roofCoverFraming(d);
   const coverLatitude = coverFraming?.latitude ?? d.geo_reference?.originLatitude;
@@ -746,6 +777,7 @@ export function RoofMeasurements({
               view={view}
               onChange={(next) => {
                 viewPicked.current = true;
+                if (next !== "plan") setPlanRotateActive(false);
                 setView(next);
               }}
             />
@@ -788,6 +820,58 @@ export function RoofMeasurements({
               {autoRotate ? "Pause rotation" : "Auto rotate"}
             </Button>
           )}
+          {view === "plan" && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={planRotateActive ? "secondary" : "outline"}
+                aria-pressed={planRotateActive}
+                aria-label="Rotate plan by dragging"
+                title="Drag on the plan to rotate it"
+                onClick={() => setPlanRotateActive((value) => !value)}
+              >
+                <RotateCw />
+                Rotate
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Rotate plan by -15 degrees"
+                title="Rotate plan −15°"
+                onClick={() =>
+                  setPlanRotationDeg((deg) => normalizePlanAngleDeg(deg - PLAN_ROTATION_STEP_DEG))
+                }
+              >
+                −15°
+              </Button>
+              <span
+                className="min-w-10 text-center text-sm tabular-nums"
+                aria-label="Current plan rotation"
+              >
+                {Math.round(normalizePlanAngleDeg(planRotationDeg))}°
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Rotate plan by +15 degrees"
+                title="Rotate plan +15°"
+                onClick={() =>
+                  setPlanRotationDeg((deg) => normalizePlanAngleDeg(deg + PLAN_ROTATION_STEP_DEG))
+                }
+              >
+                +15°
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="Reset plan rotation (north up)"
+                aria-label="Reset plan rotation"
+                onClick={() => setPlanRotationDeg(0)}
+              >
+                <Compass />
+              </Button>
+            </div>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -801,10 +885,11 @@ export function RoofMeasurements({
         <p className="px-3 py-2 text-xs text-muted-foreground">
           House photo shows the actual aerial photo of this property — the same photo printed on the
           report cover. 3D House shows a simplified building mass beneath the measured roof. 2D Plan
-          shows the roof from directly above. The building shape is generated from measured roof
-          geometry, not a photorealistic model of the actual home.
+          shows the roof from directly above; its Rotate control turns the plan to match how you're
+          looking at the house. The building shape is generated from measured roof geometry, not a
+          photorealistic model of the actual home.
         </p>
-        <div className="h-[440px] min-w-0 bg-muted sm:h-[560px]">
+        <div className="relative h-[440px] min-w-0 bg-muted sm:h-[560px]">
           {view === "photo" ? (
             <HousePhotoView
               photo={photo}
@@ -830,9 +915,69 @@ export function RoofMeasurements({
                   autoRotate={autoRotate}
                   zoomDirection={zoomDirection}
                   zoomKey={zoomKey}
+                  planRotationDeg={planRotationDeg}
+                  planRotateActive={planRotateActive}
                 />
               </Suspense>
             </DrawingErrorBoundary>
+          )}
+          {view === "plan" && planRotateActive && (
+            <div
+              data-testid="plan-rotate-overlay"
+              aria-label="Drag to rotate the 2D plan"
+              className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing"
+              style={{ touchAction: "none" }}
+              onPointerDown={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const center = {
+                  x: rect.left + rect.width / 2,
+                  y: rect.top + rect.height / 2,
+                };
+                planDrag.current = {
+                  pointerId: event.pointerId,
+                  centerX: center.x,
+                  centerY: center.y,
+                  startPointerDeg: pointerAngleDeg(center, {
+                    x: event.clientX,
+                    y: event.clientY,
+                  }),
+                  startRotationDeg: planRotationDeg,
+                };
+                try {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                  // Pointer capture is best-effort; the drag still
+                  // tracks while the pointer stays over the plan.
+                }
+              }}
+              onPointerMove={(event) => {
+                const drag = planDrag.current;
+                if (!drag || drag.pointerId !== event.pointerId) return;
+                const currentPointerDeg = pointerAngleDeg(
+                  { x: drag.centerX, y: drag.centerY },
+                  { x: event.clientX, y: event.clientY },
+                );
+                setPlanRotationDeg(
+                  dragPlanRotationDeg(
+                    drag.startRotationDeg,
+                    drag.startPointerDeg,
+                    currentPointerDeg,
+                  ),
+                );
+              }}
+              onPointerUp={(event) => {
+                if (planDrag.current?.pointerId === event.pointerId) planDrag.current = null;
+              }}
+              onPointerCancel={() => {
+                planDrag.current = null;
+              }}
+              onWheel={(event) => {
+                // The overlay owns the pointer in rotate mode; keep
+                // the toolbar's wheel-zoom path working through it.
+                setZoomDirection(event.deltaY < 0 ? "in" : "out");
+                setZoomKey((key) => key + 1);
+              }}
+            />
           )}
         </div>
         {view !== "photo" && (
