@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import {
-  SATELLITE_MAX_ZOOM,
+  SATELLITE_MAX_VIEW_ZOOM,
   SATELLITE_MIN_ZOOM,
   SATELLITE_TILE_PX,
   latLonAtViewportOffset,
   projectToViewport,
   satelliteLabelTiles,
   satelliteMapTiles,
+  satelliteTileZoom,
+  satelliteUpscale,
   type LatLon,
 } from "@/lib/satellite-map";
 
@@ -73,8 +75,28 @@ export function SatelliteMap({
   // the drag commits a new centre.
   const layerWidth = size.width + SATELLITE_TILE_PX * 4;
   const layerHeight = size.height + SATELLITE_TILE_PX * 4;
-  const tiles = satelliteMapTiles(center.lat, center.lon, zoom, layerWidth, layerHeight);
-  const labelLayers = satelliteLabelTiles(center.lat, center.lon, zoom, layerWidth, layerHeight);
+  // Deep zoom (the Sketch Editor's PR #233 pattern): Esri serves
+  // no tiles past z20, so past that the z20 mosaic is fetched for
+  // the proportionally smaller viewport it has to cover and
+  // upscaled on screen. Pins and pointer math below keep using
+  // the VIEW zoom's exact Mercator projection, so a pin dropped
+  // at z24 lands on the precise lat/lon under the cursor.
+  const tileZoom = satelliteTileZoom(zoom);
+  const upscale = satelliteUpscale(zoom);
+  const tiles = satelliteMapTiles(
+    center.lat,
+    center.lon,
+    tileZoom,
+    layerWidth / upscale,
+    layerHeight / upscale,
+  );
+  const labelLayers = satelliteLabelTiles(
+    center.lat,
+    center.lon,
+    tileZoom,
+    layerWidth / upscale,
+    layerHeight / upscale,
+  );
 
   useEffect(() => {
     const element = containerRef.current;
@@ -104,7 +126,7 @@ export function SatelliteMap({
     if (!element) return;
     const stepZoom = (direction: 1 | -1) => {
       const next = Math.min(
-        SATELLITE_MAX_ZOOM,
+        SATELLITE_MAX_VIEW_ZOOM,
         Math.max(SATELLITE_MIN_ZOOM, zoomRef.current + direction),
       );
       if (next !== zoomRef.current) {
@@ -232,10 +254,10 @@ export function SatelliteMap({
             draggable={false}
             className="absolute max-w-none"
             style={{
-              left: tile.left,
-              top: tile.top,
-              width: SATELLITE_TILE_PX,
-              height: SATELLITE_TILE_PX,
+              left: tile.left * upscale,
+              top: tile.top * upscale,
+              width: SATELLITE_TILE_PX * upscale,
+              height: SATELLITE_TILE_PX * upscale,
             }}
           />
         ))}
@@ -248,10 +270,10 @@ export function SatelliteMap({
               draggable={false}
               className="absolute max-w-none"
               style={{
-                left: tile.left,
-                top: tile.top,
-                width: SATELLITE_TILE_PX,
-                height: SATELLITE_TILE_PX,
+                left: tile.left * upscale,
+                top: tile.top * upscale,
+                width: SATELLITE_TILE_PX * upscale,
+                height: SATELLITE_TILE_PX * upscale,
               }}
             />
           )),

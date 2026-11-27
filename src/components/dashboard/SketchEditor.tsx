@@ -32,7 +32,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { satelliteMapTiles, SATELLITE_MAX_ZOOM, SATELLITE_MIN_ZOOM } from "@/lib/satellite-map";
+import {
+  satelliteMapTiles,
+  satelliteTileZoom,
+  satelliteUpscale,
+  SATELLITE_MIN_ZOOM,
+} from "@/lib/satellite-map";
 import {
   dragPlanRotationDeg,
   normalizePlanAngleDeg,
@@ -591,8 +596,8 @@ export function SketchEditor({
     // Past the deepest real tile level, fetch the z20 mosaic for the
     // (proportionally smaller) viewport it has to cover and upscale it
     // by `upscale` when rendering, so the backdrop survives deep zoom.
-    const tileZoom = Math.min(geoZoom, SATELLITE_MAX_ZOOM);
-    const upscale = 2 ** (geoZoom - tileZoom);
+    const tileZoom = satelliteTileZoom(geoZoom);
+    const upscale = satelliteUpscale(geoZoom);
     return {
       width: layerW,
       height: layerH,
