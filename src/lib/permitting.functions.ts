@@ -68,6 +68,9 @@ export const getPermitWorkspace = createServerFn({ method: "POST" })
     const { data: approvals, error: approvalsError } = await db.from("roof_product_approvals")
       .select("*").eq("company_id", companyId).order("updated_at", { ascending: false });
     if (approvalsError) throw new Error("Could not load roof product approval records.");
+    const { data: nocTracking, error: nocError } = await db.from("roof_permit_noc_tracking")
+      .select("*").eq("company_id", companyId).order("updated_at", { ascending: false });
+    if (nocError) throw new Error("Could not load Notice of Commencement tracking records.");
     const propertyIds = [...new Set((jobs ?? []).map((job) => job.property_id).filter(Boolean))];
     const { data: properties, error: propertiesError } = propertyIds.length
       ? await db.from("crm_properties").select("id,address").in("id", propertyIds)
@@ -77,6 +80,7 @@ export const getPermitWorkspace = createServerFn({ method: "POST" })
       applications: applications ?? [],
       inspections: inspections ?? [],
       approvals: approvals ?? [],
+      nocTracking: nocTracking ?? [],
       jobs: (jobs ?? []).map((job) => ({
         ...job,
         address: properties?.find((property) => property.id === job.property_id)?.address ?? "",
@@ -267,5 +271,48 @@ export const verifyRoofProductApproval = createServerFn({ method: "POST" })
       .select("*").maybeSingle();
     if (error) throw new Error("Could not verify this product approval record.");
     if (!saved) throw new Error("This approval record changed in another session. Reload and retry.");
+    return saved;
+  });
+
+
+const permitNocInput = z.object({
+  permit_application_id: z.string().uuid(),
+  assessment_status: z.enum(["not_assessed", "required", "not_required"]),
+  recording_status: z.enum(["not_started", "draft", "recorded"]),
+  contract_value_cents: z.number().int().nonnegative().nullable().optional(),
+  threshold_amount_cents: z.number().int().nonnegative().nullable().optional(),
+  assessment_basis: z.string().max(3000).optional(),
+  threshold_source_url: z.string().url().max(2048).nullable().optional(),
+  recording_county: z.string().trim().max(100).optional(),
+  instrument_number: z.string().trim().max(120).nullable().optional(),
+  recorded_on: z.string().date().nullable().optional(),
+  clerk_receipt_url: z.string().url().max(2048).nullable().optional(),
+  notes: z.string().max(4000).optional(),
+}).superRefine((value, context) => {
+  if (value.recording_status === "recorded" && value.assessment_status !== "required") {
+    context.addIssue({ code: "custom", path: ["assessment_status"], message: "A recorded NOC must have an assessment marked required." });
+  }
+  if (value.recording_status === "recorded" && (
+    !value.recording_county?.trim() || !value.instrument_number?.trim() || !value.recorded_on
+  )) {
+    context.addIssue({ code: "custom", path: ["recording_status"], message: "A recorded NOC requires county, instrument number, and recording date." });
+  }
+  if (value.assessment_status === "required" && !value.assessment_basis?.trim()) {
+    context.addIssue({ code: "custom", path: ["assessment_basis"], message: "Document the current jurisdiction source and why the NOC is required." });
+  }
+});
+
+export const savePermitNocTracking = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => permitNocInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { db, companyId } = await permitContext(context.userId);
+    const { data: application } = await db.from("roof_permit_applications")
+      .select("id").eq("id", data.permit_application_id).eq("company_id", companyId).maybeSingle();
+    if (!application) throw new Error("Select a permit application belonging to your company.");
+    const { data: saved, error } = await db.from("roof_permit_noc_tracking")
+      .upsert({ ...data, company_id: companyId, created_by: context.userId }, { onConflict: "permit_application_id" })
+      .select("*").single();
+    if (error || !saved) throw new Error("Could not save the NOC tracking record.");
     return saved;
   });
