@@ -1,5 +1,8 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   finishRoofReport,
@@ -9,7 +12,10 @@ import {
   type RoofDrawingRow,
   type RoofReportOrderRow,
 } from "@/lib/auto-finish";
-import { useAutoFinishReports } from "@/components/dashboard/use-auto-finish";
+import {
+  useAutoFinishReports,
+  type AutoFinishUiState,
+} from "@/components/dashboard/use-auto-finish";
 import { drawingSchema, measureDrawing, roofPreset } from "@/lib/roof-geometry";
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
@@ -324,5 +330,218 @@ describe("useAutoFinishReports on the reports list", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(calls.submits).toBe(1);
     expect(vi.mocked(saveRoofDrawing)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useAutoFinishReports on the measurements tab surface", () => {
+  // The Roof measurements tab calls the very same hook as the reports
+  // list, enabled only while its grid is showing — an open workspace
+  // owns its report, exactly like leaving the reports list. These
+  // harnesses mirror both surfaces; the guards under test (attempt
+  // set, concurrency cap) are module-level, so the two surfaces share
+  // them in these renders just like they do in the app. Each test
+  // uses its own report ids because terminal attempts are remembered
+  // for the whole session.
+  let listStates: ReadonlyMap<string, AutoFinishUiState> = new Map();
+  let tabStates: ReadonlyMap<string, AutoFinishUiState> = new Map();
+
+  function ListHarness({
+    orders,
+    drawings = [],
+  }: {
+    orders: RoofReportOrderRow[];
+    drawings?: RoofDrawingRow[];
+  }) {
+    listStates = useAutoFinishReports(orders, drawings, []);
+    return null;
+  }
+
+  function TabHarness({
+    orders,
+    drawings = [],
+    workspaceOpen = false,
+  }: {
+    orders: RoofReportOrderRow[];
+    drawings?: RoofDrawingRow[];
+    workspaceOpen?: boolean;
+  }) {
+    tabStates = useAutoFinishReports(orders, drawings, [], !workspaceOpen);
+    return null;
+  }
+
+  function tree(client: QueryClient, children: ReactNode) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  }
+
+  function newClient() {
+    return new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  }
+
+  const tick = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it("finishes an awaiting report from the tab grid exactly once, even across refetches", async () => {
+    const calls = mockDetectionService();
+    const identity = {
+      id: "44444444-4444-4444-8444-444444444441",
+      updated_at: "2026-11-27T16:00:00.000Z",
+    };
+    const client = newClient();
+    const view = render(tree(client, <TabHarness orders={[makeOrder(identity)]} />));
+
+    await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1));
+    expect(calls.submits).toBe(1);
+    expect(vi.mocked(saveRoofDrawing)).toHaveBeenCalledTimes(1);
+
+    view.rerender(tree(client, <TabHarness orders={[makeOrder(identity)]} />));
+    await tick();
+    expect(calls.submits).toBe(1);
+    expect(vi.mocked(saveRoofDrawing)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not double-submit when the reports list and the tab are mounted at the same time", async () => {
+    const calls = mockDetectionService();
+    const order = makeOrder({
+      id: "44444444-4444-4444-8444-444444444442",
+      updated_at: "2026-11-27T16:05:00.000Z",
+    });
+    const client = newClient();
+    render(
+      tree(
+        client,
+        <>
+          <ListHarness orders={[order]} />
+          <TabHarness orders={[order]} />
+        </>,
+      ),
+    );
+
+    await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(calls.submits).toBe(1);
+    expect(vi.mocked(saveRoofDrawing)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not resubmit a report version the list surface already attempted to a terminal error", async () => {
+    const calls = mockDetectionService({ alwaysLose: true });
+    const order = makeOrder({
+      id: "44444444-4444-4444-8444-444444444443",
+      updated_at: "2026-11-27T16:10:00.000Z",
+    });
+    const client = newClient();
+    const list = render(tree(client, <ListHarness orders={[order]} />));
+
+    // The list's run burns its whole resubmit budget and lands on the
+    // terminal error state; that attempt is remembered session-wide.
+    await waitFor(() => expect(listStates.get(order.id)?.phase).toBe("error"));
+    expect(calls.submits).toBe(4);
+    list.unmount();
+
+    render(tree(client, <TabHarness orders={[order]} />));
+    await tick(250);
+    expect(calls.submits).toBe(4);
+    expect(vi.mocked(attachRoofOrderPdf)).not.toHaveBeenCalled();
+    expect(vi.mocked(saveRoofDrawing)).not.toHaveBeenCalled();
+  });
+
+  it("holds the shared concurrency cap across both surfaces and finishes every report once", async () => {
+    let released = false;
+    const calls = { submits: 0 };
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/v1/roof/analyze/jobs") && init?.method === "POST") {
+        calls.submits += 1;
+        return jsonResponse(202, { job_id: `job-${calls.submits}`, status: "queued" });
+      }
+      const match = url.match(/\/v1\/roof\/analyze\/jobs\/(job-\d+)$/);
+      if (match) {
+        if (!released) {
+          return jsonResponse(200, {
+            job_id: match[1],
+            status: "running",
+            stage: "fitting_planes",
+            detail: "Fitting roof planes to the LiDAR points",
+            download_fraction: null,
+          });
+        }
+        return jsonResponse(200, { job_id: match[1], status: "complete", result: LIDAR_RESULT });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const orders = [1, 2, 3, 4].map((n) =>
+      makeOrder({
+        id: `44444444-4444-4444-8444-44444444445${n}`,
+        updated_at: `2026-11-27T16:2${n}:00.000Z`,
+      }),
+    );
+    const client = newClient();
+    render(
+      tree(
+        client,
+        <>
+          <ListHarness orders={orders} />
+          <TabHarness orders={orders} />
+        </>,
+      ),
+    );
+
+    // Four eligible reports, two surfaces, one shared cap of 3:
+    // only three measurement jobs may be in flight at once.
+    await waitFor(() => expect(calls.submits).toBe(3));
+    await tick(250);
+    expect(calls.submits).toBe(3);
+
+    released = true;
+    await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(4), {
+      timeout: 15000,
+    });
+    expect(calls.submits).toBe(4);
+    expect(vi.mocked(saveRoofDrawing)).toHaveBeenCalledTimes(4);
+  }, 20000);
+
+  it("builds only the PDF for a drawing-saved report on the tab — no measurement, no re-save", async () => {
+    const order = makeOrder({
+      id: "44444444-4444-4444-8444-444444444445",
+      updated_at: "2026-11-27T16:30:00.000Z",
+      drawing_id: "drawing-1",
+    });
+    const drawingRow = {
+      id: "drawing-1",
+      geometry: roofPreset("gable"),
+      media: [],
+    } as unknown as RoofDrawingRow;
+    const client = newClient();
+    render(tree(client, <TabHarness orders={[order]} drawings={[drawingRow]} />));
+
+    await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(vi.mocked(saveRoofDrawing)).not.toHaveBeenCalled();
+    expect(storageUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands over to an open workspace, then starts when Fredy returns to the grid", async () => {
+    const calls = mockDetectionService();
+    const order = makeOrder({
+      id: "44444444-4444-4444-8444-444444444446",
+      updated_at: "2026-11-27T16:35:00.000Z",
+    });
+    const client = newClient();
+    const view = render(tree(client, <TabHarness orders={[order]} workspaceOpen />));
+
+    await tick(250);
+    expect(calls.submits).toBe(0);
+    expect(tabStates.get(order.id)).toBeUndefined();
+
+    view.rerender(tree(client, <TabHarness orders={[order]} />));
+    await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1));
+    expect(calls.submits).toBe(1);
+  });
+
+  it("wires the finisher and the shared live status into the measurements tab grid", () => {
+    const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+    const tab = read("src/components/dashboard/RoofMeasurementsTab.tsx");
+    expect(tab).toContain("useAutoFinishReports(");
+    expect(tab).toContain("AutoFinishStatus");
+    // The reports list renders the same shared status component.
+    expect(read("src/components/dashboard/RoofReports.tsx")).toContain("AutoFinishStatus");
   });
 });
