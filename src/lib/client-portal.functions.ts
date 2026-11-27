@@ -1,3 +1,4 @@
+// tenant-audit: reviewed — portal issuance/revocation require same-company membership and company_id is inherited from the lead; public portal access is gated by an expiring/revocable capability token and every returned dataset is filtered to that lead.
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
