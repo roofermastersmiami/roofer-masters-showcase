@@ -15,8 +15,34 @@
 
 export const SATELLITE_TILE_PX = 256;
 export const SATELLITE_MIN_ZOOM = 17;
+/** Deepest zoom level Esri actually serves tiles for. No tile
+ * request may ever go past this — see satelliteTileZoom. */
 export const SATELLITE_MAX_ZOOM = 20;
+/** Deepest VIEW zoom the maps offer. Past SATELLITE_MAX_ZOOM the
+ * z20 mosaic is upscaled on screen (softer, but present) while
+ * every overlay and pointer calculation keeps projecting with
+ * exact Mercator math at the view zoom, so pins stay registered
+ * to the imagery at every level. z24 is 16x closer than z20 —
+ * at the deepest level a single house fills the frame, which is
+ * what precise pin placement needs. Shared by the measurement-
+ * order map (SatelliteMap) and the Sketch Editor (PR #233). */
+export const SATELLITE_MAX_VIEW_ZOOM = 24;
 export const SATELLITE_DEFAULT_ZOOM = 19;
+
+/** The tile level to fetch for a view zoom: the view zoom itself
+ * while real tiles exist, then pinned at the deepest real level. */
+export function satelliteTileZoom(viewZoom: number): number {
+  return Math.min(viewZoom, SATELLITE_MAX_ZOOM);
+}
+
+/** How much the fetched mosaic must be upscaled on screen to fill
+ * the same frame at a view zoom: 1 while real tiles exist, then
+ * doubling per level past them (16 at z24). Tiles are fetched for
+ * a viewport shrunk by this factor and rendered scaled back up,
+ * so the mosaic's centre stays glued to the frame centre. */
+export function satelliteUpscale(viewZoom: number): number {
+  return 2 ** Math.max(0, viewZoom - SATELLITE_MAX_ZOOM);
+}
 /** Fixed size of the centred tile layer. It overscans the visible
  * dialog map area (max ~930×520) so the imagery fills the frame at
  * any dialog size while the layer centre — the address point —

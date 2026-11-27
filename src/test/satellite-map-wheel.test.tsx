@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SatelliteMap, type SatelliteMapPin } from "@/components/dashboard/SatelliteMap";
+import { latLonAtViewportOffset } from "@/lib/satellite-map";
 
 // 4311 SW 32nd Dr, West Park, FL 33023 (the bug-report address).
 const LAT = 25.979306;
@@ -100,13 +101,24 @@ describe("SatelliteMap wheel zoom", () => {
   });
 
   it("never zooms past the same bounds as the + / − buttons", () => {
-    const atMax = renderMap({ zoom: 20 });
+    const atMax = renderMap({ zoom: 24 });
     fireEvent.wheel(atMax.map, { deltaY: -200 });
     expect(atMax.onZoomChange).not.toHaveBeenCalled();
     cleanup();
     const atMin = renderMap({ zoom: 17 });
     fireEvent.wheel(atMin.map, { deltaY: 200 });
     expect(atMin.onZoomChange).not.toHaveBeenCalled();
+  });
+
+  it("zooms past the last real tile level, up to z24", () => {
+    const { map, onZoomChange } = renderMap({ zoom: 20 });
+    fireEvent.wheel(map, { deltaY: -100 });
+    expect(onZoomChange).toHaveBeenCalledTimes(1);
+    expect(onZoomChange).toHaveBeenCalledWith(21);
+    cleanup();
+    const deepest = renderMap({ zoom: 23 });
+    fireEvent.wheel(deepest.map, { deltaY: -100 });
+    expect(deepest.onZoomChange).toHaveBeenCalledWith(24);
   });
 
   it("treats trackpad pinch (ctrlKey wheel) as zoom", () => {
@@ -169,5 +181,54 @@ describe("SatelliteMap pan, click-to-drop and pins", () => {
     const { onPinDoubleClick } = renderMap({ pins });
     fireEvent.doubleClick(screen.getByRole("button", { name: /Building pin 1/ }));
     expect(onPinDoubleClick).toHaveBeenCalledWith(0);
+  });
+});
+
+describe("SatelliteMap deep zoom (z21–z24)", () => {
+  it("never requests tiles past z20 and draws them upscaled", () => {
+    const { container } = renderMap({ zoom: 24 });
+    const images = [...container.querySelectorAll("img")];
+    expect(images.length).toBeGreaterThan(0);
+    for (const img of images) {
+      expect(img.getAttribute("src")).toContain("/tile/20/");
+      expect(img.getAttribute("src")).not.toMatch(/\/tile\/2[1-9]\//);
+    }
+    // Imagery tiles are drawn at 256 * 2^(24-20) = 4096px: the
+    // z20 mosaic upscaled to the z24 frame.
+    const imagery = images.find((img) => img.getAttribute("src")?.includes("World_Imagery"));
+    expect(imagery?.style.width).toBe("4096px");
+    expect(imagery?.style.height).toBe("4096px");
+  });
+
+  it("drops a pin on the exact lat/lon under the cursor at z24", () => {
+    const { map, onMapClick } = renderMap({ zoom: 24 });
+    // Stub viewport is 800×600 with centre (400, 300): click
+    // 100px east of centre.
+    pointer(map, "pointerdown", { clientX: 500, clientY: 300, button: 0 });
+    pointer(map, "pointerup", { clientX: 500, clientY: 300, button: 0 });
+    expect(onMapClick).toHaveBeenCalledTimes(1);
+    const point = onMapClick.mock.calls[0]?.[0] as { lat: number; lon: number };
+    const expected = latLonAtViewportOffset(CENTER, 24, 100, 0);
+    expect(point.lat).toBeCloseTo(expected.lat, 9);
+    expect(point.lon).toBeCloseTo(expected.lon, 9);
+    // The same 100px click at z20 lands 16x farther east — the
+    // pin math follows the view zoom, never the tile zoom.
+    const atTileZoom = latLonAtViewportOffset(CENTER, 20, 100, 0);
+    expect(point.lon - LON).toBeCloseTo((atTileZoom.lon - LON) / 16, 9);
+  });
+
+  it("drags a pin by view-zoom math at z24", () => {
+    const pins: SatelliteMapPin[] = [{ id: 0, lat: LAT, lon: LON }];
+    const { onPinMove } = renderMap({ zoom: 24, pins });
+    const pin = screen.getByRole("button", { name: /Building pin 1/ });
+    pointer(pin, "pointerdown", { clientX: 400, clientY: 300, button: 0 });
+    pointer(pin, "pointermove", { clientX: 500, clientY: 260, button: 0 });
+    pointer(pin, "pointerup", { clientX: 500, clientY: 260, button: 0 });
+    expect(onPinMove).toHaveBeenCalled();
+    const [id, point] = onPinMove.mock.calls.at(-1) as [number, { lat: number; lon: number }];
+    expect(id).toBe(0);
+    const expected = latLonAtViewportOffset(CENTER, 24, 100, -40);
+    expect(point.lat).toBeCloseTo(expected.lat, 9);
+    expect(point.lon).toBeCloseTo(expected.lon, 9);
   });
 });

@@ -27,7 +27,7 @@ import { DeleteRoofReportButton } from "./DeleteRoofReport";
 import { EditSketchButton } from "./EditSketchButton";
 import {
   SATELLITE_DEFAULT_ZOOM,
-  SATELLITE_MAX_ZOOM,
+  SATELLITE_MAX_VIEW_ZOOM,
   SATELLITE_MIN_ZOOM,
   type LatLon,
 } from "@/lib/satellite-map";
@@ -575,8 +575,8 @@ export function RoofMeasurementsTab({
                         size="icon"
                         variant="outline"
                         aria-label="Zoom map in"
-                        disabled={mapZoom >= SATELLITE_MAX_ZOOM}
-                        onClick={() => setMapZoom((z) => Math.min(SATELLITE_MAX_ZOOM, z + 1))}
+                        disabled={mapZoom >= SATELLITE_MAX_VIEW_ZOOM}
+                        onClick={() => setMapZoom((z) => Math.min(SATELLITE_MAX_VIEW_ZOOM, z + 1))}
                       >
                         +
                       </Button>
