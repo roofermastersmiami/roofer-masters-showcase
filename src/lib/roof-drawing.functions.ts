@@ -20,13 +20,15 @@ export const saveRoofDrawing = createServerFn({ method: "POST" })
       .parse(raw),
   )
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales", "production_manager"],
-    });
-    if (roleError)
-      throw new Error("Could not verify your roof-drawing permissions. Sign in again and retry.");
-    if (!owner) throw new Error("Your team role does not have permission to save roof drawings.");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("company_id,role")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (membershipError || !membership)
+      throw new Error("A single company membership is required to save roof drawings.");
+    if (!["owner", "admin", "office", "sales", "production_manager"].includes(membership.role))
+      throw new Error("Your company role does not have permission to save roof drawings.");
 
     let revision = 1;
     if (data.parent_id) {
