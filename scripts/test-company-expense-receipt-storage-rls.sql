@@ -44,6 +44,10 @@ SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 INSERT INTO storage.objects(bucket_id,name) VALUES
  ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf');
+DO $ BEGIN
+  IF NOT public.can_access_company_expense_receipt('expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf', false)
+    THEN RAISE EXCEPTION 'Receipt authorization helper denied Company A cleanup; uid=%, company memberships=%', auth.uid(), (SELECT count(*) FROM crm_company_memberships WHERE user_id=auth.uid()); END IF;
+END $;
 DELETE FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf';
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf')
