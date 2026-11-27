@@ -37,10 +37,19 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
     expect(result.items.some((item) => item.id === "owner-roofing-notification")).toBe(false);
   });
 
+  it("requires a verified folio before confirming the unincorporated County authority", () => {
+    const result = getPermitChecklist({
+      profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
+      roofingSystem: "metal",
+    });
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.warnings.some((warning) => warning.includes("Enter and verify the property folio"))).toBe(true);
+  });
+
   it("flags a folio that does not match the County's unincorporated-property guidance", () => {
     const result = getPermitChecklist({
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
-      roofingSystem: "shingle" as never,
+      roofingSystem: "metal",
       folio: "4942-01-001",
     });
     expect(result.authorityConfirmed).toBe(false);
