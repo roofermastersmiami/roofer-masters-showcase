@@ -18,7 +18,7 @@ describe("company-scoped NOC tracking", () => {
     expect(entry.when).toBeGreaterThan(previous.when);
   });
   it("does not infer a legal NOC threshold and requires recorded evidence", () => {
-    expect(migration).toMatch(/does not\\s+-- calculate a statutory threshold/i);
+    expect(migration).toMatch(/does not\s+-- calculate a statutory threshold/i);
     expect(migration).toMatch(/assessment_status IN \('not_assessed','required','not_required'\)/);
     expect(migration).toMatch(/recording_status <> 'recorded' OR/);
     expect(migration).toMatch(/instrument_number/);
