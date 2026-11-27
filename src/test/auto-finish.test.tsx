@@ -48,10 +48,12 @@ type OrderRowReadResult = {
   error: null;
 };
 const orderRowRead = vi.hoisted(() =>
-  vi.fn(async (): Promise<OrderRowReadResult> => ({
-    data: { updated_at: "2026-11-27T12:00:00.000Z", file_path: null, status: "requested" },
-    error: null,
-  })),
+  vi.fn(
+    async (): Promise<OrderRowReadResult> => ({
+      data: { updated_at: "2026-11-27T12:00:00.000Z", file_path: null, status: "requested" },
+      error: null,
+    }),
+  ),
 );
 
 /** Queue the order rows successive state re-reads will observe;
