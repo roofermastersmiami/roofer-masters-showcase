@@ -407,3 +407,23 @@ The existing PR migration 0049 creates the new private permit-documents bucket a
 - The current production audit does not establish that every historical staff identity has a company membership. Do not infer memberships from a global role. The cutover must fail closed or use an explicitly reviewed identity mapping.
 
 No production writes, policy changes, RPC replacement, migration execution, or deployment were performed during this audit. The PR remains a draft and must not be merged or deployed until the remaining paths above have coordinated implementation and adversarial clone tests.
+## Tenant RPC and policy replacement implementation — 2026-11-27
+
+Implementation was added to the PR branch only; it has not been applied to production.
+
+- Migration 0053 replaces all three roof-report request overloads. Each derives exactly one company membership from auth.uid(), validates allowed company roles, scopes address matching and advisory locks by company, and writes report rows with company_id. The customer-ID overload verifies the customer belongs to the actor company.
+- Migration 0053 also replaces save_report_drawing. It verifies the report belongs to the actor company, matches the report property, and checks a revision parent through the same company-owned property. Production roof_drawings has no company_id column; the implementation deliberately scopes it through property_id rather than assuming a nonexistent column.
+- The report workflow now authorizes create/update/attach/transfer/delete operations using company membership instead of global user_roles checks. Report row writes use the authenticated RLS client; the service-role client remains only for private storage cleanup after the report row has been authorized and deleted.
+- Migration 0054 drops the inventoried legacy global-role policies on leads, customers, properties, jobs, reports, drawings, roof-job-photos, and roofing-proposals, then installs company-membership and parent-row policies. It preserves company-branding policies.
+- Roof-job photo access is resolved through the owning roof job; crew access additionally requires a crew membership in that company and explicit assignment.
+- Roof report PDF storage is resolved through roof-report/{report_id}/... and the company-owned report row. Signed-contract storage is created private and authorized through the report and its linked source lead.
+- Public instant-estimate intake migration 0045 was corrected so its created roof_jobs row is stamped with the trusted server-configured company_id. Without this, the NOT NULL company ownership added by migration 0047 would reject intake.
+- Drizzle journal now includes migrations 0053 and 0054.
+
+### Deliberate fail-closed limitation
+
+Legacy accounting expense objects in roofing-proposals use expense-* object names without a company or expense-record key. Migration 0054 removes the legacy global accounting policy and leaves these objects inaccessible to authenticated users until the expense records and storage paths are migrated to an explicit company-owned key. This is intentional: preserving global access would retain a cross-tenant data exposure. A separate reviewed expense storage migration is still required.
+
+### Validation still required
+
+The migrations have not been applied to a production clone yet. The current CI workflow is running against the branch; its outcome must be checked after the latest commit. A passing application build is not a substitute for PostgreSQL execution of migrations 0053/0054 with Supabase auth/storage stubs and two-company adversarial cases. Production remains unchanged and the PR remains draft pending those tests and a coordinated cutover window.
