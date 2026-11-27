@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, model_validator
 from pyproj import CRS, Transformer
 from pystac_client import Client
 from shapely import contains_xy
-from shapely.geometry import MultiPoint, Point, Polygon, mapping, shape
+from shapely.geometry import LineString, MultiPoint, Point, Polygon, mapping, shape
 from shapely.ops import nearest_points
 from shapely.validation import make_valid
 from sklearn.cluster import DBSCAN
@@ -94,17 +94,16 @@ MERGE_HULL_GAP_M = float(os.getenv("MERGE_HULL_GAP_M", "1.0"))
 # RING_EVIDENCE_ADJACENCY_M, and stay below the facet's own highest fitted
 # elevation plus RING_EVIDENCE_Z_CAP_M (a taller neighbouring roof that
 # merely crosses the plane's extension is not this roof's overhang).
-# The default keeps the ring AT the clip width (0.75 m — lever inert):
-# five-house validation showed the growth is worth a great deal where the
-# county footprint traces the wall line (Broward: Miramar's total error
-# went to -0.4% with the ring at 1.5 m) but annexes non-roof surface where
-# the footprint already traces the roof outline (Miami-Dade's LiDAR-derived
-# footprints: at Annel's house a same-pitch surface beyond the eave — a
-# patio cover or similar — added +92 sq ft the FirstMeasure report does
-# not count, and the growth also filled a valley line at Miramar). Until
-# an automatic guard can tell the two footprint kinds apart, enabling the
-# ring is a deliberate per-deployment choice: OVERHANG_RING_M=1.5.
-OVERHANG_RING_M = float(os.getenv("OVERHANG_RING_M", "0.75"))
+# Whether the growth may fire at all depends on what the footprint polygon
+# traces (see ROOF_OUTLINE_PROVIDERS below): where the county traces the
+# WALL line (Broward), the ring past it is real roof and the growth is
+# worth a great deal (Miramar's total error went to -0.4% with the ring at
+# 1.5 m); where the footprint already traces the ROOF outline (Miami-Dade),
+# the same growth annexes non-roof surface beyond the eave (at Annel's
+# house a same-pitch patio cover added +92 sq ft the FirstMeasure report
+# does not count). The ring therefore defaults to 1.5 m and is gated per
+# footprint provider in _fit_facets, not per deployment.
+OVERHANG_RING_M = float(os.getenv("OVERHANG_RING_M", "1.5"))
 RING_EVIDENCE_ADJACENCY_M = float(os.getenv("RING_EVIDENCE_ADJACENCY_M", "1.0"))
 RING_EVIDENCE_Z_CAP_M = float(os.getenv("RING_EVIDENCE_Z_CAP_M", "0.25"))
 # Competing planes: largest-first resolution drops a candidate that keeps
@@ -119,6 +118,34 @@ RING_EVIDENCE_Z_CAP_M = float(os.getenv("RING_EVIDENCE_Z_CAP_M", "0.25"))
 # planes' intersection lines (see _competing_plane_share).
 COMPETING_PLANE_MIN_POINTS = int(os.getenv("COMPETING_PLANE_MIN_POINTS", "150"))
 COMPETING_PLANE_RESIDUAL_M = float(os.getenv("COMPETING_PLANE_RESIDUAL_M", "0.20"))
+# Footprint provenance decides two things in _fit_facets: whether the
+# overhang ring may grow facets past the polygon, and whether facet edges
+# are clipped back to the polygon. Miami-Dade County's building footprints
+# are derived from the county LiDAR survey itself (the layer's SOURCE code
+# 'L'), so the polygon traces the ROOF outline — eave overhang is already
+# inside it, and surface past the eave (an attached patio cover at Annel's
+# house, same pitch, same height) is not part of the measured roof. Every
+# other provider used here (Broward County, ArcGIS USA Structures,
+# OpenStreetMap, City of Miramar parcels) traces the WALL line, so the
+# roof legitimately extends past the polygon by the eave overhang and the
+# ring evidence may claim it. Providers not in this set are treated as
+# wall outlines.
+ROOF_OUTLINE_PROVIDERS = frozenset({"Miami-Dade County Building Footprints"})
+# Boundary snapping: the resolution/shrink/growth passes can leave two
+# facets that share one physical seam a few decimetres apart, so the edge
+# classifier sees two perimeters instead of one shared edge (Miramar's
+# ridge nearly vanished this way). After all growth, boundary vertices of
+# one facet that lie within this tolerance of a neighbour's boundary move
+# to the midpoint between the two boundaries, and any overlap the move
+# creates is trimmed back, so adjacent facets end up coincident and
+# disjoint.
+BOUNDARY_SNAP_TOLERANCE_M = float(os.getenv("BOUNDARY_SNAP_TOLERANCE_M", "0.5"))
+# Valley protection for overhang growth: a valley runs out to the eave,
+# and ring growth at its mouth would fill the concave corner (and, by
+# moving the facet outline, can cost the valley its classification).
+# Growth pieces are clipped out of a corridor this wide around each
+# existing valley seam, extended into the ring along its own line.
+VALLEY_GROWTH_CLEARANCE_M = float(os.getenv("VALLEY_GROWTH_CLEARANCE_M", "0.5"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -1077,6 +1104,7 @@ def _grow_into_overhang_ring(
     records: list[dict[str, Any]],
     footprint: Polygon,
     ring_points: np.ndarray,
+    protected_zones: list[Polygon] | None = None,
 ) -> None:
     """Extend facets into the eave overhang ring on ring-point evidence.
 
@@ -1099,11 +1127,19 @@ def _grow_into_overhang_ring(
     outermost returns — a house whose eaves end inside the clip has no
     on-plane ring points and does not grow. Facet point counts and fit
     RMSE are untouched, as in coverage completion.
+
+    Valley protection: `protected_zones` are corridors around the valley
+    seams the facets already share (extended into the ring along the
+    seam's own line). Growth pieces are clipped out of those corridors:
+    a valley runs out to the eave, and growth at its mouth would fill
+    the concave corner the two valley facets form — the valley must
+    continue through the overhang, not be paved over by it.
     """
     from shapely.ops import unary_union
 
     if not records or ring_points is None or len(ring_points) == 0:
         return
+    protected: Any = unary_union(protected_zones) if protected_zones else None
     inner_clip = footprint.buffer(0.75)
     outer_clip = footprint.buffer(OVERHANG_RING_M)
     annulus = outer_clip.difference(inner_clip)
@@ -1182,7 +1218,10 @@ def _grow_into_overhang_ring(
             # Same merge discipline as coverage completion: a growth
             # piece meeting the facet at a single point is expanded by
             # 2 cm so the union stays one valid ring; a piece that still
-            # cannot merge cleanly is left unassigned.
+            # cannot merge cleanly is left unassigned. Valley corridors
+            # are cut out of every piece first (see the docstring).
+            if protected is not None and not geometry.is_empty:
+                geometry = geometry.difference(protected)
             for piece in _polygon_parts(geometry):
                 merged = owner["polygon"].union(piece)
                 if merged.geom_type != "Polygon" or not merged.is_valid:
@@ -1212,6 +1251,198 @@ def _grow_into_overhang_ring(
             )
             if not evidenced_leftover.is_empty:
                 grow(owners[0], evidenced_leftover)
+
+
+def _complete_outline(records: list[dict[str, Any]], footprint: Polygon) -> None:
+    """Tile whatever part of the footprint the facets still leave bare.
+
+    Coverage completion only grows a facet across ground its own points
+    evidence, which leaves the footprint's corners and edges unclaimed
+    wherever returns thinned out — yet the footprint is itself measured
+    evidence: a roof covers its building's outline. Any part of the
+    footprint polygon no facet claims is therefore split among the
+    adjacent facets along the planes' intersection lines, the same
+    split coverage completion uses, so facet outer edges end up
+    following the true building outline (the notches and corners of an
+    L-shaped plan included) instead of the smoother line the hulls
+    stopped at. Ground beyond the footprint is not touched here: past
+    a wall outline that is overhang, claimed only by ring evidence;
+    past a roof outline it is not this roof at all.
+    """
+    from shapely.ops import unary_union
+
+    if not records:
+        return
+    covered = unary_union([record["polygon"] for record in records])
+    uncovered = footprint.difference(covered)
+    if uncovered.is_empty or uncovered.area <= 1e-6:
+        return
+
+    def grow(owner: dict[str, Any], geometry: Any) -> None:
+        # Same merge discipline as coverage completion.
+        for piece in _polygon_parts(geometry):
+            merged = owner["polygon"].union(piece)
+            if merged.geom_type != "Polygon" or not merged.is_valid:
+                merged = owner["polygon"].union(piece.buffer(0.02))
+            if merged.geom_type == "Polygon" and merged.is_valid:
+                owner["polygon"] = merged
+
+    for component in _polygon_parts(uncovered):
+        if component.is_empty or component.area <= 1e-6:
+            continue
+        owners = [
+            record
+            for record in records
+            if record["polygon"].distance(component) <= COVERAGE_GAP_ADJACENCY_M
+        ]
+        if not owners:
+            owners = [min(records, key=lambda record: record["polygon"].distance(component))]
+        owners.sort(key=lambda record: -record["point_count"])
+        remainder: Any = component
+        for owner in owners:
+            if remainder.is_empty or remainder.area <= 1e-9:
+                break
+            if len(owners) == 1:
+                part = remainder
+            else:
+                part = _upper_envelope_part(
+                    remainder, owner, [other for other in owners if other is not owner]
+                )
+            if part is None or part.is_empty:
+                continue
+            grow(owner, part)
+            remainder = remainder.difference(part)
+        if not remainder.is_empty and remainder.area > 1e-9:
+            grow(owners[0], remainder)
+
+
+def _snap_polygon_vertices(polygon: Polygon, other_boundary: Any, tolerance_m: float) -> Polygon:
+    """Move `polygon`'s exterior vertices that lie within `tolerance_m`
+    of `other_boundary` to the midpoint between the vertex and its
+    nearest point on that boundary.
+
+    A move is skipped when the midpoint would land within 2 cm of
+    another vertex of the same ring (a narrow neck the facet wraps
+    around a neighbour, for example): the moved ring would pinch there,
+    and the boundary rounding at emission time would then cut the
+    pinched lobe off — taking any seam it carried with it.
+    """
+    from shapely.ops import nearest_points
+
+    coords = [(float(x), float(y)) for x, y in polygon.exterior.coords]
+    moved: list[tuple[float, float]] = []
+    for index, (x, y) in enumerate(coords):
+        vertex = Point(x, y)
+        if other_boundary.distance(vertex) > tolerance_m:
+            moved.append((x, y))
+            continue
+        nearest = nearest_points(vertex, other_boundary)[1]
+        candidate = ((x + nearest.x) / 2.0, (y + nearest.y) / 2.0)
+        pinched = any(
+            math.hypot(candidate[0] - ox, candidate[1] - oy) < 0.02
+            for other_index, (ox, oy) in enumerate(coords)
+            if other_index != index
+            and abs(other_index - index) > 1
+            and not (index == 0 and other_index == len(coords) - 1)
+            and not (index == len(coords) - 1 and other_index == 0)
+        )
+        moved.append((x, y) if pinched else candidate)
+    if len(moved) < 4:
+        return polygon
+    return Polygon(moved)
+
+
+def _snap_shared_boundaries(
+    records: list[dict[str, Any]],
+    tolerance_m: float = BOUNDARY_SNAP_TOLERANCE_M,
+) -> None:
+    """Make near-coincident facet boundaries coincident (see the
+    BOUNDARY_SNAP_TOLERANCE_M note).
+
+    Boundaries are densified first so long edges bend onto the shared
+    line instead of only their endpoints moving. Each pair is snapped
+    symmetrically from the same snapshot, so the two sides meet at the
+    midline. A record whose snapped polygon is invalid, or whose area
+    moves by more than 15%, keeps its pre-snap geometry; overlaps the
+    snapping itself creates are then trimmed largest-first, restoring
+    the disjointness the resolution pass guarantees.
+    """
+    if len(records) < 2:
+        return
+    originals = [record["polygon"] for record in records]
+    snapped: list[Polygon] = []
+    for polygon in originals:
+        densified = polygon.segmentize(1.0) if polygon.length > 0 else polygon
+        snapped.append(densified if densified.geom_type == "Polygon" else polygon)
+    for i in range(len(records)):
+        for j in range(i + 1, len(records)):
+            if snapped[i].distance(snapped[j]) > tolerance_m:
+                continue
+            boundary_i = snapped[i].boundary
+            boundary_j = snapped[j].boundary
+            new_i = _snap_polygon_vertices(snapped[i], boundary_j, tolerance_m)
+            new_j = _snap_polygon_vertices(snapped[j], boundary_i, tolerance_m)
+            snapped[i], snapped[j] = new_i, new_j
+    accepted: list[Polygon] = []
+    for index, record in enumerate(records):
+        polygon = snapped[index]
+        original = originals[index]
+        if polygon is not original and not polygon.is_valid:
+            repaired = _polygon_parts(make_valid(polygon))
+            polygon = max(repaired, key=lambda part: part.area) if repaired else original
+        if (
+            polygon is original
+            or not polygon.is_valid
+            or polygon.is_empty
+            or abs(polygon.area - original.area) > 0.15 * original.area + 1e-9
+        ):
+            polygon = original
+        accepted.append(polygon)
+    # Trim overlaps the vertex moves created (small wedges along the
+    # snapped seams), largest facet first — the same priority the
+    # resolution pass uses. A record the trim would gut keeps its
+    # snapped polygon instead.
+    order = sorted(range(len(records)), key=lambda k: -records[k]["point_count"])
+    claimed: Any = None
+    final: dict[int, Polygon] = {}
+    for index in order:
+        polygon = accepted[index]
+        if claimed is not None and polygon.intersects(claimed):
+            remainder = polygon.difference(claimed)
+            parts = [
+                part for part in _polygon_parts(remainder)
+                if not part.is_empty
+            ]
+            if parts:
+                largest = max(parts, key=lambda part: part.area)
+                if largest.area >= 0.5 * polygon.area:
+                    polygon = largest
+        final[index] = polygon
+        claimed = polygon if claimed is None else claimed.union(polygon)
+    for index, record in enumerate(records):
+        # Facet emission rounds boundary coordinates to millimetres and
+        # repairs any ring that rounding invalidates — a repair this
+        # pass cannot control, which on Miramar cut a snapped facet's
+        # lobe and the ridge contact it carried. Bake the rounding in
+        # here instead: a record keeps the rounded ring only when it is
+        # valid as rounded and close in area to its pre-snap geometry;
+        # otherwise it keeps the pre-snap polygon, whose rounding the
+        # earlier passes already survived.
+        polygon = final[index]
+        rounded = [(round(float(x), 3), round(float(y), 3)) for x, y in polygon.exterior.coords]
+        candidate = Polygon(rounded) if len(rounded) >= 4 else None
+        if (
+            candidate is not None
+            and candidate.is_valid
+            and not candidate.is_empty
+            and abs(candidate.area - originals[index].area)
+            <= 0.15 * originals[index].area + 1e-9
+        ):
+            record["polygon"] = candidate
+        elif polygon is originals[index]:
+            record["polygon"] = polygon
+        else:
+            record["polygon"] = originals[index]
 
 
 def _plane_normal(a: float, b: float) -> np.ndarray:
@@ -1465,6 +1696,8 @@ def _fit_facets(
     points: np.ndarray,
     footprint: Polygon | None = None,
     ring_points: np.ndarray | None = None,
+    footprint_provider: str | None = None,
+    pair_classes_out: dict | None = None,
 ) -> list[dict[str, Any]]:
     from shapely.ops import unary_union
 
@@ -1662,13 +1895,76 @@ def _fit_facets(
     if footprint is not None and resolved:
         _complete_coverage(resolved, footprint.buffer(0.75), points)
 
+    # Classify the facet pairs now, while the structure is the one the
+    # fitter established, and freeze the verdicts on the records (see
+    # _classify_record_pairs): the geometry passes below reshape the
+    # polygons, and a seam's type must not be re-litigated from the
+    # reshaped shapes. The valley corridors for ring-growth protection
+    # come from the same frozen verdicts. The verdicts are keyed by
+    # record identity because the roof-outline clip below may drop a
+    # record; they are re-mapped to emitted-facet indices at emission.
+    pair_classes = _classify_record_pairs(resolved) if resolved else {}
+    for (first_index, second_index), (classification, _seam) in pair_classes.items():
+        first_record = resolved[first_index]
+        second_record = resolved[second_index]
+        first_record.setdefault("_frozen_edges", {})[id(second_record)] = classification
+        second_record.setdefault("_frozen_edges", {})[id(first_record)] = classification
+    valley_zones = _valley_seams(resolved, pair_classes)
+
+    # What coverage completion still leaves bare inside the footprint
+    # itself — corners and outline stretches whose returns were consumed
+    # as another facet's inliers — is assigned to the adjacent facets
+    # along their intersection lines: the footprint is measured evidence
+    # that the roof covers its building's outline, and facet edges
+    # should follow that outline rather than the smoother hull line.
+    if footprint is not None and resolved:
+        _complete_outline(resolved, footprint)
+
     # Roof surface past the fitting clip (wide eave overhang) is invisible
     # to hulls and coverage completion alike; grow into the overhang ring
-    # where the ring points gathered beyond the clip evidence it.
-    if footprint is not None and resolved and ring_points is not None:
-        _grow_into_overhang_ring(resolved, footprint, ring_points)
+    # where the ring points gathered beyond the clip evidence it. The
+    # growth is provenance-gated: it fires only when the footprint traces
+    # the wall line (see ROOF_OUTLINE_PROVIDERS) — where the polygon
+    # already traces the roof outline, the strip past it is not roof —
+    # and it is clipped out of the corridors around existing valley
+    # seams so the growth cannot fill a valley's concave corner.
+    roof_outline = footprint_provider in ROOF_OUTLINE_PROVIDERS
+    if footprint is not None and resolved and ring_points is not None and not roof_outline:
+        _grow_into_overhang_ring(
+            resolved, footprint, ring_points, protected_zones=valley_zones
+        )
+
+    # Where the footprint traces the roof outline itself, that outline
+    # is the roof's edge: trim anything the earlier passes pushed past
+    # it (hull and coverage growth reach the +0.75 m clip), so the
+    # measured plan is the traced roof, not the traced roof plus a
+    # margin.
+    if footprint is not None and roof_outline:
+        clipped: list[dict[str, Any]] = []
+        for record in resolved:
+            parts = [
+                part
+                for part in _polygon_parts(record["polygon"].intersection(footprint))
+                if not part.is_empty
+                and float(part.area)
+                / max(math.cos(math.radians(float(record["pitch"]))), 1e-6)
+                * 10.7639104167
+                >= MIN_FACET_AREA_SQFT
+            ]
+            if not parts:
+                continue
+            record["polygon"] = max(parts, key=lambda part: part.area)
+            clipped.append(record)
+        resolved = clipped
+
+    # Finally, pull near-coincident facet boundaries onto shared lines
+    # so the edge classifier sees one shared edge where two facets meet,
+    # not two almost-touching perimeters.
+    if resolved:
+        _snap_shared_boundaries(resolved)
 
     facets: list[dict[str, Any]] = []
+    emitted_records: list[dict[str, Any]] = []
     for record in resolved:
         polygon = record["polygon"]
         if polygon.geom_type != "Polygon":
@@ -1698,6 +1994,7 @@ def _fit_facets(
                     [round(float(x), 3), round(float(y), 3)]
                     for x, y in max(repaired, key=lambda part: part.area).exterior.coords
                 ]
+        emitted_records.append(record)
         facets.append({
             "id": f"facet-{len(facets) + 1}",
             "point_count": record["point_count"],
@@ -1716,6 +2013,16 @@ def _fit_facets(
             },
             "boundary_xy": boundary,
         })
+    if pair_classes_out is not None:
+        # Re-map the frozen pair verdicts from record identity to
+        # emitted-facet indices (emission may skip a record, and the
+        # roof-outline clip may have dropped one).
+        for first_index in range(len(emitted_records)):
+            frozen = emitted_records[first_index].get("_frozen_edges", {})
+            for second_index in range(first_index + 1, len(emitted_records)):
+                classification = frozen.get(id(emitted_records[second_index]))
+                if classification is not None:
+                    pair_classes_out[(first_index, second_index)] = classification
     return facets
 
 def _deduplicate_lidar_points(points: np.ndarray, precision_m: float = 0.02) -> np.ndarray:
@@ -1766,7 +2073,174 @@ def _line_components(geometry: Any) -> list[Any]:
     return []
 
 
-def _compute_edge_lengths(facets: list[dict[str, Any]]) -> dict[str, float] | None:
+def _shared_edge_span(
+    poly_i: Polygon, a_i: float, b_i: float, c_i: float, pitch_i: float,
+    poly_j: Polygon, a_j: float, b_j: float, c_j: float, pitch_j: float,
+) -> tuple[float, str, Any] | None:
+    """The shared edge between two facet polygons, if they have one:
+    (true 3D length in metres, classification, plan-view seam geometry).
+
+    The edge is the two planes' intersection line; the overlap of one
+    polygon with the other buffered by 0.75 m is projected onto that
+    line to find the span the facets actually share, and a cross-section
+    chord test one metre into each facet classifies it — above the chord
+    is a peak (ridge when the line runs level, hip when it slopes),
+    below it a valley. Parallel planes have no intersection line; a
+    flat pair among them still shares a pitch-change seam, measured on
+    the boundary itself. Projected spans under half a metre are corner
+    noise and return None. This is the single implementation of the
+    pair test: _compute_edge_lengths totals from it and _valley_seams
+    locates valleys from it, so the two can never disagree.
+    """
+    overlap = poly_i.intersection(poly_j.buffer(0.75))
+    if overlap.is_empty or overlap.area <= 1e-6:
+        return None
+    # Plane normals for z = ax + by + c are (-a, -b, 1); the edge
+    # direction is their cross product.
+    dx = -b_i + b_j
+    dy = a_i - a_j
+    dz = a_i * b_j - a_j * b_i
+    horizontal = math.hypot(dx, dy)
+    flat_pair = pitch_i < 5.0 and pitch_j < 5.0
+    if horizontal <= 1e-9:
+        # Parallel planes: no unique intersection line. Only a flat
+        # pair is meaningful here, as a pitch-change seam.
+        if not flat_pair:
+            return None
+        seam = poly_i.boundary.intersection(poly_j.buffer(0.3))
+        if seam.is_empty:
+            return None
+        return float(seam.length), "pitch_change", seam
+    # A point on the intersection line: both planes satisfy
+    # (a_i - a_j) x + (b_i - b_j) y + (c_i - c_j) = 0, whose
+    # coefficients are (dy, -dx). Fix the coordinate whose
+    # coefficient is smaller and solve for the other.
+    if abs(dx) >= abs(dy):
+        p_x = 0.0
+        p_y = (c_i - c_j) / dx
+    else:
+        p_y = 0.0
+        p_x = (c_i - c_j) / (-dy)
+    p_z = a_i * p_x + b_i * p_y + c_i
+    # Project the overlap region onto the line: s parameterizes
+    # position along it, and |d| converts s back to true 3D length.
+    denom = dx * dx + dy * dy
+    s_values = []
+    for part in _polygon_parts(overlap):
+        for vx, vy in part.exterior.coords:
+            s_values.append(((vx - p_x) * dx + (vy - p_y) * dy) / denom)
+    if not s_values:
+        return None
+    s_min, s_max = min(s_values), max(s_values)
+    length_m = (s_max - s_min) * math.sqrt(dx * dx + dy * dy + dz * dz)
+    if length_m < 0.5:
+        return None
+    s_mid = (s_min + s_max) / 2.0
+    mid_x, mid_y = p_x + s_mid * dx, p_y + s_mid * dy
+    edge_z = p_z + s_mid * dz
+    # Cross-section chord test one metre into each facet, stepping
+    # from the seam midpoint toward each polygon's representative
+    # point. The margin this produces can be a few centimetres on real
+    # seams, which is why _fit_facets classifies each pair once, when
+    # the facet structure is established, and does not re-run this test
+    # on reshaped polygons (see _classify_record_pairs).
+    chord_z = 0.0
+    for polygon, a, b, c in ((poly_i, a_i, b_i, c_i), (poly_j, a_j, b_j, c_j)):
+        center = polygon.representative_point()
+        vx, vy = center.x - mid_x, center.y - mid_y
+        norm = math.hypot(vx, vy)
+        if norm <= 1e-9:
+            chord_z = float("nan")
+            break
+        chord_z += (a * (mid_x + vx / norm) + b * (mid_y + vy / norm) + c) / 2.0
+    if flat_pair or not math.isfinite(chord_z) or abs(edge_z - chord_z) <= 0.03:
+        classification = "pitch_change"
+    elif edge_z > chord_z:
+        slope_along = abs(dz) / horizontal
+        classification = "ridge" if slope_along <= 0.14 else "hip"
+    else:
+        classification = "valley"
+    seam = LineString([
+        (p_x + s_min * dx, p_y + s_min * dy),
+        (p_x + s_max * dx, p_y + s_max * dy),
+    ])
+    return length_m, classification, seam
+
+
+def _classify_record_pairs(
+    records: list[dict[str, Any]],
+) -> dict[tuple[int, int], tuple[str, Any]]:
+    """Classify every shared edge the records currently have:
+    {(i, j): (classification, seam geometry)} from _shared_edge_span.
+
+    _fit_facets calls this once, right after coverage completion —
+    the moment the facet structure is established — and the verdicts
+    are carried through the later geometry passes (outline
+    completion, overhang growth, boundary snapping) instead of being
+    re-derived from the reshaped polygons at emission. The chord
+    test's margin on real seams can be a few centimetres (Miramar's
+    main valley: ~0.07 m against a 0.03 m pitch-change band), less
+    than the sampling drift those passes induce when they move a
+    polygon's representative point around an unchanged pair of planes
+    and an unchanged shared boundary: the same seam read as valley,
+    then pitch-change, then hip across the passes, and the valley —
+    and the ring-growth protection keyed to it — was lost. A seam's
+    type is a property of its two planes and their initial adjacency;
+    the later passes may lengthen or shorten the seam, and pairs that
+    only become adjacent later are classified live at emission, but a
+    classified pair is not re-litigated.
+    """
+    classes: dict[tuple[int, int], tuple[str, Any]] = {}
+    for i in range(len(records)):
+        for j in range(i + 1, len(records)):
+            first, second = records[i], records[j]
+            span = _shared_edge_span(
+                first["polygon"], first["a"], first["b"], first["c"], first["pitch"],
+                second["polygon"], second["a"], second["b"], second["c"], second["pitch"],
+            )
+            if span is not None:
+                classes[(i, j)] = (span[1], span[2])
+    return classes
+
+
+def _valley_seams(
+    records: list[dict[str, Any]],
+    pair_classes: dict[tuple[int, int], tuple[str, Any]] | None = None,
+) -> list[Polygon]:
+    """Protected corridors around the valley seams the facet records
+    currently share, for overhang-ring valley protection.
+
+    Each seam is extended by OVERHANG_RING_M at both ends — a valley
+    runs out through the eave, so its line continues into the ring —
+    and buffered by VALLEY_GROWTH_CLEARANCE_M. Ring growth is clipped
+    out of these corridors (see _grow_into_overhang_ring).
+    """
+    if pair_classes is None:
+        pair_classes = _classify_record_pairs(records)
+    zones: list[Polygon] = []
+    for classification, seam in pair_classes.values():
+        if classification != "valley":
+            continue
+        if seam is None or seam.is_empty or seam.geom_type != "LineString":
+            continue
+        (x0, y0), (x1, y1) = seam.coords[0], seam.coords[-1]
+        span_x, span_y = x1 - x0, y1 - y0
+        norm = math.hypot(span_x, span_y)
+        if norm <= 1e-9:
+            continue
+        ux, uy = span_x / norm, span_y / norm
+        extended = LineString([
+            (x0 - ux * OVERHANG_RING_M, y0 - uy * OVERHANG_RING_M),
+            (x1 + ux * OVERHANG_RING_M, y1 + uy * OVERHANG_RING_M),
+        ])
+        zones.append(extended.buffer(VALLEY_GROWTH_CLEARANCE_M))
+    return zones
+
+
+def _compute_edge_lengths(
+    facets: list[dict[str, Any]],
+    frozen_pair_classes: dict[tuple[int, int], str] | None = None,
+) -> dict[str, float] | None:
     """Derive EagleView-style edge totals from fitted facet geometry.
 
     Shared boundaries between two planes are classified with a cross-section
@@ -1775,11 +2249,16 @@ def _compute_edge_lengths(facets: list[dict[str, Any]]) -> dict[str, float] | No
     valley. Unshared boundary is perimeter: segments running across the
     facet's downslope direction are eaves, segments running along it are
     rakes. Lengths are true 3D lengths on the facet planes, in feet.
+
+    `frozen_pair_classes` carries the classifications _fit_facets froze
+    when the facet structure was established (see _classify_record_pairs):
+    for a pair present in the map, the frozen classification is used with
+    the pair's current span length; pairs absent from the map (adjacent
+    only after the later geometry passes) are classified live.
     """
     if not facets:
         return None
     feet_per_meter = 3.280839895
-    min_segment_m = 0.5
     polygons: list[Polygon] = []
     for facet in facets:
         polygon = Polygon(facet["boundary_xy"])
@@ -1794,10 +2273,6 @@ def _compute_edge_lengths(facets: list[dict[str, Any]]) -> dict[str, float] | No
             polygon = max(parts, key=lambda part: part.area)
         polygons.append(polygon)
 
-    def plane_z(index: int, x: float, y: float) -> float:
-        a, b, c = facets[index]["plane_model"]["z_equals_ax_plus_by_plus_c"]
-        return a * x + b * y + c
-
     totals = {"ridge": 0.0, "hip": 0.0, "valley": 0.0, "eave": 0.0, "rake": 0.0, "pitch_change": 0.0}
 
     # Shared edges between adjacent facet planes. The true edge is the two
@@ -1805,73 +2280,18 @@ def _compute_edge_lengths(facets: list[dict[str, Any]]) -> dict[str, float] | No
     # over-counts wherever a third boundary passes near a corner.
     for i in range(len(facets)):
         for j in range(i + 1, len(facets)):
-            overlap = polygons[i].intersection(polygons[j].buffer(0.75))
-            if overlap.is_empty or overlap.area <= 1e-6:
-                continue
             a_i, b_i, c_i = facets[i]["plane_model"]["z_equals_ax_plus_by_plus_c"]
             a_j, b_j, c_j = facets[j]["plane_model"]["z_equals_ax_plus_by_plus_c"]
-            # Plane normals for z = ax + by + c are (-a, -b, 1); the edge
-            # direction is their cross product.
-            dx = -b_i + b_j
-            dy = a_i - a_j
-            dz = a_i * b_j - a_j * b_i
-            horizontal = math.hypot(dx, dy)
-            flat_pair = facets[i]["pitch_degrees"] < 5.0 and facets[j]["pitch_degrees"] < 5.0
-            if horizontal <= 1e-9:
-                # Parallel planes: no unique intersection line. Only a flat
-                # pair is meaningful here, as a pitch-change seam.
-                if flat_pair:
-                    seam = polygons[i].boundary.intersection(polygons[j].buffer(0.3))
-                    totals["pitch_change"] += seam.length * feet_per_meter
+            span = _shared_edge_span(
+                polygons[i], a_i, b_i, c_i, facets[i]["pitch_degrees"],
+                polygons[j], a_j, b_j, c_j, facets[j]["pitch_degrees"],
+            )
+            if span is None:
                 continue
-            # A point on the intersection line: both planes satisfy
-            # (a_i - a_j) x + (b_i - b_j) y + (c_i - c_j) = 0, whose
-            # coefficients are (dy, -dx). Fix the coordinate whose
-            # coefficient is smaller and solve for the other.
-            if abs(dx) >= abs(dy):
-                p_x = 0.0
-                p_y = (c_i - c_j) / dx
-            else:
-                p_y = 0.0
-                p_x = (c_i - c_j) / (-dy)
-            p_z = a_i * p_x + b_i * p_y + c_i
-            # Project the overlap region onto the line: s parameterizes
-            # position along it, and |d| converts s back to true 3D length.
-            denom = dx * dx + dy * dy
-            s_values = []
-            for part in [overlap] if overlap.geom_type == "Polygon" else list(getattr(overlap, "geoms", [])):
-                ring = part.exterior if part.geom_type == "Polygon" else None
-                if ring is None:
-                    continue
-                for vx, vy in ring.coords:
-                    s_values.append(((vx - p_x) * dx + (vy - p_y) * dy) / denom)
-            if not s_values:
-                continue
-            s_min, s_max = min(s_values), max(s_values)
-            length_m = (s_max - s_min) * math.sqrt(dx * dx + dy * dy + dz * dz)
-            if length_m < min_segment_m:
-                continue
-            s_mid = (s_min + s_max) / 2.0
-            mid_x, mid_y = p_x + s_mid * dx, p_y + s_mid * dy
-            # Cross-section chord test one meter into each facet.
-            chord_z = 0.0
-            for index in (i, j):
-                center = polygons[index].representative_point()
-                vx, vy = center.x - mid_x, center.y - mid_y
-                norm = math.hypot(vx, vy)
-                if norm <= 1e-9:
-                    chord_z = float("nan")
-                    break
-                chord_z += plane_z(index, mid_x + vx / norm, mid_y + vy / norm) / 2.0
-            edge_z = p_z + s_mid * dz
-            length_ft = length_m * feet_per_meter
-            if flat_pair or not math.isfinite(chord_z) or abs(edge_z - chord_z) <= 0.03:
-                totals["pitch_change"] += length_ft
-            elif edge_z > chord_z:
-                slope_along = abs(dz) / horizontal
-                totals["ridge" if slope_along <= 0.14 else "hip"] += length_ft
-            else:
-                totals["valley"] += length_ft
+            length_m, classification, _seam = span
+            if frozen_pair_classes:
+                classification = frozen_pair_classes.get((i, j), classification)
+            totals[classification] += length_m * feet_per_meter
 
     # Unshared boundary is roof perimeter: eaves run across the slope,
     # rakes run along it.
@@ -1912,14 +2332,23 @@ def _facets_from_local_points(
     to_local: Transformer,
     from_local: Transformer,
     ring_points: np.ndarray | None = None,
+    footprint_provider: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, float] | None]:
     """Fit roof planes to deduplicated local-metric points and express each
     facet boundary back in lat/lon with modeled elevations. Ring points
     (already in local coordinates) never enter fitting; they only evidence
-    overhang growth in _fit_facets."""
+    overhang growth in _fit_facets. The footprint provider decides whether
+    that growth may fire (see ROOF_OUTLINE_PROVIDERS)."""
     footprint_local = _transform_polygon(polygon, to_local)
-    raw_facets = _fit_facets(unique_points, footprint_local, ring_points=ring_points)
-    edge_lengths = _compute_edge_lengths(raw_facets)
+    pair_classes: dict[tuple[int, int], str] = {}
+    raw_facets = _fit_facets(
+        unique_points, footprint_local, ring_points=ring_points,
+        footprint_provider=footprint_provider,
+        pair_classes_out=pair_classes,
+    )
+    edge_lengths = _compute_edge_lengths(
+        raw_facets, frozen_pair_classes=pair_classes
+    )
     all_facets: list[dict[str, Any]] = []
     for facet in raw_facets:
         facet["id"] = f"facet-{len(all_facets) + 1}"
@@ -1936,7 +2365,9 @@ def _facets_from_local_points(
     return all_facets, edge_lengths
 
 
-def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _read_lidar_facets(
+    polygon: Polygon, footprint_provider: str | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     catalog = Client.open(STAC_URL)
     # Search footprint bbox, not the full city. Multiple COPC tiles may overlap.
     items = list(catalog.search(collections=[STAC_COLLECTION], bbox=list(polygon.bounds), max_items=MAX_STAC_ITEMS).items())
@@ -2051,11 +2482,15 @@ def _read_lidar_facets(polygon: Polygon) -> tuple[list[dict[str, Any]], dict[str
         else np.empty((0, 3))
     )
     all_facets, edge_lengths = _facets_from_local_points(
-        unique_points, polygon, to_local, from_local, ring_points=unique_ring_points
+        unique_points, polygon, to_local, from_local,
+        ring_points=unique_ring_points, footprint_provider=footprint_provider,
     )
 
     return all_facets, {
         "edge_lengths_lf": edge_lengths,
+        "footprint_provider": footprint_provider,
+        "roof_outline_footprint": footprint_provider in ROOF_OUTLINE_PROVIDERS,
+        "overhang_ring_m": OVERHANG_RING_M,
         "stac_items": len(items),
         "tiles_used": used_items,
         "tile_ids_used": used_tile_ids,
@@ -2146,7 +2581,7 @@ def _select_building_points(
 
 
 def _tnm_points_local(
-    polygon: Polygon, tile_paths: list[Path]
+    polygon: Polygon, tile_paths: list[Path], footprint_provider: str | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read roof points from downloaded USGS LAZ tiles and fit facets.
 
@@ -2280,10 +2715,14 @@ def _tnm_points_local(
         else np.empty((0, 3))
     )
     all_facets, edge_lengths = _facets_from_local_points(
-        unique_points, polygon, to_local, from_local, ring_points=unique_ring_points
+        unique_points, polygon, to_local, from_local,
+        ring_points=unique_ring_points, footprint_provider=footprint_provider,
     )
     return all_facets, {
         "edge_lengths_lf": edge_lengths,
+        "footprint_provider": footprint_provider,
+        "roof_outline_footprint": footprint_provider in ROOF_OUTLINE_PROVIDERS,
+        "overhang_ring_m": OVERHANG_RING_M,
         "tiles_used": used_items,
         "tile_ids_used": used_tile_ids,
         "building_class_points": len(unique_points),
@@ -2299,7 +2738,7 @@ def _tnm_points_local(
 
 
 async def _read_lidar_facets_tnm(
-    polygon: Polygon,
+    polygon: Polygon, footprint_provider: str | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Fallback LiDAR source: USGS Lidar Point Cloud tiles via The National Map.
 
@@ -2309,28 +2748,61 @@ async def _read_lidar_facets_tnm(
     disk and reused for every nearby address.
     """
     minx, miny, maxx, maxy = polygon.bounds
-    async with httpx.AsyncClient(
-        timeout=httpx.Timeout(30.0, connect=10.0), headers={"User-Agent": USER_AGENT}
-    ) as client:
-        response = await client.get(
-            TNM_PRODUCTS_URL,
-            params={
-                "datasets": "Lidar Point Cloud (LPC)",
-                "bbox": f"{minx},{miny},{maxx},{maxy}",
-                "max": 12,
-                "outputFormat": "JSON",
-            },
-        )
-        response.raise_for_status()
-        items = response.json().get("items", [])
-    laz_items = [
-        item for item in items
-        if str(item.get("downloadURL", "")).lower().endswith(".laz")
-    ]
+
+    async def search_tiles(bbox: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0), headers={"User-Agent": USER_AGENT}
+        ) as client:
+            response = await client.get(
+                TNM_PRODUCTS_URL,
+                params={
+                    "datasets": "Lidar Point Cloud (LPC)",
+                    "bbox": bbox,
+                    "max": 12,
+                    "outputFormat": "JSON",
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+        items = payload.get("items", [])
+        laz = [
+            item for item in items
+            if str(item.get("downloadURL", "")).lower().endswith(".laz")
+        ]
+        return laz, payload
+
+    items: list[dict[str, Any]] = []
+    laz_items, payload = await search_tiles(f"{minx},{miny},{maxx},{maxy}")
+    items = payload.get("items", [])
     if not laz_items:
+        # TNM's product search is unreliable for building-sized
+        # bounding boxes: it intermittently answers HTTP 200 with an
+        # error envelope and no items, so a small footprint reads as
+        # "no tiles published" even where tiles exist (Annel's
+        # Miami-Dade D23 tiles, for one). Retry with the box padded to
+        # a ~450 m span, up to two more attempts — the search only
+        # discovers candidate tiles; the points are clipped to the
+        # footprint later, and a tile is far larger than the padding.
+        # Addresses whose first search already works are untouched.
+        span_x = max(maxx - minx, 0.004)
+        span_y = max(maxy - miny, 0.004)
+        center_x, center_y = (minx + maxx) / 2.0, (miny + maxy) / 2.0
+        padded = (
+            f"{center_x - span_x / 2},{center_y - span_y / 2},"
+            f"{center_x + span_x / 2},{center_y + span_y / 2}"
+        )
+        for _attempt in range(2):
+            laz_items, payload = await search_tiles(padded)
+            items = payload.get("items", [])
+            if laz_items:
+                break
+    if not laz_items:
+        reason = "No USGS Lidar Point Cloud tiles are published for this footprint."
+        if payload.get("error"):
+            reason = f"USGS TNM product search returned an error: {payload['error']}"
         return [], {
             "tnm_products": len(items),
-            "reason": "No USGS Lidar Point Cloud tiles are published for this footprint.",
+            "reason": reason,
         }
 
     def project_key(item: dict[str, Any]) -> str:
@@ -2361,7 +2833,7 @@ async def _read_lidar_facets_tnm(
             await _download_tile(url, dest)
         tile_paths.append(dest)
 
-    facets, meta = _tnm_points_local(polygon, tile_paths)
+    facets, meta = _tnm_points_local(polygon, tile_paths, footprint_provider)
     return facets, {
         "source": "USGS National Map (TNM) Lidar Point Cloud LAZ",
         "tnm_project": project,
@@ -2393,8 +2865,9 @@ async def analyze_roof(request: AnalyzeRequest):
         address_provenance = {"source": "User-provided coordinates"}
     footprint, footprint_meta = await get_footprint(lat, lon, request.street_address, request.footprint_candidate_id)
     footprint_sqft = _polygon_area_sqft(footprint)
+    footprint_provider = footprint_meta.get("provider")
     try:
-        facets, lidar_meta = _read_lidar_facets(footprint)
+        facets, lidar_meta = _read_lidar_facets(footprint, footprint_provider)
     except Exception as exc:
         facets, lidar_meta = [], {"reason": f"3DEP lookup failed: {type(exc).__name__}"}
     if not facets:
@@ -2405,7 +2878,7 @@ async def analyze_roof(request: AnalyzeRequest):
         # Either way, fall back to the same USGS surveys published as LAZ
         # tiles via The National Map.
         try:
-            tnm_facets, tnm_meta = await _read_lidar_facets_tnm(footprint)
+            tnm_facets, tnm_meta = await _read_lidar_facets_tnm(footprint, footprint_provider)
         except Exception as exc:
             tnm_facets, tnm_meta = [], {"reason": f"TNM lookup failed: {type(exc).__name__}"}
         if tnm_facets:

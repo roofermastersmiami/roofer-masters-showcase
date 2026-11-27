@@ -114,10 +114,10 @@ def test_analyze_endpoint_returns_address_footprint_match_evidence(monkeypatch):
     monkeypatch.setattr(
         roof_service,
         "_read_lidar_facets",
-        lambda _polygon: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
+        lambda _polygon, _provider=None: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
     )
 
-    async def fake_tnm(_polygon):
+    async def fake_tnm(_polygon, _provider=None):
         return [], {"reason": "test stub"}
 
     monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
@@ -158,10 +158,10 @@ def test_analyze_endpoint_falls_back_to_tnm_when_copc_items_yield_no_facets(monk
     monkeypatch.setattr(
         roof_service,
         "_read_lidar_facets",
-        lambda _polygon: ([], {"stac_items": 1, "tiles_used": 0, "building_class_points": 0}),
+        lambda _polygon, _provider=None: ([], {"stac_items": 1, "tiles_used": 0, "building_class_points": 0}),
     )
 
-    async def fake_tnm(_polygon):
+    async def fake_tnm(_polygon, _provider=None):
         return (
             [{"area_sqft": 1200.0, "pitch_rise_per_12": 6.0}],
             {"source": "USGS National Map (TNM) Lidar Point Cloud LAZ", "tiles_used": 1},
@@ -512,8 +512,9 @@ def test_overhang_ring_points_extend_eave_facet_only_when_on_plane(monkeypatch):
     # only as ring points. On-plane ring points must extend the facet
     # past the clip; off-plane ring points (a taller neighbouring
     # surface crossing the plane's extension) must not move it at all.
-    # The ring lever is inert at its default width (see OVERHANG_RING_M),
-    # so the test enables it explicitly.
+    # The test pins the ring width explicitly (see OVERHANG_RING_M) and
+    # passes no footprint provider, which is a wall-outline default:
+    # growth may fire (see the provider-gating test below).
     import main as service
 
     monkeypatch.setattr(service, "OVERHANG_RING_M", 1.5)
@@ -633,10 +634,10 @@ def test_analyze_endpoint_forwards_explicit_building_candidate_id(monkeypatch):
     monkeypatch.setattr(
         roof_service,
         "_read_lidar_facets",
-        lambda _polygon: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
+        lambda _polygon, _provider=None: ([], {"stac_items": 0, "tiles_used": 0, "building_class_points": 0}),
     )
 
-    async def fake_tnm(_polygon):
+    async def fake_tnm(_polygon, _provider=None):
         return [], {"reason": "test stub"}
 
     monkeypatch.setattr(roof_service, "_read_lidar_facets_tnm", fake_tnm)
@@ -1253,3 +1254,195 @@ def test_select_building_points_rejects_low_and_ground_points():
     selected, source = _select_building_points(ground, np.full(300, 2), 0.5)
     assert source is None
     assert len(selected) == 0
+
+
+def test_outline_completion_tiles_l_shaped_footprint():
+    from main import _complete_outline
+    from shapely.ops import unary_union
+
+    # L-shaped plan: a 20x20 square missing its north-east quadrant.
+    # The inner corner is (10, 10); the notch void is x > 10, y > 10.
+    footprint = Polygon([(0, 0), (20, 0), (20, 10), (10, 10), (10, 20), (0, 20)])
+    # One facet whose hull stopped at the south arm: the north arm and
+    # the notch corner are still bare.
+    record = {
+        "polygon": Polygon([(0, 0), (20, 0), (20, 10), (0, 10)]),
+        "point_count": 500,
+        "a": 0.0, "b": -0.3, "c": 12.0, "pitch": 16.7,
+    }
+    records = [record]
+    assert not record["polygon"].covers(Point(5, 15))
+
+    _complete_outline(records, footprint)
+
+    merged = unary_union([r["polygon"] for r in records])
+    # The facet now tiles the whole L: the north arm is claimed and the
+    # notch corner sits on its boundary, while the notch void stays
+    # empty — the outer edge followed the traced outline instead of
+    # bulging across the notch the way a hull perimeter would.
+    assert merged.area == pytest.approx(footprint.area, rel=0.001)
+    assert merged.covers(Point(5, 15))
+    assert merged.boundary.distance(Point(10, 10)) < 0.05
+    assert not merged.covers(Point(15, 15))
+
+
+def test_snap_shared_boundaries_registers_ridge():
+    from main import _shared_edge_span, _snap_shared_boundaries
+
+    # Two opposing slopes whose planes meet at x = 10 (both give
+    # z = 10 there), but whose polygons stop 0.3 m apart: two
+    # almost-touching perimeters instead of one shared edge.
+    def record(x0, x1, a, c):
+        return {
+            "polygon": Polygon([(x0, 0), (x1, 0), (x1, 10), (x0, 10)]),
+            "point_count": 100,
+            "a": a, "b": 0.0, "c": c, "pitch": 26.57,
+        }
+
+    records = [record(0.0, 9.85, 0.5, 5.0), record(10.15, 20.0, -0.5, 15.0)]
+    gap_midpoint = Point(10.0, 5.0)
+    assert not any(r["polygon"].covers(gap_midpoint) for r in records)
+
+    _snap_shared_boundaries(records)
+
+    first, second = records
+    # The boundaries now coincide along the seam: no gap, no overlap,
+    # and the pair's shared edge registers as the ridge it is.
+    assert first["polygon"].boundary.distance(second["polygon"].boundary) == pytest.approx(0.0, abs=0.01)
+    assert first["polygon"].intersection(second["polygon"]).area == pytest.approx(0.0, abs=0.01)
+    assert first["polygon"].covers(gap_midpoint) or second["polygon"].covers(gap_midpoint)
+    span = _shared_edge_span(
+        first["polygon"], first["a"], first["b"], first["c"], first["pitch"],
+        second["polygon"], second["a"], second["b"], second["c"], second["pitch"],
+    )
+    assert span is not None
+    length_m, classification, _seam = span
+    assert classification == "ridge"
+    assert length_m == pytest.approx(10.0, rel=0.05)
+
+
+def test_ring_growth_gated_by_footprint_provider():
+    # The same face and ring evidence as the ring test above, through
+    # the two provenance classes. A Miami-Dade footprint traces the
+    # ROOF outline — the overhang is already inside the polygon — so
+    # ring growth must never fire and the facet is clipped to the
+    # traced outline. A Broward footprint traces the WALL line, so the
+    # ring beyond it is real roof and the facet grows on the evidence.
+    rng = np.random.default_rng(31)
+    footprint = Polygon([(0, 0), (20, 0), (20, 10), (0, 10)])
+    x, y = np.meshgrid(np.arange(0.25, 20.5, 0.5), np.arange(0.25, 9.75, 0.5))
+    face = np.column_stack((x.ravel(), y.ravel(), (20.0 - 0.5 * x).ravel()))
+    face[:, 2] += rng.normal(0, 0.02, len(face))
+    x_ring, y_ring = np.meshgrid(
+        np.arange(21.0, 21.5, 0.25), np.arange(0.5, 9.75, 0.5)
+    )
+    on_plane = np.column_stack(
+        (x_ring.ravel(), y_ring.ravel(), (20.0 - 0.5 * x_ring).ravel())
+    )
+    on_plane[:, 2] += rng.normal(0, 0.02, len(on_plane))
+
+    miami = _fit_facets(
+        face, footprint, ring_points=on_plane,
+        footprint_provider="Miami-Dade County Building Footprints",
+    )
+    broward = _fit_facets(
+        face, footprint, ring_points=on_plane,
+        footprint_provider="Broward County Building Footprints",
+    )
+
+    assert len(miami) == 1 and len(broward) == 1
+    miami_max_x = max(point[0] for point in miami[0]["boundary_xy"])
+    broward_max_x = max(point[0] for point in broward[0]["boundary_xy"])
+    # Roof outline: nothing past the traced east edge at x = 20.
+    assert miami_max_x <= 20.0 + 0.01
+    # Wall outline: the facet grows past the wall on ring evidence.
+    assert broward_max_x > miami_max_x + 0.3
+    assert broward[0]["area_sqft"] > miami[0]["area_sqft"] + 40.0
+
+
+def test_ring_growth_refuses_to_cross_valley():
+    from main import _grow_into_overhang_ring, _valley_seams
+    from shapely.ops import unary_union
+
+    # A valley pair: two slopes descending to their shared seam at
+    # x = 10 (the geometry of the valley edge test). The valley runs
+    # out of the footprint's south edge, and ring points evidence both
+    # planes across the whole south strip.
+    def record(x0, x1, a, c):
+        return {
+            "polygon": Polygon([(x0, 0), (x1, 0), (x1, 10), (x0, 10)]),
+            "point_count": 100,
+            "a": a, "b": 0.0, "c": c, "pitch": 26.57,
+        }
+
+    footprint = Polygon([(0, 0), (20, 0), (20, 10), (0, 10)])
+    xs = np.arange(0.5, 20.0, 0.5)
+    ys = np.array([-0.3, -0.6, -0.9, -1.2])
+    gx, gy = np.meshgrid(xs, ys)
+    gz = np.where(gx < 10.0, 10.0 - 0.5 * gx, 0.5 * gx)
+    ring_points = np.column_stack((gx.ravel(), gy.ravel(), gz.ravel()))
+
+    def grown_union(protected_zones):
+        records = [record(0.0, 10.0, -0.5, 10.0), record(10.0, 20.0, 0.5, 0.0)]
+        _grow_into_overhang_ring(
+            records, footprint, ring_points, protected_zones=protected_zones
+        )
+        return unary_union([r["polygon"] for r in records])
+
+    corridor_point = Point(9.7, -0.5)  # in the valley corridor, on facet A's side
+    eave_point = Point(5.0, -1.0)  # ordinary overhang south of facet A
+
+    unprotected = grown_union(None)
+    # Without protection the growth reaches the corridor point: the
+    # valley's mouth would be paved over.
+    assert unprotected.covers(corridor_point)
+    assert unprotected.covers(eave_point)
+
+    records = [record(0.0, 10.0, -0.5, 10.0), record(10.0, 20.0, 0.5, 0.0)]
+    zones = _valley_seams(records)
+    assert zones  # the pair's seam is a valley and earns its corridor
+    protected = grown_union(zones)
+    # With the corridor, growth still takes the ordinary overhang but
+    # refuses the strip the valley runs out through.
+    assert not protected.covers(corridor_point)
+    assert protected.covers(eave_point)
+
+
+def test_frozen_pair_classes_override_live_classification():
+    from main import _compute_edge_lengths
+
+    # The gable pair from the ridge test: live classification is ridge.
+    facets = [
+        _edge_facet(0.0, 10.0, 0.5, 0.0, 5.0),
+        _edge_facet(10.0, 20.0, -0.5, 0.0, 15.0),
+    ]
+    live = _compute_edge_lengths(facets)
+    assert live is not None and live["ridge"] > 0.0
+
+    # A classification frozen when the facet structure was established
+    # wins over the live verdict for that pair, at the pair's live
+    # length (see _classify_record_pairs).
+    frozen = _compute_edge_lengths(facets, frozen_pair_classes={(0, 1): "valley"})
+    assert frozen is not None
+    assert frozen["ridge"] == 0.0
+    assert frozen["valley"] == pytest.approx(live["ridge"], rel=0.02)
+
+
+def test_fit_facets_reports_frozen_pair_classes():
+    # The competing-planes roof (two facets, one shared seam): the
+    # frozen map must carry the pair so the edge totals can use the
+    # verdict from when the structure was established.
+    rng = np.random.default_rng(41)
+    x_w, y_w = np.meshgrid(np.arange(0.0, 20.25, 0.5), np.arange(0.0, 10.25, 0.5))
+    broad = np.column_stack((x_w.ravel(), y_w.ravel(), (0.36 * x_w + 12.0).ravel()))
+    x_c, y_c = np.meshgrid(np.arange(12.0, 20.25, 0.5), np.arange(0.0, 10.25, 0.5))
+    steep = np.column_stack((x_c.ravel(), y_c.ravel(), (0.47 * x_c + 10.6).ravel()))
+    points = np.vstack((broad, steep))
+    points[:, 2] += rng.normal(0, 0.02, len(points))
+
+    pair_classes: dict = {}
+    facets = _fit_facets(points, pair_classes_out=pair_classes)
+
+    assert len(facets) == 2
+    assert set(pair_classes) == {(0, 1)}
+    assert pair_classes[(0, 1)] in {"ridge", "hip", "valley", "pitch_change"}
