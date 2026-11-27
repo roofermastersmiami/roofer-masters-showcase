@@ -15,7 +15,7 @@ export async function reconcileInvoiceSession(sessionId: string, environment: St
     throw new Error("Payment currency, amount, or environment mismatch");
   const { data: checkout, error: checkoutError } = await supabaseAdmin
     .from("invoice_checkouts")
-    .select("id,invoice_id")
+    .select("id,invoice_id,company_id")
     .eq("session_id", sessionId)
     .eq("environment", environment)
     .maybeSingle();
@@ -23,6 +23,7 @@ export async function reconcileInvoiceSession(sessionId: string, environment: St
     throw new Error("Could not verify the payment checkout; owner review required");
   if (
     !checkout ||
+    !checkout.company_id ||
     checkout.invoice_id !== session.metadata["invoiceId"] ||
     checkout.id !== session.metadata["checkoutId"]
   )
