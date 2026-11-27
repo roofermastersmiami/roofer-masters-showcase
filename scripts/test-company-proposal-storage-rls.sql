@@ -35,6 +35,7 @@ GRANT USAGE ON SCHEMA public,auth,storage TO authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON storage.objects TO authenticated;
 GRANT SELECT ON storage.buckets TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_crm_company_member(uuid) TO authenticated;
+GRANT SELECT ON public.proposals, public.crm_company_memberships TO authenticated;
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE storage.objects FORCE ROW LEVEL SECURITY;
 
