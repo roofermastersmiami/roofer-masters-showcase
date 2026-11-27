@@ -1,0 +1,118 @@
+\set ON_ERROR_STOP on
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
+  SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+$$;
+CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$
+  SELECT coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'authenticated')
+$$;
+
+CREATE TABLE crm_company_memberships(user_id uuid, company_id uuid, role text);
+CREATE TABLE crm_invoices(
+  id uuid PRIMARY KEY, company_id uuid NOT NULL, status text NOT NULL,
+  paid_cents bigint NOT NULL DEFAULT 0, total_cents bigint NOT NULL,
+  environment text NOT NULL
+);
+CREATE TABLE invoice_checkouts(
+  id uuid PRIMARY KEY, company_id uuid NOT NULL, invoice_id uuid NOT NULL,
+  session_id text NOT NULL, environment text NOT NULL, amount_cents bigint NOT NULL,
+  status text NOT NULL
+);
+CREATE TABLE invoice_payments(
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
+  invoice_id uuid NOT NULL, amount_cents bigint NOT NULL, method text NOT NULL,
+  reference text, provider_event_id text, received_at timestamptz, environment text NOT NULL
+);
+
+INSERT INTO crm_company_memberships VALUES
+('00000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','owner'),
+('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','accounting');
+INSERT INTO crm_invoices(id,company_id,status,paid_cents,total_cents,environment) VALUES
+('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','draft',0,10000,'test'),
+('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','issued',0,10000,'test');
+INSERT INTO invoice_checkouts VALUES
+('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','cs_test_1','test',5000,'pending');
+
+\ir ../drizzle/migrations/0056_company_scoped_invoice_payment_rpcs.sql
+
+-- Same-company accounting can issue an invoice.
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $$ BEGIN
+  IF NOT public.set_invoice_status('20000000-0000-0000-0000-000000000001','issued') THEN
+    RAISE EXCEPTION 'Same-company issue did not return true';
+  END IF;
+END $$;
+
+-- A different company's accounting member cannot issue the first company's invoice.
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
+DO $$ BEGIN
+  BEGIN
+    PERFORM public.set_invoice_status('20000000-0000-0000-0000-000000000001','void');
+    RAISE EXCEPTION 'Cross-company invoice status change was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Cross-company invoice status change was accepted' THEN RAISE; END IF;
+  END;
+END $$;
+
+-- Same-company manual payment is recorded and inherits company from invoice.
+DO $$
+DECLARE payment_uuid uuid;
+BEGIN
+  payment_uuid := public.record_invoice_payment(
+    '20000000-0000-0000-0000-000000000002',2500,'check','CHK-1',now()
+  );
+  IF NOT EXISTS(SELECT 1 FROM invoice_payments
+    WHERE id=payment_uuid AND company_id='10000000-0000-0000-0000-000000000002'
+      AND invoice_id='20000000-0000-0000-0000-000000000002') THEN
+    RAISE EXCEPTION 'Payment did not inherit invoice company';
+  END IF;
+END $$;
+
+-- A company A owner cannot record payment against company B invoice.
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $$ BEGIN
+  BEGIN
+    PERFORM public.record_invoice_payment(
+      '20000000-0000-0000-0000-000000000002',1000,'cash','X',now()
+    );
+    RAISE EXCEPTION 'Cross-company payment was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Cross-company payment was accepted' THEN RAISE; END IF;
+  END;
+END $$;
+
+-- Authenticated users cannot settle a provider checkout directly.
+DO $$ BEGIN
+  BEGIN
+    PERFORM public.settle_invoice_checkout('cs_test_1','test',5000);
+    RAISE EXCEPTION 'Authenticated checkout settlement was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Authenticated checkout settlement was accepted' THEN RAISE; END IF;
+  END;
+END $$;
+
+-- Trusted payment service can settle, and the payment inherits checkout/invoice company.
+SELECT set_config('request.jwt.claim.role','service_role',false);
+DO $$
+BEGIN
+  IF NOT public.settle_invoice_checkout('cs_test_1','test',5000) THEN
+    RAISE EXCEPTION 'Trusted checkout settlement failed';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM invoice_payments
+    WHERE invoice_id='20000000-0000-0000-0000-000000000002'
+      AND company_id='10000000-0000-0000-0000-000000000002'
+      AND provider_event_id='cs_test_1') THEN
+    RAISE EXCEPTION 'Settlement payment company does not match invoice';
+  END IF;
+  IF (SELECT paid_cents FROM crm_invoices WHERE id='20000000-0000-0000-0000-000000000002') <> 7500 THEN
+    RAISE EXCEPTION 'Invoice paid balance was not updated';
+  END IF;
+  IF NOT public.settle_invoice_checkout('cs_test_1','test',5000) THEN
+    RAISE EXCEPTION 'Repeated settlement was not idempotent';
+  END IF;
+  IF (SELECT count(*) FROM invoice_payments WHERE provider_event_id='cs_test_1') <> 1 THEN
+    RAISE EXCEPTION 'Repeated settlement duplicated payment';
+  END IF;
+END $$;
+
+\echo 'Company-scoped invoice RPC integration tests passed.'
