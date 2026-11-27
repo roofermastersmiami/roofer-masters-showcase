@@ -1,3 +1,4 @@
+// tenant-audit: reviewed — report mutations use the authenticated Supabase client and company membership; the only service-role operation is post-authorization cleanup of the exact report PDF path after the tenant-scoped row delete.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
