@@ -29,7 +29,7 @@ import { drawingsQuery } from "./roof-data";
 import { roofOrdersQuery, type RoofOrder } from "./roof-orders-data";
 import { downloadPdf } from "./proposal-data";
 import { Empty, SectionHeading } from "./CrmControls";
-import { PdfContractSigner } from "@/components/PdfContractSigner";
+import { useCrm } from "./CrmContext";
 
 export function RoofReports({
   onOpenMeasurement,
@@ -38,11 +38,11 @@ export function RoofReports({
 }) {
   const customers = useQuery(customersQuery);
   const orders = useQuery(roofOrdersQuery);
+  const { openPdfStudio } = useCrm();
   const drawings = useQuery(drawingsQuery);
   const [search, setSearch] = useState("");
   const [swipedReportId, setSwipedReportId] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
-  const [signingReport, setSigningReport] = useState<RoofOrder | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -64,6 +64,29 @@ export function RoofReports({
       downloadPdf(new Uint8Array(await data.arrayBuffer()), row.title || "Roof measurement report");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not download roof report PDF");
+    }
+  }
+
+  // Fill & Sign opens the report PDF in PDF Studio's Request signatures
+  // tool — Acrobat-style click-and-drop signature/date/name fields plus a
+  // private signing link for the customer — replacing the old
+  // stamp-on-top contract dialog.
+  async function fillAndSign(row: RoofOrder) {
+    if (!row.file_path) {
+      openPdfStudio(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from("roofing-proposals")
+        .download(row.file_path);
+      if (error || !data) throw error ?? new Error("PDF file not found");
+      openPdfStudio({
+        name: `${row.title || "Roof measurement report"}.pdf`,
+        bytes: new Uint8Array(await data.arrayBuffer()),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open roof report PDF");
     }
   }
 
@@ -202,7 +225,7 @@ export function RoofReports({
                       {row.file_path ? "Open measurements" : "Continue measurements"} <ArrowRight />
                     </Button>
                     <EditSketchButton report={row} drawingRow={savedDrawing} />
-                    <Button onClick={() => setSigningReport(row)}>
+                    <Button onClick={() => void fillAndSign(row)}>
                       <PenLine /> Fill &amp; Sign
                     </Button>
                     <DeleteRoofReportButton reportId={row.id} address={row.address} />
@@ -297,37 +320,6 @@ export function RoofReports({
               <p className="p-6 text-sm text-muted-foreground">PDF preview is unavailable.</p>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={!!signingReport}
-        onOpenChange={(open) => {
-          if (!open) setSigningReport(null);
-        }}
-      >
-        <DialogContent className="flex h-[94vh] w-[98vw] max-w-7xl flex-col gap-3 overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Fill &amp; Sign Contract</DialogTitle>
-            <DialogDescription>
-              Add signatures and contract fields to a PDF for{" "}
-              {signingReport?.address ?? "this property"}.
-            </DialogDescription>
-          </DialogHeader>
-          {signingReport && (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <PdfContractSigner
-                reportId={signingReport.id}
-                leadId={
-                  customers.data?.find((customer) => customer.id === signingReport.customer_id)
-                    ?.source_lead_id ?? null
-                }
-                propertyAddress={signingReport.address}
-                sourcePdfPath={signingReport.file_path}
-                sourceBucket="roofing-proposals"
-                onSaved={() => setSigningReport(null)}
-              />
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>

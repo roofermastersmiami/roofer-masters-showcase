@@ -65,6 +65,7 @@ import {
   type RedactionRect,
 } from "@/lib/pdf-tools-browser";
 import { useCrm } from "./CrmContext";
+import { PdfSignatureStudio } from "./PdfSignatureStudio";
 
 /**
  * PDF Studio: an Acrobat-style workspace. One document stays open in the
@@ -353,6 +354,7 @@ function StudioViewer({
     widthPt: number;
     heightPt: number;
   } | null>(null);
+  const [renderError, setRenderError] = useState("");
   const [zoom, setZoom] = useState<"fit" | number>("fit");
   const [rotation, setRotation] = useState(0);
   const dragStart = useRef<{ fx: number; fy: number } | null>(null);
@@ -365,12 +367,18 @@ function StudioViewer({
   useEffect(() => {
     if (!doc) return;
     let cancelled = false;
+    setRenderError("");
     renderPagePreview(doc.bytes, pageIndex, 1100)
       .then((result) => {
         if (!cancelled) setPagePreview(result);
       })
-      .catch(() => {
-        if (!cancelled) setPagePreview(null);
+      .catch((caught) => {
+        if (!cancelled) {
+          setPagePreview(null);
+          setRenderError(
+            caught instanceof Error ? caught.message : "This page could not be rendered.",
+          );
+        }
       });
     return () => {
       cancelled = true;
@@ -535,6 +543,14 @@ function StudioViewer({
                 }
               }}
             />
+          ) : renderError ? (
+            <p
+              role="alert"
+              className="m-3 rounded border border-destructive/40 bg-destructive/10 p-3 text-sm"
+            >
+              Could not render page {pageIndex + 1}: {renderError} — the file may be damaged or
+              password-protected.
+            </p>
           ) : (
             <p className="py-16 text-center text-sm text-muted-foreground">Rendering page…</p>
           )}
@@ -1061,31 +1077,6 @@ function CommentsPanel({ doc, onResult, registerInteraction }: PanelProps) {
   );
 }
 
-function EsignPanel({ doc }: PanelProps) {
-  const { openProposals } = useCrm();
-  return (
-    <div className="grid gap-3">
-      <p className="text-sm text-muted-foreground">
-        For a tracked signature with a signing record, send the proposal from Estimates &amp;
-        proposals — the customer signs through a secure link and the signed PDF is stored on the
-        job. To simply email the open PDF with a signature request, use the button below.
-      </p>
-      <div>
-        <Button type="button" onClick={() => openProposals()}>
-          Open Estimates &amp; proposals
-        </Button>
-      </div>
-      {doc ? (
-        <EmailComposer result={doc} defaultSubject="Please review and sign — Roofer Masters" />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Open a PDF in the studio to email it from here.
-        </p>
-      )}
-    </div>
-  );
-}
-
 function OcrPanel({ doc, onResult, openDoc }: PanelProps) {
   const { busy, error, run } = useRun();
   const [progress, setProgress] = useState("");
@@ -1532,6 +1523,7 @@ function SignPanel({ doc, onResult, registerInteraction }: PanelProps) {
 }
 
 export function PdfStudio() {
+  const { pdfStudioRequest, clearPdfStudioRequest } = useCrm();
   const [tool, setTool] = useState<ToolId>("create");
   const [doc, setDoc] = useState<StudioDoc | null>(null);
   const [pageCount, setPageCount] = useState(0);
@@ -1551,6 +1543,16 @@ export function PdfStudio() {
     setResult(null);
     setPageIndex(0);
   }, []);
+
+  // Entry points elsewhere in the CRM (a roof report's Fill & Sign button, a
+  // proposal's Edit PDF button) hand their PDF to the studio through the CRM
+  // context: open it here, ready to place signature fields.
+  useEffect(() => {
+    if (!pdfStudioRequest) return;
+    if (pdfStudioRequest.doc) openDoc(pdfStudioRequest.doc);
+    setTool("esign");
+    clearPdfStudioRequest();
+  }, [pdfStudioRequest, openDoc, clearPdfStudioRequest]);
 
   useEffect(() => {
     setInteraction(null);
@@ -1666,14 +1668,16 @@ export function PdfStudio() {
         </div>
 
         <div className="grid content-start gap-4">
-          <StudioViewer
-            doc={doc}
-            pageCount={pageCount}
-            pageIndex={pageIndex}
-            onPageChange={setPageIndex}
-            thumbs={thumbs}
-            interaction={interaction}
-          />
+          {tool !== "esign" && (
+            <StudioViewer
+              doc={doc}
+              pageCount={pageCount}
+              pageIndex={pageIndex}
+              onPageChange={setPageIndex}
+              thumbs={thumbs}
+              interaction={interaction}
+            />
+          )}
           <div className="rounded border p-4">
             <h3 className="mb-3 font-medium">{active.label}</h3>
             {result && (
@@ -1687,7 +1691,7 @@ export function PdfStudio() {
             {tool === "combine" && <CombinePanel {...panelProps} />}
             {tool === "organize" && <OrganizePanel {...panelProps} />}
             {tool === "comments" && <CommentsPanel {...panelProps} />}
-            {tool === "esign" && <EsignPanel {...panelProps} />}
+            {tool === "esign" && <PdfSignatureStudio doc={doc} />}
             {tool === "ocr" && <OcrPanel {...panelProps} />}
             {tool === "protect" && <ProtectPanel {...panelProps} />}
             {tool === "redact" && <RedactPanel {...panelProps} />}

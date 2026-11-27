@@ -11,6 +11,10 @@ export type CrmState = {
   clearRoofReportRequest: () => void;
   selectedRoofReportId: string | null;
   openRoofMeasurements: (reportId: string | null) => void;
+  /** A PDF handed to PDF Studio by another CRM section (roof report, proposal). */
+  pdfStudioRequest: { doc: { name: string; bytes: Uint8Array } | null } | null;
+  openPdfStudio: (doc: { name: string; bytes: Uint8Array } | null) => void;
+  clearPdfStudioRequest: () => void;
 };
 export const CrmContext = createContext<CrmState | null>(null);
 export function useCrm() {

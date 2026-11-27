@@ -27,7 +27,7 @@ import { ROOF_CATEGORIES } from "@/lib/proposal-schema";
 import { proposalsQuery, readProposalPdf, downloadPdf, type Proposal } from "./proposal-data";
 import { ProposalComposer, type ComposerConfig } from "./ProposalComposer";
 import { ProposalShareDialog } from "./ProposalShareDialog";
-import { PdfEditor } from "./PdfEditor";
+import { useCrm } from "./CrmContext";
 import type { Lead } from "./data";
 
 export function Proposals({
@@ -41,12 +41,12 @@ export function Proposals({
 }) {
   const { data: proposals = [], isLoading, error } = useQuery(proposalsQuery);
   const qc = useQueryClient();
+  const { openPdfStudio } = useCrm();
   const [view, setView] = useState("proposals");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [composer, setComposer] = useState<ComposerConfig | null>(null);
-  const [editing, setEditing] = useState<Proposal | null>(null);
   const [sharing, setSharing] = useState<Proposal | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["proposals"] });
@@ -219,8 +219,22 @@ export function Proposals({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!proposal.file_path}
-                  onClick={() => setEditing(proposal)}
+                  disabled={!proposal.file_path || busyId === proposal.id}
+                  onClick={async () => {
+                    // Edit PDF now opens the proposal in the new PDF Studio
+                    // (Acrobat-style tools + Request signatures), replacing
+                    // the old stamp-on-top editor dialog.
+                    if (!proposal.file_path) return;
+                    setBusyId(proposal.id);
+                    try {
+                      const bytes = await readProposalPdf(proposal.file_path);
+                      openPdfStudio({ name: `${proposal.title}.pdf`, bytes });
+                    } catch (caught) {
+                      toast.error(caught instanceof Error ? caught.message : "Could not open PDF");
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
                 >
                   <Pencil /> Edit PDF
                 </Button>
@@ -298,15 +312,6 @@ export function Proposals({
           onClose={() => setComposer(null)}
           onSaved={() => {
             setComposer(null);
-            void refresh();
-          }}
-        />
-      )}
-      {editing && (
-        <PdfEditor
-          proposal={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
             void refresh();
           }}
         />
