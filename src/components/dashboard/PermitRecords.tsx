@@ -377,7 +377,7 @@ export function PermitRecords() {
                     </CardHeader>
                     <CardContent className="space-y-2 text-xs">
                       <p className={jurisdictionChecklist.authorityConfirmed ? "font-medium text-emerald-700 dark:text-emerald-400" : "font-medium text-amber-700 dark:text-amber-400"}>
-                        {jurisdictionChecklist.authorityConfirmed ? "Authority profile and project scope matched." : "Authority / project scope is not confirmed. Do not treat this checklist as filing-ready."}
+                        {jurisdictionChecklist.authorityConfirmed ? "Checklist scope matches the selected inputs; verify the parcel authority before filing." : "Authority / project scope is not confirmed. Do not treat this checklist as filing-ready."}
                       </p>
                       {jurisdictionChecklist.warnings.map((warning) => <p key={warning} className="text-amber-700 dark:text-amber-400">{warning}</p>)}
                       {jurisdictionChecklist.requiredRoofingSections.length > 0 && <p><strong>Roof application sections:</strong> {jurisdictionChecklist.requiredRoofingSections.join(", ")}</p>}
