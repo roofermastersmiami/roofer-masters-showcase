@@ -20,10 +20,12 @@ export function validatePermitDocument(file: {
   if (!Number.isFinite(file.size) || file.size < 0 || file.size > PERMIT_DOCUMENT_MAX_BYTES) {
     return { valid: false, reason: "Permit documents must be 25 MB or smaller." };
   }
-  const safeName = file.name
+  const sanitizedName = file.name
     .normalize("NFKD")
     .replace(/[^a-zA-Z0-9._-]/g, "-")
-    .slice(-100) || "permit-document";
+    .replace(/^-+|-+$/g, "")
+    .slice(-100);
+  const safeName = sanitizedName || "permit-document";
   return { valid: true, safeName };
 }
 
