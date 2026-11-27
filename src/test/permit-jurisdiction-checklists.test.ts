@@ -443,7 +443,7 @@ describe("City of Margate roofing permit profile", () => {
     expect(ids).toContain("margate-hurricane-preparedness");
     expect(ids).toContain("margate-fire-classification");
     expect(ids).toContain("margate-product-approvals");
-    expect(ids).not.toContain("margate-owner-builder-affidavit");
+    expect(ids).toContain("margate-owner-builder-affidavit");
   });
 
   it("requires City parcel verification and suppresses expired code references", () => {
