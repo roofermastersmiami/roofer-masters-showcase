@@ -80,3 +80,83 @@ The reviewed production snapshot contained:
 - Company qualifier settings migration 0041 exists in the repository but is not verified in production.
 - PR #181/#182/#183 CI workflows were observed completed successfully in the reviewed snapshot; all three remained open/draft and their mergeability does not imply deployment readiness.
 - No production DDL/DML or migration runner was executed as part of this audit.
+
+
+---
+
+## Read-only production refresh — 2026-11-26 (evening refresh)
+
+**Project:** Roofer Masters CRM and its connected Supabase database.  
+**Method:** SELECT-only inspection through the project's connected database. No DDL, DML, migration execution, storage changes, or deployment was performed.
+
+### Current migration ledger
+
+- \`drizzle.__drizzle_migrations\` contains **30 rows**.
+- Latest recorded migration timestamp: \`2026-11-21T03:35:20.000Z\`.
+- The live catalog still has no \`company_id\` column on \`leads\`, \`crm_customers\`, \`crm_properties\`, \`roof_report_orders\`, or \`roof_jobs\`.
+- Live \`crm_company_memberships.role\` remains \`text\` with a CHECK constraint, not the repository enum shape assumed by an earlier historical migration.
+
+### Current company and operational record counts
+
+| Object | Live count / state |
+| --- | ---: |
+| Companies | 1 |
+| Company memberships | 1 (owner) |
+| Legacy \`user_roles\` users | 1 (admin role) |
+| Leads | 11 |
+| CRM customers | 22 |
+| CRM properties | 19 |
+| Roof report orders | 4 |
+| Roof jobs | 4 |
+
+**Count drift is only partially reconciled.** PR #181's baseline note reported 12 roof-report orders; the 2026-11-26 earlier audit recorded 3; the evening read-only refresh returned 4. A privacy-minimized date-bucket query shows one order created on each of 2026-11-21, 2026-11-24, 2026-11-25, and 2026-11-26, so the 3 → 4 change is consistent with a new order created on 2026-11-26. The older 12 → 4 discrepancy remains unexplained and may reflect a different project, schema, filter, or earlier data state. Do not use 12 or 4 as a backfill assumption until that discrepancy is resolved against source records.
+
+### Current permit-related production objects
+
+The following relations are absent from the live \`public\` schema:
+
+- \`crm_company_permit_settings\`
+- \`roof_permit_applications\`
+- \`roof_permit_inspections\`
+- \`roof_product_approvals\`
+- \`roof_permit_noc_tracking\`
+
+The \`storage.buckets\` inventory contains \`crm-company-branding\`, \`roof-job-photos\`, and \`roofing-proposals\`; there is no \`permit-documents\` bucket.
+
+### Current security and privileged-path observations
+
+- RLS is enabled on the existing core CRM tables and \`roof_jobs\`, but the inspected operational tables are not FORCE-RLS.
+- The current \`leads\`, \`crm_customers\`, \`crm_properties\`, \`roof_jobs\`, and \`roof_report_orders\` policies still authorize through legacy global \`has_role\` / \`has_any_role\` checks.
+- The existing company tables use \`is_crm_company_member\` and \`is_crm_company_admin\` helpers. Both helpers are SECURITY DEFINER and are granted to authenticated roles (and anon); their current bodies check \`auth.uid()\` against \`crm_company_memberships\`.
+- \`save_crm_customer(jsonb)\` is still SECURITY DEFINER and authorizes through global \`has_any_role\`; its current body has no company membership lookup or company predicate.
+- Three \`create_roof_report_request\` overloads exist. All three are SECURITY DEFINER and authorize with global roles; their queries and writes are not company-scoped.
+- \`delete_crm_customer(uuid)\` was not present in the inspected public routine inventory.
+- Existing service-role, public intake, report-order, team, invoice, change-order, and storage paths still require the coordinated review recorded in the tenant-isolation PR comments.
+
+**Release consequence:** the new permit application and product-approval migrations depend on a company-owned roof-job/application foundation that is not present in production. The CI two-company fixtures prove the new migrations in an isolated test database; they do not prove the live production schema has the prerequisites or that all legacy privileged write paths are tenant-safe.
+
+### Permitting feature branch status
+
+The following stacked feature PRs have successful CI runs, including PostgreSQL security tests, unit tests, lint, and application build:
+
+| PR | Scope | CI |
+| --- | --- | --- |
+| #198 | Permit application / inspection management | Passed |
+| #204 | Miami-Dade and Broward jurisdiction checklists | Passed |
+| #205 | NOA / Florida Product Approval register | Passed |
+| #206 | NOC assessment and recording tracker | Passed |
+| #207 | Product-approval code-edition evidence | Passed |
+
+They remain open, draft, and stacked by dependency. Their successful CI does not mean the migrations have been merged or applied to production.
+
+### Required production release gate
+
+1. Repeat the read-only ledger, object, row-count, constraint, trigger, function, grant, RLS, policy, and storage inventory immediately before release. Resolve the roof-report count drift (12 → 3 → 4) from source records.
+2. Reconcile migrations 0031–0041 against the live schema. Do not replay historical migrations blindly and do not manufacture ledger entries to skip them.
+3. Complete the company ownership and membership-aware authorization chain. In particular, replace global-role policies and secure every SECURITY DEFINER/service-role path, including customer delete, report request overloads, team/job assignment, invoices, change orders, public intake, and storage.
+4. Confirm the existing staff/user membership mapping and preserve the current role matrix and public lead-intake behavior.
+5. Apply reviewed forward-only migrations in dependency order: company ownership and roof-job foundation first; then permit applications/inspections; then private permit documents; then product approvals; NOC tracking; and code-edition evidence.
+6. Run the migration chain against a production-like clone and execute two-company adversarial tests before approving any production DDL.
+7. Deploy only after the production schema and app version are aligned. Then run a read-only/live smoke test for application creation, document access, product approvals, NOC tracking, and inspection status.
+
+**Current decision: NO PRODUCTION MIGRATION OR DEPLOYMENT.** The feature build is CI-validated, but the production database prerequisites and tenant-isolation release gate remain incomplete.
