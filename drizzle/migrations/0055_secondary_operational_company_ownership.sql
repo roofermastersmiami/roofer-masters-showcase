@@ -106,6 +106,18 @@ BEGIN
     WHERE i.proposal_id IS NOT NULL AND i.lead_id IS NOT NULL
       AND p.lead_id IS NOT NULL AND p.lead_id IS DISTINCT FROM l.id
     UNION ALL
+    SELECT 1 FROM public.crm_invoices i
+    JOIN public.proposals p ON p.id=i.proposal_id
+    JOIN public.crm_properties ip ON ip.id=i.property_id
+    WHERE i.proposal_id IS NOT NULL AND i.property_id IS NOT NULL
+      AND p.property_id IS NOT NULL AND p.property_id IS DISTINCT FROM ip.id
+    UNION ALL
+    SELECT 1 FROM public.proposals p
+    JOIN public.roof_drawings d ON d.id=p.drawing_id
+    JOIN public.crm_properties pr ON pr.id=p.property_id
+    WHERE p.drawing_id IS NOT NULL AND p.property_id IS NOT NULL
+      AND d.property_id IS DISTINCT FROM pr.id
+    UNION ALL
     SELECT 1 FROM public.invoice_project_links x
     JOIN public.crm_invoices i ON i.id=x.invoice_id
     JOIN public.roof_jobs j ON j.id=x.job_id
@@ -134,6 +146,12 @@ BEGIN
     JOIN public.roof_drawings d ON d.id=e.drawing_id
     WHERE e.property_id IS NOT NULL AND e.drawing_id IS NOT NULL
       AND p.id IS DISTINCT FROM d.property_id
+    UNION ALL
+    SELECT 1 FROM public.roof_estimates e
+    JOIN public.roof_report_orders r ON r.id=e.report_order_id
+    JOIN public.crm_properties p ON p.id=e.property_id
+    WHERE e.report_order_id IS NOT NULL AND e.property_id IS NOT NULL
+      AND r.property_id IS DISTINCT FROM p.id
   ) THEN
     RAISE EXCEPTION '0055 found conflicting parent ownership; resolve before retrying';
   END IF;
