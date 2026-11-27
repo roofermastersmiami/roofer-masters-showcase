@@ -15,6 +15,7 @@ CREATE POLICY "Company accounting members read expense receipts" ON storage.obje
       JOIN public.crm_company_memberships m ON m.company_id=e.company_id
       WHERE e.id::text=split_part(name,'/',3)
         AND e.company_id::text=split_part(name,'/',2)
+        AND e.receipt_path=name
         AND m.user_id=auth.uid()
         AND m.role IN ('owner','admin','accounting')
     )
@@ -51,7 +52,6 @@ CREATE POLICY "Company accounting members delete expense receipts" ON storage.ob
       JOIN public.crm_company_memberships m ON m.company_id=e.company_id
       WHERE e.id::text=split_part(name,'/',3)
         AND e.company_id::text=split_part(name,'/',2)
-        AND e.receipt_path=name
         AND m.user_id=auth.uid()
         AND m.role IN ('owner','admin','accounting')
     )
@@ -62,4 +62,4 @@ COMMENT ON POLICY "Company accounting members read expense receipts" ON storage.
 COMMENT ON POLICY "Company accounting members upload expense receipts" ON storage.objects IS
   'Receipt upload requires a pre-existing company-owned expense row and owner/admin/accounting membership in that company.';
 COMMENT ON POLICY "Company accounting members delete expense receipts" ON storage.objects IS
-  'Receipt deletion requires the exact receipt_path on a company-owned expense row and owner/admin/accounting membership.';
+  'Receipt deletion requires an exact company/expense path and owner/admin/accounting membership; this also permits cleanup when upload succeeded but row attachment failed.';
