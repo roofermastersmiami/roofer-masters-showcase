@@ -54,6 +54,8 @@ import { RoofImageTrace } from "./RoofImageTrace";
 import { SatelliteRoofTrace } from "./SatelliteRoofTrace";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
 import { loadPublicAerial } from "@/lib/public-aerial.functions";
+import { loadReportAerial } from "@/lib/report-aerial.functions";
+import type { AerialPhoto } from "@/lib/aerial-photo";
 import { findBuildingFootprints } from "@/lib/building-footprint.functions";
 import {
   footprintToDraftPlane,
@@ -102,6 +104,7 @@ export function RoofMeasurements({
   const saveFn = useServerFn(saveRoofDrawing);
   const attachPdfFn = useServerFn(attachRoofOrderPdf);
   const aerialFn = useServerFn(loadPublicAerial);
+  const reportAerialFn = useServerFn(loadReportAerial);
   const footprintFn = useServerFn(findBuildingFootprints);
   const [traceIndex, setTraceIndex] = useState(0);
   const [reportTheme, setReportTheme] = useState<"roofsnap" | "navy" | "charcoal" | "emerald">(
@@ -295,19 +298,44 @@ export function RoofMeasurements({
       }
       // Hands-off cover photo: when the job has no stored aerial,
       // fetch free Esri World Imagery for the drawing's geographic
-      // origin automatically. Any failure leaves photos unchanged
-      // and the report falls back to its sketch cover.
+      // origin automatically. The server-side export fetch goes
+      // first (no browser CORS dependency — the step-7 client-side
+      // tile stitch was never proven in a real export); the client
+      // stitch remains as a fallback. Any failure leaves photos
+      // unchanged and the report falls back to its sketch cover.
       if (!photos.some((photo) => /aerial/i.test(photo.category)) && d.geo_reference) {
+        const { originLatitude, originLongitude } = d.geo_reference;
+        let aerial: AerialPhoto | null = null;
         try {
-          const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
-          const aerial = await fetchAerialPhoto(
-            d.geo_reference.originLatitude,
-            d.geo_reference.originLongitude,
-          );
-          if (aerial) photos.unshift(aerial);
+          const result = await reportAerialFn({
+            data: { latitude: originLatitude, longitude: originLongitude },
+          });
+          if ("imageBase64" in result && result.imageBase64) {
+            const binary = atob(result.imageBase64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            aerial = {
+              bytes,
+              mime: result.mime,
+              category: "aerial",
+              name: "Aerial photo (Esri World Imagery)",
+              source: result.source,
+              latitude: result.latitude,
+              longitude: result.longitude,
+            };
+          }
         } catch {
-          // Imagery is best-effort; never block the report on it.
+          // Fall through to the client-side stitch.
         }
+        if (!aerial) {
+          try {
+            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
+            aerial = await fetchAerialPhoto(originLatitude, originLongitude);
+          } catch {
+            // Imagery is best-effort; never block the report on it.
+          }
+        }
+        if (aerial) photos.unshift(aerial);
       }
       const bytes = await roofDrawingPdf(
         title,

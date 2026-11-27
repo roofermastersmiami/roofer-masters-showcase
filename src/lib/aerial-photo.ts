@@ -5,8 +5,12 @@
  * "Esri, Maxar, Earthstar Geographics"). Tiles are stitched in the
  * browser at zoom 19 (~0.27 m/px at South Florida latitudes) around
  * the property and cropped to a square window centred on it. This
- * runs automatically when a report is generated for a drawing that
- * has a geographic origin and no stored aerial photo — address in,
+ * is the FALLBACK path: report generation fetches the same window
+ * server-side first (report-aerial.server.ts — one exportImage
+ * request, no browser CORS dependency); this stitch runs only when
+ * the server fetch is unavailable. Either way the photo arrives
+ * automatically when a report is generated for a drawing that has
+ * a geographic origin and no stored aerial photo — address in,
  * report out, no manual photo fetching (Fredy's hands-off rule).
  *
  * Any failure (offline, tile missing, CORS, canvas unavailable)
