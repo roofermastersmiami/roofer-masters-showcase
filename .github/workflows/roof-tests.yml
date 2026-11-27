@@ -8,9 +8,9 @@ concurrency:
 
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051]
+    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052]
   pull_request:
-    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050]
+    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051]
   workflow_dispatch:
 
 jobs:
@@ -91,6 +91,12 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_product_approvals_test
           psql "postgresql://postgres@localhost:5432/crm_product_approvals_test" -v ON_ERROR_STOP=1 -f scripts/test-company-roof-product-approvals.sql
+      - name: Run permit NOC tracking PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_permit_noc_test
+          psql "postgresql://postgres@localhost:5432/crm_permit_noc_test" -v ON_ERROR_STOP=1 -f scripts/test-company-permit-noc-tracking.sql
       - name: Run lint checks (baseline audit)
         run: npm run lint
         continue-on-error: true
