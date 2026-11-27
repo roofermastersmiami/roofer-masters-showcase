@@ -10,43 +10,90 @@ import { PDFDocument } from "pdf-lib";
 type PdfJsModule = typeof import("pdfjs-dist");
 
 let pdfJsPromise: Promise<PdfJsModule> | null = null;
+let workerSrcOverride: string | null = null;
+
+/**
+ * Point pdf.js at a specific worker file instead of the bundled one.
+ * Used by the Node test suite (where Vite's `?url` asset handling does
+ * not apply) and available for self-hosted deployments.
+ */
+export function setPdfWorkerSource(source: string | null): void {
+  workerSrcOverride = source;
+  pdfJsPromise = null;
+}
 
 async function loadPdfJs(): Promise<PdfJsModule> {
   if (!pdfJsPromise) {
     pdfJsPromise = (async () => {
       const pdfjs = await import("pdfjs-dist");
-      const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
-      pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+      if (workerSrcOverride) {
+        pdfjs.GlobalWorkerOptions.workerSrc = workerSrcOverride;
+      } else {
+        const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+        pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+      }
       return pdfjs;
     })();
   }
   return pdfJsPromise;
 }
 
+/**
+ * Canvas seam: in the browser, pages render onto real <canvas> elements.
+ * Tests (Node) register a factory backed by @napi-rs/canvas so the exact
+ * same render/rasterize code paths run headlessly.
+ */
+export type PdfCanvas = {
+  width: number;
+  height: number;
+  getContext: (type: "2d") => CanvasRenderingContext2D | null;
+  toBlob: (callback: (blob: Blob | null) => void, type?: string, quality?: number) => void;
+  toDataURL: (type?: string) => string;
+};
+
+let canvasFactory: ((width: number, height: number) => PdfCanvas) | null = null;
+
+export function setPdfCanvasFactory(
+  factory: ((width: number, height: number) => PdfCanvas) | null,
+): void {
+  canvasFactory = factory;
+}
+
+function createPdfCanvas(width: number, height: number): PdfCanvas {
+  if (canvasFactory) return canvasFactory(width, height);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas as unknown as PdfCanvas;
+}
+
 export type RenderedPage = {
   pageNumber: number; // 1-based
   widthPt: number;
   heightPt: number;
-  canvas: HTMLCanvasElement;
+  canvas: PdfCanvas;
   scale: number; // canvas pixels per PDF point
 };
 
 export async function renderPdfPages(bytes: Uint8Array, dpi = 150): Promise<RenderedPage[]> {
   const pdfjs = await loadPdfJs();
-  const pdf = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  const loadingTask = pdfjs.getDocument({ data: Uint8Array.from(bytes) });
+  const pdf = await loadingTask.promise;
   const scale = dpi / 72;
   const pages: RenderedPage[] = [];
   for (let index = 1; index <= pdf.numPages; index++) {
     const page = await pdf.getPage(index);
     const viewport = page.getViewport({ scale });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
+    const canvas = createPdfCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Canvas is not available in this browser.");
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    await page.render({
+      canvas: canvas as unknown as HTMLCanvasElement,
+      canvasContext: context,
+      viewport,
+    }).promise;
     pages.push({
       pageNumber: index,
       widthPt: viewport.width / scale,
@@ -55,7 +102,7 @@ export async function renderPdfPages(bytes: Uint8Array, dpi = 150): Promise<Rend
       scale,
     });
   }
-  await pdf.destroy();
+  await loadingTask.destroy();
   return pages;
 }
 
@@ -66,21 +113,24 @@ export async function renderPagePreview(
   targetWidth = 760,
 ): Promise<{ dataUrl: string; widthPt: number; heightPt: number }> {
   const pdfjs = await loadPdfJs();
-  const pdf = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  const loadingTask = pdfjs.getDocument({ data: Uint8Array.from(bytes) });
+  const pdf = await loadingTask.promise;
   const page = await pdf.getPage(pageIndex + 1);
   const base = page.getViewport({ scale: 1 });
   const scale = targetWidth / base.width;
   const viewport = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
+  const canvas = createPdfCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas is not available in this browser.");
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  await page.render({
+    canvas: canvas as unknown as HTMLCanvasElement,
+    canvasContext: context,
+    viewport,
+  }).promise;
   const dataUrl = canvas.toDataURL("image/png");
-  await pdf.destroy();
+  await loadingTask.destroy();
   return { dataUrl, widthPt: base.width, heightPt: base.height };
 }
 
@@ -108,7 +158,8 @@ export async function exportPdfToImages(
 /** Extract the text already embedded in a PDF (no OCR). */
 export async function exportPdfToText(bytes: Uint8Array): Promise<string> {
   const pdfjs = await loadPdfJs();
-  const pdf = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  const loadingTask = pdfjs.getDocument({ data: Uint8Array.from(bytes) });
+  const pdf = await loadingTask.promise;
   const parts: string[] = [];
   for (let index = 1; index <= pdf.numPages; index++) {
     const page = await pdf.getPage(index);
@@ -127,7 +178,7 @@ export async function exportPdfToText(bytes: Uint8Array): Promise<string> {
       .join("\n");
     parts.push(`--- Page ${index} ---\n${text}`);
   }
-  await pdf.destroy();
+  await loadingTask.destroy();
   return parts.join("\n\n");
 }
 
@@ -202,7 +253,19 @@ export async function ocrPdfToSearchable(
   try {
     for (const page of pages) {
       options.onProgress?.(page.pageNumber, pages.length);
-      const result = await worker.recognize(page.canvas);
+      const isDomCanvas =
+        typeof HTMLCanvasElement !== "undefined" && page.canvas instanceof HTMLCanvasElement;
+      let ocrInput: unknown = page.canvas;
+      if (!isDomCanvas) {
+        const pngBlob = await new Promise<Blob>((resolve, reject) =>
+          page.canvas.toBlob(
+            (value) => (value ? resolve(value) : reject(new Error("Page render failed"))),
+            "image/png",
+          ),
+        );
+        ocrInput = new Uint8Array(await pngBlob.arrayBuffer());
+      }
+      const result = await worker.recognize(ocrInput as never);
       const data = result.data as unknown as {
         text: string;
         words?: OcrWord[];

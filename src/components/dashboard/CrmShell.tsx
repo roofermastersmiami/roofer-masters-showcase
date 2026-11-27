@@ -99,7 +99,7 @@ const groups = [
       { id: "detailed-estimator", label: "Detailed estimator", icon: Calculator },
       { id: "prices", label: "Material & labor prices", icon: Settings },
       { id: "proposals", label: "Estimates & proposals", icon: FileText },
-      { id: "pdf-tools", label: "PDF tools", icon: FileText },
+      { id: "pdf-tools", label: "PDF studio", icon: FileText },
       { id: "jobs", label: "Projects & production", icon: HardHat },
       { id: "followups", label: "Tasks & follow-ups", icon: Clock },
       { id: "appointments", label: "Appointment calendar", icon: CalendarDays },
