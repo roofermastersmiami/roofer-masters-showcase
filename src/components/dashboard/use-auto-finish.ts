@@ -159,7 +159,13 @@ function applyState(order: RoofOrder, next: AutoFinishUiState | null) {
       "The measurement found more than one building at this address — open the report to pick the right one.",
     );
   } else if (next.phase === "unmeasurable") {
-    recordMeasurementTerminal(order.id, order.address, attemptKey(order), "attention", next.message);
+    recordMeasurementTerminal(
+      order.id,
+      order.address,
+      attemptKey(order),
+      "attention",
+      next.message,
+    );
   } else if (next.phase === "error") {
     recordMeasurementTerminal(order.id, order.address, attemptKey(order), "failed", next.message);
   } else {

@@ -272,8 +272,7 @@ describe("background measurements through the shared engine", () => {
   function tree(client: QueryClient, children: React.ReactNode) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   }
-  const newClient = () =>
-    new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   it("keeps finishing after the reports page unmounts, and notifies exactly once", async () => {
     const calls = mockDetectionService();
@@ -334,14 +333,10 @@ describe("background measurements through the shared engine", () => {
     render(tree(client, <ShellHarness orders={[good, bad]} />));
 
     await waitFor(() =>
-      expect(
-        getMeasurementActivitySnapshot().find((e) => e.id === good.id)?.status,
-      ).toBe("ready"),
+      expect(getMeasurementActivitySnapshot().find((e) => e.id === good.id)?.status).toBe("ready"),
     );
     await waitFor(() =>
-      expect(
-        getMeasurementActivitySnapshot().find((e) => e.id === bad.id)?.status,
-      ).toBe("failed"),
+      expect(getMeasurementActivitySnapshot().find((e) => e.id === bad.id)?.status).toBe("failed"),
     );
     // Good: 1 submission. Bad: initial + 3 resubmits, then it stops —
     // without touching the good report's single clean run.

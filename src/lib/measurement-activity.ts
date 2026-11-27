@@ -62,9 +62,7 @@ function emit() {
   const byFinishedDesc = (a: MeasurementActivityEntry, b: MeasurementActivityEntry) =>
     (b.finishedAt ?? 0) - (a.finishedAt ?? 0) ||
     (entryOrder.get(b.id) ?? 0) - (entryOrder.get(a.id) ?? 0);
-  running.sort(
-    (a, b) => (entryOrder.get(b.id) ?? 0) - (entryOrder.get(a.id) ?? 0),
-  );
+  running.sort((a, b) => (entryOrder.get(b.id) ?? 0) - (entryOrder.get(a.id) ?? 0));
   fresh.sort(byFinishedDesc);
   seen.sort(byFinishedDesc);
   snapshot = [...running, ...fresh, ...seen];

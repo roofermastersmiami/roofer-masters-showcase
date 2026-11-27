@@ -1,11 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  LoaderCircle,
-  Ruler,
-} from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, LoaderCircle, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
@@ -110,9 +104,7 @@ export function MeasurementActivityButton() {
   );
   const [notifyBlocked, setNotifyBlocked] = useState(false);
   const runningCount = entries.filter((entry) => entry.status === "running").length;
-  const unseenCount = entries.filter(
-    (entry) => entry.status !== "running" && !entry.seen,
-  ).length;
+  const unseenCount = entries.filter((entry) => entry.status !== "running" && !entry.seen).length;
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -145,9 +137,7 @@ export function MeasurementActivityButton() {
           className="relative"
           title="Roof measurements"
           aria-label={
-            runningCount > 0
-              ? `Roof measurements — ${runningCount} running`
-              : "Roof measurements"
+            runningCount > 0 ? `Roof measurements — ${runningCount} running` : "Roof measurements"
           }
         >
           <Ruler className="size-4" />
@@ -162,9 +152,7 @@ export function MeasurementActivityButton() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-2">
-        <p className="px-2 pb-1 pt-1 text-xs font-semibold text-foreground">
-          Roof measurements
-        </p>
+        <p className="px-2 pb-1 pt-1 text-xs font-semibold text-foreground">Roof measurements</p>
         {entries.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
             No measurements running. Reports that finish in the background will appear here.
@@ -188,18 +176,18 @@ export function MeasurementActivityButton() {
           </label>
           {!browserNotificationsSupported() ? (
             <p className="mt-1.5 text-[11px] text-muted-foreground">
-              This browser does not support notifications; finished reports still appear here
-              and as an in-app message.
+              This browser does not support notifications; finished reports still appear here and as
+              an in-app message.
             </p>
           ) : notifyBlocked ? (
             <p className="mt-1.5 text-[11px] text-muted-foreground">
-              The browser did not allow notifications. You can allow them in the browser's
-              site settings; finished reports still appear here and as an in-app message.
+              The browser did not allow notifications. You can allow them in the browser's site
+              settings; finished reports still appear here and as an in-app message.
             </p>
           ) : (
             <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Browser notifications arrive when this tab is in the background; in-app messages
-              cover the rest.
+              Browser notifications arrive when this tab is in the background; in-app messages cover
+              the rest.
             </p>
           )}
         </div>
