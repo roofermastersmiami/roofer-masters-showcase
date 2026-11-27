@@ -131,6 +131,63 @@ describe("deleteRoofReportCascade", () => {
     expect(calls.deletedReportRows).toEqual([]);
   });
 
+  it("aborts with the PDF-untouched error and runs zero cleanup when the row delete matches no row", async () => {
+    // This is the failure Fredy hit live: the proof reads succeed but the
+    // row delete affects nothing. The cascade must stop before touching a
+    // single file or drawing so nothing is half-deleted.
+    const { deps, calls } = makeDeps({ deleteReportRow: async () => false });
+    await expect(
+      deleteRoofReportCascade(deps, { userId: "user-1", reportId: REPORT_ID }),
+    ).rejects.toThrow("Could not delete the roof report. The report PDF was left untouched.");
+    expect(calls.deletedDrawingBatches).toEqual([]);
+    expect(calls.clearedReferences).toEqual([]);
+    expect(calls.removedFiles).toEqual([]);
+  });
+
+  it("proves tenant visibility before the authorized row delete, then cleans up", async () => {
+    // Regression pin for the live bug: the production database has no
+    // DELETE RLS policy on roof_report_orders, so the row delete runs
+    // through the authorized service-role dep — but only AFTER the
+    // membership gate and the RLS-scoped reads have proven the report is
+    // the caller's own. This order is what keeps another tenant's report
+    // undeletable even though the delete itself bypasses RLS.
+    const sequence: string[] = [];
+    const { deps } = makeDeps({
+      getMembership: async () => {
+        sequence.push("membership");
+        return { company_id: "company-1", role: "owner" };
+      },
+      getReport: async () => {
+        sequence.push("proof-read");
+        return { id: REPORT_ID, file_path: PDF_PATH };
+      },
+      listReportDrawings: async () => {
+        sequence.push("collect-drawings");
+        return [];
+      },
+      deleteReportRow: async () => {
+        sequence.push("row-delete");
+        return true;
+      },
+      listReportPdfPaths: async () => {
+        sequence.push("cleanup");
+        return [PDF_PATH];
+      },
+    });
+    const result = await deleteRoofReportCascade(deps, {
+      userId: "user-1",
+      reportId: REPORT_ID,
+    });
+    expect(result.fileCleanupPending).toBe(false);
+    expect(sequence).toEqual([
+      "membership",
+      "proof-read",
+      "collect-drawings",
+      "row-delete",
+      "cleanup",
+    ]);
+  });
+
   it("reports pending cleanup instead of failing when storage removal fails", async () => {
     const { deps } = makeDeps({
       removeStorageFiles: async () => false,
@@ -211,5 +268,30 @@ describe("delete affordances on the report surfaces", () => {
     );
     expect(button).toContain("deleteRoofOrder");
     expect(button).toContain("its saved roof drawing");
+  });
+
+  it("deletes the proven report row through the service-role client, not the RLS client", () => {
+    // The live database carries no DELETE RLS policy on roof_report_orders
+    // (only the legacy SELECT policies), so an authenticated delete matches
+    // zero rows and Fredy's delete failed with the PDF-untouched error.
+    // The wiring must use supabaseAdmin for the row delete while the proof
+    // reads stay on the authenticated client.
+    const functions = readFileSync(
+      resolve(process.cwd(), "src/lib/roof-orders.functions.ts"),
+      "utf8",
+    );
+    const depStart = functions.indexOf("deleteReportRow: async");
+    expect(depStart).toBeGreaterThan(-1);
+    const depBlock = functions.slice(depStart, depStart + 900);
+    expect(depBlock).toContain("supabaseAdmin");
+    expect(depBlock).toContain('from("roof_report_orders")');
+    expect(depBlock).not.toContain("await auth");
+    // The proof read in the same handler stays RLS-scoped.
+    const proofStart = functions.indexOf("getReport: async");
+    const proofBlock = functions.slice(proofStart, proofStart + 400);
+    expect(proofBlock).toContain("await auth");
+    // The tenant-audit header documents the service-role row delete.
+    expect(functions.slice(0, 1200)).toContain("tenant-audit: reviewed");
+    expect(functions.slice(0, 1200)).toContain("no DELETE RLS policy");
   });
 });

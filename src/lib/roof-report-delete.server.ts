@@ -3,13 +3,18 @@ import { isSafeRoofMediaPath } from "./roof-media";
 /**
  * Complete, tenant-scoped deletion of one roof report.
  *
- * The caller-facing server function wires these dependencies to the
- * authenticated Supabase client (every read and the report-row delete run
- * under RLS, so a report belonging to another company is simply invisible)
- * and to the service-role client for post-authorization cleanup only:
- * removing the deleted report's own drawing revisions, nulling their
- * drawing_id references, and deleting the exact storage files those
- * records pointed to. No company id is ever taken from request data.
+ * The caller-facing server function wires the reads to the authenticated
+ * Supabase client (every read runs under RLS, so a report belonging to
+ * another company is simply invisible) and the writes to the service-role
+ * client: deleting the exact report row the RLS-scoped read just proved
+ * visible — the live database carries no DELETE RLS policy on
+ * roof_report_orders (verified 2026-11-27: only the legacy SELECT policies
+ * exist), so an authenticated row delete silently matches zero rows — plus
+ * the post-authorization cleanup: removing the deleted report's own
+ * drawing revisions, nulling their drawing_id references, and deleting
+ * the exact storage files those records pointed to. Tenant isolation
+ * comes from the membership/role gate and the RLS-scoped proof reads, not
+ * from the delete itself. No company id is ever taken from request data.
  */
 export interface RoofReportDeleteDeps {
   /** The caller's single company membership, or null when they have none. */
@@ -20,7 +25,10 @@ export interface RoofReportDeleteDeps {
   listReportDrawings(
     reportId: string,
   ): Promise<Array<{ id: string; parent_id: string | null; media: unknown }>>;
-  /** RLS-scoped delete of the report row; false when no row was deleted. */
+  /**
+   * Service-role delete of the exact report row whose visibility was just
+   * proven by getReport under RLS; false when no row was deleted.
+   */
   deleteReportRow(reportId: string): Promise<boolean>;
   /** Service-role listing of the report's private PDF folder; null on error. */
   listReportPdfPaths(reportId: string): Promise<string[] | null>;
