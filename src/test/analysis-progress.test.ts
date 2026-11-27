@@ -57,7 +57,7 @@ describe("analysisProgressPercent", () => {
   });
 
   it("never exceeds 99 while the job is still running", () => {
-    expect(at("measuring", { stageElapsedSeconds: 60 * 60 })).toBeLessThanOrEqual(90);
+    expect(at("downloading_tiles", { stageElapsedSeconds: 60 * 60 })).toBeLessThanOrEqual(90);
     expect(
       analysisProgressPercent(
         { status: "running", stage: "some_future_stage", stageElapsedSeconds: 60 * 60 },
