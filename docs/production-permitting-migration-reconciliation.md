@@ -109,7 +109,7 @@ The reviewed production snapshot contained:
 | Roof report orders | 4 |
 | Roof jobs | 4 |
 
-**Count drift remains unresolved.** PR #181's baseline note reported 12 roof-report orders; the 2026-11-26 audit note later recorded 3; this 2026-11-26 (evening refresh) read-only refresh returned 4. Treat 4 as the latest observed count, not a reconciled historical explanation. Before any ownership backfill, repeat the count against the confirmed project and inspect the rows/filters and timestamps to explain the changes.
+**Count drift is only partially reconciled.** PR #181's baseline note reported 12 roof-report orders; the 2026-11-26 earlier audit recorded 3; the evening read-only refresh returned 4. A privacy-minimized date-bucket query shows one order created on each of 2026-11-21, 2026-11-24, 2026-11-25, and 2026-11-26, so the 3 → 4 change is consistent with a new order created on 2026-11-26. The older 12 → 4 discrepancy remains unexplained and may reflect a different project, schema, filter, or earlier data state. Do not use 12 or 4 as a backfill assumption until that discrepancy is resolved against source records.
 
 ### Current permit-related production objects
 
