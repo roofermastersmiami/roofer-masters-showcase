@@ -215,9 +215,7 @@ export async function roofDrawingPdf(
         const polygons = d.planes
           .filter((plane) => plane.points.length >= 3)
           .map((plane) => {
-            const ring = plane.points.map(
-              (point) => [point.x, point.z] as [number, number],
-            );
+            const ring = plane.points.map((point) => [point.x, point.z] as [number, number]);
             ring.push([...ring[0]!] as [number, number]);
             return [ring];
           });

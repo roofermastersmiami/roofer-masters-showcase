@@ -32,10 +32,5 @@ export const loadReportAerial = createServerFn({ method: "POST" })
         stage: "authorization",
       } as const;
     const { fetchReportAerialImage } = await import("./report-aerial.server");
-    return fetchReportAerialImage(
-      data.latitude,
-      data.longitude,
-      fetch,
-      data.halfExtentMeters,
-    );
+    return fetchReportAerialImage(data.latitude, data.longitude, fetch, data.halfExtentMeters);
   });

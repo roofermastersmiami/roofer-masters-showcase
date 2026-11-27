@@ -121,8 +121,7 @@ export function roofCoverFraming(drawing: {
   const latitude = origin.originLatitude - (centerZFt * feetToMeters) / 110540;
   const longitude =
     origin.originLongitude +
-    (centerXFt * feetToMeters) /
-      (111320 * Math.cos((origin.originLatitude * Math.PI) / 180));
+    (centerXFt * feetToMeters) / (111320 * Math.cos((origin.originLatitude * Math.PI) / 180));
   const eastWestM = (maxX - minX) * feetToMeters;
   const northSouthM = (maxZ - minZ) * feetToMeters;
   const halfExtentMeters = Math.min(

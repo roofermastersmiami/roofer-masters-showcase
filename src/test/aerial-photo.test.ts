@@ -62,10 +62,7 @@ describe("roofCoverFraming (step 10)", () => {
     const framing = roofCoverFraming(drawing(-70, -20, -95, -40))!;
     expect(framing.latitude).toBeGreaterThan(origin.originLatitude);
     expect(framing.longitude).toBeLessThan(origin.originLongitude);
-    expect(framing.latitude).toBeCloseTo(
-      origin.originLatitude + (67.5 * 0.3048) / 110540,
-      6,
-    );
+    expect(framing.latitude).toBeCloseTo(origin.originLatitude + (67.5 * 0.3048) / 110540, 6);
     // A 50 x 55 ft roof takes the tightest allowed window.
     expect(framing.halfExtentMeters).toBe(24);
   });

@@ -674,19 +674,14 @@ describe("LiDAR drawing sliver folds (step 10)", () => {
     squares: 6,
     boundary_latlon: ring([...points, points[0]!]),
   });
-  const footprintFor = (
-    outlineFt: [number, number][],
-  ): RoofDetectionResponse["footprint"] => ({
+  const footprintFor = (outlineFt: [number, number][]): RoofDetectionResponse["footprint"] => ({
     source: "test",
     area_sqft: 1800,
     polygon_geojson: {
       type: "Polygon",
       coordinates: [
         [
-          ...outlineFt.map(([x, z]) => [
-            origin.lon + x / lonScale,
-            origin.lat - z / latScale,
-          ]),
+          ...outlineFt.map(([x, z]) => [origin.lon + x / lonScale, origin.lat - z / latScale]),
           [origin.lon + outlineFt[0]![0] / lonScale, origin.lat - outlineFt[0]![1] / latScale],
         ],
       ],
@@ -804,9 +799,7 @@ describe("LiDAR drawing sliver folds (step 10)", () => {
     // C is its full 900 sf rectangle again, dent vertex gone.
     expect(measured.planes[1]!.area).toBeCloseTo(900 * Math.sqrt(1.25), 0);
     expect(
-      drawing.planes[1]!.points.some(
-        (p) => Math.abs(p.x - 24) < 0.01 && Math.abs(p.z - 15) < 0.01,
-      ),
+      drawing.planes[1]!.points.some((p) => Math.abs(p.x - 24) < 0.01 && Math.abs(p.z - 15) < 0.01),
     ).toBe(false);
   });
 

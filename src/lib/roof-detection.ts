@@ -746,12 +746,7 @@ export function detectedFacetsToDrawing(
       }
       return area / 2;
     };
-    const segmentsCross = (
-      a: Ring[number],
-      b: Ring[number],
-      c: Ring[number],
-      d: Ring[number],
-    ) => {
+    const segmentsCross = (a: Ring[number], b: Ring[number], c: Ring[number], d: Ring[number]) => {
       const orient = (p: Ring[number], q: Ring[number], r: Ring[number]) =>
         (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
       return orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0;
@@ -937,29 +932,27 @@ export function detectedFacetsToDrawing(
           // lie within 0.12 ft of it and retry once; the snap moves
           // drawing points by less than the seam offset the service
           // itself leaves between facets.
-          const snapped: Ring = candidate.sliverClosed
-            .slice(0, -1)
-            .map(([x, z]) => {
-              let bestDist = Infinity;
-              let bestPoint: [number, number] = [x, z];
-              for (let j = 0; j < recipientRing.length - 1; j++) {
-                const c = recipientRing[j]!;
-                const d = recipientRing[j + 1]!;
-                const dx = d[0] - c[0];
-                const dz = d[1] - c[1];
-                const lenSq = dx * dx + dz * dz;
-                let u = lenSq === 0 ? 0 : ((x - c[0]) * dx + (z - c[1]) * dz) / lenSq;
-                u = Math.max(0, Math.min(1, u));
-                const px = c[0] + u * dx;
-                const pz = c[1] + u * dz;
-                const dist = Math.hypot(x - px, z - pz);
-                if (dist < bestDist) {
-                  bestDist = dist;
-                  bestPoint = [px, pz];
-                }
+          const snapped: Ring = candidate.sliverClosed.slice(0, -1).map(([x, z]) => {
+            let bestDist = Infinity;
+            let bestPoint: [number, number] = [x, z];
+            for (let j = 0; j < recipientRing.length - 1; j++) {
+              const c = recipientRing[j]!;
+              const d = recipientRing[j + 1]!;
+              const dx = d[0] - c[0];
+              const dz = d[1] - c[1];
+              const lenSq = dx * dx + dz * dz;
+              let u = lenSq === 0 ? 0 : ((x - c[0]) * dx + (z - c[1]) * dz) / lenSq;
+              u = Math.max(0, Math.min(1, u));
+              const px = c[0] + u * dx;
+              const pz = c[1] + u * dz;
+              const dist = Math.hypot(x - px, z - pz);
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestPoint = [px, pz];
               }
-              return bestDist <= 0.12 ? bestPoint : ([x, z] as [number, number]);
-            });
+            }
+            return bestDist <= 0.12 ? bestPoint : ([x, z] as [number, number]);
+          });
           snapped.push(snapped[0]!);
           const retry = polygonClipping.union([recipientRing], [snapped]);
           if (retry.length === 1) unioned = retry;
@@ -976,9 +969,7 @@ export function detectedFacetsToDrawing(
         let onlyRing: Ring | undefined;
         if (onlyPoly && onlyPoly.length >= 1) {
           const byArea = [...onlyPoly].sort((x, y) => ringAreaAbs(y) - ringAreaAbs(x));
-          const holeArea = byArea
-            .slice(1)
-            .reduce((sum, ring) => sum + ringAreaAbs(ring), 0);
+          const holeArea = byArea.slice(1).reduce((sum, ring) => sum + ringAreaAbs(ring), 0);
           if (holeArea <= Math.max(1, expected * 0.02)) onlyRing = byArea[0];
         }
         const filled =
@@ -1020,10 +1011,7 @@ export function detectedFacetsToDrawing(
         if (Math.abs(ownerArea - expectedOwner) > Math.max(1, expectedOwner * 0.02))
           applied = false;
       }
-      if (
-        applied &&
-        hasTripleSharedEdge(consolidated.map((entry) => closedRing(entry.points)))
-      )
+      if (applied && hasTripleSharedEdge(consolidated.map((entry) => closedRing(entry.points))))
         applied = false;
       if (!applied) {
         consolidated.forEach((entry, index) => {
