@@ -73,6 +73,12 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_secondary_ownership_test
           psql "postgresql://postgres@localhost:5432/crm_secondary_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-secondary-operational-company-ownership.sql
+      - name: Run company-scoped invoice RPC PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_invoice_rpc_test
+          psql "postgresql://postgres@localhost:5432/crm_invoice_rpc_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-invoice-rpcs.sql
       - name: Run company-scoped customer delete PostgreSQL integration test
         env:
           PGPASSWORD: postgres
