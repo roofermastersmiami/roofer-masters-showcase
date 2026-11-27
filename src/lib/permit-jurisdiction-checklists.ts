@@ -55,7 +55,7 @@ const miamiDadeAttachments: ChecklistItem[] = [
     id: "design-calculations",
     label: "Design calculations",
     detail: "Chapter 16 calculations or, where applicable, RAS 127 / RAS 128 calculations.",
-    appliesWhen: "Required by the official attachment matrix for low-slope and tile systems; for other systems, add when required by plan review or the approved assembly.",
+    appliesWhen: "Required by the official attachment matrix for low-slope, tile, and metal systems; for other systems, add when required by plan review or the approved assembly.",
     sourceUrl: MIAMI_DADE_FORM_URL,
   },
   {
