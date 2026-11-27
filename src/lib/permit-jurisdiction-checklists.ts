@@ -206,6 +206,9 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
       if (!normalizedFolio.startsWith("30")) {
         authorityConfirmed = false;
         warnings.push("The supplied folio does not begin with 30. Confirm the municipality / authority having jurisdiction; do not use the unincorporated County checklist.");
+      } else if (!request.parcelAuthorityVerified) {
+        authorityConfirmed = false;
+        warnings.push("Confirm the folio against the property record and verify the address is in unincorporated Miami-Dade before treating the County as the permit authority.");
       }
     }
   }
