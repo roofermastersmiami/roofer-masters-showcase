@@ -44,4 +44,24 @@ describe("production permitting preflight is read-only and schema-drift tolerant
     expect(executable).toContain("SELECT current_database()");
     expect(executable).toContain("\\set ON_ERROR_STOP on");
   });
+
+  it("captures the live tenant-security drift needed before a forward-only cutover", () => {
+    for (const evidence of [
+      "crm_company_memberships",
+      "crm_company_branding",
+      "is_crm_company_member",
+      "is_crm_company_admin",
+      "save_crm_customer",
+      "create_roof_report_request",
+      "p.proacl AS raw_acl",
+      "pg_get_function_identity_arguments",
+      "roof-job-photos",
+      "roofing-proposals",
+      "permit-documents",
+    ]) expect(sql).toContain(evidence);
+
+    expect(sql).toContain("FROM pg_policies");
+    expect(sql).toContain("FROM pg_proc p");
+    expect(sql).toContain("FROM pg_constraint c");
+  });
 });
