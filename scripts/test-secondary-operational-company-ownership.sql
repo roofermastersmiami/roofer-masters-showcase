@@ -73,3 +73,47 @@ BEGIN
  BEGIN INSERT INTO roof_estimates(id,lead_id,company_id) VALUES('aa000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002'); RAISE EXCEPTION 'Cross-company estimate accepted'; EXCEPTION WHEN foreign_key_violation THEN NULL; END;
 END
 $tenant_fks$;
+
+
+-- Add valid Company B parents, then exercise the remaining parent-company links.
+INSERT INTO crm_properties(id,company_id)
+VALUES('b3000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO roof_report_orders(id,property_id,company_id)
+VALUES('b6000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO proposals(id,lead_id,property_id,company_id)
+VALUES('b7000000-0000-0000-0000-000000000001',NULL,NULL,'10000000-0000-0000-0000-000000000002');
+
+DO $remaining_tenant_fks$
+BEGIN
+ BEGIN
+  INSERT INTO crm_invoices(id,property_id,company_id)
+  VALUES('b8000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+  RAISE EXCEPTION 'Cross-company invoice/property reference accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ BEGIN
+  INSERT INTO crm_invoices(id,proposal_id,company_id)
+  VALUES('b8000000-0000-0000-0000-000000000002','b7000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+  RAISE EXCEPTION 'Cross-company invoice/proposal reference accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ BEGIN
+  INSERT INTO proposals(id,lead_id,company_id)
+  VALUES('b7000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+  RAISE EXCEPTION 'Cross-company proposal/lead reference accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ BEGIN
+  INSERT INTO proposals(id,property_id,company_id)
+  VALUES('b7000000-0000-0000-0000-000000000003','30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+  RAISE EXCEPTION 'Cross-company proposal/property reference accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ BEGIN
+  INSERT INTO roof_estimates(id,property_id,company_id)
+  VALUES('b9000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+  RAISE EXCEPTION 'Cross-company roof estimate/property reference accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ BEGIN
+  INSERT INTO roof_estimates(id,report_order_id,company_id)
+  VALUES('b9000000-0000-0000-0000-000000000002','b6000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+  RAISE EXCEPTION 'Cross-company roof estimate/report reference accepted';
+ EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+END
+$remaining_tenant_fks$;
