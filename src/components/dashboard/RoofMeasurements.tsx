@@ -26,12 +26,12 @@ import { calculateRoofSummary, measuredEdgeTotalsToInputs } from "@/lib/roof-cal
 import { roofCoverFraming } from "@/lib/aerial-photo";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
 import { restoreRoofDrawingMedia, type RoofDrawingMedia } from "@/lib/roof-drawing-media";
-import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
 import { propertiesQuery, customersQuery } from "./foundation-data";
 import { automaticMaterialList, type AutomaticMaterialList } from "@/lib/material-order";
 import type { RoofOrder } from "./roof-orders-data";
 import type { Database } from "@/integrations/supabase/types";
 import { AutomatedRoofReport } from "./AutomatedRoofReport";
+import { requestReportPdfRefresh, useAutoFinishClaim } from "./use-auto-finish";
 import { parseIncludeOutbuilding, parseMeasurementPin } from "@/lib/roof-order-notes";
 import {
   ALL_STRUCTURES_KEY,
@@ -46,7 +46,6 @@ import {
   pointerAngleDeg,
 } from "@/lib/plan-rotation";
 import { loadReportAerial } from "@/lib/report-aerial.functions";
-import type { AerialPhoto } from "@/lib/aerial-photo";
 import { ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
 import {
@@ -72,13 +71,21 @@ export function RoofMeasurements({
     customers = useQuery(customersQuery),
     qc = useQueryClient();
   const saveFn = useServerFn(saveRoofDrawing);
-  const attachPdfFn = useServerFn(attachRoofOrderPdf);
   const reportAerialFn = useServerFn(loadReportAerial);
+  // One finisher: while this workspace is open it owns its report —
+  // the claim keeps the background auto-finish engine from starting
+  // the same report — and the workspace itself never generates or
+  // attaches the report PDF. When a save lands, save() hands the
+  // PDF step to the engine by releasing the claim (plus a refresh
+  // intent when the save superseded a PDF already on file). Two
+  // chains writing the same report used to stale each other's
+  // attaches into terminal errors for finished reports.
+  const releaseFinishClaim = useAutoFinishClaim(report?.id ?? null);
   const userEditedDrawing = useRef(false);
   // Hands-off flow: when the automated measurement applies a drawing
-  // inside a report workspace, the revision save (which also generates
-  // and attaches the report PDF) runs by itself and the material list
-  // is built from the saved drawing — no Save click needed.
+  // inside a report workspace, the revision save runs by itself and
+  // the material list is built from the saved drawing — no Save
+  // click needed. The report PDF is the engine's step (see above).
   const autoSaveArmed = useRef(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMaterials, setAutoMaterials] = useState<AutomaticMaterialList | null>(null);
@@ -368,7 +375,15 @@ export function RoofMeasurements({
         qc.invalidateQueries({ queryKey: ["roof-report-orders"] }),
       ]);
       toast.success(`Drawing revision ${row.revision} saved`);
-      if (report) await attachGeneratedReportPdf();
+      if (report) {
+        // Hand the PDF step to the background engine (one finisher):
+        // releasing the claim lets its drawing-saved → PDF path run
+        // for the revision just saved, and when this save superseded
+        // a PDF already on file, the refresh intent has the engine
+        // regenerate it from the new drawing.
+        if (report.file_path) requestReportPdfRefresh(report.id, row.id);
+        releaseFinishClaim();
+      }
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save drawing");
@@ -396,7 +411,7 @@ export function RoofMeasurements({
           setAutoMaterials(null);
         }
         toast.success(
-          "Measurement saved, report PDF generated, and material list built automatically.",
+          "Measurement saved and material list built automatically — the report PDF is finishing in the background.",
         );
       }
       setAutoSaving(false);
@@ -421,164 +436,6 @@ export function RoofMeasurements({
       toast.error(
         error instanceof Error ? error.message : "Could not generate material takeoff PDF",
       );
-    }
-  }
-  // Automatic report PDF: once the hands-off save lands, the
-  // report PDF is generated from the main drawing and attached to
-  // the report — Roof reports holds the file. The workspace has no
-  // manual PDF download (that was an old-system option), and the
-  // structure picker is display-only, so the PDF on file always
-  // stays the main house's and structures are never silently mixed.
-  async function attachGeneratedReportPdf() {
-    if (!report) return;
-    if (!initialDrawing && !parent && !userEditedDrawing.current) {
-      toast.error("Add measured roof geometry before exporting this property report");
-      return;
-    }
-    if (!measurement) return;
-    setBusy(true);
-    let roofReportPdfPath: string | null = null;
-    try {
-      const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
-      const photos = [];
-      for (const item of media) {
-        const { data: blob, error: photoError } = await supabase.storage
-          .from("roof-job-photos")
-          .download(item.path);
-        if (photoError || !blob) throw new Error("Photo could not load");
-        let photoBytes = new Uint8Array(await blob.arrayBuffer());
-        let mime = blob.type;
-        if (mime === "image/webp") {
-          const bitmap = await createImageBitmap(blob);
-          const canvas = document.createElement("canvas");
-          canvas.width = bitmap.width;
-          canvas.height = bitmap.height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("Photo conversion failed");
-          ctx.drawImage(bitmap, 0, 0);
-          bitmap.close();
-          const converted = await new Promise<Blob | null>((resolve) =>
-            canvas.toBlob(resolve, "image/png"),
-          );
-          if (!converted) throw new Error("Photo conversion failed");
-          photoBytes = new Uint8Array(await converted.arrayBuffer());
-          mime = "image/png";
-        }
-        photos.push({
-          bytes: photoBytes,
-          mime,
-          category: item.category,
-          name: item.name,
-          ...(item.source ? { source: item.source } : {}),
-          ...(item.matched_address ? { matchedAddress: item.matched_address } : {}),
-          ...(typeof item.latitude === "number" ? { latitude: item.latitude } : {}),
-          ...(typeof item.longitude === "number" ? { longitude: item.longitude } : {}),
-        });
-      }
-      // Hands-off cover photo: when the job has no stored aerial,
-      // fetch free Esri World Imagery for the drawing's geographic
-      // origin automatically. The server-side export fetch goes
-      // first (no browser CORS dependency — the step-7 client-side
-      // tile stitch was never proven in a real export); the client
-      // stitch remains as a fallback. Any failure leaves photos
-      // unchanged and the report falls back to its sketch cover.
-      if (!photos.some((photo) => /aerial/i.test(photo.category)) && d.geo_reference) {
-        const { originLatitude, originLongitude } = d.geo_reference;
-        // Frame the cover on the roof itself: the geocode origin
-        // can sit a house away from the roof centre (Miramar: ~64
-        // ft), which left the subject house small and off-centre in
-        // a fixed ±42 m window. Both fetch paths get the same
-        // roof-centred framing.
-        const framing = roofCoverFraming(d);
-        const coverLatitude = framing?.latitude ?? originLatitude;
-        const coverLongitude = framing?.longitude ?? originLongitude;
-        let aerial: AerialPhoto | null = null;
-        try {
-          const result = await reportAerialFn({
-            data: {
-              latitude: coverLatitude,
-              longitude: coverLongitude,
-              ...(framing ? { halfExtentMeters: framing.halfExtentMeters } : {}),
-            },
-          });
-          if ("imageBase64" in result && result.imageBase64) {
-            const binary = atob(result.imageBase64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            aerial = {
-              bytes,
-              mime: result.mime,
-              category: "aerial",
-              name: "Aerial photo (Esri World Imagery)",
-              source: result.source,
-              latitude: result.latitude,
-              longitude: result.longitude,
-            };
-          }
-        } catch {
-          // Fall through to the client-side stitch.
-        }
-        if (!aerial) {
-          try {
-            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
-            aerial = await fetchAerialPhoto(
-              coverLatitude,
-              coverLongitude,
-              framing?.halfExtentMeters,
-            );
-          } catch {
-            // Imagery is best-effort; never block the report on it.
-          }
-        }
-        if (aerial) photos.unshift(aerial);
-      }
-      const bytes = await roofDrawingPdf(
-        title,
-        d,
-        report?.title || customer?.name || "",
-        workspaceAddress,
-        photos,
-        { phone: report?.customer_phone ?? "", email: report?.customer_email ?? "" },
-        // The workspace no longer exposes theme/logo pickers; the PDF
-        // keeps the generator defaults it already used (RoofSnap
-        // Classic theme, medium logo).
-        { theme: "roofsnap", logoScale: 1 },
-      );
-
-      roofReportPdfPath = `roof-report/${report.id}/${crypto.randomUUID()}.pdf`;
-      const { error: uploadError } = await supabase.storage
-        .from("roofing-proposals")
-        .upload(
-          roofReportPdfPath,
-          new Blob([Uint8Array.from(bytes)], { type: "application/pdf" }),
-          { contentType: "application/pdf" },
-        );
-      if (uploadError) throw uploadError;
-      const { data: currentReport, error: currentReportError } = await supabase
-        .from("roof_report_orders")
-        .select("updated_at")
-        .eq("id", report.id)
-        .maybeSingle();
-      if (currentReportError || !currentReport)
-        throw new Error("Could not refresh the roof report before attaching its PDF");
-      await attachPdfFn({
-        data: {
-          id: report.id,
-          path: roofReportPdfPath,
-          updated_at: currentReport.updated_at,
-        },
-      });
-      roofReportPdfPath = null;
-      if (report.file_path)
-        await supabase.storage.from("roofing-proposals").remove([report.file_path]);
-      await qc.invalidateQueries({ queryKey: ["roof-report-orders"] });
-      toast.success("Updated measurement PDF was automatically saved to Roof reports");
-    } catch (error) {
-      if (roofReportPdfPath)
-        await supabase.storage.from("roofing-proposals").remove([roofReportPdfPath]);
-      toast.error(error instanceof Error ? error.message : "Could not generate report");
-    } finally {
-      setBusy(false);
     }
   }
   const statusLabel = report
@@ -1027,7 +884,7 @@ export function RoofMeasurements({
           </div>
           {autoSaving ? (
             <p className="text-sm text-muted-foreground" role="status">
-              Saving the measurement, generating the report PDF, and building the material list…
+              Saving the measurement and building the material list…
             </p>
           ) : autoMaterials ? (
             <>
