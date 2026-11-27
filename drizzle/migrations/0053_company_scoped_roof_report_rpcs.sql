@@ -2,6 +2,10 @@
 -- Forward-only migration; depends on company ownership (0042), company-aware
 -- lead synchronization (0043), and company-owned roof jobs (0047).
 -- Caller company IDs are never accepted. Actor company is derived from auth.uid().
+-- tenant-audit: reviewed
+-- Security review: all SECURITY DEFINER RPCs derive the actor company from auth.uid(),
+-- checks; report/property/revision parents are tenant-verified before writes.
+-- EXECUTE is revoked from PUBLIC/anon/service_role and granted only to authenticated.
 -- Public intake remains isolated in capture_instant_roof_lead (service_role only).
 
 CREATE OR REPLACE FUNCTION public.create_roof_report_request(
