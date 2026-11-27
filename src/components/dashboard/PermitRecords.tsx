@@ -11,6 +11,7 @@ import {
   BROWARD_WESTON_ROOFING_PROFILE,
   BROWARD_DAVIE_ROOFING_PROFILE,
   BROWARD_MARGATE_ROOFING_PROFILE,
+  BROWARD_HALLANDALE_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -354,6 +355,7 @@ export function PermitRecords() {
                         else if (profileId === BROWARD_WESTON_ROOFING_PROFILE.id) setJurisdiction("City of Weston, Broward County");
                         else if (profileId === BROWARD_DAVIE_ROOFING_PROFILE.id) setJurisdiction("Town of Davie, Broward County");
                         else if (profileId === BROWARD_MARGATE_ROOFING_PROFILE.id) setJurisdiction("City of Margate, Broward County");
+                        else if (profileId === BROWARD_HALLANDALE_ROOFING_PROFILE.id) setJurisdiction("City of Hallandale Beach, Broward County");
                         else setJurisdiction("City of Hollywood, Broward County");
                       }}>
                         <option value={MIAMI_DADE_UNINCORPORATED_PROFILE.id}>Miami-Dade — unincorporated</option>
@@ -368,6 +370,7 @@ export function PermitRecords() {
                         <option value={BROWARD_WESTON_ROOFING_PROFILE.id}>Broward — Weston roofing</option>
                         <option value={BROWARD_DAVIE_ROOFING_PROFILE.id}>Broward — Town of Davie roofing</option>
                         <option value={BROWARD_MARGATE_ROOFING_PROFILE.id}>Broward — Margate roofing</option>
+                        <option value={BROWARD_HALLANDALE_ROOFING_PROFILE.id}>Broward — Hallandale Beach roofing</option>
                       </select>
                     </div>
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>

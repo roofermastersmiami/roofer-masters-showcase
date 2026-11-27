@@ -401,6 +401,32 @@ export const BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE: JurisdictionPermitProfile 
   checklist: fortLauderdaleRoofingChecklist,
 };
 
+const hallandaleRoofingChecklist: ChecklistItem[] = [
+  { id: "hallandale-building-permit", label: "City building permit application", detail: "Submit the City building permit application and applicable roofing application packet.", appliesWhen: "Required permit application for the City's roof permit checklist.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-notice-of-commencement", label: "Notice of Commencement", detail: "Record and provide the Notice of Commencement when the job cost is $5,000 or more, as stated by the current roof checklist.", appliesWhen: "City roof checklist threshold; confirm current statutory applicability and timing.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-hvhz-roofing-application", label: "HVHZ Uniform Roofing Application Form", detail: "Complete the roofing packet and applicable HVHZ Uniform Roofing Application Form sections.", appliesWhen: "Minimum plan submittal for roofing permits.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-product-approval", label: "Miami-Dade NOA or Florida Product Approval", detail: "Provide the applicable product approval for the proposed roof system.", appliesWhen: "Minimum plan submittal; approval must match the proposed roof assembly.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-design-pressures", label: "Enhanced fastener calculations / design pressures", detail: "Provide digitally signed and sealed enhanced fastener calculations or design pressures.", appliesWhen: "When applicable to the proposed roof assembly or required by plan review.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-fire-directory", label: "Fire Directory listing", detail: "Provide the Fire Directory listing identifying a Class A roofing system and ensure listed components match the HVHZ roofing application.", appliesWhen: "Minimum plan submittal for the proposed roofing system.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-asbestos-certificate", label: "Broward asbestos responsibility certificate", detail: "Obtain the Statement of Responsibilities Regarding Asbestos Certificate through Broward County NRD e-Permits Online.", appliesWhen: "Reroof applications.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-insulation-replacement", label: "Roof insulation replacement documentation", detail: "Where the existing roof membrane includes insulation, replace it and ensure new thickness and R-value are at least equal to the existing insulation.", appliesWhen: "Reroof with an insulated roof membrane.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-rooftop-equipment", label: "Rooftop Equipment Affidavit", detail: "Complete the City's Rooftop Equipment Affidavit.", appliesWhen: "Reroof applications.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-renailing-affidavit", label: "Renailing Affidavit", detail: "Complete the City's renailing affidavit.", appliesWhen: "Reroof applications.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-assessed-value", label: "Broward assessed building valuation", detail: "Attach the Broward County Property Appraiser assessed building valuation.", appliesWhen: "Reroofs where assessed building value is $300,000 or more.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+  { id: "hallandale-hurricane-mitigation", label: "Hurricane Mitigation Form and Roof-to-Wall Affidavit", detail: "Complete the Hurricane Mitigation Form and attach a Roof-to-Wall Affidavit when necessary.", appliesWhen: "Reroofs where assessed building value is $300,000 or more; roof-to-wall affidavit as applicable.", sourceUrl: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=" },
+];
+export const BROWARD_HALLANDALE_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-hallandale-roofing",
+  label: "City of Hallandale Beach — roofing",
+  county: "Broward",
+  authorityScope: "City of Hallandale Beach Roof Permit Checklist approved August 1, 2024. The checklist covers roof permit submittals and additional reroof documents; confirm the live City forms and any updated code or intake requirements before filing.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Hallandale Beach limits. The checklist is a CRM intake aid, not a municipal determination or approval. The City states permit-related documents must be submitted through its online portal.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=", "https://hallandalebeachfl.gov/1271/Applications-Forms", "https://www.cohb.org/1316/Online-Services", "https://www.hallandalebeachfl.gov/1036/Building-Division/"],
+  checklist: hallandaleRoofingChecklist,
+};
+
 export type PermitChecklistRequest = {
   profileId: string;
   roofingSystem?: RoofingSystem;
@@ -449,6 +475,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_WESTON_ROOFING_PROFILE.id]: BROWARD_WESTON_ROOFING_PROFILE,
     [BROWARD_DAVIE_ROOFING_PROFILE.id]: BROWARD_DAVIE_ROOFING_PROFILE,
     [BROWARD_MARGATE_ROOFING_PROFILE.id]: BROWARD_MARGATE_ROOFING_PROFILE,
+    [BROWARD_HALLANDALE_ROOFING_PROFILE.id]: BROWARD_HALLANDALE_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -484,7 +511,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
   const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id || profile.id === BROWARD_HALLANDALE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
@@ -530,4 +557,5 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   fortLauderdaleRoofingChecklist: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms",
   davieRoofingChecklist: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist",
   davieRoofingPackage: "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package",
+  hallandaleBeachReroofChecklist: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=",
 } as const;

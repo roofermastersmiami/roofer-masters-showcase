@@ -7,6 +7,7 @@ import {
   BROWARD_WESTON_ROOFING_PROFILE,
   BROWARD_DAVIE_ROOFING_PROFILE,
   BROWARD_MARGATE_ROOFING_PROFILE,
+  BROWARD_HALLANDALE_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -608,5 +609,48 @@ describe("Weston roofing permit profile", () => {
     expect(result.codeReferenceCurrent).toBe(false);
     expect(result.authorityConfirmed).toBe(false);
     expect(result.items).toHaveLength(0);
+  });
+});
+
+describe("City of Hallandale Beach roofing permit profile", () => {
+  it("includes the City's roof permit and reroof documents with conditional requirements", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_HALLANDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const ids = result.items.map((item) => item.id);
+    expect(result.authorityConfirmed).toBe(true);
+    expect(ids).toContain("hallandale-building-permit");
+    expect(ids).toContain("hallandale-hvhz-roofing-application");
+    expect(ids).toContain("hallandale-product-approval");
+    expect(ids).toContain("hallandale-fire-directory");
+    expect(ids).toContain("hallandale-asbestos-certificate");
+    expect(ids).toContain("hallandale-rooftop-equipment");
+    expect(ids).toContain("hallandale-renailing-affidavit");
+    expect(ids).toContain("hallandale-assessed-value");
+    expect(ids).toContain("hallandale-hurricane-mitigation");
+  });
+
+  it("requires City parcel verification and suppresses expired code references", () => {
+    const unverified = getPermitChecklist({
+      profileId: BROWARD_HALLANDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      asOfDate: "2026-11-26",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.warnings.join(" ")).toContain("inside City of Hallandale Beach limits");
+
+    const expired = getPermitChecklist({
+      profileId: BROWARD_HALLANDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(expired.codeReferenceCurrent).toBe(false);
+    expect(expired.authorityConfirmed).toBe(false);
+    expect(expired.items).toHaveLength(0);
   });
 });
