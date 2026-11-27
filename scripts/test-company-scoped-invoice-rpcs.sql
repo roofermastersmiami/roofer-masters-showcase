@@ -55,7 +55,8 @@ DO $$ BEGIN
 END $$;
 
 -- Same-company manual payment is recorded and inherits company from invoice.
-DO $$
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $
 DECLARE payment_uuid uuid;
 BEGIN
   payment_uuid := public.record_invoice_payment(
