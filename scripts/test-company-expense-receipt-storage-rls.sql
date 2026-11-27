@@ -37,8 +37,18 @@ VALUES ('80000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-00000000
 \ir ../drizzle/migrations/0061_company_scoped_expense_receipt_storage.sql
 
 -- Company A accounting member can upload only under its existing expense row.
+-- A failed row-attachment can still clean up its own newly uploaded object:
+-- DELETE is scoped to the same company/expense and accounting membership,
+-- but deliberately does not require receipt_path to have been attached yet.
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+INSERT INTO storage.objects(bucket_id,name) VALUES
+ ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf');
+DELETE FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf';
+DO $ BEGIN
+  IF EXISTS (SELECT 1 FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf')
+    THEN RAISE EXCEPTION 'Accounting member could not clean up unattached receipt'; END IF;
+END $;
 INSERT INTO storage.objects(bucket_id,name) VALUES
  ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf');
 DO $$ BEGIN
