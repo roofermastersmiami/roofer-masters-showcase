@@ -43,8 +43,8 @@ INSERT INTO job_change_orders VALUES('96000000-0000-0000-0000-000000000001','400
 INSERT INTO lead_messages VALUES('97000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001');
 INSERT INTO proposal_shares VALUES('98000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001');
 INSERT INTO roof_estimates VALUES('99000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','50000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000001');
-\ir ../drizzle/migrations/0055_secondary_operational_company_ownership.sql
-\ir ../drizzle/migrations/0062_company_owned_drawing_references.sql
+\ir ../drizzle/migrations/0056_secondary_operational_company_ownership.sql
+\ir ../drizzle/migrations/0063_company_owned_drawing_references.sql
 DO $$ BEGIN
  IF (SELECT count(*) FROM proposals)<>2 OR NOT EXISTS(SELECT 1 FROM proposals WHERE id='70000000-0000-0000-0000-000000000002' AND lead_id IS NULL AND property_id IS NULL AND drawing_id IS NULL) THEN RAISE EXCEPTION 'Parentless proposal not preserved'; END IF;
  IF EXISTS(SELECT 1 FROM client_portal_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_activity WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_expenses WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_invoices WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_tasks WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_checkouts WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_payments WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_project_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM job_change_orders WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM lead_messages WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposal_shares WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposals WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM roof_estimates WHERE company_id IS NULL) THEN RAISE EXCEPTION 'Missing company ownership'; END IF;
