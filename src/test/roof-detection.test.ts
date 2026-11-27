@@ -408,20 +408,20 @@ describe("LiDAR converter vertex snap robustness", () => {
       ]),
       "Metal Roof",
     );
-    const [planeA, planeB] = drawing.planes;
-    expect(planeA?.points).toHaveLength(5);
-    // Facet B's two bracket vertices collapse onto the shared centroid.
-    expect(planeB?.points).toHaveLength(5);
-    const sharedA = planeA?.points.find(
-      (point) => Math.abs(point.x - 30.02) < 0.1 && Math.abs(point.z - 10.02) < 0.1,
+    // Step 8: the two facets are halves of ONE plane (elevation is a
+    // function of z alone), so drawing consolidation merges them
+    // into a single plane and the seam — bracketed vertices and all —
+    // disappears from the outline entirely instead of braiding the
+    // three near-coincident vertices around each other. (Seams
+    // between DIFFERENT planes still exercise the snap; see the
+    // edge-classification tests above.)
+    expect(drawing.planes).toHaveLength(1);
+    const merged = drawing.planes[0]!;
+    const seamResidue = merged.points.filter(
+      (point) => Math.abs(point.x - 30.02) < 0.5 && Math.abs(point.z - 10.02) < 0.5,
     );
-    const sharedB = planeB?.points.filter(
-      (point) => Math.abs(point.x - 30.02) < 0.1 && Math.abs(point.z - 10.02) < 0.1,
-    );
-    expect(sharedA).toBeDefined();
-    expect(sharedB).toHaveLength(1);
-    expect(sharedB[0]?.x).toBe(sharedA?.x);
-    expect(sharedB[0]?.z).toBe(sharedA?.z);
+    expect(seamResidue).toHaveLength(0);
+    expect(merged.points.length).toBeLessThanOrEqual(8);
     // And the resulting drawing measures cleanly (no plan overlap).
     const measured = measureDrawing(drawing);
     const total = measured.planes.reduce((sum, plane) => sum + plane.area, 0);
@@ -477,5 +477,179 @@ describe("Async analyze job envelope", () => {
         result: { status: "lidar_facets" },
       }),
     ).toThrow();
+  });
+});
+
+describe("LiDAR drawing consolidation (step 8)", () => {
+  const origin = response.location;
+  const lonScale = 111320 * Math.cos((origin.lat * Math.PI) / 180) * (1 / 0.3048);
+  const latScale = 110540 * (1 / 0.3048);
+  const ring = (points: [number, number, number][]) =>
+    points.map(([x, z, elevation]) => [
+      origin.lat - z / latScale,
+      origin.lon + x / lonScale,
+      elevation,
+    ]) as [number, number, number][];
+  const facet = (id: string, points: [number, number, number][]) => ({
+    id,
+    point_count: 500,
+    pitch_degrees: (Math.atan(6 / 12) * 180) / Math.PI,
+    pitch_rise_per_12: 6,
+    azimuth_degrees: 180,
+    area_sqft: 600,
+    squares: 6,
+    boundary_latlon: ring([...points, points[0]!]),
+  });
+  const makeReady = (
+    facets: ReturnType<typeof facet>[],
+    extra: Partial<RoofDetectionResponse["roof"]> = {},
+    footprint: RoofDetectionResponse["footprint"] = response.footprint,
+  ): RoofDetectionResponse => ({
+    ...response,
+    footprint,
+    roof: {
+      ...response.roof,
+      facet_count: facets.length,
+      facets: facets as RoofDetectionResponse["roof"]["facets"],
+      drawing_ready: true,
+      ...extra,
+    },
+  });
+  const EAVE_M = 10;
+  const RIDGE_M = 12.286; // 6/12 over a 15 ft run
+
+  it("merges coplanar fragments of one fitted plane into a single drawing plane", () => {
+    // The service's outline partition split Miramar's 5.64/12 plane
+    // into facets carrying byte-identical plane models; drawn as
+    // separate polygons their mutual seams scribbled across one face.
+    // Two halves of one slope must become one plane, while the
+    // opposing slope across the ridge stays its own plane.
+    const drawing = detectedFacetsToDrawing(
+      makeReady([
+        facet("facet-a", [
+          [0, 0, EAVE_M],
+          [20, 0, EAVE_M],
+          [20, 15, RIDGE_M],
+          [0, 15, RIDGE_M],
+        ]),
+        facet("facet-b", [
+          [20, 0, EAVE_M],
+          [40, 0, EAVE_M],
+          [40, 15, RIDGE_M],
+          [20, 15, RIDGE_M],
+        ]),
+        facet("facet-c", [
+          [0, 15, RIDGE_M],
+          [40, 15, RIDGE_M],
+          [40, 30, EAVE_M],
+          [0, 30, EAVE_M],
+        ]),
+      ]),
+      "Tile Roof",
+    );
+    expect(drawing.planes).toHaveLength(2);
+    const measured = measureDrawing(drawing);
+    // The fake seam between the fragments is gone: the ridge is the
+    // only interior edge and nothing is left unclassified.
+    expect(measured.edges.ridge).toBeCloseTo(40, 0);
+    expect(measured.edges.other).toBe(0);
+    // 1200 sf of plan at 6/12 (slope factor sqrt(1.25)).
+    expect(measured.area).toBeCloseTo(1200 * Math.sqrt(1.25), 0);
+  });
+
+  it("passes the service's authoritative edge totals through to the drawing", () => {
+    const serviceEdges = {
+      ridge: 7.2,
+      hip: 239.2,
+      valley: 59.6,
+      eave: 197.4,
+      rake: 50.7,
+      pitch_change: 0,
+    };
+    const drawing = detectedFacetsToDrawing(
+      makeReady(
+        [
+          facet("facet-1", [
+            [0, 0, EAVE_M],
+            [40, 0, EAVE_M],
+            [40, 15, RIDGE_M],
+            [0, 15, RIDGE_M],
+          ]),
+        ],
+        { edge_lengths_lf: serviceEdges },
+      ),
+      "Tile Roof",
+    );
+    expect(drawing.service_edge_lengths_lf).toEqual(serviceEdges);
+    // Legacy responses without service totals leave the field unset,
+    // and the report falls back to the drawing's own classification.
+    const legacy = detectedFacetsToDrawing(
+      makeReady([
+        facet("facet-1", [
+          [0, 0, EAVE_M],
+          [40, 0, EAVE_M],
+          [40, 15, RIDGE_M],
+          [0, 15, RIDGE_M],
+        ]),
+      ]),
+      "Tile Roof",
+    );
+    expect(legacy.service_edge_lengths_lf).toBeUndefined();
+  });
+
+  it("fills a compact tiling notch into its bordering facet but skips hairline margins", () => {
+    // Outline = the facets' 40x30 tiling, plus a compact 3x3 ft
+    // notch on the east side (a genuine hole in the sketch) and a
+    // 0.15 ft hairline offset along the west side (outline-margin
+    // noise that must NOT be unioned into a facet).
+    const outlineFt: [number, number][] = [
+      [-0.15, 0],
+      [40, 0],
+      [40, 10],
+      [43, 10],
+      [43, 13],
+      [40, 13],
+      [40, 30],
+      [-0.15, 30],
+    ];
+    const footprint: RoofDetectionResponse["footprint"] = {
+      source: "test",
+      area_sqft: 1213,
+      polygon_geojson: {
+        type: "Polygon",
+        coordinates: [
+          [
+            ...outlineFt.map(([x, z]) => [origin.lon + x / lonScale, origin.lat - z / latScale]),
+            [origin.lon + outlineFt[0]![0] / lonScale, origin.lat - outlineFt[0]![1] / latScale],
+          ],
+        ],
+      },
+    };
+    const drawing = detectedFacetsToDrawing(
+      makeReady(
+        [
+          facet("facet-1", [
+            [0, 0, EAVE_M],
+            [40, 0, EAVE_M],
+            [40, 15, RIDGE_M],
+            [0, 15, RIDGE_M],
+          ]),
+          facet("facet-2", [
+            [0, 15, RIDGE_M],
+            [40, 15, RIDGE_M],
+            [40, 30, EAVE_M],
+            [0, 30, EAVE_M],
+          ]),
+        ],
+        {},
+        footprint,
+      ),
+      "Tile Roof",
+    );
+    expect(drawing.planes).toHaveLength(2);
+    const measured = measureDrawing(drawing);
+    // (1200 sf of facets + the 9 sf notch) at 6/12; the 4.5 sf
+    // hairline strip stays unfilled.
+    expect(measured.area).toBeCloseTo(1209 * Math.sqrt(1.25), 0);
   });
 });

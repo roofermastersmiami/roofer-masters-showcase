@@ -384,6 +384,333 @@ export function detectedFacetsToDrawing(
     const plane = facetPlanes[index];
     return plane ? plane.a * x + plane.b * z + plane.c : null;
   };
+  // --- Drawing consolidation (rendering only) ---
+  // The fitted facets and every service-reported number are untouched;
+  // this only restyles how the facets are DRAWN, and it runs before
+  // plane fitting / edge classification so the consolidated facets are
+  // classified as the single faces they are.
+  // 1) Coplanar fragments: the service's outline partition can split
+  //    one fitted plane's region into several polygons (Miramar's
+  //    5.64/12 plane shipped as facets 5, 6 and 7 carrying identical
+  //    plane models). The seams between fragments of one plane are
+  //    not roof edges — drawn, they scribble across a single face and
+  //    the fragments render as slivers and wedges. Merge facets that
+  //    share a boundary and whose refit planes agree (normals within
+  //    2°, elevations within 0.3 ft at the shared seam) into one
+  //    drawing polygon.
+  // 2) Tiling gaps: the partition can leave small unfilled parts of
+  //    the footprint outline (Miramar: 10 sf in 4 parts, Annel:
+  //    7.5 sf) that read as holes in the sketch. Assign each part to
+  //    the facet it borders most, for the drawing only.
+  // Consolidation is cosmetic, so any failure keeps the original
+  // facets: it must never break a measurement.
+  try {
+    type Ring = [number, number][];
+    const closedRing = (points: LocalPoint[]): Ring => {
+      const ring = points.map((p) => [p.x, p.z] as [number, number]);
+      const first = ring[0];
+      return first ? [...ring, first] : ring;
+    };
+    const ringAreaAbs = (ring: Ring) => {
+      let area = 0;
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i]!;
+        const b = ring[(i + 1) % ring.length]!;
+        area += a[0] * b[1] - b[0] * a[1];
+      }
+      return Math.abs(area) / 2;
+    };
+    // Overlap of segment a-b with segment c-d when the two are
+    // collinear within tolerance, else null.
+    const collinearOverlap = (
+      a: Ring[number],
+      b: Ring[number],
+      c: Ring[number],
+      d: Ring[number],
+    ) => {
+      const dx = b[0] - a[0];
+      const dz = b[1] - a[1];
+      const length = Math.hypot(dx, dz);
+      if (length <= 1e-9) return null;
+      const ux = dx / length;
+      const uz = dz / length;
+      if (Math.abs((c[0] - a[0]) * uz - (c[1] - a[1]) * ux) > 0.06) return null;
+      if (Math.abs((d[0] - a[0]) * uz - (d[1] - a[1]) * ux) > 0.06) return null;
+      const tc = (c[0] - a[0]) * ux + (c[1] - a[1]) * uz;
+      const td = (d[0] - a[0]) * ux + (d[1] - a[1]) * uz;
+      const lo = Math.max(0, Math.min(tc, td));
+      const hi = Math.min(length, Math.max(tc, td));
+      if (hi - lo <= 0.05) return null;
+      return {
+        length: hi - lo,
+        mid: { x: a[0] + ux * ((lo + hi) / 2), z: a[1] + uz * ((lo + hi) / 2) },
+      };
+    };
+    const sharedBoundary = (ringA: Ring, ringB: Ring) => {
+      let total = 0;
+      let longest: { length: number; mid: { x: number; z: number } } | null = null;
+      for (let i = 0; i < ringA.length - 1; i++)
+        for (let j = 0; j < ringB.length - 1; j++) {
+          const overlap = collinearOverlap(ringA[i]!, ringA[i + 1]!, ringB[j]!, ringB[j + 1]!);
+          if (!overlap) continue;
+          total += overlap.length;
+          if (!longest || overlap.length > longest.length) longest = overlap;
+        }
+      return { total, longest };
+    };
+    const elevationLookup = new Map<string, number>();
+    for (const points of facetsPoints)
+      for (const p of points)
+        elevationLookup.set(`${Math.round(p.x * 50)}:${Math.round(p.z * 50)}`, p.elevation);
+    const elevationAt = (x: number, z: number, facetIndex: number) => {
+      const exact = elevationLookup.get(`${Math.round(x * 50)}:${Math.round(z * 50)}`);
+      if (exact !== undefined) return exact;
+      let best: number | null = null;
+      let bestDist = 0.15;
+      for (const points of facetsPoints)
+        for (const p of points) {
+          const dist = Math.hypot(p.x - x, p.z - z);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = p.elevation;
+          }
+        }
+      return best ?? planeElevation(facetIndex, x, z) ?? 0;
+    };
+    const dedupeRing = (points: LocalPoint[]) => {
+      const deduped: LocalPoint[] = [];
+      for (const point of points) {
+        const previous = deduped[deduped.length - 1];
+        if (!previous || Math.hypot(point.x - previous.x, point.z - previous.z) > 0.01)
+          deduped.push(point);
+      }
+      if (deduped.length > 1) {
+        const first = deduped[0]!;
+        const last = deduped[deduped.length - 1]!;
+        if (Math.hypot(first.x - last.x, first.z - last.z) <= 0.01) deduped.pop();
+      }
+      return deduped;
+    };
+
+    const rings = facetsPoints.map((points) => closedRing(points));
+    const parent = facetsPoints.map((_, index) => index);
+    const findRoot = (index: number): number => {
+      let root = index;
+      while (parent[root] !== root) root = parent[root]!;
+      return root;
+    };
+    for (let i = 0; i < rings.length; i++)
+      for (let j = i + 1; j < rings.length; j++) {
+        const planeI = facetPlanes[i];
+        const planeJ = facetPlanes[j];
+        if (!planeI || !planeJ) continue;
+        const shared = sharedBoundary(rings[i]!, rings[j]!);
+        if (shared.total < 1 || !shared.longest) continue;
+        const normI = Math.hypot(planeI.a, planeI.b, 1);
+        const normJ = Math.hypot(planeJ.a, planeJ.b, 1);
+        const cos = (planeI.a * planeJ.a + planeI.b * planeJ.b + 1) / (normI * normJ);
+        const angleDeg = (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI;
+        if (angleDeg > 2) continue;
+        const { mid } = shared.longest;
+        const elevI = planeI.a * mid.x + planeI.b * mid.z + planeI.c;
+        const elevJ = planeJ.a * mid.x + planeJ.b * mid.z + planeJ.c;
+        if (Math.abs(elevI - elevJ) > 0.3) continue;
+        const rootI = findRoot(i);
+        const rootJ = findRoot(j);
+        if (rootI !== rootJ) parent[rootI] = rootJ;
+      }
+    const groups = new Map<number, number[]>();
+    facetsPoints.forEach((_, index) => {
+      const root = findRoot(index);
+      groups.set(root, [...(groups.get(root) ?? []), index]);
+    });
+
+    type ConsolidatedFacet = { descriptor: number; points: LocalPoint[] };
+    const consolidated: ConsolidatedFacet[] = [];
+    for (const members of groups.values()) {
+      if (members.length === 1) {
+        consolidated.push({ descriptor: members[0]!, points: facetsPoints[members[0]!]! });
+        continue;
+      }
+      const polys = members.map((member) => [rings[member]!] as Ring[]);
+      const merged = polygonClipping.union(polys[0]!, ...polys.slice(1));
+      const onlyPoly = merged.length === 1 ? merged[0] : undefined;
+      const outer = onlyPoly && onlyPoly.length === 1 ? onlyPoly[0] : undefined;
+      const memberArea = members.reduce((sum, member) => sum + ringAreaAbs(rings[member]!), 0);
+      const representative = members.reduce(
+        (best, member) => (ringAreaAbs(rings[member]!) > ringAreaAbs(rings[best]!) ? member : best),
+        members[0]!,
+      );
+      const points =
+        outer && outer.length >= 4
+          ? dedupeRing(
+              outer
+                .slice(0, -1)
+                .map(([x, z]) => ({ x, z, elevation: elevationAt(x, z, representative) })),
+            )
+          : [];
+      if (
+        points.length < 3 ||
+        Math.abs(ringAreaAbs(closedRing(points)) - memberArea) > Math.max(1, memberArea * 0.02)
+      ) {
+        // The union did not reproduce the fragments' territory
+        // (multi-part or holed result): keep the fragments as drawn.
+        for (const member of members)
+          consolidated.push({ descriptor: member, points: facetsPoints[member]! });
+        continue;
+      }
+      consolidated.push({ descriptor: representative, points });
+    }
+
+    // measureDrawing pairs shared segments by their endpoints and
+    // rejects a segment carried by more than two planes. A gap part
+    // can carry a spur that runs along an existing seam between two
+    // other facets (Annel's 6.9 sf notch did exactly this): filling
+    // it hands that seam a third owner once the T-junction split
+    // aligns the endpoints. Endpoint matching alone cannot see it
+    // before the split, so ownership is sampled along each segment:
+    // a seam LENGTH is triple-owned when interior samples sit on
+    // three facets' boundaries at once (junction POINTS where three
+    // facets meet are legitimate and are skipped).
+    const boundaryFacetsAt = (point: { x: number; z: number }, ringsNow: Ring[]) => {
+      const owners = new Set<number>();
+      ringsNow.forEach((ring, index) => {
+        for (let s = 0; s < ring.length - 1; s++) {
+          const a = { x: ring[s]![0], z: ring[s]![1] };
+          const b = { x: ring[s + 1]![0], z: ring[s + 1]![1] };
+          if (pointToSegmentDistance(point, a, b).distance <= 0.06) {
+            owners.add(index);
+            break;
+          }
+        }
+      });
+      return owners;
+    };
+    const segmentTripleOwned = (
+      a: Ring[number],
+      b: Ring[number],
+      selfIndex: number,
+      ringsNow: Ring[],
+    ) => {
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (length < 0.5) return false;
+      const steps = Math.max(2, Math.ceil(length / 0.25));
+      let run = 0;
+      for (let s = 1; s < steps; s++) {
+        const t = s / steps;
+        const point = { x: a[0] + (b[0] - a[0]) * t, z: a[1] + (b[1] - a[1]) * t };
+        let nearVertex = false;
+        for (const ring of ringsNow)
+          for (const vertex of ring)
+            if (Math.hypot(vertex[0] - point.x, vertex[1] - point.z) <= 0.12) {
+              nearVertex = true;
+              break;
+            }
+        if (nearVertex) {
+          run = 0;
+          continue;
+        }
+        const owners = boundaryFacetsAt(point, ringsNow);
+        owners.delete(selfIndex);
+        if (owners.size >= 2) {
+          run++;
+          if (run >= 2) return true;
+        } else run = 0;
+      }
+      return false;
+    };
+    const hasTripleSharedEdge = (ringsNow: Ring[]) =>
+      ringsNow.some((ring, index) => {
+        for (let s = 0; s < ring.length - 1; s++)
+          if (segmentTripleOwned(ring[s]!, ring[s + 1]!, index, ringsNow)) return true;
+        return false;
+      });
+    const fillCreatesTripleEdge = (filled: Ring, targetIndex: number, ringsNow: Ring[]) => {
+      const candidate = ringsNow.map((ring, index) => (index === targetIndex ? filled : ring));
+      for (let s = 0; s < filled.length - 1; s++)
+        if (segmentTripleOwned(filled[s]!, filled[s + 1]!, targetIndex, candidate)) return true;
+      return false;
+    };
+    if (hasTripleSharedEdge(consolidated.map((entry) => closedRing(entry.points))))
+      throw new Error("Consolidation produced a triple-shared edge");
+
+    // Tiling gaps inside the footprint outline.
+    const outlineCoords = result.footprint.polygon_geojson.coordinates[0] ?? [];
+    const outlineRing: Ring = outlineCoords.map(([lon, lat]) => [
+      (lon - originLon) * longitudeScale * FEET_PER_METER,
+      (originLat - lat) * METERS_PER_LAT_DEGREE * FEET_PER_METER,
+    ]);
+    if (outlineRing.length >= 4) {
+      const currentRings = consolidated.map((entry) => closedRing(entry.points));
+      const gaps = polygonClipping.difference(
+        [outlineRing],
+        currentRings.map((ring) => [ring]),
+      );
+      for (const part of gaps) {
+        if (part.length !== 1) continue;
+        const outer = part[0]!;
+        const gapArea = ringAreaAbs(outer);
+        if (gapArea < 0.5 || gapArea > 30) continue;
+        // Almost every difference part is a hairline strip where
+        // the facet union runs a few centimetres inside the outline
+        // (Annel's 6.9 sf part has a 206 ft perimeter; Maria's
+        // 10.2 sf part 185 ft): sub-visible at report scale, and
+        // unioning one hands its owner a degenerate double-sided
+        // ring. Only a genuinely open part — mean width
+        // 2·area/perimeter of at least 0.6 ft, like Miramar's
+        // 7.4 sf corner notch at 1.18 ft — is a hole worth filling.
+        let perimeter = 0;
+        for (let s = 0; s < outer.length - 1; s++)
+          perimeter += Math.hypot(outer[s + 1]![0] - outer[s]![0], outer[s + 1]![1] - outer[s]![1]);
+        if (perimeter <= 0 || (2 * gapArea) / perimeter < 0.6) continue;
+        // Try the facets the part borders, longest shared border
+        // first. The longest-border facet is not always a legal
+        // owner: a part whose spur runs along the seam between two
+        // other facets can only be filled into one of those two
+        // (anyone else would give the seam a third owner).
+        const candidates = currentRings
+          .map((ring, index) => ({ index, shared: sharedBoundary(outer, ring).total }))
+          .filter((candidate) => candidate.shared >= 0.5)
+          .sort((a, b) => b.shared - a.shared);
+        for (const { index: bestIndex } of candidates) {
+          const target = consolidated[bestIndex]!;
+          const unioned = polygonClipping.union([currentRings[bestIndex]!], [outer]);
+          const onlyPoly = unioned.length === 1 ? unioned[0] : undefined;
+          const onlyRing = onlyPoly && onlyPoly.length === 1 ? onlyPoly[0] : undefined;
+          if (!onlyRing || onlyRing.length < 4) continue;
+          const filled = dedupeRing(
+            onlyRing
+              .slice(0, -1)
+              .map(([x, z]) => ({ x, z, elevation: elevationAt(x, z, target.descriptor) })),
+          );
+          if (filled.length < 3) continue;
+          const expected = ringAreaAbs(currentRings[bestIndex]!) + gapArea;
+          if (Math.abs(ringAreaAbs(closedRing(filled)) - expected) > Math.max(1, expected * 0.02))
+            continue;
+          if (fillCreatesTripleEdge(closedRing(filled), bestIndex, currentRings)) continue;
+          target.points = filled;
+          currentRings[bestIndex] = closedRing(filled);
+          break;
+        }
+      }
+    }
+
+    if (hasTripleSharedEdge(consolidated.map((entry) => closedRing(entry.points))))
+      throw new Error("Consolidation produced a triple-shared edge");
+
+    const consolidatedPoints = consolidated.map((entry) => entry.points);
+    const consolidatedProjected = consolidated.map((entry) => projected[entry.descriptor]!);
+    facetsPoints.length = 0;
+    facetsPoints.push(...consolidatedPoints);
+    projected.length = 0;
+    projected.push(...consolidatedProjected);
+    facetPlanes.length = 0;
+    facetsPoints.forEach((points) => facetPlanes.push(fitPlane(points)));
+  } catch {
+    // Consolidation is cosmetic; the unconsolidated facets still
+    // convert and measure correctly.
+  }
+
   // Re-level every vertex on its facet's fitted plane at its (snapped)
   // position, so vertices stay exactly coplanar after snapping.
   const leveledElevations: number[][] = facetsPoints.map((points, index) =>
@@ -811,6 +1138,12 @@ export function detectedFacetsToDrawing(
     penetrations: [],
     waste: 10,
     roof_type: roofType,
+    // The service's fitted-facet edge totals are authoritative for
+    // reports; the drawing's own classification of the partition
+    // seams diverges (see roof-geometry's service_edge_lengths_lf).
+    ...(result.roof.edge_lengths_lf
+      ? { service_edge_lengths_lf: result.roof.edge_lengths_lf }
+      : {}),
     notes:
       "Preliminary roof facets from public USGS 3DEP LiDAR. Edge types (ridge, hip, valley, eave, rake) are classified from facet geometry and are estimates. Verify all facet boundaries, pitch, edge types, and material system before use.",
     condition: "",

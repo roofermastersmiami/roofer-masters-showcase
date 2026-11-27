@@ -229,10 +229,63 @@ export async function roofDrawingPdf(
     mapPoint: (point: { x: number; z: number }) => { x: number; y: number },
   ) => {
     const pts = plane.points.map((point) => mapPoint(point));
-    return pts.reduce(
+    const centroid = pts.reduce(
       (acc, point) => ({ x: acc.x + point.x / pts.length, y: acc.y + point.y / pts.length }),
       { x: 0, y: 0 },
     );
+    // Label anchor: the pole of inaccessibility (deepest interior
+    // point), approximated on a grid. The vertex average of a concave
+    // facet can land on a seam or inside a neighbouring facet —
+    // Miramar's wrapper facets put their pitch labels on the wrong
+    // face — while the pole always sits inside its own facet, as far
+    // from every edge as the shape allows.
+    if (pts.length < 3) return centroid;
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const inside = (px: number, py: number) => {
+      let isInside = false;
+      for (let a = 0, b = pts.length - 1; a < pts.length; b = a++) {
+        const pa = pts[a]!;
+        const pb = pts[b]!;
+        if (pa.y > py !== pb.y > py && px < ((pb.x - pa.x) * (py - pa.y)) / (pb.y - pa.y) + pa.x)
+          isInside = !isInside;
+      }
+      return isInside;
+    };
+    const clearance = (px: number, py: number) => {
+      let best = Infinity;
+      for (let a = 0; a < pts.length; a++) {
+        const pa = pts[a]!;
+        const pb = pts[(a + 1) % pts.length]!;
+        const dx = pb.x - pa.x;
+        const dy = pb.y - pa.y;
+        const lengthSq = dx * dx + dy * dy;
+        const t =
+          lengthSq <= 1e-12
+            ? 0
+            : Math.max(0, Math.min(1, ((px - pa.x) * dx + (py - pa.y) * dy) / lengthSq));
+        best = Math.min(best, Math.hypot(px - (pa.x + t * dx), py - (pa.y + t * dy)));
+      }
+      return best;
+    };
+    const step = Math.max(maxX - minX, maxY - minY) / 24;
+    if (!(step > 0)) return centroid;
+    let bestPoint: { x: number; y: number } | null = null;
+    let bestClearance = -1;
+    for (let gx = minX + step / 2; gx < maxX; gx += step)
+      for (let gy = minY + step / 2; gy < maxY; gy += step) {
+        if (!inside(gx, gy)) continue;
+        const c = clearance(gx, gy);
+        if (c > bestClearance) {
+          bestClearance = c;
+          bestPoint = { x: gx, y: gy };
+        }
+      }
+    return bestPoint ?? centroid;
   };
 
   const today = new Date();
@@ -586,7 +639,23 @@ export async function roofDrawingPdf(
   const numbersPage = addPage();
   drawBlackHeader(numbersPage, "SKETCH REPORT  |  MEASUREMENTS");
   numbersPage.drawText("Waste calculation", { x: 30, y: 706, size: 12, font: bold, color: BLACK });
-  const edges = m.edges;
+  // Line measurements print the detection service's authoritative
+  // totals when the drawing carries them: the drawing's own
+  // classification of the partition seams diverges from the
+  // service's fitted-facet classification (step-7 scoreboard:
+  // Miramar valley 197 drawing vs 59.6 service). Manually drawn or
+  // traced roofs have no service totals and keep the drawing's.
+  const serviceEdges = d.service_edge_lengths_lf;
+  const edges = serviceEdges
+    ? {
+        eave: serviceEdges.eave,
+        rake: serviceEdges.rake,
+        ridge: serviceEdges.ridge,
+        hip: serviceEdges.hip,
+        valley: serviceEdges.valley,
+      }
+    : m.edges;
+  const pitchChangeLf = serviceEdges ? serviceEdges.pitch_change : 0;
   const suggestedExtraSqFt =
     m.area * 0.05 + edges.valley * 2.3 + edges.hip * 0.7 + edges.rake * 0.25;
   const suggestedPct = m.area > 0 ? (suggestedExtraSqFt / m.area) * 100 : 0;
@@ -714,7 +783,7 @@ export async function roofDrawingPdf(
       ["Valleys", ft(edges.valley)],
       ["Step", ft(0)],
       ["Wall", ft(0)],
-      ["Pitch change", ft(0)],
+      ["Pitch change", ft(pitchChangeLf)],
     ],
     30,
     158,
@@ -751,6 +820,17 @@ export async function roofDrawingPdf(
     166,
     tableY,
   );
+  if (serviceEdges)
+    numbersPage.drawText(
+      "Line measurements: detection service totals (fitted-facet classification).",
+      {
+        x: 30,
+        y: 404,
+        size: 7,
+        font,
+        color: MUTED,
+      },
+    );
   drawBlueFooter(numbersPage, "SKETCH REPORT  |  MEASUREMENTS", pageNumber);
 
   // ---------- Page 5: area diagram ----------
