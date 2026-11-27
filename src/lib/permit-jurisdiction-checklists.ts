@@ -166,6 +166,23 @@ const pembrokePinesChecklist: ChecklistItem[] = [
   { id: "notice-of-commencement", label: "Recorded Notice of Commencement", detail: "Record, submit, and display before the first inspection when a non-mechanical project exceeds $5,000.", appliesWhen: "When the project value exceeds $5,000.", sourceUrl: "https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist" },
 ];
 
+const coralSpringsChecklist: ChecklistItem[] = [
+  { id: "building-application", label: "Broward County Building Permit Application", detail: "Complete the current building permit application.", appliesWhen: "Required for residential re-roof permit intake.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "zoning-addendum", label: "Building Permit Application Zoning Addendum", detail: "Complete the City of Coral Springs zoning addendum.", appliesWhen: "Required for residential re-roof permit intake.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "roofers-application-packet", label: "Roofers Application Packet", detail: "Complete the current city roofing application packet.", appliesWhen: "Required for residential re-roof permit intake.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "job-value", label: "Job value and itemized cost breakdown", detail: "List the job value on the permit application; an itemized cost breakdown may be requested.", appliesWhen: "Required job value; itemized breakdown when requested.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "product-approvals", label: "Roofing product approvals", detail: "Provide applicable approvals for roofing materials and accessories, including solar roof fans, roof vents, and skylights when present.", appliesWhen: "For products included in the proposed scope.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "asbestos-srra", label: "Statement of Responsibility Regarding Asbestos (SRRA)", detail: "Include the Broward County asbestos statement.", appliesWhen: "Listed in the city checklist.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "lightweight-concrete", label: "Lightweight concrete installation documentation", detail: "Provide the applicable lightweight concrete documentation.", appliesWhen: "Only when lightweight concrete installation applies.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "contractor-registration", label: "City contractor registration", detail: "Complete contractor registration requirements if the contractor is not already registered with the City.", appliesWhen: "Only if contractor is not registered with Coral Springs.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "owner-builder-affidavit", label: "Owner/Builder Affidavit Packet", detail: "Provide the city owner/builder affidavit packet.", appliesWhen: "Only for owner-builder applications.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "notice-of-commencement", label: "Notice of Commencement", detail: "Record and provide the Notice of Commencement before the first inspection.", appliesWhen: "When job value exceeds $5,000.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "rooftop-equipment-affidavit", label: "Rooftop Mounted Equipment Affidavit", detail: "Provide the rooftop-mounted equipment affidavit.", appliesWhen: "When rooftop-mounted equipment is present.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "preapproved-roof-materials", label: "Pre-Approved Roof Colors and Materials", detail: "Check the City's current pre-approved roof colors and materials before selecting tile or other regulated finish materials.", appliesWhen: "As applicable to the selected roof material and city design requirements.", sourceUrl: "https://www.coralsprings.gov/Government/Departments/Community-Development/Property-Guidelines/Property-Guidelines-old/Roofs" },
+  { id: "asbestos-compliance", label: "Asbestos Compliance Program", detail: "Confirm and satisfy the Broward County Asbestos Compliance Program requirements.", appliesWhen: "Listed in the city checklist.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+  { id: "roof-to-wall-interpretation", label: "Roof-to-wall retrofit interpretation", detail: "Review Broward County Board of Rules and Appeals Formal Interpretation #28 regarding retrofitting roof-to-wall connections.", appliesWhen: "Review for applicability to the existing roof-to-wall condition and proposed scope.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
+];
+
 const hollywoodChecklist: ChecklistItem[] = [
   { id: "building-application", label: "Broward County Uniform Building Permit Application", detail: "Complete the application with Building checked; the city's checklist identifies a licensed roofing contractor or owner-builder.", appliesWhen: "Residential and commercial roofing permit applications.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
   { id: "hvzh-roofing-package", label: "HVHZ Uniform Roofing Permit Application", detail: "Complete the applicable sections and attachments for the proposed roof system.", appliesWhen: "Residential and commercial roofing permit applications.", sourceUrl: "https://hollywoodfl.org/DocumentCenter/View/4770/COH-Roofing-Permit-Checklist--Application-Packet-91525" },
@@ -190,6 +207,18 @@ export const BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE: JurisdictionPermitProfi
   codeEditionEffectiveThrough: "2026-12-30",
   sourceUrls: ["https://www.ppines.com/DocumentCenter/View/26288/Re-Roof-Permit-Checklist", "https://www.ppines.com/1665/Information-Forms", FBC_CODE_URL],
   checklist: pembrokePinesChecklist,
+};
+
+export const BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-coral-springs-residential-reroof",
+  label: "City of Coral Springs — residential re-roof",
+  county: "Broward",
+  authorityScope: "City of Coral Springs Building Department Roof / Re-Roof Permit Application Checklist, Form 013.0, revised October 26, 2026.",
+  authorityWarning: "This profile is limited to residential roof / re-roof permit intake in the City of Coral Springs. Verify the parcel is inside city limits and confirm the current Building Department packet before filing. The City states its checklist is not all-inclusive.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf", "https://www.coralsprings.gov/Government/Departments/Community-Development/Property-Guidelines/Property-Guidelines-old/Roofs", FBC_CODE_URL],
+  checklist: coralSpringsChecklist,
 };
 
 export const BROWARD_HOLLYWOOD_ROOFING_PROFILE: JurisdictionPermitProfile = {
@@ -244,7 +273,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_COUNTY_PROFILE.id]: BROWARD_COUNTY_PROFILE,
     [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
     [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
-    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
+    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,\n    [BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id]: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -279,8 +308,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
-  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id;
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
