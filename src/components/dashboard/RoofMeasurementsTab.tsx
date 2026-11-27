@@ -138,6 +138,9 @@ export function RoofMeasurementsTab({
     }
     const parsed = roofOrderSchema.safeParse({
       ...form,
+      // Client name is optional in the form: the report is titled by
+      // its address until a client is linked.
+      title: form.title.trim() || locatedAddress.matchedAddress,
       // Preserve the exact saved CRM address so the server reuses its property record.
       address: originalCrmAddress || locatedAddress.matchedAddress,
     });
@@ -276,8 +279,9 @@ export function RoofMeasurementsTab({
         }
       />
       <p className="mb-5 text-sm text-muted-foreground">
-        Start with a property address, then trace or enter roof dimensions in the linked 2D and 3D
-        workspace. The completed measurement PDF is saved back to Roof reports.
+        Start with a property address: the linked workspace measures the roof automatically from
+        public LiDAR data, saves the measurement PDF back to Roof reports, and builds the material
+        list. Tracing and manual dimensions remain available whenever you want them.
       </p>
       {orders.error || drawings.error ? (
         <p role="alert" className="mb-4 text-destructive">
@@ -344,8 +348,10 @@ export function RoofMeasurementsTab({
                 ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
                 : ""}
               Search for an address and confirm the pin is on the correct building. For apartment
-              complexes or condos, create a separate report for each building. Roof dimensions still
-              require tracing or field measurement.
+              complexes or condos, create a separate report for each building. The roof is then
+              measured automatically from public LiDAR data, the report PDF is generated and saved,
+              and a material list is built from the measurement — you can review or adjust every
+              result afterwards.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -465,10 +471,10 @@ export function RoofMeasurementsTab({
                 </p>
               </div>
             )}
-            <Field label="Client name">
+            <Field label="Client name (optional)">
               <Input
-                required
                 maxLength={180}
+                placeholder="Leave blank to title the report by its address"
                 value={form.title}
                 onChange={(event) => setForm({ ...form, title: event.target.value })}
               />

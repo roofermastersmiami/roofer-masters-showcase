@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ROOF_TYPES } from "./instant-estimate-schema";
+import { toMaterialReport, type RoofDrawing } from "./roof-geometry";
 import {
   calculateRoofTakeoff,
   type MetalPlaneRun,
@@ -207,6 +208,48 @@ export function materialOrderForTransfer(input: RoofReport): MaterialLine[] {
     return [];
   }
   return materialOrder(report);
+}
+
+export type AutomaticMaterialList = {
+  report: RoofReport;
+  lines: MaterialLine[];
+  warnings: string[];
+  wastePct: number;
+};
+
+/**
+ * Material list generated automatically from a roof drawing — the same
+ * takeoff the report PDF prints and the job transfer uses, so the list
+ * exists the moment a measurement is saved instead of waiting for a
+ * manual transfer. Quantities derive from the drawing's slope area and
+ * its waste setting. When the drawing came from the automated
+ * measurement service, the service's authoritative edge totals replace
+ * the drawing's own seam classification — the same totals the report's
+ * measurements page prints (the two diverge on partition seams).
+ * Metal roofs without product specifications return no lines plus the
+ * review warnings, exactly like the transfer path.
+ */
+export function automaticMaterialList(drawing: RoofDrawing): AutomaticMaterialList {
+  const base = toMaterialReport(drawing);
+  const service = drawing.service_edge_lengths_lf;
+  const report = reportSchema.parse(
+    service
+      ? {
+          ...base,
+          ridge_lf: service.ridge,
+          hips_lf: service.hip,
+          valleys_lf: service.valley,
+          eaves_lf: service.eave,
+          rakes_lf: service.rake,
+        }
+      : base,
+  );
+  return {
+    report,
+    lines: materialOrderForTransfer(report),
+    warnings: materialOrderWarnings(report),
+    wastePct: effectiveMaterialWastePct(report),
+  };
 }
 
 export function materialOrderWarnings(input: RoofReport): string[] {
