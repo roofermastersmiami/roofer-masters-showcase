@@ -427,6 +427,28 @@ export const BROWARD_HALLANDALE_ROOFING_PROFILE: JurisdictionPermitProfile = {
   checklist: hallandaleRoofingChecklist,
 };
 
+const cityOfMiamiResidentialRoofingChecklist: ChecklistItem[] = [
+  { id: "miami-city-roofing-permit", label: "City of Miami Building Roofing Permit", detail: "Apply for the City roofing permit and use the residential reroof applicant checklist for the selected roof system. The City's permit catalog says a building permit is required for all roofing work.", appliesWhen: "All roofing work; this profile's detailed checklist is intentionally limited to residential reroofs.", sourceUrl: "https://www.miami.gov/Permits-Construction/Permit-Catalog/Get-a-Roofing-Permit?lang_update=637748169458966676" },
+  { id: "miami-city-uniform-roofing-application", label: "Uniform Roofing Application (PAP) and HVHZ form (RPF)", detail: "Complete the Uniform Roofing Application and HVHZ form. Include a dimensioned roof plan and slope; complete sections A, B and the applicable roof-system section.", appliesWhen: "Residential reroof; flat/low-slope uses sections A, B and C; shingle, tile and metal use sections A, B and D per the City's published checklists.", sourceUrl: "https://www.miami.gov/Permits-Construction/Digital-Permitting/Permitting-Forms-Documents" },
+  { id: "miami-city-disclosure-statement", label: "Reroof disclosure statement", detail: "Include the City's disclosure statement on the HVHZ roof sketch page. The permit authorizes only the proposed reroof scope and does not legalize the attached structure.", appliesWhen: "Residential reroof; include the statement on the HVHZ roof sketch page.", sourceUrl: "https://www.miami.gov/files/assets/public/v/2/document-resources/pdf-docs/building/checklists/residential-permit-re-roofing-metal-roof-applicant-checklist_remediated.pdf" },
+  { id: "miami-city-product-approval", label: "Miami-Dade NOA or Florida Product Approval", detail: "Provide the NOA or Florida Product Approval identifying the exact roof system to be installed.", appliesWhen: "Residential reroof; approval must match the selected system.", sourceUrl: "https://www.miami.gov/Permits-Construction/Permit-Catalog/Get-a-Roofing-Permit?lang_update=637748169458966676" },
+  { id: "miami-city-ul-listing", label: "UL roof-system listing (BLD)", detail: "Provide the UL listing identifying the roof system proposed for installation.", appliesWhen: "Listed in the City's residential reroof applicant checklists.", sourceUrl: "https://www.miami.gov/files/assets/public/v/2/document-resources/pdf-docs/building/checklists/residential-permit-re-roofing-metal-roof-applicant-checklist_remediated.pdf" },
+  { id: "miami-city-owner-notification", label: "Owner's Notification for Roofing Considerations — Form 1524", detail: "Complete the City owner-notification form for roofing considerations.", appliesWhen: "Listed in the City's residential reroof applicant checklists.", sourceUrl: "https://www.miami.gov/Permits-Construction/Digital-Permitting/Permitting-Forms-Documents" },
+  { id: "miami-city-owner-affidavit-exemption", label: "Owner's Affidavit of Exemption (BLD)", detail: "Include the Owner's Affidavit of Exemption in the application package.", appliesWhen: "Listed in the City's residential reroof applicant checklists; confirm applicability for the specific owner and project.", sourceUrl: "https://www.miami.gov/Permits-Construction/Digital-Permitting/Permitting-Forms-Documents" },
+  { id: "miami-city-eplan-upload", label: "ePlan document upload and file naming", detail: "Upload the signed application, NOAs, drawings and supporting documents to the correct ePlan folders. Follow the City's current file-naming and upload-complete instructions.", appliesWhen: "City of Miami online roofing permit application process.", sourceUrl: "https://www.miami.gov/Permits-Construction/Permit-Catalog/Get-a-Roofing-Permit?lang_update=637748169458966676" },
+];
+export const CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "miami-city-residential-roofing",
+  label: "City of Miami — residential reroof",
+  county: "Miami-Dade",
+  authorityScope: "City of Miami roofing permit guidance and residential applicant checklists for flat, shingle, tile, metal, and waterproofing reroofs. Detailed checklist scope is limited to residential reroofing; commercial roofing requires the City's applicable commercial submittal requirements.",
+  authorityWarning: "Use only after confirming the property is inside City of Miami limits. The City says folios beginning with -01 are a City-limit clue, but the address/GIS or property record and City boundary must still be verified. This CRM profile is not a municipal determination or approval.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.miami.gov/Permits-Construction/Permit-Catalog/Get-a-Roofing-Permit?lang_update=637748169458966676", "https://www.miami.gov/My-Government/Departments/Building/Residential-Permit-Guide", "https://www.miami.gov/Permits-Construction/Digital-Permitting/Permitting-Forms-Documents", "https://www.miami.gov/files/assets/public/v/2/document-resources/pdf-docs/building/checklists/residential-permit-re-roofing-flat-roof-applicant-checklist_remediated.pdf", "https://www.miami.gov/files/assets/public/v/2/document-resources/pdf-docs/building/checklists/residential-permit-re-roofing-metal-roof-applicant-checklist_remediated.pdf"],
+  checklist: cityOfMiamiResidentialRoofingChecklist,
+};
+
 export type PermitChecklistRequest = {
   profileId: string;
   roofingSystem?: RoofingSystem;
@@ -464,6 +486,7 @@ function southFloridaCalendarDate(date = new Date()): string {
 export function getPermitChecklist(request: PermitChecklistRequest): PermitChecklistResult {
   const profiles: Record<string, JurisdictionPermitProfile> = {
     [MIAMI_DADE_UNINCORPORATED_PROFILE.id]: MIAMI_DADE_UNINCORPORATED_PROFILE,
+    [CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id]: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE,
     [BROWARD_COUNTY_PROFILE.id]: BROWARD_COUNTY_PROFILE,
     [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
     [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
@@ -491,6 +514,21 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("Set the project type so reroof-only documents are not treated as universally required.");
   }
+  if (profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) {
+    if (!request.folio?.trim()) {
+      authorityConfirmed = false;
+      warnings.push("Enter the property folio and verify the address is inside City of Miami limits. Folios beginning with 01 are a routing clue only.");
+    } else {
+      const normalizedFolio = request.folio.replace(/\D/g, "");
+      if (!normalizedFolio.startsWith("01")) {
+        authorityConfirmed = false;
+        warnings.push("The supplied folio does not begin with 01. Confirm the actual municipality / authority having jurisdiction; do not use the City of Miami checklist.");
+      } else if (!request.parcelAuthorityVerified) {
+        authorityConfirmed = false;
+        warnings.push("Confirm the folio against the property record and verify the address is inside City of Miami limits before treating the City as the permit authority.");
+      }
+    }
+  }
   if (profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id) {
     if (!request.folio?.trim()) {
       authorityConfirmed = false;
@@ -510,8 +548,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
-  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id || profile.id === BROWARD_HALLANDALE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  const residentialOnlyProfile = profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id || profile.id === BROWARD_HALLANDALE_ROOFING_PROFILE.id || profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
@@ -523,7 +561,9 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const roofSystem = request.roofingSystem ?? "other";
   const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
-  const requiredRoofingSections = !checklistEnabled ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
+  const requiredRoofingSections = !checklistEnabled ? [] : profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id
+    ? (roofSystem === "low_slope" ? ["A", "B", "C"] : ["A", "B", "D"])
+    : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
     : [];
 
@@ -559,4 +599,5 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   davieRoofingChecklist: "https://www.davie-fl.gov/DocumentCenter/View/11543/Roofing-Checklist",
   davieRoofingPackage: "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package",
   hallandaleBeachReroofChecklist: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=",
+  cityOfMiamiRoofingPermit: "https://www.miami.gov/Permits-Construction/Permit-Catalog/Get-a-Roofing-Permit?lang_update=637748169458966676",
 } as const;
