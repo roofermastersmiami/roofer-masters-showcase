@@ -109,6 +109,12 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_proposal_storage_test
           psql "postgresql://postgres@localhost:5432/crm_proposal_storage_test" -v ON_ERROR_STOP=1 -f scripts/test-company-proposal-storage-rls.sql
+      - name: Run company-scoped expense receipt storage PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_expense_receipt_test
+          psql "postgresql://postgres@localhost:5432/crm_expense_receipt_test" -v ON_ERROR_STOP=1 -f scripts/test-company-expense-receipt-storage-rls.sql
       - name: Run roof product approval PostgreSQL RLS integration test
         env:
           PGPASSWORD: postgres
