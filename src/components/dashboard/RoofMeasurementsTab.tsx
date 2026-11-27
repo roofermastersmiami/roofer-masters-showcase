@@ -364,7 +364,7 @@ export function RoofMeasurementsTab({
       <p className="mb-5 text-sm text-muted-foreground">
         Start with a property address: the linked workspace measures the roof automatically from
         public LiDAR data, saves the measurement PDF back to Roof reports, and builds the material
-        list. Tracing and manual dimensions remain available whenever you want them.
+        list.
       </p>
       {orders.error || drawings.error ? (
         <p role="alert" className="mb-4 text-destructive">
