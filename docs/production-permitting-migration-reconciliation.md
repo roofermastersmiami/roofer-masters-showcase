@@ -160,3 +160,41 @@ They remain open, draft, and stacked by dependency. Their successful CI does not
 7. Deploy only after the production schema and app version are aligned. Then run a read-only/live smoke test for application creation, document access, product approvals, NOC tracking, and inspection status.
 
 **Current decision: NO PRODUCTION MIGRATION OR DEPLOYMENT.** The feature build is CI-validated, but the production database prerequisites and tenant-isolation release gate remain incomplete.
+
+
+---
+
+## Live Supabase read-only verification — 2026-11-27
+
+**Execution:** read-only SELECT queries through the Roofer Masters Lovable project's connected Supabase database. No DDL, DML, migration execution, storage mutation, or deployment was performed.
+
+**Application/source alignment:** the published Lovable project currently reports source commit `9a9185e73df1734c5df596c050a6ecb73d4faa36` (current `main` at the time of inspection). The consolidated permitting candidate in PR #216 is not the deployed source.
+
+### Confirmed live database state
+
+- Migration ledger: **30 rows**; latest migration timestamp **2026-11-21 03:35:20 UTC**.
+- Company records: **1 company**, **1 membership**.
+- Operational records: **11 leads**, **22 customers**, **19 properties**, **4 roof report orders**, **4 roof jobs**.
+- None of `leads`, `crm_customers`, `crm_properties`, `roof_report_orders`, or `roof_jobs` currently has a `company_id` column.
+- Permit-specific relations are absent: `crm_company_permit_settings`, `roof_permit_applications`, `roof_permit_inspections`, `roof_permit_documents`, `roof_product_approvals`, and `roof_permit_noc_tracking`.
+- RLS is enabled but not FORCE-enabled on the existing company, customer, property, lead, roof-job, and roof-report tables inspected.
+- Existing customer, property, lead, job, and roof-report policies still authorize through legacy global `has_role` / `has_any_role` predicates. The company membership helper policies exist on company tables, but that does not scope the operational tables.
+- Live `save_crm_customer(jsonb)` remains SECURITY DEFINER and checks legacy global roles. The live schema still exposes three SECURITY DEFINER `create_roof_report_request` overloads; their current definitions perform legacy role checks and do not derive or enforce company ownership. The two-argument company helper functions are also SECURITY DEFINER and executable by anon as observed in their ACLs; review before broader exposure.
+- Storage buckets include `crm-company-branding`, `roof-job-photos`, and `roofing-proposals`; `permit-documents` is absent.
+- Existing legacy storage policies for job photos and proposal files remain role-based rather than parent-company scoped.
+
+### Release decision after live verification
+
+**NO PRODUCTION MIGRATION, NO MERGE-TO-PRODUCTION, AND NO DEPLOYMENT YET.**
+
+The CI-validated candidate proves the new migrations and tenant-isolation fixtures in an isolated test database. The live Supabase database still lacks the ownership columns and all permit relations on which the candidate depends. The existing operational tables also retain legacy global-role policies and privileged RPCs. Applying 0042–0052 as a blind migration sequence would be unsafe and could break current workflows or leave authorization gaps.
+
+### Required next work
+
+1. Produce a forward-only reconciliation plan for the live 0031–0041 drift; preserve the existing company and branding objects and do not manufacture migration ledger rows.
+2. Resolve the historical roof-report count discrepancy (12 in an older implementation note, 3 in an earlier audit, 4 in this live read-only check) against source records before any backfill.
+3. Review and secure every privileged legacy write path and remove/replace permissive global-role policies as part of one coordinated release. The roof-report RPC overloads and server-side service-role mutations are explicitly not tenant-safe yet.
+4. Validate the exact 0042–0052 chain against a production-like clone with current live schema and data shape, then run the two-company adversarial and Roofer Masters compatibility suites.
+5. Only after approval, perform a staged forward-only migration and deploy a matching app commit; then verify permit creation, document storage, product approval evidence, NOC tracking, and inspection workflow in production.
+
+**This live snapshot supersedes the older row-count observations above for current counts, but does not resolve the historical discrepancy or authorize a write.**
