@@ -81,12 +81,64 @@ export type AerialPhoto = {
   longitude: number;
 };
 
+export type RoofCoverFraming = {
+  latitude: number;
+  longitude: number;
+  halfExtentMeters: number;
+};
+
+/**
+ * Cover framing for a drawing (pure, unit-tested): centre the
+ * photo window on the roof itself rather than the geocode origin —
+ * Miramar's origin sits ~64 ft from its roof centre, which left
+ * the house small and off-centre in the step-8 covers — and size
+ * the window to the roof instead of a fixed ±42 m. The cover's
+ * picture box is wider than it is tall (612×444 pt), so a square
+ * photo shows only its middle 444/612 vertically; the window is
+ * the smallest square that keeps the whole roof in frame with a
+ * 30% margin on both axes once that crop is accounted for,
+ * clamped to [24, 42] m so a small roof still shows some street
+ * context and a large roof never frames wider than before. Local
+ * plan coordinates follow the converter's convention: x east and
+ * z SOUTH of the origin (z = (originLat − lat) × scale), so the
+ * centre latitude subtracts the centre z.
+ */
+export function roofCoverFraming(drawing: {
+  planes: { points: { x: number; z: number }[] }[];
+  geo_reference?: { originLatitude: number; originLongitude: number } | null;
+}): RoofCoverFraming | null {
+  const origin = drawing.geo_reference;
+  if (!origin) return null;
+  const points = drawing.planes.flatMap((plane) => plane.points);
+  if (!points.length) return null;
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minZ = Math.min(...points.map((point) => point.z));
+  const maxZ = Math.max(...points.map((point) => point.z));
+  const feetToMeters = 0.3048;
+  const centerXFt = (minX + maxX) / 2;
+  const centerZFt = (minZ + maxZ) / 2;
+  const latitude = origin.originLatitude - (centerZFt * feetToMeters) / 110540;
+  const longitude =
+    origin.originLongitude +
+    (centerXFt * feetToMeters) /
+      (111320 * Math.cos((origin.originLatitude * Math.PI) / 180));
+  const eastWestM = (maxX - minX) * feetToMeters;
+  const northSouthM = (maxZ - minZ) * feetToMeters;
+  const halfExtentMeters = Math.min(
+    42,
+    Math.max(24, eastWestM * 0.65, northSouthM * (0.65 / (444 / 612))),
+  );
+  return { latitude, longitude, halfExtentMeters };
+}
+
 export async function fetchAerialPhoto(
   latitude: number,
   longitude: number,
+  halfExtentMeters?: number,
 ): Promise<AerialPhoto | null> {
   try {
-    const plan = aerialTilePlan(latitude, longitude);
+    const plan = aerialTilePlan(latitude, longitude, 19, halfExtentMeters);
     const tileMinX = Math.min(...plan.tiles.map((t) => t.x));
     const tileMinY = Math.min(...plan.tiles.map((t) => t.y));
     const canvas = document.createElement("canvas");

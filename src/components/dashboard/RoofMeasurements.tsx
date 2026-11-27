@@ -39,6 +39,7 @@ import {
   type RoofShape,
 } from "@/lib/roof-geometry";
 import { calculateRoofSummary, measuredEdgeTotalsToInputs } from "@/lib/roof-calculations";
+import { roofCoverFraming } from "@/lib/aerial-photo";
 import { saveRoofDrawing } from "@/lib/roof-drawing.functions";
 import { restoreRoofDrawingMedia, type RoofDrawingMedia } from "@/lib/roof-drawing-media";
 import { attachRoofOrderPdf } from "@/lib/roof-orders.functions";
@@ -305,10 +306,22 @@ export function RoofMeasurements({
       // unchanged and the report falls back to its sketch cover.
       if (!photos.some((photo) => /aerial/i.test(photo.category)) && d.geo_reference) {
         const { originLatitude, originLongitude } = d.geo_reference;
+        // Frame the cover on the roof itself: the geocode origin
+        // can sit a house away from the roof centre (Miramar: ~64
+        // ft), which left the subject house small and off-centre in
+        // a fixed ±42 m window. Both fetch paths get the same
+        // roof-centred framing.
+        const framing = roofCoverFraming(d);
+        const coverLatitude = framing?.latitude ?? originLatitude;
+        const coverLongitude = framing?.longitude ?? originLongitude;
         let aerial: AerialPhoto | null = null;
         try {
           const result = await reportAerialFn({
-            data: { latitude: originLatitude, longitude: originLongitude },
+            data: {
+              latitude: coverLatitude,
+              longitude: coverLongitude,
+              ...(framing ? { halfExtentMeters: framing.halfExtentMeters } : {}),
+            },
           });
           if ("imageBase64" in result && result.imageBase64) {
             const binary = atob(result.imageBase64);
@@ -330,7 +343,11 @@ export function RoofMeasurements({
         if (!aerial) {
           try {
             const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
-            aerial = await fetchAerialPhoto(originLatitude, originLongitude);
+            aerial = await fetchAerialPhoto(
+              coverLatitude,
+              coverLongitude,
+              framing?.halfExtentMeters,
+            );
           } catch {
             // Imagery is best-effort; never block the report on it.
           }

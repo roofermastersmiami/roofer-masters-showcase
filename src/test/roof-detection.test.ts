@@ -653,3 +653,206 @@ describe("LiDAR drawing consolidation (step 8)", () => {
     expect(measured.area).toBeCloseTo(1209 * Math.sqrt(1.25), 0);
   });
 });
+
+describe("LiDAR drawing sliver folds (step 10)", () => {
+  const origin = response.location;
+  const lonScale = 111320 * Math.cos((origin.lat * Math.PI) / 180) * (1 / 0.3048);
+  const latScale = 110540 * (1 / 0.3048);
+  const ring = (points: [number, number, number][]) =>
+    points.map(([x, z, elevation]) => [
+      origin.lat - z / latScale,
+      origin.lon + x / lonScale,
+      elevation,
+    ]) as [number, number, number][];
+  const facet = (id: string, points: [number, number, number][]) => ({
+    id,
+    point_count: 500,
+    pitch_degrees: (Math.atan(6 / 12) * 180) / Math.PI,
+    pitch_rise_per_12: 6,
+    azimuth_degrees: 180,
+    area_sqft: 600,
+    squares: 6,
+    boundary_latlon: ring([...points, points[0]!]),
+  });
+  const footprintFor = (
+    outlineFt: [number, number][],
+  ): RoofDetectionResponse["footprint"] => ({
+    source: "test",
+    area_sqft: 1800,
+    polygon_geojson: {
+      type: "Polygon",
+      coordinates: [
+        [
+          ...outlineFt.map(([x, z]) => [
+            origin.lon + x / lonScale,
+            origin.lat - z / latScale,
+          ]),
+          [origin.lon + outlineFt[0]![0] / lonScale, origin.lat - outlineFt[0]![1] / latScale],
+        ],
+      ],
+    },
+  });
+  const makeReady = (
+    facets: ReturnType<typeof facet>[],
+    footprint: RoofDetectionResponse["footprint"],
+  ): RoofDetectionResponse => ({
+    ...response,
+    footprint,
+    roof: {
+      ...response.roof,
+      facet_count: facets.length,
+      facets: facets as RoofDetectionResponse["roof"]["facets"],
+      drawing_ready: true,
+    },
+  });
+  const RECT: [number, number][] = [
+    [0, 0],
+    [60, 0],
+    [60, 30],
+    [0, 30],
+  ];
+
+  it("folds a long thin finger of one facet into the facet it protrudes into", () => {
+    // (Boundary elevations are metres, as the service returns
+    // them; the planes below are described in feet for readability
+    // and converted: 6/12 = 0.1524 m per ft of run.)
+    // Facet A (6/12 rising east) carries a 20 x 2.5 ft finger into
+    // facet B's rectangle (3/12 falling east); B's ring bites
+    // around it. Drawn as assigned, the finger's two seams would
+    // scribble a thin spike across B's face — Miramar's facet-1
+    // wedge inside facet-3, which the fold hands to B.
+    const drawing = detectedFacetsToDrawing(
+      makeReady(
+        [
+          facet("facet-a", [
+            [0, 0, 3.048],
+            [20, 0, 6.096],
+            [20, 13, 6.096],
+            [40, 13, 9.144],
+            [40, 15.5, 9.144],
+            [20, 15.5, 6.096],
+            [20, 30, 6.096],
+            [0, 30, 3.048],
+          ]),
+          facet("facet-b", [
+            [20, 0, 7.62],
+            [60, 0, 4.572],
+            [60, 30, 4.572],
+            [20, 30, 7.62],
+            [20, 15.5, 7.62],
+            [40, 15.5, 6.096],
+            [40, 13, 6.096],
+            [20, 13, 7.62],
+          ]),
+        ],
+        footprintFor(RECT),
+      ),
+      "Metal Roof",
+    );
+    expect(drawing.planes).toHaveLength(2);
+    const measured = measureDrawing(drawing);
+    // A keeps its 600 sf body at 6/12; B is whole again at 1200 sf
+    // at 3/12. The finger moved planes, so the drawing total moves
+    // by exactly the finger's slope-area difference.
+    expect(measured.planes[0]!.area).toBeCloseTo(600 * Math.sqrt(1.25), 0);
+    expect(measured.planes[1]!.area).toBeCloseTo(1200 * Math.sqrt(1.0625), 0);
+    // The finger tip is gone from A's ring.
+    expect(Math.max(...drawing.planes[0]!.points.map((p) => p.x))).toBeCloseTo(20, 0);
+  });
+
+  it("absorbs a narrow notch into its owner across the seam it faces", () => {
+    // Facet C's west edge dents 4 ft inward — a 6 sf tooth left
+    // outside the tiling (Miramar facet-3's west tail). Facet D
+    // borders the chord the dent would close along. The footprint
+    // outline traces the dent, so the step-8 gap fill (which only
+    // fills inside the outline) cannot take the tooth; the fold
+    // absorbs it into C and the chord becomes a clean C-D seam.
+    const outline: [number, number][] = [
+      [20, 0],
+      [50, 0],
+      [50, 30],
+      [20, 30],
+      [20, 16.5],
+      [24, 15],
+      [20, 13.5],
+    ];
+    const drawing = detectedFacetsToDrawing(
+      makeReady(
+        [
+          facet("facet-d", [
+            [0, 0, 3.048],
+            [20, 0, 6.096],
+            [20, 30, 6.096],
+            [0, 30, 3.048],
+          ]),
+          facet("facet-c", [
+            [20, 0, 7.62],
+            [50, 0, 3.048],
+            [50, 30, 3.048],
+            [20, 30, 7.62],
+            [20, 16.5, 7.62],
+            [24, 15, 7.0104],
+            [20, 13.5, 7.62],
+          ]),
+        ],
+        footprintFor(outline),
+      ),
+      "Metal Roof",
+    );
+    expect(drawing.planes).toHaveLength(2);
+    const measured = measureDrawing(drawing);
+    // C is its full 900 sf rectangle again, dent vertex gone.
+    expect(measured.planes[1]!.area).toBeCloseTo(900 * Math.sqrt(1.25), 0);
+    expect(
+      drawing.planes[1]!.points.some(
+        (p) => Math.abs(p.x - 24) < 0.01 && Math.abs(p.z - 15) < 0.01,
+      ),
+    ).toBe(false);
+  });
+
+  it("leaves a finger that borders two facets in place", () => {
+    // The same finger as the fold test, but split between two
+    // neighbours — its north edge and tip border B1, its south
+    // edge B2 — so no single facet owns 85% of its border and it
+    // stays a legitimate part of its facet. (Annel's facet corners
+    // fail the fold rules the same way and must not move either.)
+    const drawing = detectedFacetsToDrawing(
+      makeReady(
+        [
+          facet("facet-a", [
+            [0, 0, 3.048],
+            [20, 0, 6.096],
+            [20, 13, 6.096],
+            [29, 13, 7.4676],
+            [29, 16, 7.4676],
+            [20, 16, 6.096],
+            [20, 30, 6.096],
+            [0, 30, 3.048],
+          ]),
+          facet("facet-b1", [
+            [20, 0, 7.62],
+            [60, 0, 4.572],
+            [60, 16, 4.572],
+            [29, 16, 6.9342],
+            [29, 13, 6.9342],
+            [20, 13, 7.62],
+          ]),
+          facet("facet-b2", [
+            [20, 16, 3.048],
+            [29, 16, 3.048],
+            [60, 16, 3.048],
+            [60, 30, 5.1816],
+            [20, 30, 5.1816],
+          ]),
+        ],
+        footprintFor(RECT),
+      ),
+      "Metal Roof",
+    );
+    expect(drawing.planes).toHaveLength(3);
+    const measured = measureDrawing(drawing);
+    // A keeps body + finger (627 sf at 6/12); the tip vertex stays.
+    expect(measured.planes[0]!.area).toBeCloseTo(627 * Math.sqrt(1.25), 0);
+    expect(Math.max(...drawing.planes[0]!.points.map((p) => p.x))).toBeCloseTo(29, 0);
+  });
+});

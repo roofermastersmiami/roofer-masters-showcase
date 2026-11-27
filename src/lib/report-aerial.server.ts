@@ -18,8 +18,10 @@
  * endpoint works but stitching tiles needs a JPEG codec the server
  * runtime does not carry, so the client-side Esri stitch remains
  * the fallback in RoofMeasurements and this NAIP export is the
- * primary. The window matches the client stitch (±42 m, square) so
- * both paths frame the property the same way.
+ * primary. The caller frames the window on the roof itself
+ * (aerial-photo.ts roofCoverFraming: roof centre, extent sized to
+ * the roof) and the client stitch receives the same centre and
+ * extent, so both paths frame the property identically.
  */
 
 export const REPORT_AERIAL_SOURCE =
@@ -63,6 +65,7 @@ export async function fetchReportAerialImage(
   latitude: number,
   longitude: number,
   fetcher: typeof fetch = fetch,
+  halfExtentMeters = 42,
 ) {
   if (
     !Number.isFinite(latitude) ||
@@ -71,11 +74,14 @@ export async function fetchReportAerialImage(
     Math.abs(longitude) > 180
   )
     return failure("coordinates", "The drawing has no usable map coordinates for an aerial photo.");
+  const extent = Number.isFinite(halfExtentMeters)
+    ? Math.min(60, Math.max(15, halfExtentMeters))
+    : 42;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
   let response: Response | null = null;
   try {
-    response = await fetcher(naipExportImageUrl(latitude, longitude), {
+    response = await fetcher(naipExportImageUrl(latitude, longitude, extent), {
       signal: controller.signal,
       redirect: "follow",
       headers: { Accept: "image/jpeg, image/*;q=0.8" },
