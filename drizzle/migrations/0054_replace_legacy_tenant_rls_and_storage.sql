@@ -115,8 +115,26 @@ DROP POLICY IF EXISTS "Owner reads report requests" ON public.roof_report_orders
 DROP POLICY IF EXISTS "Team reports read" ON public.roof_report_orders;
 CREATE POLICY "Company members read report requests" ON public.roof_report_orders
   FOR SELECT TO authenticated USING (public.is_crm_company_member(company_id));
+CREATE POLICY "Company staff update report requests" ON public.roof_report_orders
+  FOR UPDATE TO authenticated
+  USING (public.is_crm_company_admin(company_id) OR EXISTS (
+    SELECT 1 FROM public.crm_company_memberships m
+    WHERE m.company_id=roof_report_orders.company_id AND m.user_id=auth.uid()
+      AND m.role IN ('office','sales','production_manager')
+  ))
+  WITH CHECK (public.is_crm_company_admin(company_id) OR EXISTS (
+    SELECT 1 FROM public.crm_company_memberships m
+    WHERE m.company_id=roof_report_orders.company_id AND m.user_id=auth.uid()
+      AND m.role IN ('office','sales','production_manager')
+  ));
+CREATE POLICY "Company staff delete report requests" ON public.roof_report_orders
+  FOR DELETE TO authenticated
+  USING (public.is_crm_company_admin(company_id) OR EXISTS (
+    SELECT 1 FROM public.crm_company_memberships m
+    WHERE m.company_id=roof_report_orders.company_id AND m.user_id=auth.uid()
+      AND m.role IN ('office','sales','production_manager')
+  ));
 -- Report creation and drawing saves are routed through membership-derived RPCs.
--- No direct INSERT/UPDATE/DELETE policy is granted to authenticated clients.
 
 -- Drawings do not yet have a company_id column in the live schema. Their
 -- authoritative tenant is the required property_id; scope through that parent.
