@@ -562,7 +562,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
   const requiredRoofingSections = !checklistEnabled ? [] : profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id
-    ? (roofSystem === "low_slope" ? ["A", "B", "C"] : ["A", "B", "D"])
+    ? (roofSystem === "low_slope" ? ["A", "B", "C"] : ["asphalt_shingle", "tile", "metal"].includes(roofSystem) ? ["A", "B", "D"] : [])
     : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
     : [];

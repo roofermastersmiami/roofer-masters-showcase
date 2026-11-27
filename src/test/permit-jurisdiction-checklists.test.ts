@@ -688,6 +688,8 @@ describe("City of Miami residential roofing profile", () => {
 
     const metal = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", roofingSystem: "metal", folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-11-26" });
     expect(metal.requiredRoofingSections).toEqual(["A", "B", "D"]);
+    const unsupported = getPermitChecklist({ profileId: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id, projectKind: "reroof", roofingSystem: "other", folio: "01-1234567", parcelAuthorityVerified: true, asOfDate: "2026-11-26" });
+    expect(unsupported.requiredRoofingSections).toEqual([]);
   });
 
   it("does not apply the residential City checklist to commercial reroofs, repairs, or new roofs", () => {
