@@ -40,7 +40,7 @@ VALUES ('80000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-00000000
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 INSERT INTO storage.objects(bucket_id,name) VALUES
- ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/80000000-0000-0000-0000-000000000001/a.pdf');
+ ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf');
 DO $$ BEGIN
   BEGIN
     INSERT INTO storage.objects(bucket_id,name) VALUES ('roofing-proposals','expense/10000000-0000-0000-0000-000000000002/80000000-0000-0000-0000-000000000002/forged.pdf');
@@ -59,7 +59,7 @@ RESET ROLE;
 
 -- Attach the object to its expense row as the database owner, mirroring the
 -- application upload-then-update sequence.
-UPDATE crm_expenses SET receipt_path='expense/10000000-0000-0000-0000-000000000001/80000000-0000-0000-0000-000000000001/a.pdf'
+UPDATE crm_expenses SET receipt_path='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf'
  WHERE id='92000000-0000-0000-0000-000000000001';
 
 SET ROLE authenticated;
@@ -76,12 +76,12 @@ SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004'
 DO $$ BEGIN
   IF (SELECT count(*) FROM storage.objects WHERE bucket_id='roofing-proposals')<>0
     THEN RAISE EXCEPTION 'Company B read Company A receipt'; END IF;
-  DELETE FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/80000000-0000-0000-0000-000000000001/a.pdf';
+  DELETE FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf';
 END $$;
 RESET ROLE;
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/80000000-0000-0000-0000-000000000001/a.pdf')
+  IF NOT EXISTS (SELECT 1 FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf')
     THEN RAISE EXCEPTION 'Cross-company DELETE removed a receipt'; END IF;
   IF (SELECT count(*) FROM crm_expenses WHERE id IN ('92000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002'))<>2
     THEN RAISE EXCEPTION 'Expense records were deleted'; END IF;
