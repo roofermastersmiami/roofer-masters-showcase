@@ -22,6 +22,7 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
         roofingSystem,
         projectKind: "reroof",
         folio: "30-1234567",
+        parcelAuthorityVerified: true,
       });
       expect(result.requiredRoofingSections).toEqual(sections);
       expect(result.authorityConfirmed).toBe(true);
@@ -47,6 +48,17 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
     expect(result.warnings.some((warning) => warning.includes("Enter and verify the property folio"))).toBe(true);
   });
 
+  it("requires manual parcel-record verification even when the folio begins with 30", () => {
+    const result = getPermitChecklist({
+      profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
+      roofingSystem: "metal",
+      projectKind: "reroof",
+      folio: "30-1234567",
+    });
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.warnings.join(" ")).toContain("Confirm the folio against the property record");
+  });
+
   it("flags a folio that does not match the County's unincorporated-property guidance", () => {
     const result = getPermitChecklist({
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
@@ -63,6 +75,7 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
       roofingSystem: "metal",
       projectKind: "reroof",
       folio: "30-1234567",
+      parcelAuthorityVerified: true,
       asOfDate: "2026-12-31",
     });
     expect(result.codeReferenceCurrent).toBe(false);
@@ -77,11 +90,13 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
       roofingSystem: "metal",
       folio: "30-1234567",
+      parcelAuthorityVerified: true,
     });
     const shingle = getPermitChecklist({
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
       roofingSystem: "asphalt_shingle",
       folio: "30-1234567",
+      parcelAuthorityVerified: true,
     });
     expect(metal.items.some((item) => item.id === "design-calculations")).toBe(true);
     expect(shingle.items.some((item) => item.id === "design-calculations")).toBe(false);
