@@ -8,6 +8,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { analysisProgressPercent, formatElapsedClock } from "@/lib/analysis-progress";
 import { detectedFacetsToDrawing, type RoofDetectionResponse } from "@/lib/roof-detection";
 import type { RoofDrawing } from "@/lib/roof-geometry";
 
@@ -146,6 +148,9 @@ async function requestAnalysis(
   onProgress: (progress: AnalysisProgress) => void,
 ): Promise<AnalysisOutcome> {
   const legacy = async (): Promise<AnalysisOutcome> => {
+    // The legacy service reports no stages; the progress display creeps
+    // on elapsed time in the wide "measuring" band instead.
+    onProgress({ stage: "measuring", detail: null, downloadFraction: null });
     const legacyController = new AbortController();
     const linkAbort = () => legacyController.abort();
     if (signal.aborted) legacyController.abort();
@@ -290,6 +295,7 @@ const STAGE_LABELS: Record<string, string> = {
   downloading_tiles: "Downloading USGS LiDAR tiles…",
   fitting_planes: "Fitting roof planes to the LiDAR points…",
   resubmitting: "Resubmitting the measurement…",
+  measuring: "Measuring the roof…",
 };
 
 export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
@@ -305,6 +311,65 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
   const activeController = useRef<AbortController | null>(null);
   const autoAnalyzedAddress = useRef("");
   const autoAppliedAddress = useRef("");
+  // Overall-progress clock: the percent is derived from the job's stage
+  // (see analysis-progress.ts) and must never rewind within one attempt,
+  // so the last shown value and the current stage's start are kept here.
+  const progressClock = useRef({
+    stage: null as string | null,
+    stageSince: 0,
+    percent: 0,
+    downloadFraction: null as number | null,
+  });
+  const runStartedAt = useRef(0);
+  const [percent, setPercent] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const refreshPercent = useCallback(() => {
+    const clock = progressClock.current;
+    if (!clock.stageSince) return;
+    const next = analysisProgressPercent(
+      {
+        status: "running",
+        stage: clock.stage,
+        downloadFraction: clock.downloadFraction,
+        stageElapsedSeconds: (Date.now() - clock.stageSince) / 1000,
+      },
+      clock.percent,
+    );
+    clock.percent = next;
+    setPercent(next);
+    setElapsedSeconds(Math.max(0, (Date.now() - runStartedAt.current) / 1000));
+  }, []);
+
+  const handleProgress = useCallback(
+    (next: AnalysisProgress) => {
+      const clock = progressClock.current;
+      if (next.stage === "resubmitting") {
+        // A fresh attempt starts: the number restarts honestly with it.
+        clock.stage = "queued";
+        clock.stageSince = Date.now();
+        clock.percent = 0;
+        clock.downloadFraction = null;
+      } else if (next.stage !== clock.stage) {
+        clock.stage = next.stage;
+        clock.stageSince = Date.now();
+        clock.downloadFraction = next.downloadFraction;
+      } else if (next.downloadFraction != null) {
+        clock.downloadFraction = next.downloadFraction;
+      }
+      setProgress(next);
+      refreshPercent();
+    },
+    [refreshPercent],
+  );
+
+  // Keep the number creeping (and the elapsed clock ticking) between the
+  // ~3s job polls, so a long stage never looks frozen.
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setInterval(refreshPercent, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading, refreshPercent]);
 
   // Cancel work for the previous property and prevent stale responses or loading state.
   useEffect(() => {
@@ -344,6 +409,15 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
       const requestedAddress = address.trim();
       setLoading(true);
       setLoadingAddress(requestedAddress);
+      progressClock.current = {
+        stage: "queued",
+        stageSince: Date.now(),
+        percent: 0,
+        downloadFraction: null,
+      };
+      runStartedAt.current = Date.now();
+      setPercent(analysisProgressPercent({ status: "queued", stage: "queued" }));
+      setElapsedSeconds(0);
       setProgress(null);
       setError("");
       setErrorAddress("");
@@ -359,7 +433,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
           },
           controller.signal,
           (next) => {
-            if (activeRequest === requestId.current) setProgress(next);
+            if (activeRequest === requestId.current) handleProgress(next);
           },
         );
         if (activeRequest !== requestId.current) return;
@@ -392,7 +466,7 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
         }
       }
     },
-    [address, currentAddress],
+    [address, currentAddress, handleProgress],
   );
 
   // Start public-data analysis once when a new property address is loaded.
@@ -437,19 +511,23 @@ export function AutomatedRoofReport({ address, roofType, onApply }: Props) {
         </Button>
       </div>
       {isLoading && (
-        <div className="space-y-1" role="status">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Activity className="size-4" />
-            {progress?.detail ??
-              (progress?.stage ? STAGE_LABELS[progress.stage] : undefined) ??
-              "Finding available roof data…"}
-            {progress?.downloadFraction != null
-              ? ` (${Math.round(progress.downloadFraction * 100)}%)`
-              : ""}
+        <div className="space-y-2" role="status">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Activity className="size-4 shrink-0" />
+              <span>
+                {progress?.detail ??
+                  (progress?.stage ? STAGE_LABELS[progress.stage] : undefined) ??
+                  "Finding available roof data…"}
+              </span>
+            </div>
+            <span className="text-lg font-semibold tabular-nums">{percent}%</span>
           </div>
+          <Progress value={percent} aria-label="Measurement progress percent" />
           <p className="text-xs text-muted-foreground">
-            Large LiDAR downloads can take several minutes on a first measurement — the analysis
-            keeps running on the service, no need to retry.
+            Elapsed {formatElapsedClock(elapsedSeconds)} · Large LiDAR downloads can take several
+            minutes on a first measurement — the analysis keeps running on the service, no need to
+            retry.
           </p>
         </div>
       )}
