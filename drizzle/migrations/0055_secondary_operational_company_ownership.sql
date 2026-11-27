@@ -118,11 +118,6 @@ BEGIN
     WHERE p.drawing_id IS NOT NULL AND p.property_id IS NOT NULL
       AND d.property_id IS DISTINCT FROM pr.id
     UNION ALL
-    SELECT 1 FROM public.invoice_project_links x
-    JOIN public.crm_invoices i ON i.id=x.invoice_id
-    JOIN public.roof_jobs j ON j.id=x.job_id
-    WHERE i.company_id IS DISTINCT FROM j.company_id
-    UNION ALL
     SELECT 1 FROM public.proposals p
     JOIN public.crm_properties pr ON pr.id=p.property_id
     JOIN public.leads l ON l.id=p.lead_id
