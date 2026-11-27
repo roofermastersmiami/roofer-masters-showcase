@@ -1,5 +1,6 @@
 import logoMark from "@/assets/logo-mark.webp";
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFPage } from "pdf-lib";
+import polygonClipping from "polygon-clipping";
 import {
   auditRoofReport,
   measureDrawing,
@@ -200,6 +201,47 @@ export async function roofDrawingPdf(
     mapPoint: (point: { x: number; z: number }) => { x: number; y: number },
     options: { fill: boolean; edgeWidth: number },
   ) => {
+    if (options.fill) {
+      // Hairline underlay: adjacent facet fills can stop a few
+      // hundredths of a foot short of each other — and of the roof
+      // outline — leaving paper-white slivers along seams and edges
+      // that read as gaps in an otherwise exact tiling (Miramar's
+      // top and right edges). Painting the facets' union in the
+      // fill colour first, outer rings only so the union's interior
+      // is solid, closes those slivers visually without adding
+      // geometry or changing any measurement; the per-facet fills
+      // and edge lines then draw over it exactly as before.
+      try {
+        const polygons = d.planes
+          .filter((plane) => plane.points.length >= 3)
+          .map((plane) => {
+            const ring = plane.points.map(
+              (point) => [point.x, point.z] as [number, number],
+            );
+            ring.push([...ring[0]!] as [number, number]);
+            return [ring];
+          });
+        if (polygons.length) {
+          const union = polygonClipping.union(polygons[0]!, ...polygons.slice(1));
+          for (const polygon of union) {
+            const outer = polygon[0];
+            if (!outer || outer.length < 4) continue;
+            const pts = outer.slice(0, -1).map(([x, z]) => mapPoint({ x, z }));
+            const { path, center } = facetPath(pts);
+            p.drawSvgPath(path, {
+              x: center.x,
+              y: center.y,
+              color: FACET_FILL,
+              borderColor: FACET_FILL,
+              borderWidth: 2.5,
+            });
+          }
+        }
+      } catch {
+        // The underlay is cosmetic; the facet fills still draw
+        // without it.
+      }
+    }
     d.planes.forEach((plane) => {
       const pts = plane.points.map((point) => mapPoint(point));
       if (options.fill) {
@@ -669,17 +711,25 @@ export async function roofDrawingPdf(
   ];
   const wasteX = [118, 196, 274, 352, 430, 508];
   const wasteTableY = 684;
-  // Suggested-waste flag over the suggested column.
+  // Suggested-waste flag over the suggested column. The pill is
+  // sized to its label and centred on the column: the previous
+  // fixed 104 pt pill was wider than the 78 pt column pitch, so
+  // its corners crowded the neighbouring "+10%"/"+15%" headers,
+  // and at wasteTableY + 16 its bottom edge sat only ~7 pt above
+  // the header text. Sized to the text plus padding and raised,
+  // it clears every header cleanly on all sides.
+  const pillTextWidth = bold.widthOfTextAtSize("SUGGESTED WASTE", 7.5);
+  const pillWidth = pillTextWidth + 24;
   numbersPage.drawRectangle({
-    x: wasteX[3]! - 34,
-    y: wasteTableY + 16,
-    width: 104,
+    x: wasteX[3]! - pillWidth / 2,
+    y: wasteTableY + 22,
+    width: pillWidth,
     height: 15,
     color: BLACK,
   });
   numbersPage.drawText("SUGGESTED WASTE", {
-    x: wasteX[3]! - 34 + (104 - bold.widthOfTextAtSize("SUGGESTED WASTE", 7.5)) / 2,
-    y: wasteTableY + 20.5,
+    x: wasteX[3]! - pillTextWidth / 2,
+    y: wasteTableY + 26.5,
     size: 7.5,
     font: bold,
     color: WHITE,

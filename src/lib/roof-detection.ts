@@ -695,6 +695,344 @@ export function detectedFacetsToDrawing(
       }
     }
 
+    // 3) Sliver folds: narrow fingers and notches a facet's ring makes
+    // against one neighbour. The outline partition can assign a long
+    // tapering strip of one face to the facet across the seam
+    // (Miramar: a 54 sf finger of facet-1 inside facet-3, 18 ft long
+    // and at most ~3.5 ft wide, bounded on both sides by facet-3 —
+    // drawn, its two valley seams read as a thin pink spike inside
+    // the bottom face), leave a facet with a narrow notch whose tip
+    // vertex draws as a tail sticking out of the west edge (Miramar
+    // facet-3's 3.2 sf notch, 1.8 ft at the base, facing facet-1
+    // across the chord), or strand a thin flap of one facet along
+    // the eave against another (Miramar: 2.1 sf of facet-1 against
+    // facet-4). None of these are roof features a report should
+    // draw; each is folded into the facet it protrudes into (or, for
+    // a notch, absorbed by its owner across the seam it faces).
+    // A chord between two of a facet's own vertices splits its ring
+    // into two sub-rings; the smaller part is a fold candidate only
+    // when it is small (1.5–60 sf, at most 12% of the facet), thin
+    // (mean width 2·area/perimeter at most 2.3 ft) and elongated
+    // (outer chain at least 2.5× the chord), AND its allegiance is
+    // unambiguous from what borders it:
+    // - protrusion: the outer chain borders ONE other facet along
+    //   at least 85% of its length (every other facet at most 5%)
+    //   and the chord borders almost nothing — the part is that
+    //   facet's territory in all but assignment;
+    // - flap: like a protrusion but the chain runs partly along the
+    //   outline, so the one bordering facet needs only 40% (still
+    //   unique), and the part must be very thin (mean width at most
+    //   0.6 ft) and tiny (at most 5 sf);
+    // - notch: the part lies OUTSIDE its owner (the sub-ring's
+    //   signed area opposes the ring's), its outer chain borders
+    //   nothing (at least 85% open) and the chord it would close
+    //   along borders ONE other facet at least 85% — the owner
+    //   absorbs it and the chord becomes a clean shared seam.
+    // Calibrated against all five validation houses: the three
+    // Miramar defects above are the only parts that qualify. Annel's
+    // facet corners (mixed borders, mean width above 1.2 ft),
+    // Maria's facet-5 strip (69% single border — under the 85%
+    // protrusion bar — and 7.3 sf, over the 5 sf flap cap), and the
+    // lobes every hip facet legitimately owns at its corners all
+    // fail at least one test. Folds are
+    // drawing-only, one at a time with a fresh scan after each, and
+    // every fold is reverted if it breaks the tiling invariants.
+    const signedRingArea = (ring: Ring) => {
+      let area = 0;
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i]!;
+        const b = ring[(i + 1) % ring.length]!;
+        area += a[0] * b[1] - b[0] * a[1];
+      }
+      return area / 2;
+    };
+    const segmentsCross = (
+      a: Ring[number],
+      b: Ring[number],
+      c: Ring[number],
+      d: Ring[number],
+    ) => {
+      const orient = (p: Ring[number], q: Ring[number], r: Ring[number]) =>
+        (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+      return orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0;
+    };
+    const openRingSimple = (ring: Ring) => {
+      const n = ring.length;
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++) {
+          if (j === i + 1 || (i === 0 && j === n - 1)) continue;
+          if (segmentsCross(ring[i]!, ring[(i + 1) % n]!, ring[j]!, ring[(j + 1) % n]!))
+            return false;
+        }
+      return true;
+    };
+    // Bordered length of a chain (consecutive point pairs, no
+    // closing edge) against every other facet's ring, sampled: a
+    // sample counts for the facet whose edge passes within 0.08 ft —
+    // the same order as the seam offsets the partition leaves
+    // between two rings tracing one seam (the 0.04 ft lens along
+    // Miramar's facet-1/facet-3 seam must still read as bordered).
+    const chainBorder = (chain: Ring, selfIndex: number, ringsNow: Ring[]) => {
+      const shares = new Map<number, number>();
+      let unbordered = 0;
+      let total = 0;
+      for (let e = 0; e < chain.length - 1; e++) {
+        const a = chain[e]!;
+        const b = chain[e + 1]!;
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (length < 1e-9) continue;
+        const steps = Math.max(1, Math.ceil(length / 0.25));
+        for (let s = 0; s < steps; s++) {
+          const t = (s + 0.5) / steps;
+          const px = a[0] + (b[0] - a[0]) * t;
+          const pz = a[1] + (b[1] - a[1]) * t;
+          total += length / steps;
+          let bestDist = Infinity;
+          let bestFacet = -1;
+          ringsNow.forEach((ring, facetIndex) => {
+            if (facetIndex === selfIndex) return;
+            for (let j = 0; j < ring.length - 1; j++) {
+              const c = ring[j]!;
+              const d = ring[j + 1]!;
+              const dx = d[0] - c[0];
+              const dz = d[1] - c[1];
+              const lenSq = dx * dx + dz * dz;
+              let u = lenSq === 0 ? 0 : ((px - c[0]) * dx + (pz - c[1]) * dz) / lenSq;
+              u = Math.max(0, Math.min(1, u));
+              const dist = Math.hypot(px - (c[0] + u * dx), pz - (c[1] + u * dz));
+              if (dist < bestDist) {
+                bestDist = dist;
+                bestFacet = facetIndex;
+              }
+            }
+          });
+          if (bestFacet >= 0 && bestDist <= 0.08)
+            shares.set(bestFacet, (shares.get(bestFacet) ?? 0) + length / steps);
+          else unbordered += length / steps;
+        }
+      }
+      return { shares, unbordered, total };
+    };
+
+    type FoldCandidate = {
+      facet: number;
+      recipient: number; // -1: notch absorbed by its owner
+      ownerPoints: LocalPoint[];
+      sliverClosed: Ring;
+      sliverArea: number;
+      chordLength: number;
+    };
+    const findFold = (ringsNow: Ring[]): FoldCandidate | null => {
+      let best: FoldCandidate | null = null;
+      consolidated.forEach((entry, facetIndex) => {
+        const pts = entry.points;
+        const n = pts.length;
+        if (n < 4) return;
+        const ring: Ring = pts.map((p) => [p.x, p.z] as [number, number]);
+        const totalSigned = signedRingArea(ring);
+        const totalArea = Math.abs(totalSigned);
+        if (totalArea < 1e-6) return;
+        for (let a = 0; a < n; a++)
+          for (let b = a + 2; b < n; b++) {
+            if (a === 0 && b === n - 1) continue;
+            const sub1 = pts.slice(a, b + 1);
+            const sub2 = [...pts.slice(b), ...pts.slice(0, a + 1)];
+            if (sub1.length < 3 || sub2.length < 3) continue;
+            const ring1: Ring = sub1.map((p) => [p.x, p.z] as [number, number]);
+            const ring2: Ring = sub2.map((p) => [p.x, p.z] as [number, number]);
+            if (!openRingSimple(ring1) || !openRingSimple(ring2)) continue;
+            const signed1 = signedRingArea(ring1);
+            const signed2 = signedRingArea(ring2);
+            // The two sub-rings share the chord in opposite
+            // directions, so their signed areas must sum to the
+            // ring's; a chord that leaves the polygon breaks this.
+            if (Math.abs(signed1 + signed2 - totalSigned) > Math.max(0.5, totalArea * 0.02))
+              continue;
+            const smallIsFirst = Math.abs(signed1) <= Math.abs(signed2);
+            const smallPts = smallIsFirst ? sub1 : sub2;
+            const largePts = smallIsFirst ? sub2 : sub1;
+            const smallRing = smallIsFirst ? ring1 : ring2;
+            const smallSigned = smallIsFirst ? signed1 : signed2;
+            const sliverArea = Math.abs(smallSigned);
+            if (sliverArea < 1.5 || sliverArea > 60 || sliverArea > totalArea * 0.12) continue;
+            let perimeter = 0;
+            for (let s = 0; s < smallRing.length; s++) {
+              const p = smallRing[s]!;
+              const q = smallRing[(s + 1) % smallRing.length]!;
+              perimeter += Math.hypot(q[0] - p[0], q[1] - p[1]);
+            }
+            const chordLength = Math.hypot(pts[a]!.x - pts[b]!.x, pts[a]!.z - pts[b]!.z);
+            const chainLength = perimeter - chordLength;
+            if (chordLength < 1e-6 || chainLength < 2.5 * chordLength) continue;
+            if (perimeter <= 0 || (2 * sliverArea) / perimeter > 2.3) continue;
+            const notch = Math.sign(smallSigned) !== Math.sign(totalSigned);
+            const outer = chainBorder(smallRing, facetIndex, ringsNow);
+            const chord = chainBorder([ring[a]!, ring[b]!], facetIndex, ringsNow);
+            const chordBordered = chord.total - chord.unbordered;
+            const ranked = [...outer.shares.entries()].sort((x, y) => y[1] - x[1]);
+            const topFacet = ranked[0]?.[0] ?? -1;
+            const topShare = outer.total > 0 ? (ranked[0]?.[1] ?? 0) / outer.total : 0;
+            const secondShare = outer.total > 0 ? (ranked[1]?.[1] ?? 0) / outer.total : 0;
+            let recipient = -2;
+            if (notch) {
+              const chordTop = [...chord.shares.entries()].sort((x, y) => y[1] - x[1])[0];
+              if (
+                outer.total > 0 &&
+                outer.unbordered / outer.total >= 0.85 &&
+                chordTop &&
+                chord.total > 0 &&
+                chordTop[1] / chord.total >= 0.85
+              )
+                recipient = -1;
+            } else if (
+              topShare >= 0.85 &&
+              secondShare <= 0.05 &&
+              chordBordered <= 0.15 * Math.max(chord.total, 1e-9)
+            )
+              recipient = topFacet;
+            else if (
+              topShare >= 0.4 &&
+              secondShare <= 0.05 &&
+              chordBordered <= 0.15 * Math.max(chord.total, 1e-9) &&
+              (2 * sliverArea) / perimeter <= 0.6 &&
+              sliverArea <= 5
+            )
+              recipient = topFacet;
+            if (recipient === -2 || recipient === facetIndex) continue;
+            if (
+              best &&
+              (sliverArea < best.sliverArea ||
+                (sliverArea === best.sliverArea && chordLength >= best.chordLength))
+            )
+              continue;
+            best = {
+              facet: facetIndex,
+              recipient,
+              ownerPoints: largePts,
+              sliverClosed: [...smallRing, smallRing[0]!],
+              sliverArea,
+              chordLength,
+            };
+          }
+      });
+      return best;
+    };
+    for (let foldCount = 0; foldCount < 6; foldCount++) {
+      const ringsNow = consolidated.map((entry) => closedRing(entry.points));
+      const candidate = findFold(ringsNow);
+      if (!candidate) break;
+      const snapshot = consolidated.map((entry) => entry.points);
+      const owner = consolidated[candidate.facet]!;
+      owner.points = candidate.ownerPoints;
+      let applied = owner.points.length >= 3;
+      if (applied && candidate.recipient >= 0) {
+        const recipient = consolidated[candidate.recipient]!;
+        const recipientRing = closedRing(recipient.points);
+        let unioned = polygonClipping.union([recipientRing], [candidate.sliverClosed]);
+        if (unioned.length !== 1) {
+          // A flap can run a hairline away from the facet it borders
+          // (the two traces of the seam offset by a few hundredths
+          // of a foot), leaving the union disjoint. Snap the
+          // sliver's vertices onto the recipient's trace where they
+          // lie within 0.12 ft of it and retry once; the snap moves
+          // drawing points by less than the seam offset the service
+          // itself leaves between facets.
+          const snapped: Ring = candidate.sliverClosed
+            .slice(0, -1)
+            .map(([x, z]) => {
+              let bestDist = Infinity;
+              let bestPoint: [number, number] = [x, z];
+              for (let j = 0; j < recipientRing.length - 1; j++) {
+                const c = recipientRing[j]!;
+                const d = recipientRing[j + 1]!;
+                const dx = d[0] - c[0];
+                const dz = d[1] - c[1];
+                const lenSq = dx * dx + dz * dz;
+                let u = lenSq === 0 ? 0 : ((x - c[0]) * dx + (z - c[1]) * dz) / lenSq;
+                u = Math.max(0, Math.min(1, u));
+                const px = c[0] + u * dx;
+                const pz = c[1] + u * dz;
+                const dist = Math.hypot(x - px, z - pz);
+                if (dist < bestDist) {
+                  bestDist = dist;
+                  bestPoint = [px, pz];
+                }
+              }
+              return bestDist <= 0.12 ? bestPoint : ([x, z] as [number, number]);
+            });
+          snapped.push(snapped[0]!);
+          const retry = polygonClipping.union([recipientRing], [snapped]);
+          if (retry.length === 1) unioned = retry;
+        }
+        const expected = ringAreaAbs(recipientRing) + candidate.sliverArea;
+        const onlyPoly = unioned.length === 1 ? unioned[0] : undefined;
+        // The union can keep the sub-visible seam lens between the
+        // two rings as a pinhole inner ring (Miramar's wedge fold:
+        // 0.5 sf where the two traces of one seam diverge by ~0.04
+        // ft). The recipient's new ring is the outer ring, which
+        // absorbs the lens — the same hairline the renderer's
+        // underlay hides. A union with a real hole (beyond the area
+        // tolerance) is not a legal fold and is rejected below.
+        let onlyRing: Ring | undefined;
+        if (onlyPoly && onlyPoly.length >= 1) {
+          const byArea = [...onlyPoly].sort((x, y) => ringAreaAbs(y) - ringAreaAbs(x));
+          const holeArea = byArea
+            .slice(1)
+            .reduce((sum, ring) => sum + ringAreaAbs(ring), 0);
+          if (holeArea <= Math.max(1, expected * 0.02)) onlyRing = byArea[0];
+        }
+        const filled =
+          onlyRing && onlyRing.length >= 4
+            ? dedupeRing(
+                onlyRing.slice(0, -1).map(([x, z]) => ({
+                  x,
+                  z,
+                  // The recipient's new ring must lie on the
+                  // recipient's OWN fitted plane: the global
+                  // elevation lookup hands the gained vertices the
+                  // donor facet's elevations, and the refit after
+                  // consolidation would tilt the recipient's plane
+                  // toward the donor's (Miramar's 2 sf flap dragged
+                  // facet-4 from 4.27/12 to 3.93/12). The re-level
+                  // step puts every vertex on the refit plane
+                  // anyway, so on-plane elevations change nothing
+                  // else about the drawing.
+                  elevation:
+                    planeElevation(recipient.descriptor, x, z) ??
+                    elevationAt(x, z, recipient.descriptor),
+                })),
+              )
+            : [];
+        if (
+          filled.length < 3 ||
+          Math.abs(ringAreaAbs(closedRing(filled)) - expected) > Math.max(1, expected * 0.02)
+        )
+          applied = false;
+        else recipient.points = filled;
+      }
+      if (applied) {
+        const ownerArea = ringAreaAbs(closedRing(owner.points));
+        const facetArea = ringAreaAbs(ringsNow[candidate.facet]!);
+        const expectedOwner =
+          candidate.recipient >= 0
+            ? facetArea - candidate.sliverArea
+            : facetArea + candidate.sliverArea;
+        if (Math.abs(ownerArea - expectedOwner) > Math.max(1, expectedOwner * 0.02))
+          applied = false;
+      }
+      if (
+        applied &&
+        hasTripleSharedEdge(consolidated.map((entry) => closedRing(entry.points)))
+      )
+        applied = false;
+      if (!applied) {
+        consolidated.forEach((entry, index) => {
+          entry.points = snapshot[index]!;
+        });
+        break;
+      }
+    }
+
     if (hasTripleSharedEdge(consolidated.map((entry) => closedRing(entry.points))))
       throw new Error("Consolidation produced a triple-shared edge");
 

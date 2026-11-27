@@ -13,6 +13,10 @@ export const loadReportAerial = createServerFn({ method: "POST" })
       .object({
         latitude: z.number().finite().min(-85).max(85),
         longitude: z.number().finite().min(-180).max(180),
+        // Optional cover framing (roof-centred window sized to the
+        // roof, aerial-photo.ts roofCoverFraming); absent = the
+        // server's ±42 m default.
+        halfExtentMeters: z.number().finite().min(15).max(60).optional(),
       })
       .parse(raw),
   )
@@ -28,5 +32,10 @@ export const loadReportAerial = createServerFn({ method: "POST" })
         stage: "authorization",
       } as const;
     const { fetchReportAerialImage } = await import("./report-aerial.server");
-    return fetchReportAerialImage(data.latitude, data.longitude);
+    return fetchReportAerialImage(
+      data.latitude,
+      data.longitude,
+      fetch,
+      data.halfExtentMeters,
+    );
   });

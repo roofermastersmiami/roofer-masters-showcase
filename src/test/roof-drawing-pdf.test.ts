@@ -116,6 +116,55 @@ describe("service edge totals in the report (step 8)", () => {
   });
 });
 
+describe("report polish (step 10)", () => {
+  it("renders the filled pages when facet seam traces are offset by a hairline", async () => {
+    // Two slopes whose traces of the shared seam sit 0.06 ft apart
+    // leave a paper-white sliver between the fills at the outline
+    // and along the seam; the renderer paints the facets' union as
+    // an underlay so the sliver never shows. Rendering must keep
+    // the full page structure either way.
+    const offset = {
+      ...response,
+      roof: {
+        ...response.roof,
+        facet_count: 3,
+        facets: [
+          facet("facet-1", [
+            [0, 0, E],
+            [20, 0, E],
+            [20, 18, R],
+            [0, 18, R],
+          ]),
+          facet("facet-2", [
+            [20.06, 0, E],
+            [50, 0, E],
+            [50, 18, R],
+            [20.06, 18, R],
+          ]),
+          facet("facet-3", [
+            [0, 18, R],
+            [50, 18, R],
+            [50, 36, E],
+            [0, 36, E],
+          ]),
+        ],
+      },
+    } as unknown as RoofDetectionResponse;
+    const drawing = detectedFacetsToDrawing(offset, "Metal Roof");
+    const bytes = await roofDrawingPdf(
+      "Sketch Report",
+      drawing,
+      "Test Customer",
+      "1 Main Street",
+      [],
+      {},
+      { theme: "roofsnap" },
+    );
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(5);
+  });
+});
+
 describe("sketch report themes", () => {
   it("renders every theme with the same structure and a resizable logo", async () => {
     const drawing = detectedFacetsToDrawing(response, "Metal Roof");

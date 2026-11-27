@@ -80,3 +80,40 @@ describe("report aerial server fetch (step 8)", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("report aerial framing (step 10)", () => {
+  it("threads a caller-supplied half extent into the NAIP window", async () => {
+    const calls: string[] = [];
+    const result = await fetchReportAerialImage(
+      25.9802103,
+      -80.399521,
+      fakeFetcher(
+        new Response(JPEG_BYTES, { status: 200, headers: { "content-type": "image/jpeg" } }),
+        calls,
+      ),
+      25,
+    );
+    expect("imageBase64" in result).toBe(true);
+    const bbox = new URL(calls[0]!).searchParams.get("bbox")!.split(",").map(Number);
+    expect(bbox[3]! - bbox[1]!).toBeCloseTo((2 * 25) / 110540, 5);
+    expect(bbox[2]! - bbox[0]!).toBeCloseTo(
+      (2 * 25) / (111320 * Math.cos((25.98 * Math.PI) / 180)),
+      5,
+    );
+  });
+
+  it("clamps an out-of-range half extent to the supported window", async () => {
+    const calls: string[] = [];
+    await fetchReportAerialImage(
+      25.98,
+      -80.39,
+      fakeFetcher(
+        new Response(JPEG_BYTES, { status: 200, headers: { "content-type": "image/jpeg" } }),
+        calls,
+      ),
+      500,
+    );
+    const bbox = new URL(calls[0]!).searchParams.get("bbox")!.split(",").map(Number);
+    expect(bbox[3]! - bbox[1]!).toBeCloseTo((2 * 60) / 110540, 5);
+  });
+});
