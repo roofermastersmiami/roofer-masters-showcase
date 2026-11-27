@@ -75,7 +75,7 @@ export function rebaseRoofPlanes(
   });
 }
 
-export const drawingSchema = z.object({
+const baseDrawingSchema = z.object({
   planes: z.array(planeSchema).min(1).max(100),
   penetrations: z
     .array(
@@ -116,6 +116,24 @@ export const drawingSchema = z.object({
       pitch_change: z.number().finite().nonnegative(),
     })
     .optional(),
+});
+
+/** A detached structure (garage, shed, guest house) the detection
+ * service identified and measured separately from the main house in
+ * multi-structure mode. Its drawing is a complete base drawing in
+ * the SAME local-feet coordinate frame as the main drawing (shared
+ * geo-reference origin), so the structures can be rendered together
+ * and their measurements summed. The main structure is the drawing
+ * itself and is never stored as an entry. */
+export const detachedStructureSchema = z.object({
+  label: z.string().min(1).max(80),
+  candidate_id: z.string().min(1).max(128).nullable(),
+  drawing: baseDrawingSchema,
+});
+export type DetachedStructure = z.infer<typeof detachedStructureSchema>;
+
+export const drawingSchema = baseDrawingSchema.extend({
+  detached_structures: z.array(detachedStructureSchema).max(8).optional(),
 });
 export type RoofDrawing = z.infer<typeof drawingSchema>;
 export type RoofPlane = z.infer<typeof planeSchema>;

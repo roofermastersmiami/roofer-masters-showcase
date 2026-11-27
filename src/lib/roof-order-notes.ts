@@ -23,6 +23,7 @@ export function buildingTypeLabel(value: BuildingType): string {
 }
 
 const PIN_LINE = /^Measurement pin:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/m;
+const OUTBUILDING_LINE = /^Include outbuilding:\s*(Yes|No)\s*$/m;
 
 export function composeRoofOrderNotes(input: {
   buildingType: BuildingType;
@@ -56,4 +57,14 @@ export function parseMeasurementPin(notes: string | null | undefined): {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return { lat, lon };
+}
+
+/** Whether the order form's "Include outbuilding" checkbox was set
+ * for this report, recovered from the labelled notes line written by
+ * composeRoofOrderNotes. Absent line = false, so reports created
+ * before the checkbox existed keep single-structure behaviour. */
+export function parseIncludeOutbuilding(notes: string | null | undefined): boolean {
+  if (!notes) return false;
+  const match = OUTBUILDING_LINE.exec(notes);
+  return match?.[1] === "Yes";
 }
