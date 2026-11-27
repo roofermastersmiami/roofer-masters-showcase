@@ -5,6 +5,7 @@
 -- It does not modify schema, rows, migration history, or storage.
 
 \set ON_ERROR_STOP on
+BEGIN READ ONLY;
 \echo '=== 0. Connection identity ==='
 SELECT current_database() AS database_name,
        current_user AS database_role,
@@ -218,3 +219,4 @@ ORDER BY name;
 
 \echo '=== PREFLIGHT COMPLETE ==='
 \echo 'Review exact outputs and compare against the repository migrations before any write operation.'
+COMMIT;
