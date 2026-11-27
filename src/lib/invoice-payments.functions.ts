@@ -23,13 +23,14 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" })
         .gt("expires_at", new Date().toISOString())
         .maybeSingle();
       if (invoiceError) throw new Error("Could not load invoice for checkout");
-      if (!invoice || invoice.environment !== data.environment)
+      if (!invoice || !invoice.company_id || invoice.environment !== data.environment)
         return { error: "This invoice is unavailable in this payment environment." };
       const stripe = createStripeClient(data.environment);
       const { data: pending, error: pendingError } = await supabaseAdmin
         .from("invoice_checkouts")
         .select("id,session_id")
         .eq("invoice_id", invoice.id)
+        .eq("company_id", invoice.company_id)
         .eq("status", "pending")
         .maybeSingle();
       if (pendingError) throw new Error("Could not verify existing checkout");
@@ -53,6 +54,7 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" })
           .from("invoice_checkouts")
           .update({ status: "expired" })
           .eq("id", pending.id)
+          .eq("company_id", invoice.company_id)
           .eq("status", "pending")
           .select("id")
           .maybeSingle();
@@ -81,6 +83,7 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" })
             .from("invoice_checkouts")
             .update({ status: "failed" })
             .eq("id", recoverableId.data.id)
+            .eq("company_id", invoice.company_id)
             .eq("status", "pending");
           if (releaseError)
             throw new Error(
@@ -137,6 +140,7 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" })
           .from("invoice_checkouts")
           .update({ session_id: session.id })
           .eq("id", reserved.id)
+          .eq("company_id", invoice.company_id)
           .eq("status", "pending")
           .select("id")
           .maybeSingle();
@@ -182,7 +186,7 @@ export const confirmInvoiceCheckout = createServerFn({ method: "POST" })
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: invoice, error: invoiceError } = await supabaseAdmin
         .from("crm_invoices")
-        .select("id")
+        .select("id,company_id")
         .eq("token", data.token)
         .eq("environment", data.environment)
         .eq("status", "issued")
@@ -195,6 +199,7 @@ export const confirmInvoiceCheckout = createServerFn({ method: "POST" })
         .select("id")
         .eq("session_id", data.session_id)
         .eq("invoice_id", invoice.id)
+        .eq("company_id", invoice.company_id)
         .eq("environment", data.environment)
         .maybeSingle();
       if (checkoutError) throw new Error("Could not verify payment session");
@@ -233,6 +238,7 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" })
         .from("invoice_checkouts")
         .select("id,session_id,environment")
         .eq("invoice_id", data.invoice_id)
+        .eq("company_id", invoice.company_id)
         .eq("status", "pending")
         .maybeSingle();
       if (checkoutError) throw new Error("Could not load pending checkout");
@@ -253,6 +259,7 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" })
         .from("invoice_checkouts")
         .update({ status: "expired" })
         .eq("id", checkout.id)
+        .eq("company_id", invoice.company_id)
         .eq("status", "pending")
         .select("id")
         .maybeSingle();
@@ -262,6 +269,7 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" })
           .from("invoice_checkouts")
           .select("status")
           .eq("id", checkout.id)
+          .eq("company_id", invoice.company_id)
           .maybeSingle();
         if (currentError) throw new Error("Could not verify checkout status after cancellation");
         if (current?.status === "paid" || current?.status === "expired") return { ok: true };
