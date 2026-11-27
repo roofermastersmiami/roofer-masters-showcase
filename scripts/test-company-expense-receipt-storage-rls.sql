@@ -3,6 +3,13 @@
 \set ON_ERROR_STOP on
 \ir test-secondary-operational-company-ownership.sql
 
+-- Extend the intentionally minimal shared fixture to match the expense table.
+ALTER TABLE crm_expenses ADD COLUMN description text NOT NULL DEFAULT 'Fixture expense';
+ALTER TABLE crm_expenses ADD COLUMN category text NOT NULL DEFAULT 'materials';
+ALTER TABLE crm_expenses ADD COLUMN amount_cents bigint NOT NULL DEFAULT 10000;
+ALTER TABLE crm_expenses ADD COLUMN incurred_at date NOT NULL DEFAULT current_date;
+ALTER TABLE crm_expenses ADD COLUMN receipt_path text;
+
 DO $role_setup$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
 END $role_setup$;
@@ -25,9 +32,7 @@ INSERT INTO auth.users VALUES ('00000000-0000-0000-0000-000000000004');
 INSERT INTO crm_company_memberships(company_id,user_id,role) VALUES
  ('10000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000004','accounting');
 INSERT INTO crm_expenses(id,company_id,description,category,amount_cents,incurred_at,receipt_path)
-VALUES
- ('80000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','Company A expense','materials',10000,current_date,NULL),
- ('80000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','Company B expense','materials',20000,current_date,NULL);
+VALUES ('80000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','Company B expense','materials',20000,current_date,NULL);
 
 \ir ../drizzle/migrations/0061_company_scoped_expense_receipt_storage.sql
 
@@ -50,12 +55,19 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Legacy unscoped receipt upload unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
+RESET ROLE;
+
+-- Attach the object to its expense row as the database owner, mirroring the
+-- application upload-then-update sequence.
 UPDATE crm_expenses SET receipt_path='expense/10000000-0000-0000-0000-000000000001/80000000-0000-0000-0000-000000000001/a.pdf'
- WHERE id='80000000-0000-0000-0000-000000000001';
-DO $$ BEGIN
+ WHERE id='92000000-0000-0000-0000-000000000001';
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $ BEGIN
   IF (SELECT count(*) FROM storage.objects WHERE bucket_id='roofing-proposals')<>1
     THEN RAISE EXCEPTION 'Company A can read another tenant or legacy receipt'; END IF;
-END $$;
+END $;
 RESET ROLE;
 
 -- Company B cannot read or delete Company A's object; RLS silently filters DELETE.
@@ -71,7 +83,7 @@ RESET ROLE;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/80000000-0000-0000-0000-000000000001/a.pdf')
     THEN RAISE EXCEPTION 'Cross-company DELETE removed a receipt'; END IF;
-  IF (SELECT count(*) FROM crm_expenses WHERE id IN ('80000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002'))<>2
+  IF (SELECT count(*) FROM crm_expenses WHERE id IN ('92000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002'))<>2
     THEN RAISE EXCEPTION 'Expense records were deleted'; END IF;
 END $$;
 \echo 'PASS: expense receipt storage tenant isolation, accounting roles, orphan denial, and record preservation'
