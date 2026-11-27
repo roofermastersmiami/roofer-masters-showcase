@@ -59,11 +59,11 @@ DO $$
 DECLARE payment_uuid uuid;
 BEGIN
   payment_uuid := public.record_invoice_payment(
-    '20000000-0000-0000-0000-000000000002',2500,'check','CHK-1',now()
+    '20000000-0000-0000-0000-000000000001',2500,'check','CHK-1',now()
   );
   IF NOT EXISTS(SELECT 1 FROM invoice_payments
-    WHERE id=payment_uuid AND company_id='10000000-0000-0000-0000-000000000002'
-      AND invoice_id='20000000-0000-0000-0000-000000000002') THEN
+    WHERE id=payment_uuid AND company_id='10000000-0000-0000-0000-000000000001'
+      AND invoice_id='20000000-0000-0000-0000-000000000001') THEN
     RAISE EXCEPTION 'Payment did not inherit invoice company';
   END IF;
 END $$;
@@ -104,7 +104,7 @@ BEGIN
       AND provider_event_id='cs_test_1') THEN
     RAISE EXCEPTION 'Settlement payment company does not match invoice';
   END IF;
-  IF (SELECT paid_cents FROM crm_invoices WHERE id='20000000-0000-0000-0000-000000000002') <> 7500 THEN
+  IF (SELECT paid_cents FROM crm_invoices WHERE id='20000000-0000-0000-0000-000000000002') <> 5000 THEN
     RAISE EXCEPTION 'Invoice paid balance was not updated';
   END IF;
   IF NOT public.settle_invoice_checkout('cs_test_1','test',5000) THEN
