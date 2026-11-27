@@ -351,6 +351,13 @@
       "when": 1795733100000,
       "tag": "0049_company_scoped_permit_document_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795733200000,
+      "tag": "0050_company_roof_product_approvals",
+      "breakpoints": true
     }
   ]
 }
