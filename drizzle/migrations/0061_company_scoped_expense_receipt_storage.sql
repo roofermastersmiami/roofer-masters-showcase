@@ -37,7 +37,7 @@ GRANT EXECUTE ON FUNCTION public.can_access_company_expense_receipt(text,boolean
 CREATE POLICY "Company accounting members read expense receipts" ON storage.objects
   FOR SELECT TO authenticated USING (
     bucket_id='roofing-proposals'
-    AND public.can_access_company_expense_receipt(name, true)
+    AND public.can_access_company_expense_receipt(name, false)
   );
 
 CREATE POLICY "Company accounting members upload expense receipts" ON storage.objects
@@ -53,7 +53,7 @@ CREATE POLICY "Company accounting members delete expense receipts" ON storage.ob
   );
 
 COMMENT ON POLICY "Company accounting members read expense receipts" ON storage.objects IS
-  'Receipt access requires an exact company/expense path and a matching company-owned expense row; only owner/admin/accounting can read.';
+  'Receipt access requires an exact company/expense path and a matching company-owned expense row; company accounting members can read pending uploads before attachment.';
 COMMENT ON POLICY "Company accounting members upload expense receipts" ON storage.objects IS
   'Receipt upload requires a pre-existing company-owned expense row and owner/admin/accounting membership in that company.';
 COMMENT ON POLICY "Company accounting members delete expense receipts" ON storage.objects IS
