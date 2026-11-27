@@ -17,7 +17,7 @@ export const createInvoiceCheckout = createServerFn({ method: "POST" })
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: invoice, error: invoiceError } = await supabaseAdmin
         .from("crm_invoices")
-        .select("id,number,title,environment")
+        .select("id,number,title,environment,company_id")
         .eq("token", data.token)
         .eq("status", "issued")
         .gt("expires_at", new Date().toISOString())
