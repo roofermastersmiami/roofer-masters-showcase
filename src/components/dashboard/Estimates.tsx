@@ -63,6 +63,7 @@ export function Estimates({
         title,
         category,
         lead_id: customer || null,
+        company_id: leads.find((lead) => lead.id === customer)?.company_id ?? leads[0]?.company_id,
         inputs: input,
         total_cents: result.total,
       };
@@ -104,6 +105,7 @@ export function Estimates({
         .from("proposals")
         .insert({
           ...details,
+          company_id: leads.find((lead) => lead.id === customer)?.company_id,
           ...(linkedEstimate?.property_id ? { property_id: linkedEstimate.property_id } : {}),
           ...(linkedEstimate?.drawing_id ? { drawing_id: linkedEstimate.drawing_id } : {}),
         })
