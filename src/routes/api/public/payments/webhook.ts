@@ -32,13 +32,24 @@ export const Route = createFileRoute("/api/public/payments/webhook")({
             event.type === "checkout.session.async_payment_failed"
           ) {
             const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-            const { error } = await supabaseAdmin
+            const { data: checkout, error: lookupError } = await supabaseAdmin
               .from("invoice_checkouts")
-              .update({ status: event.type === "checkout.session.expired" ? "expired" : "failed" })
+              .select("id,company_id")
               .eq("session_id", event.data.object.id)
               .eq("environment", environment)
-              .eq("status", "pending");
-            if (error) throw error;
+              .eq("status", "pending")
+              .maybeSingle();
+            if (lookupError) throw lookupError;
+            if (checkout) {
+              if (!checkout.company_id) throw new Error("Checkout company is missing");
+              const { error } = await supabaseAdmin
+                .from("invoice_checkouts")
+                .update({ status: event.type === "checkout.session.expired" ? "expired" : "failed" })
+                .eq("id", checkout.id)
+                .eq("company_id", checkout.company_id)
+                .eq("status", "pending");
+              if (error) throw error;
+            }
           }
           return Response.json({ received: true });
         } catch {
