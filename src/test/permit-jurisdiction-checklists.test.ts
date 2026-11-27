@@ -21,6 +21,7 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
         profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
         roofingSystem,
         projectKind: "reroof",
+        folio: "30-1234567",
       });
       expect(result.requiredRoofingSections).toEqual(sections);
       expect(result.authorityConfirmed).toBe(true);
@@ -60,10 +61,12 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
     const metal = getPermitChecklist({
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
       roofingSystem: "metal",
+      folio: "30-1234567",
     });
     const shingle = getPermitChecklist({
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
       roofingSystem: "asphalt_shingle",
+      folio: "30-1234567",
     });
     expect(metal.items.some((item) => item.id === "design-calculations")).toBe(true);
     expect(shingle.items.some((item) => item.id === "design-calculations")).toBe(false);
