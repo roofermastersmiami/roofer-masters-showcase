@@ -3,6 +3,10 @@ import {
   DEFAULT_NOC_THRESHOLD_CENTS,
   getRecordedBudgetForNocScreening,
   requiresNoticeOfCommencement,
+  canTransitionPermitApplication,
+  canTransitionPermitInspection,
+  canCreatePermitApplication,
+  canCreatePermitInspection,
 } from "@/lib/permitting-rules";
 
 describe("Notice of Commencement threshold", () => {
@@ -51,5 +55,105 @@ describe("Notice of Commencement threshold", () => {
       RangeError,
     );
     expect(() => requiresNoticeOfCommencement(null, -1)).toThrow(RangeError);
+  });
+});
+
+describe("permit application status transitions", () => {
+  it("allows only intended forward and cancellation paths", () => {
+    expect(canTransitionPermitApplication("draft", "ready_to_submit")).toBe(true);
+    expect(canTransitionPermitApplication("ready_to_submit", "submitted")).toBe(true);
+    expect(canTransitionPermitApplication("submitted", "issued")).toBe(true);
+    expect(canTransitionPermitApplication("submitted", "rejected")).toBe(true);
+    expect(canTransitionPermitApplication("issued", "expired")).toBe(true);
+    expect(canTransitionPermitApplication("draft", "issued")).toBe(false);
+    expect(canTransitionPermitApplication("issued", "submitted")).toBe(false);
+    expect(canTransitionPermitApplication("rejected", "draft")).toBe(false);
+    expect(canTransitionPermitApplication("cancelled", "submitted")).toBe(false);
+  });
+  it("allows unchanged state when editing details", () => {
+    expect(canTransitionPermitApplication("submitted", "submitted")).toBe(true);
+  });
+});
+
+describe("inspection status transitions", () => {
+  it("requires scheduling before inspection outcomes", () => {
+    expect(canTransitionPermitInspection("requested", "scheduled")).toBe(true);
+    expect(canTransitionPermitInspection("scheduled", "passed")).toBe(true);
+    expect(canTransitionPermitInspection("scheduled", "failed")).toBe(true);
+    expect(canTransitionPermitInspection("requested", "passed")).toBe(false);
+    expect(canTransitionPermitInspection("passed", "failed")).toBe(false);
+    expect(canTransitionPermitInspection("cancelled", "scheduled")).toBe(false);
+  });
+  it("allows unchanged state when saving confirmation details", () => {
+    expect(canTransitionPermitInspection("scheduled", "scheduled")).toBe(true);
+  });
+});
+
+describe("complete permitting transition matrix", () => {
+  it("keeps every application status limited to its explicitly supported next states", () => {
+    const allowed: Record<
+      "draft" | "ready_to_submit" | "submitted" | "issued" | "rejected" | "expired" | "cancelled",
+      string[]
+    > = {
+      draft: ["draft", "ready_to_submit", "cancelled"],
+      ready_to_submit: ["ready_to_submit", "submitted", "cancelled"],
+      submitted: ["submitted", "issued", "rejected", "cancelled"],
+      issued: ["issued", "expired"],
+      rejected: ["rejected"],
+      expired: ["expired"],
+      cancelled: ["cancelled"],
+    };
+    const statuses = Object.keys(allowed) as Array<keyof typeof allowed>;
+
+    for (const current of statuses) {
+      for (const next of statuses) {
+        expect(canTransitionPermitApplication(current, next)).toBe(
+          allowed[current].includes(next),
+        );
+      }
+    }
+  });
+
+  it("keeps every inspection status limited to its explicitly supported next states", () => {
+    const allowed: Record<
+      "requested" | "scheduled" | "passed" | "failed" | "cancelled",
+      string[]
+    > = {
+      requested: ["requested", "scheduled", "cancelled"],
+      scheduled: ["scheduled", "passed", "failed", "cancelled"],
+      passed: ["passed"],
+      failed: ["failed"],
+      cancelled: ["cancelled"],
+    };
+    const statuses = Object.keys(allowed) as Array<keyof typeof allowed>;
+
+    for (const current of statuses) {
+      for (const next of statuses) {
+        expect(canTransitionPermitInspection(current, next)).toBe(
+          allowed[current].includes(next),
+        );
+      }
+    }
+  });
+});
+
+describe("initial permit record states", () => {
+  it("allows new permit applications only as drafts", () => {
+    expect(canCreatePermitApplication("draft")).toBe(true);
+    expect(canCreatePermitApplication("draft", { permit_number: "P-123" })).toBe(false);
+    expect(canCreatePermitApplication("draft", { submitted_at: "2026-11-01T12:00:00.000Z" })).toBe(false);
+    expect(canCreatePermitApplication("draft", { issued_at: "2026-11-02T12:00:00.000Z" })).toBe(false);
+    for (const status of ["ready_to_submit", "submitted", "issued", "rejected", "expired", "cancelled"] as const) {
+      expect(canCreatePermitApplication(status)).toBe(false);
+    }
+  });
+
+  it("allows new inspections only as requested", () => {
+    expect(canCreatePermitInspection("requested")).toBe(true);
+    expect(canCreatePermitInspection("requested", { scheduled_at: "2026-11-01T12:00:00.000Z" })).toBe(false);
+    expect(canCreatePermitInspection("requested", { completed_at: "2026-11-01T12:00:00.000Z" })).toBe(false);
+    for (const status of ["scheduled", "passed", "failed", "cancelled"] as const) {
+      expect(canCreatePermitInspection(status)).toBe(false);
+    }
   });
 });

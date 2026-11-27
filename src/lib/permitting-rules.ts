@@ -37,3 +37,58 @@ export function requiresNoticeOfCommencement(
     ? { required: true, reason: "value_exceeds_threshold", thresholdCents }
     : { required: false, reason: "value_at_or_below_threshold", thresholdCents };
 }
+
+export type PermitApplicationStatus =
+  | "draft" | "ready_to_submit" | "submitted" | "issued" | "rejected" | "expired" | "cancelled";
+export type PermitInspectionStatus = "requested" | "scheduled" | "passed" | "failed" | "cancelled";
+
+const permitTransitions: Record<PermitApplicationStatus, readonly PermitApplicationStatus[]> = {
+  draft: ["ready_to_submit", "cancelled"],
+  ready_to_submit: ["submitted", "cancelled"],
+  submitted: ["issued", "rejected", "cancelled"],
+  issued: ["expired"],
+  rejected: [],
+  expired: [],
+  cancelled: [],
+};
+
+const inspectionTransitions: Record<PermitInspectionStatus, readonly PermitInspectionStatus[]> = {
+  requested: ["scheduled", "cancelled"],
+  scheduled: ["passed", "failed", "cancelled"],
+  passed: [],
+  failed: [],
+  cancelled: [],
+};
+
+export function canTransitionPermitApplication(
+  current: PermitApplicationStatus,
+  next: PermitApplicationStatus,
+): boolean {
+  return current === next || permitTransitions[current].includes(next);
+}
+
+export function canTransitionPermitInspection(
+  current: PermitInspectionStatus,
+  next: PermitInspectionStatus,
+): boolean {
+  return current === next || inspectionTransitions[current].includes(next);
+}
+
+/** New permit applications must begin as clean drafts, without lifecycle evidence. */
+export function canCreatePermitApplication(
+  status: PermitApplicationStatus,
+  details: { permit_number?: string | null; submitted_at?: string | null; issued_at?: string | null } = {},
+): boolean {
+  return status === "draft" &&
+    !details.permit_number?.trim() &&
+    !details.submitted_at &&
+    !details.issued_at;
+}
+
+/** New inspections must begin as requested, without a confirmed appointment or outcome. */
+export function canCreatePermitInspection(
+  status: PermitInspectionStatus,
+  details: { scheduled_at?: string | null; completed_at?: string | null } = {},
+): boolean {
+  return status === "requested" && !details.scheduled_at && !details.completed_at;
+}

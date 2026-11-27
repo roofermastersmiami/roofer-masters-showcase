@@ -70,7 +70,8 @@ CREATE TABLE public.roof_jobs (
 INSERT INTO auth.users(id) VALUES
  ('00000000-0000-0000-0000-000000000001'),
  ('00000000-0000-0000-0000-000000000002'),
- ('00000000-0000-0000-0000-000000000003');
+ ('00000000-0000-0000-0000-000000000003'),
+ ('00000000-0000-0000-0000-000000000004');
 INSERT INTO public.crm_companies(id,name,slug,created_by) VALUES
  ('10000000-0000-0000-0000-000000000001','Company A','company-a','00000000-0000-0000-0000-000000000001'),
  ('10000000-0000-0000-0000-000000000002','Company B','company-b','00000000-0000-0000-0000-000000000002');
@@ -90,11 +91,12 @@ INSERT INTO public.roof_jobs(id,lead_id,property_id) VALUES
 
 -- Migration 0047 requires exactly one company; run its ownership DDL against a
 -- one-company fixture first, then add Company B to test two-company RLS.
-DELETE FROM public.crm_company_memberships WHERE company_id='10000000-0000-0000-0000-000000000002';
-DELETE FROM public.crm_companies WHERE id='10000000-0000-0000-0000-000000000002';
+-- Remove the dependent roof job before its lead/property parents.
+DELETE FROM public.roof_jobs WHERE id='40000000-0000-0000-0000-000000000002';
 DELETE FROM public.leads WHERE company_id='10000000-0000-0000-0000-000000000002';
 DELETE FROM public.crm_properties WHERE company_id='10000000-0000-0000-0000-000000000002';
-DELETE FROM public.roof_jobs WHERE id='40000000-0000-0000-0000-000000000002';
+DELETE FROM public.crm_company_memberships WHERE company_id='10000000-0000-0000-0000-000000000002';
+DELETE FROM public.crm_companies WHERE id='10000000-0000-0000-0000-000000000002';
 
 \ir ../drizzle/migrations/0047_company_owned_roof_jobs.sql
 \ir ../drizzle/migrations/0048_company_permit_applications_and_inspections.sql
@@ -160,6 +162,19 @@ DO $$ BEGIN
 END $$;
 RESET ROLE;
 
+-- A signed-in user with no company membership must see no permit records.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
+DO $$ BEGIN
+  IF (SELECT count(*) FROM public.roof_permit_applications) <> 0 THEN
+    RAISE EXCEPTION 'Nonmember unexpectedly read permit applications';
+  END IF;
+  IF (SELECT count(*) FROM public.roof_permit_inspections) <> 0 THEN
+    RAISE EXCEPTION 'Nonmember unexpectedly read permit inspections';
+  END IF;
+END $$;
+RESET ROLE;
+
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 DO $$ BEGIN
@@ -178,6 +193,58 @@ DO $$ BEGIN
    RAISE EXCEPTION 'Cross-company job relationship unexpectedly accepted';
  EXCEPTION WHEN foreign_key_violation THEN NULL;
  END;
+END $$;
+RESET ROLE;
+
+
+-- Non-admin company members must not update or delete permit records.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
+DO $$ BEGIN
+  UPDATE public.roof_permit_applications
+    SET notes='unauthorized edit'
+    WHERE id='50000000-0000-0000-0000-000000000001';
+  IF EXISTS (SELECT 1 FROM public.roof_permit_applications
+             WHERE id='50000000-0000-0000-0000-000000000001'
+               AND notes='unauthorized edit') THEN
+    RAISE EXCEPTION 'Non-admin member unexpectedly updated a permit application';
+  END IF;
+  DELETE FROM public.roof_permit_inspections
+    WHERE id='60000000-0000-0000-0000-000000000001';
+  IF NOT EXISTS (SELECT 1 FROM public.roof_permit_inspections
+                 WHERE id='60000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'Non-admin member unexpectedly deleted an inspection';
+  END IF;
+END $$;
+RESET ROLE;
+
+-- Company A admins must not create an inspection linked to Company B's application.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO public.roof_permit_inspections(
+      company_id,application_id,inspection_type
+    ) VALUES (
+      '10000000-0000-0000-0000-000000000001',
+      '50000000-0000-0000-0000-000000000002',
+      'Cross-company test'
+    );
+    RAISE EXCEPTION 'Cross-company inspection/application relationship unexpectedly accepted';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.roof_permit_applications(
+      company_id,roof_job_id,jurisdiction_name,permit_type,application_status
+    ) VALUES (
+      '10000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000001',
+      'City of Miramar','Roof','issued'
+    );
+    RAISE EXCEPTION 'Issued permit without official number/timestamps unexpectedly accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
 END $$;
 RESET ROLE;
 
