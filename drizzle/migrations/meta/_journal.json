@@ -316,6 +316,13 @@
       "when": 1795662000000,
       "tag": "0044_company_scoped_customer_save",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1795730000000,
+      "tag": "0045_trusted_public_lead_company",
+      "breakpoints": true
     }
   ]
 }
