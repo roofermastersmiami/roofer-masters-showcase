@@ -10,13 +10,13 @@ DECLARE company_count bigint; company_uuid uuid; owner_uuid uuid;
 BEGIN
   SELECT count(*) INTO company_count FROM public.crm_companies;
   IF company_count <> 1 THEN
-    RAISE EXCEPTION '0055 requires exactly one verified Roofer Masters company; found %', company_count;
+    RAISE EXCEPTION '0056 requires exactly one verified Roofer Masters company; found %', company_count;
   END IF;
   SELECT id, created_by INTO company_uuid, owner_uuid
   FROM public.crm_companies ORDER BY created_at,id LIMIT 1;
   IF NOT EXISTS (SELECT 1 FROM public.crm_company_memberships
     WHERE company_id=company_uuid AND user_id=owner_uuid AND role='owner') THEN
-    RAISE EXCEPTION '0055 requires the verified company creator owner membership';
+    RAISE EXCEPTION '0056 requires the verified company creator owner membership';
   END IF;
 
   IF EXISTS (
@@ -90,7 +90,7 @@ BEGIN
     WHERE e.drawing_id IS NOT NULL AND e.property_id IS NOT NULL
       AND d.property_id IS DISTINCT FROM e.property_id
   ) THEN
-    RAISE EXCEPTION '0055 found a dangling parent reference; no ownership changes were made';
+    RAISE EXCEPTION '0056 found a dangling parent reference; no ownership changes were made';
   END IF;
 
   IF EXISTS (
@@ -148,7 +148,7 @@ BEGIN
     WHERE e.report_order_id IS NOT NULL AND e.property_id IS NOT NULL
       AND r.property_id IS DISTINCT FROM p.id
   ) THEN
-    RAISE EXCEPTION '0055 found conflicting parent ownership; resolve before retrying';
+    RAISE EXCEPTION '0056 found conflicting parent ownership; resolve before retrying';
   END IF;
 END
 $preflight$;
@@ -198,7 +198,7 @@ BEGIN
     UNION ALL SELECT 1 FROM public.proposal_shares WHERE company_id IS NULL
     UNION ALL SELECT 1 FROM public.proposals WHERE company_id IS NULL
     UNION ALL SELECT 1 FROM public.roof_estimates WHERE company_id IS NULL
-  ) THEN RAISE EXCEPTION '0055 ownership backfill incomplete'; END IF;
+  ) THEN RAISE EXCEPTION '0056 ownership backfill incomplete'; END IF;
 END
 $verify$;
 
