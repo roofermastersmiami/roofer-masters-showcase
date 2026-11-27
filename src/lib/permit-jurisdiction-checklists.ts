@@ -159,6 +159,7 @@ export type PermitChecklistRequest = {
   roofingSystem?: RoofingSystem;
   projectKind?: PermitProjectKind;
   folio?: string | null;
+  asOfDate?: string;
 };
 
 export type PermitChecklistResult = {
@@ -166,6 +167,7 @@ export type PermitChecklistResult = {
   items: ChecklistItem[];
   requiredRoofingSections: string[];
   authorityConfirmed: boolean;
+  codeReferenceCurrent: boolean;
   warnings: string[];
 };
 
@@ -184,10 +186,15 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
 
   const warnings: string[] = [profile.authorityWarning];
+  const asOfDate = request.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const codeReferenceCurrent = asOfDate <= profile.codeEditionEffectiveThrough;
+  if (!codeReferenceCurrent) {
+    warnings.push(`This checklist references ${profile.codeEdition}. That reference expired after ${profile.codeEditionEffectiveThrough}; verify the current code edition and updated local forms before using any checklist item.`);
+  }
   if (!request.projectKind || request.projectKind === "unknown") {
     warnings.push("Set the project type so reroof-only documents are not treated as universally required.");
   }
-  let authorityConfirmed = true;
+  let authorityConfirmed = codeReferenceCurrent;
   if (profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id) {
     if (!request.folio?.trim()) {
       authorityConfirmed = false;
@@ -210,7 +217,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   }
 
   const roofSystem = request.roofingSystem ?? "other";
-  const requiredRoofingSections = profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
+  const requiredRoofingSections = !codeReferenceCurrent ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
     : profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id
       ? miamiDadeSections[roofSystem]
@@ -219,13 +226,13 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const allowedIds = profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? new Set(miamiDadeAttachmentIds[roofSystem])
     : new Set(profile.checklist.map((item) => item.id));
-  const items = profile.checklist.filter((item) => allowedIds.has(item.id)).filter((item) => {
+  const items = (codeReferenceCurrent ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
     if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
 
-  return { profile, items, requiredRoofingSections, authorityConfirmed, warnings };
+  return { profile, items, requiredRoofingSections, authorityConfirmed, codeReferenceCurrent, warnings };
 }
 
 export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
