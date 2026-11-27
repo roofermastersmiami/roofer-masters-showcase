@@ -146,6 +146,36 @@ BOUNDARY_SNAP_TOLERANCE_M = float(os.getenv("BOUNDARY_SNAP_TOLERANCE_M", "0.5"))
 # Growth pieces are clipped out of a corridor this wide around each
 # existing valley seam, extended into the ring along its own line.
 VALLEY_GROWTH_CLEARANCE_M = float(os.getenv("VALLEY_GROWTH_CLEARANCE_M", "0.5"))
+# Emission conditioning: the CRM drawing path (detectedFacetsToDrawing ->
+# measureDrawing -> roofDrawingPdf) validates facet boundaries far more
+# strictly than this service's own geometry passes do. Its response schema
+# caps a boundary at 200 lat/lon entries and its drawing schema at 100
+# points per plane; measureDrawing rejects facet pairs overlapping by
+# more than 0.1 sq ft in plan; and its converter snaps cross-facet
+# vertices within 1.0 ft of each other to their midpoint, which folds
+# rings whose vertices sit closer than the snap distance without being
+# the same corner. Densified hull rings (segmentize adds a vertex every
+# metre), snap-pass fallbacks that keep pre-snap geometry, and
+# near-but-not-exactly coincident junction vertices all violated one of
+# those rules on real houses (Miramar's largest facet emitted 202
+# boundary points; Annel's facets carried duplicate points at the
+# converter's precision). _condition_polygons_for_emission therefore
+# reworks the serialized boundary into drawing-ready geometry: valid
+# simple rings, pairwise disjoint, junction vertices exactly shared,
+# no edge shorter than the converter's snap distance, and at most
+# EMISSION_MAX_RING_POINTS vertices per ring.
+EMISSION_MAX_RING_POINTS = int(os.getenv("EMISSION_MAX_RING_POINTS", "96"))
+EMISSION_MIN_EDGE_M = float(os.getenv("EMISSION_MIN_EDGE_M", "0.30"))
+EMISSION_SHORT_EDGE_DEVIATION_M = float(
+    os.getenv("EMISSION_SHORT_EDGE_DEVIATION_M", "0.03")
+)
+EMISSION_SNAP_TOLERANCE_M = 0.3048  # the CRM converter's 1.0 ft vertex snap
+# Final disjointness margin: the last conditioning operation subtracts
+# each facet against its neighbours' ground buffered by this much, so
+# the hairline gap absorbs the centimetre-scale displacement the
+# lat/lon round-trip (7 dp rounding, the converter's own projection
+# constants) can add along a seam before measureDrawing measures it.
+EMISSION_GAP_M = float(os.getenv("EMISSION_GAP_M", "0.02"))
 CACHE_TTL_SECONDS = max(60, int(os.getenv("CACHE_TTL_SECONDS", "86400")))
 MAX_RESPONSE_CACHE = 200
 CANDIDATE_SEARCH_RADIUS_M = 80.0
@@ -199,6 +229,10 @@ def _footprint_match_fields(metadata: dict[str, Any]) -> dict[str, Any]:
         fields["address_point_inside_footprint"] = inside
     if isinstance(distance, (int, float)) and math.isfinite(distance) and distance >= 0:
         fields["address_to_footprint_distance_m"] = round(float(distance), 2)
+    if metadata.get("candidate_id"):
+        fields["candidate_id"] = metadata["candidate_id"]
+    if isinstance(metadata.get("selection"), dict):
+        fields["selection"] = metadata["selection"]
     return fields
 
 
@@ -797,38 +831,18 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
         _, selected_polygon, selected_metadata = selected[0]
         return selected_polygon, selected_metadata
 
-    # A candidate outside the trusted 25 m auto-match radius may still be
-    # the correct building when geocoding lands on the street. Surface it for
-    # explicit user confirmation, never silently accept it.
-    if min(row[0] for row in candidates) > 25.0:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "building_candidate_confirmation_required",
-                "message": "Mapped buildings are more than 25 m from the geocoded address point. Review the outlines and explicitly select the correct building before roof analysis.",
-                "candidate_count": len(candidates),
-                "candidates": [
-                    {
-                        "candidate_id": row[2]["candidate_id"],
-                        "provider": row[2].get("provider"),
-                        "source_id": row[2].get("source_id"),
-                        "area_sqft": row[2]["area_sqft"],
-                        "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
-                        "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
-                        "centroid": row[2]["centroid"],
-                        "polygon_geojson": mapping(row[1]),
-                    }
-                    for row in candidates
-                ],
-            },
-        )
-
-    # Prefer address-point containment, then nearest footprint. If two nearby
-    # structures remain similarly plausible, fail safely instead of using a
-    # neighboring building.
-    # An exact street-line match from the building provider is stronger than
-    # proximity to a geocoder pin that may fall on a driveway. Only use it when
-    # exactly one distinct footprint matches; never break ties by address text.
+    # Hands-off selection (Fredy's rule: address in, report out, no
+    # manual steps, no exceptions). The flow never stops to ask a
+    # person which building is meant: every candidate is scored on
+    # the available evidence — address-point containment, the
+    # provider's own address attribute, parcel membership, distance
+    # from the geocoded point, footprint-area plausibility — and the
+    # best score wins, deterministically (score, then distance, then
+    # area, then candidate id). The basis is recorded on the chosen
+    # candidate's metadata and surfaced in the response, so the pick
+    # is auditable; an explicit footprint_candidate_id still
+    # overrides it. A single exact address-attribute match
+    # short-circuits the pool, as before.
     exact_address_matches = [
         candidate for candidate in candidates
         if candidate[2].get("address_attribute_match") is True
@@ -838,44 +852,50 @@ async def get_footprint(lat: float, lon: float, street_address: str | None = Non
     elif len(exact_address_matches) > 1:
         candidates = exact_address_matches
 
-    candidates.sort(key=lambda row: (
-        not bool(row[2].get("address_attribute_match")),
-        not bool(row[2].get("address_point_inside_footprint")),
-        row[0],
-    ))
-    if len(candidates) > 1:
-        nearest_distance = candidates[0][0]
-        next_distance = candidates[1][0]
-        if (
-            len(exact_address_matches) > 1
-            or (
-                len(exact_address_matches) != 1
-                and next_distance - nearest_distance < 8.0
-                and not candidates[0][2].get("address_point_inside_footprint")
-            )
-        ):
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "ambiguous_building_match",
-                    "message": "Several nearby buildings could match this address pin. Review the candidate outlines and explicitly select the correct building before running roof detection.",
-                    "candidate_count": len(candidates),
-                    "candidates": [
-                        {
-                            "candidate_id": row[2]["candidate_id"],
-                            "provider": row[2].get("provider"),
-                            "source_id": row[2].get("source_id"),
-                            "area_sqft": row[2]["area_sqft"],
-                            "address_point_inside_footprint": row[2]["address_point_inside_footprint"],
-                            "address_to_footprint_distance_m": row[2]["address_to_footprint_distance_m"],
-                            "centroid": row[2]["centroid"],
-                            "polygon_geojson": mapping(row[1]),
-                        }
-                        for row in candidates
-                    ],
-                },
-            )
-    _, polygon, metadata = candidates[0]
+    def _selection_score(
+        candidate: tuple[float, Polygon, dict[str, Any]],
+    ) -> tuple[float, list[str]]:
+        distance_m, _polygon, meta = candidate
+        score = 0.0
+        basis: list[str] = []
+        if meta.get("address_point_inside_footprint"):
+            score += 100.0
+            basis.append("address point inside footprint")
+        if meta.get("address_attribute_match"):
+            score += 80.0
+            basis.append("provider address attribute match")
+        parcel = meta.get("parcel_match")
+        if isinstance(parcel, dict) and parcel.get("status") == "matched":
+            score += 40.0
+            basis.append("parcel membership")
+        score -= min(distance_m, 100.0)
+        basis.append(f"{distance_m:.1f} m from the address point")
+        area = float(meta.get("area_sqft") or 0.0)
+        if 800.0 <= area <= 6000.0:
+            score += 5.0
+            basis.append("typical residential footprint area")
+        return score, basis
+
+    scored = sorted(
+        candidates,
+        key=lambda row: (
+            -_selection_score(row)[0],
+            row[0],
+            -float(row[2].get("area_sqft") or 0.0),
+            str(row[2].get("candidate_id")),
+        ),
+    )
+    _, polygon, metadata = scored[0]
+    best_score, best_basis = _selection_score(scored[0])
+    metadata["selection"] = {
+        "method": "automatic_score",
+        "score": round(best_score, 2),
+        "basis": best_basis,
+        "candidates_considered": len(scored),
+        "runner_up_candidate_id": (
+            scored[1][2].get("candidate_id") if len(scored) > 1 else None
+        ),
+    }
     return polygon, metadata
 
 
@@ -1443,6 +1463,378 @@ def _snap_shared_boundaries(
             record["polygon"] = polygon
         else:
             record["polygon"] = originals[index]
+
+
+def _ring_coords(polygon: Polygon) -> list[tuple[float, float]]:
+    """Exterior ring vertices without the duplicated closing point."""
+    if polygon.is_empty or polygon.geom_type != "Polygon":
+        return []
+    return [(float(x), float(y)) for x, y in polygon.exterior.coords][:-1]
+
+
+def _largest_polygon_part(geometry: Any) -> Polygon | None:
+    parts = _polygon_parts(geometry)
+    if not parts:
+        return None
+    return max(parts, key=lambda part: part.area)
+
+
+def _repaired_polygon(polygon: Polygon) -> Polygon:
+    """The polygon itself when it is one valid simple ring, else its
+    largest valid part (or an empty polygon when nothing survives)."""
+    if polygon.geom_type == "Polygon" and polygon.is_valid and not polygon.is_empty:
+        return polygon
+    repaired = _largest_polygon_part(make_valid(polygon))
+    return repaired if repaired is not None else Polygon()
+
+
+def _resolve_overlaps_largest_first(
+    polygons: list[Polygon],
+    gap_m: float = 0.0,
+) -> list[Polygon]:
+    """Subtract already-claimed ground from each polygon, largest facet
+    first — the same priority the resolution pass uses — with no
+    keep-the-overlap fallback: emitted facets must be pairwise disjoint
+    or the CRM's measureDrawing rejects the drawing outright. With
+    `gap_m`, the claimed ground is buffered by that margin first, so
+    the resolved facets end up separated by a hairline gap instead of
+    merely touching."""
+    from shapely.ops import unary_union
+
+    order = sorted(range(len(polygons)), key=lambda k: -polygons[k].area)
+    claimed: Any = None
+    resolved: list[Polygon] = list(polygons)
+    for index in order:
+        polygon = polygons[index]
+        if claimed is not None:
+            boundary = claimed.buffer(gap_m) if gap_m > 0 else claimed
+            if polygon.intersects(boundary):
+                remainder = _largest_polygon_part(polygon.difference(boundary))
+                if gap_m > 0 and remainder is not None:
+                    # The gap is a hairline, not a scalpel: where the
+                    # buffered subtraction pinches a narrow facet in two
+                    # and the largest-piece rule would amputate a whole
+                    # lobe (Maria's valley facet lost a quarter of its
+                    # area exactly this way), fall back to the
+                    # unbuffered subtraction — touching neighbours are
+                    # acceptable downstream; only overlap is rejected.
+                    plain = _largest_polygon_part(polygon.difference(claimed))
+                    if plain is not None and remainder.area < 0.98 * plain.area:
+                        remainder = plain
+                polygon = remainder if remainder is not None else Polygon()
+        resolved[index] = polygon
+        if not polygon.is_empty:
+            claimed = polygon if claimed is None else unary_union([claimed, polygon])
+    return resolved
+
+
+def _remove_cheapest_vertices(
+    ring: list[tuple[float, float]], cap: int
+) -> list[tuple[float, float]]:
+    """Remove vertices until the ring holds at most `cap` of them, each
+    time removing the vertex whose triangle with its neighbours is
+    smallest — the area-cheapest way to thin a dense ring."""
+    ring = list(ring)
+    while len(ring) > cap and len(ring) > 4:
+        count = len(ring)
+        worst_index, worst_area = -1, math.inf
+        for i in range(count):
+            prev = ring[(i - 1) % count]
+            point = ring[i]
+            nxt = ring[(i + 1) % count]
+            area = abs(
+                (point[0] - prev[0]) * (nxt[1] - prev[1])
+                - (point[1] - prev[1]) * (nxt[0] - prev[0])
+            ) / 2.0
+            if area < worst_area:
+                worst_area, worst_index = area, i
+        del ring[worst_index]
+    return ring
+
+
+def _sparsify_ring(polygon: Polygon) -> Polygon:
+    """Reduce a facet ring to drawing-ready density without moving its
+    area: drop consecutive near-duplicates; when the ring exceeds the
+    vertex cap, simplify with the smallest Douglas-Peucker tolerance
+    that satisfies the cap while costing at most 1% of the facet's area
+    (a larger tolerance can plunge a jagged small-facet ring from a
+    hundred points to a dozen and take real roof with it — Maria's
+    largest facet lost a sixth of its plan area that way); if no
+    tolerance qualifies, thin greedily by cheapest vertex instead.
+    Short edges are removed only when their far vertex is nearly
+    collinear with its neighbours, so cleanup cannot erode a boundary
+    corner by corner."""
+    ring = _ring_coords(polygon)
+    deduped: list[tuple[float, float]] = []
+    for point in ring:
+        if not deduped or math.hypot(
+            point[0] - deduped[-1][0], point[1] - deduped[-1][1]
+        ) > 0.01:
+            deduped.append(point)
+    if (
+        len(deduped) > 1
+        and math.hypot(
+            deduped[0][0] - deduped[-1][0], deduped[0][1] - deduped[-1][1]
+        )
+        <= 0.01
+    ):
+        deduped.pop()
+    if len(deduped) < 3:
+        return polygon
+    base = Polygon(deduped)
+    if not base.is_valid:
+        base = _repaired_polygon(base)
+    if base.is_empty:
+        return polygon
+    base_area = base.area
+    result = base
+    if len(deduped) > EMISSION_MAX_RING_POINTS:
+        result = None
+        for tolerance in (0.02, 0.04, 0.08, 0.16, 0.32):
+            candidate = _largest_polygon_part(
+                base.simplify(tolerance, preserve_topology=True)
+            )
+            if (
+                candidate is not None
+                and not candidate.is_empty
+                and len(_ring_coords(candidate)) <= EMISSION_MAX_RING_POINTS
+                and candidate.area >= 0.99 * base_area
+            ):
+                result = candidate
+                break
+        if result is None:
+            thinned = _remove_cheapest_vertices(deduped, EMISSION_MAX_RING_POINTS)
+            candidate = Polygon(thinned)
+            result = candidate if not candidate.is_empty else _repaired_polygon(candidate)
+            if result.is_empty:
+                result = base
+    ring = _ring_coords(result)
+    # Short-edge cleanup, near-collinear vertices only: an edge shorter
+    # than the converter's snap distance can be folded onto its
+    # neighbours by that snap, but only a vertex that barely deviates
+    # from its neighbours' chord may be dropped for it.
+    changed = True
+    while changed and len(ring) > 4:
+        changed = False
+        count = len(ring)
+        for i in range(count):
+            a = ring[i]
+            b = ring[(i + 1) % count]
+            if math.hypot(b[0] - a[0], b[1] - a[1]) >= EMISSION_MIN_EDGE_M:
+                continue
+            prev = ring[(i - 1) % count]
+            nxt = ring[(i + 2) % count]
+            chord = (nxt[0] - prev[0], nxt[1] - prev[1])
+            chord_len = math.hypot(*chord)
+            deviation = (
+                abs(chord[0] * (b[1] - prev[1]) - chord[1] * (b[0] - prev[0]))
+                / chord_len
+                if chord_len > 1e-9
+                else 0.0
+            )
+            if deviation <= EMISSION_SHORT_EDGE_DEVIATION_M:
+                del ring[(i + 1) % count]
+                changed = True
+                break
+    if len(ring) > EMISSION_MAX_RING_POINTS:
+        ring = _remove_cheapest_vertices(ring, EMISSION_MAX_RING_POINTS)
+    rebuilt = Polygon(ring)
+    if rebuilt.is_empty or not rebuilt.is_valid:
+        rebuilt = _repaired_polygon(rebuilt)
+    return rebuilt if not rebuilt.is_empty else result
+
+
+def _conflate_junction_vertices(
+    polygons: list[Polygon],
+) -> list[Polygon]:
+    """Move cross-facet vertices that lie within the CRM converter's
+    snap distance of each other to their cluster centroid, so junctions
+    the facets share are EXACTLY coincident and the converter's snap —
+    any variant of it — moves nothing there.
+
+    Clusters are DIAMETER-CAPPED: two clusters merge only when every
+    cross pair stays within the snap distance, so a cluster never spans
+    more than one physical corner. Plain transitive clustering chains
+    along a shared seam — each seam vertex within reach of the next —
+    and collapses both facets' seam sides onto a single centroid
+    (Francisco's largest facet lost its whole ring that way). Pairs are
+    considered closest-first, so the most confident matches claim their
+    vertices before looser ones are tested against the cap. A facet
+    whose rebuilt ring comes back empty or gutted keeps its
+    pre-conflation polygon."""
+    rings = [_ring_coords(polygon) for polygon in polygons]
+    nodes = [
+        (facet_index, vertex_index)
+        for facet_index, ring in enumerate(rings)
+        for vertex_index in range(len(ring))
+    ]
+    if not nodes:
+        return polygons
+    pairs: list[tuple[float, tuple[int, int], tuple[int, int]]] = []
+    for a in range(len(nodes)):
+        for b in range(a + 1, len(nodes)):
+            first, second = nodes[a], nodes[b]
+            if first[0] == second[0]:
+                continue
+            p = rings[first[0]][first[1]]
+            q = rings[second[0]][second[1]]
+            distance = math.hypot(p[0] - q[0], p[1] - q[1])
+            if distance <= EMISSION_SNAP_TOLERANCE_M:
+                pairs.append((distance, first, second))
+    pairs.sort(key=lambda item: item[0])
+    parent = {node: node for node in nodes}
+    members_of: dict[tuple[int, int], list[tuple[int, int]]] = {
+        node: [node] for node in nodes
+    }
+
+    def find(node: tuple[int, int]) -> tuple[int, int]:
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    for _distance, first, second in pairs:
+        root_a, root_b = find(first), find(second)
+        if root_a == root_b:
+            continue
+        merged = members_of[root_a] + members_of[root_b]
+        if all(
+            math.hypot(
+                rings[f1][v1][0] - rings[f2][v2][0],
+                rings[f1][v1][1] - rings[f2][v2][1],
+            )
+            <= EMISSION_SNAP_TOLERANCE_M
+            for f1, v1 in merged
+            for f2, v2 in merged
+        ):
+            parent[root_a] = root_b
+            members_of[root_b] = merged
+            del members_of[root_a]
+    for members in members_of.values():
+        if len(members) < 2:
+            continue
+        centroid_x = sum(rings[f][v][0] for f, v in members) / len(members)
+        centroid_y = sum(rings[f][v][1] for f, v in members) / len(members)
+        for f, v in members:
+            rings[f][v] = (centroid_x, centroid_y)
+    rebuilt: list[Polygon] = []
+    for index, ring in enumerate(rings):
+        deduped = []
+        for point in ring:
+            if not deduped or math.hypot(
+                point[0] - deduped[-1][0], point[1] - deduped[-1][1]
+            ) > 0.01:
+                deduped.append(point)
+        if (
+            len(deduped) > 1
+            and math.hypot(
+                deduped[0][0] - deduped[-1][0], deduped[0][1] - deduped[-1][1]
+            )
+            <= 0.01
+        ):
+            deduped.pop()
+        candidate = (
+            _repaired_polygon(Polygon(deduped)) if len(deduped) >= 3 else Polygon()
+        )
+        original = polygons[index]
+        if candidate.is_empty or candidate.area < 0.75 * original.area:
+            candidate = original
+        rebuilt.append(candidate)
+    return rebuilt
+
+
+def _tidy_ring(polygon: Polygon) -> Polygon:
+    """Drop consecutive vertices closer than 2 cm — the overlap
+    subtraction's cut points can land on top of an existing vertex, and
+    after the millimetre rounding at emission (and the lat/lon grid
+    beyond it) such a pair serializes as a duplicate point, which the
+    CRM converter rejects outright."""
+    ring = _ring_coords(polygon)
+    if len(ring) < 3:
+        return polygon
+    deduped: list[tuple[float, float]] = []
+    for point in ring:
+        if not deduped or math.hypot(
+            point[0] - deduped[-1][0], point[1] - deduped[-1][1]
+        ) > 0.02:
+            deduped.append(point)
+    if (
+        len(deduped) > 1
+        and math.hypot(
+            deduped[0][0] - deduped[-1][0], deduped[0][1] - deduped[-1][1]
+        )
+        <= 0.02
+    ):
+        deduped.pop()
+    if len(deduped) < 3 or len(deduped) == len(ring):
+        return polygon
+    rebuilt = Polygon(deduped)
+    if rebuilt.is_empty or not rebuilt.is_valid:
+        rebuilt = _repaired_polygon(rebuilt)
+    return rebuilt if not rebuilt.is_empty else polygon
+
+
+def _condition_polygons_for_emission(
+    polygons: list[Polygon],
+) -> list[Polygon]:
+    """Rework fitted facet polygons into geometry the CRM drawing path
+    accepts as-is (see the EMISSION_* constants): valid disjoint rings
+    under the drawing schema's vertex cap, junction vertices exactly
+    shared, no edge short enough for the converter's vertex snap to
+    fold. This runs on the SERIALIZED boundary only, after the
+    service's areas and edge totals have been computed from the fitted
+    polygons — conditioning is a rendering of the measured facets for
+    the drawing consumer, never a re-measurement: the reported numbers
+    stay the fitter's own. (An earlier design conditioned the fitted
+    polygons themselves; every conditioning variant then moved some
+    house's validated area or edge split — Maria's fragmented facets
+    three times in three variants.) The overlap subtraction may
+    legitimately take a large share of a facet that was double-counted
+    against a bigger neighbour — disjointness is a hard requirement,
+    not a fidelity loss — so the per-facet guard only rejects a
+    conditioned polygon that is empty, invalid, grown past its fitted
+    area, or trimmed below the pipeline's own minimum remaining
+    fraction (MIN_FACET_REMAINING_FRACTION): those are the signatures
+    of conditioning destroying a facet, and such a facet keeps its
+    fitted ring instead."""
+    if not polygons:
+        return polygons
+    originals = list(polygons)
+    # A single pass, in a fixed order — deliberately NOT a loop.
+    # Sparsify and conflate first (they only move or drop vertices),
+    # then decide disjointness LAST with one largest-first subtraction:
+    # conflation moves vertices, so any subtraction done before it can
+    # be undone by it. An earlier looped design re-ran the subtraction
+    # after every conflation; on Maria's fragmented facets each pass
+    # treated the previous pass's centroid drift as new overlap and cut
+    # again, eroding one facet by more than a quarter of its area over
+    # three cycles. One pass leaves the facets separated by the
+    # EMISSION_GAP_M hairline, and a ring tidy then removes any
+    # near-duplicate consecutive vertices the cut points left behind.
+    conditioned = [_repaired_polygon(polygon) for polygon in originals]
+    conditioned = [
+        _sparsify_ring(polygon) if not polygon.is_empty else polygon
+        for polygon in conditioned
+    ]
+    conditioned = _conflate_junction_vertices(conditioned)
+    conditioned = [_repaired_polygon(polygon) for polygon in conditioned]
+    conditioned = _resolve_overlaps_largest_first(conditioned, gap_m=EMISSION_GAP_M)
+    conditioned = [
+        _tidy_ring(_repaired_polygon(polygon)) for polygon in conditioned
+    ]
+    result: list[Polygon] = []
+    for index, original in enumerate(originals):
+        candidate = conditioned[index]
+        if (
+            candidate.is_empty
+            or not candidate.is_valid
+            or candidate.area < MIN_FACET_REMAINING_FRACTION * original.area - 1e-9
+            or candidate.area > 1.10 * original.area + 1e-9
+        ):
+            result.append(original)
+        else:
+            result.append(candidate)
+    return result
 
 
 def _plane_normal(a: float, b: float) -> np.ndarray:
@@ -2326,6 +2718,325 @@ def _compute_edge_lengths(
     return {key: round(value, 1) for key, value in totals.items()}
 
 
+def _drawing_outline(
+    footprint: Polygon,
+    fitted_polygons: list[Polygon],
+    footprint_provider: str | None,
+) -> Polygon:
+    """The roof's outer boundary for the drawing: the footprint itself
+    for roof-outline providers (their polygon IS the roof outline);
+    for wall-outline providers, the footprint offset outward by the
+    eave overhang. The offset distance is solved so the offset
+    outline's area matches the fitted facets' union area — the
+    fitter's own evidence of how far the roof extends past the walls
+    — which keeps the drawing's facet areas in line with the fitted
+    ones. The offset keeps the footprint's own straight edges (mitre
+    joins), so the drawing's perimeter is the survey geometry a
+    roofer would trace, at the fitted eave line."""
+    if footprint_provider in ROOF_OUTLINE_PROVIDERS:
+        return footprint
+    from shapely.geometry import JOIN_STYLE
+    from shapely.ops import unary_union
+
+    union = unary_union([p for p in fitted_polygons if not p.is_empty])
+    target = union.area
+
+    def offset(distance: float) -> Polygon | None:
+        buffered = footprint.buffer(
+            distance, join_style=JOIN_STYLE.mitre, mitre_limit=3.0
+        )
+        largest = _largest_polygon_part(buffered)
+        if largest is None or not largest.is_valid:
+            largest = _largest_polygon_part(footprint.buffer(distance))
+        return largest
+
+    low, high = 0.3, OVERHANG_RING_M
+    best = offset(low)
+    if best is None:
+        return footprint
+    if best.area < target:
+        # Bisect for the distance whose outline matches the fitted
+        # union's area (buffer area grows monotonically with distance).
+        for _ in range(8):
+            mid = (low + high) / 2
+            candidate = offset(mid)
+            if candidate is None:
+                break
+            best = candidate
+            if candidate.area < target:
+                low = mid
+            else:
+                high = mid
+    return best
+
+def _partition_facets_to_outline(
+    fitted_polygons: list[Polygon], outline: Polygon
+) -> list[Polygon]:
+    """Tile the drawing outline with the fitted facets: clip each
+    facet to the outline, resolve overlaps largest-first, then fill
+    every remaining gap of the outline with the facet it borders
+    longest (the strip a hull under-read along an eave belongs to the
+    facet behind that eave). The result covers the outline exactly —
+    no gaps, no overlaps, no hull overshoot past the eave line."""
+    from shapely.ops import unary_union
+
+    clipped: list[Polygon] = []
+    for polygon in fitted_polygons:
+        if polygon.is_empty or not polygon.is_valid:
+            clipped.append(Polygon())
+            continue
+        region = _largest_polygon_part(polygon.intersection(outline))
+        clipped.append(region if region is not None else Polygon())
+    resolved = _resolve_overlaps_largest_first(clipped, gap_m=0.0)
+    covered = unary_union([p for p in resolved if not p.is_empty])
+    gap = outline.difference(covered)
+    pieces = sorted(_polygon_parts(gap), key=lambda part: -part.area)
+    for piece in pieces:
+        best_index = -1
+        best_contact = 0.0
+        for index, region in enumerate(resolved):
+            if region.is_empty:
+                continue
+            contact = piece.intersection(region.buffer(0.02)).area / 0.02
+            if contact > best_contact:
+                best_contact = contact
+                best_index = index
+        if best_index < 0:
+            # No bordering facet (an island gap): nearest facet wins.
+            best_distance = math.inf
+            for index, region in enumerate(resolved):
+                if region.is_empty:
+                    continue
+                distance = piece.centroid.distance(region)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = index
+        if best_index < 0:
+            continue
+        merged = _largest_polygon_part(
+            unary_union([resolved[best_index], piece])
+        )
+        if merged is not None:
+            resolved[best_index] = merged
+    return resolved
+
+
+def _straighten_partition_boundaries(
+    polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+) -> list[Polygon]:
+    """Straighten the partition's boundaries into a roofer's linework.
+
+    Two passes. First, each facet polygon is Douglas-Peucker
+    simplified (topology-preserving): hull wobble and dense sample
+    vertices along every edge collapse to the edge's true straight
+    runs, on seams and perimeter alike. Second, seam segments are
+    snapped onto the intersection line of the two facets' fitted
+    planes: wherever a segment in one facet's simplified ring matches
+    a segment in a neighbour's ring (same endpoints), both copies are
+    replaced by that segment's projection onto the pair's
+    plane-intersection line — so a ridge, hip or valley in the
+    drawing is literally the two planes' intersection, drawn once,
+    identically, for both facets. A junction point is placed by the
+    first pair that claims it; later pairs keep the placed point (the
+    centimetre-scale disagreement between two pairs' lines at a
+    triple junction is below drawing precision). Facets whose result
+    is invalid or drifts from the simplified area keep the simplified
+    polygon."""
+    simplified: list[Polygon] = []
+    for polygon in polygons:
+        if polygon.is_empty:
+            simplified.append(polygon)
+            continue
+        candidate = _largest_polygon_part(
+            polygon.simplify(0.15, preserve_topology=True)
+        )
+        if (
+            candidate is None
+            or not candidate.is_valid
+            or abs(candidate.area - polygon.area) > max(0.05 * polygon.area, 0.5)
+        ):
+            candidate = polygon
+        simplified.append(candidate)
+
+    rings: list[list[tuple[float, float]]] = [
+        _ring_coords(polygon) if not polygon.is_empty else []
+        for polygon in simplified
+    ]
+
+    def close(a: tuple[float, float], b: tuple[float, float]) -> bool:
+        return math.hypot(a[0] - b[0], a[1] - b[1]) <= 0.05
+
+    placed: dict[tuple[float, float], tuple[float, float]] = {}
+
+    def placed_key(point: tuple[float, float]) -> tuple[float, float]:
+        return (round(point[0], 2), round(point[1], 2))
+
+    # Collect segments: (facet, index) -> (a, b) with ring[index] = a.
+    segments: list[tuple[int, int, tuple[float, float], tuple[float, float]]] = []
+    for facet, ring in enumerate(rings):
+        for index in range(len(ring)):
+            segments.append(
+                (facet, index, ring[index], ring[(index + 1) % len(ring)])
+            )
+    replacements: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]] = {}
+    for left in range(len(segments)):
+        facet_a, index_a, a0, a1 = segments[left]
+        if (facet_a, index_a) in replacements:
+            continue
+        for right in range(left + 1, len(segments)):
+            facet_b, index_b, b0, b1 = segments[right]
+            if facet_a == facet_b or (facet_b, index_b) in replacements:
+                continue
+            if not (
+                (close(a0, b0) and close(a1, b1))
+                or (close(a0, b1) and close(a1, b0))
+            ):
+                continue
+            # A matched seam segment: project onto the pair's
+            # plane-intersection line.
+            (aa, ba, ca), (ab, bb, cb) = (
+                plane_models[facet_a],
+                plane_models[facet_b],
+            )
+            la, lb, lc = aa - ab, ba - bb, ca - cb
+            norm = math.hypot(la, lb)
+            if norm <= 1e-6:
+                continue
+            norm_sq = la * la + lb * lb
+
+            def project(
+                point: tuple[float, float],
+            ) -> tuple[float, float] | None:
+                key = placed_key(point)
+                if key in placed:
+                    return placed[key]
+                offset = (la * point[0] + lb * point[1] + lc) / norm_sq
+                if abs(offset) * norm > 0.9:
+                    return None
+                projected = (
+                    point[0] - offset * la,
+                    point[1] - offset * lb,
+                )
+                placed[key] = projected
+                return projected
+
+            mid = ((a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2)
+            if abs(la * mid[0] + lb * mid[1] + lc) / norm > 1.0:
+                continue
+            new_a0 = project(a0)
+            new_a1 = project(a1)
+            if new_a0 is None or new_a1 is None:
+                continue
+            replacements[(facet_a, index_a)] = (new_a0, new_a1)
+            replacements[(facet_b, index_b)] = (
+                (new_a0, new_a1) if close(a0, b0) else (new_a1, new_a0)
+            )
+            break
+
+    # Junction consensus: a vertex moved by one pair's projection is
+    # moved identically in every ring that carries it, so a triple
+    # junction stays a single point across all its facets.
+    moves: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for (facet, index), (new_a, new_b) in replacements.items():
+        ring = rings[facet]
+        moves.append((ring[index], new_a))
+        moves.append((ring[(index + 1) % len(ring)], new_b))
+
+    result: list[Polygon] = []
+    for facet, ring in enumerate(rings):
+        if not ring:
+            result.append(simplified[facet])
+            continue
+        rebuilt = list(ring)
+        for index in range(len(ring)):
+            replacement = replacements.get((facet, index))
+            if replacement is not None:
+                rebuilt[index] = replacement[0]
+                rebuilt[(index + 1) % len(ring)] = replacement[1]
+        for index, point in enumerate(rebuilt):
+            for old, new in moves:
+                if math.hypot(point[0] - new[0], point[1] - new[1]) <= 0.01:
+                    break
+                if math.hypot(point[0] - old[0], point[1] - old[1]) <= 0.05:
+                    rebuilt[index] = new
+                    break
+        candidate = Polygon(rebuilt)
+        base = simplified[facet]
+        if (
+            candidate.is_empty
+            or not candidate.is_valid
+            or abs(candidate.area - base.area) > max(0.05 * base.area, 0.5)
+        ):
+            result.append(base)
+        else:
+            result.append(candidate)
+    return result
+
+def _drawing_partition(
+    fitted_polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    footprint: Polygon,
+    footprint_provider: str | None,
+) -> tuple[list[Polygon], bool]:
+    """The drawing's facet geometry: the fitted facets re-rendered as
+    an exact partition of the roof outline with straight shared
+    boundaries (see _drawing_outline, _partition_facets_to_outline,
+    _straighten_partition_boundaries). This is a RENDERING of the
+    fitted facets for the sketch — the service's reported areas,
+    pitches and edge totals are computed from the fitted polygons
+    themselves and never from this partition. Any failure or sanity
+    breach falls back to the fitted polygons unchanged, so the drawing
+    can degrade to hull geometry but never break the response.
+
+    The boolean reports whether EVERY facet's drawing polygon came
+    from the partition (no fitted-polygon fallback anywhere): the
+    response advertises it as `drawing_ready`, and the CRM converter
+    trusts flagged geometry enough to skip its own snap/trim surgery,
+    which would otherwise introduce micro-defects (junction spikes,
+    sliver overlaps) into an already exact tiling."""
+    try:
+        outline = _drawing_outline(footprint, fitted_polygons, footprint_provider)
+        partition = _partition_facets_to_outline(fitted_polygons, outline)
+        from shapely.ops import unary_union
+
+        fitted_union = unary_union(
+            [p for p in fitted_polygons if not p.is_empty]
+        )
+        partition_union = unary_union([p for p in partition if not p.is_empty])
+        if (
+            fitted_union.area <= 0
+            or abs(partition_union.area - fitted_union.area)
+            > 0.10 * fitted_union.area
+        ):
+            return fitted_polygons, False
+        straightened = _straighten_partition_boundaries(partition, plane_models)
+        # Snapping seams onto plane-intersection lines can push a
+        # junction past the outline (the projection answers to the
+        # planes, not to the eave line), leaving a facet with a small
+        # overshoot flap outside the roof. Re-tile the straightened
+        # polygons against the outline: every input edge is already
+        # straight, and boolean ops on straight-edged polygons keep
+        # them straight, so the drawing keeps its clean seams and
+        # regains exact tiling.
+        straightened = _partition_facets_to_outline(straightened, outline)
+        result: list[Polygon] = []
+        fully_partitioned = True
+        for fitted, region in zip(fitted_polygons, straightened):
+            # A facet the partition erased (fully covered by a larger
+            # neighbour inside the outline) keeps its fitted polygon —
+            # dropping a measured facet from the drawing would be worse
+            # than the overlap it causes.
+            if region.is_empty:
+                fully_partitioned = False
+                result.append(fitted)
+            else:
+                result.append(region)
+        return result, fully_partitioned
+    except Exception:  # noqa: BLE001 — drawing geometry must never break a response
+        return fitted_polygons, False
+
+
 def _facets_from_local_points(
     unique_points: np.ndarray,
     polygon: Polygon,
@@ -2333,7 +3044,7 @@ def _facets_from_local_points(
     from_local: Transformer,
     ring_points: np.ndarray | None = None,
     footprint_provider: str | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, float] | None]:
+) -> tuple[list[dict[str, Any]], dict[str, float] | None, bool]:
     """Fit roof planes to deduplicated local-metric points and express each
     facet boundary back in lat/lon with modeled elevations. Ring points
     (already in local coordinates) never enter fitting; they only evidence
@@ -2349,20 +3060,309 @@ def _facets_from_local_points(
     edge_lengths = _compute_edge_lengths(
         raw_facets, frozen_pair_classes=pair_classes
     )
+    # Serialize the boundary from drawing-conditioned copies of the
+    # facet rings (see _condition_polygons_for_emission): the reported
+    # areas, pitches and edge totals above all come from the fitted
+    # geometry, and only the lat/lon rendering of the rings is
+    # conditioned, so the CRM drawing path accepts it as emitted. The
+    # rendering itself is the exact-shape partition of the roof
+    # outline (see _drawing_partition): the sketch shows the footprint
+    # outline tiled by the facets with straight plane-intersection
+    # seams, not LiDAR hull traces.
+    fitted_polygons = [Polygon(facet["boundary_xy"]) for facet in raw_facets]
+    drawing_polygons, drawing_ready = _drawing_partition(
+        fitted_polygons,
+        [
+            tuple(facet["plane_model"]["z_equals_ax_plus_by_plus_c"])
+            for facet in raw_facets
+        ],
+        footprint_local,
+        footprint_provider,
+    )
+    boundary_polygons = _condition_polygons_for_emission(drawing_polygons)
     all_facets: list[dict[str, Any]] = []
-    for facet in raw_facets:
+    for facet, boundary_polygon in zip(raw_facets, boundary_polygons):
         facet["id"] = f"facet-{len(all_facets) + 1}"
         model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        fitted_ring = facet.pop("boundary_xy")
+        ring = _ring_coords(boundary_polygon) if not boundary_polygon.is_empty else []
+        if len(ring) < 3:
+            # Conditioning produced nothing usable for this facet (the
+            # per-facet guard normally prevents this); fall back to the
+            # fitted ring rather than emit a degenerate boundary. The
+            # fitted ring carries its closing point; drop it here — it
+            # is re-appended below in lat/lon form.
+            ring = [tuple(point) for point in fitted_ring[:-1]]
         facet["boundary_latlon"] = []
-        for xy in facet.pop("boundary_xy"):
+        for xy in ring:
             lon, lat = from_local.transform(xy[0], xy[1])
+            rounded_lat, rounded_lon = round(lat, 7), round(lon, 7)
+            # No consecutive duplicates at emission precision (the
+            # converter rejects them); a vertex that rounds onto its
+            # predecessor carries no geometry.
+            if (
+                facet["boundary_latlon"]
+                and facet["boundary_latlon"][-1][0] == rounded_lat
+                and facet["boundary_latlon"][-1][1] == rounded_lon
+            ):
+                continue
             facet["boundary_latlon"].append([
-                round(lat, 7),
-                round(lon, 7),
+                rounded_lat,
+                rounded_lon,
                 round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
             ])
+        # The schema's ring is closed: repeat the first point at the end.
+        if facet["boundary_latlon"]:
+            facet["boundary_latlon"].append(facet["boundary_latlon"][0])
         all_facets.append(facet)
-    return all_facets, edge_lengths
+    # Verify the serialized rings survive the consumer's own
+    # re-projection (see _repair_boundaries_for_converter).
+    _repair_boundaries_for_converter(
+        all_facets,
+        float(polygon.centroid.y),
+        float(polygon.centroid.x),
+        to_local,
+    )
+    return all_facets, edge_lengths, drawing_ready
+
+
+def _repair_boundaries_for_converter(
+    facets: list[dict[str, Any]],
+    origin_lat: float,
+    origin_lon: float,
+    to_local: Transformer,
+) -> None:
+    """Final validity pass over the serialized boundaries, in the CRM
+    converter's own frame.
+
+    Conditioning works in this service's projected CRS, but the
+    consumer re-projects the lat/lon ring (rounded to 7 dp) through
+    its own fixed constants (111320/110540 m per degree, feet). That
+    round-trip can push a vertex across a nearby edge where a facet
+    boundary runs through a narrow neck — Miramar's largest facet
+    arrived with a self-crossing spike between two near-touching
+    edges, which the drawing path rejects. So each emitted ring is
+    re-projected exactly as the converter projects it, and any ring
+    that is invalid there, or that overlaps a larger neighbour there
+    by more than a sliver, is repaired in that frame (largest valid
+    part; overlaps trimmed largest-first with a centimetre margin)
+    and re-serialized, with elevations recomputed on the facet's
+    plane. Facets that pass untouched keep their serialized ring
+    byte-for-byte."""
+    feet_per_degree_lon = 111320.0 * math.cos(math.radians(origin_lat)) / 0.3048
+    feet_per_degree_lat = 110540.0 / 0.3048
+
+    def to_feet(lat: float, lon: float) -> tuple[float, float]:
+        return (
+            (lon - origin_lon) * feet_per_degree_lon,
+            (origin_lat - lat) * feet_per_degree_lat,
+        )
+
+    def to_latlon(x_ft: float, z_ft: float) -> tuple[float, float]:
+        return (
+            origin_lat - z_ft / feet_per_degree_lat,
+            origin_lon + x_ft / feet_per_degree_lon,
+        )
+
+    projected: list[Polygon] = []
+    for facet in facets:
+        ring = [to_feet(lat, lon) for lat, lon, _elev in facet["boundary_latlon"][:-1]]
+        projected.append(Polygon(ring))
+
+    # Sanitation: partition junctions can leave a vertex smeared into
+    # a micro-cluster (several points a centimetre apart at one
+    # corner) or a spike (the ring returns to within millimetres of
+    # an earlier vertex). The converter rejects both (duplicate-point
+    # check; edge-crossing check). Merge every vertex within 0.25 ft
+    # of another — across AND within rings, diameter-capped, to the
+    # cluster centroid, identically in every ring that carries it —
+    # then drop cyclically-consecutive duplicates. On partition
+    # geometry (sparse rings, real vertices feet apart) this can only
+    # ever merge true junction smears. Facets whose ring changed are
+    # re-serialized below even when no repair was needed.
+    dirty: set[int] = set()
+    vertex_refs: list[tuple[int, int]] = []
+    vertex_points: list[tuple[float, float]] = []
+    rings_ft: list[list[tuple[float, float]]] = []
+    for facet_index, polygon in enumerate(projected):
+        ring = _ring_coords(polygon)
+        rings_ft.append(ring)
+        for vertex_index, point in enumerate(ring):
+            vertex_refs.append((facet_index, vertex_index))
+            vertex_points.append(point)
+    parent = list(range(len(vertex_points)))
+
+    def find_root(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    pairs: list[tuple[float, int, int]] = []
+    for a in range(len(vertex_points)):
+        for b in range(a + 1, len(vertex_points)):
+            distance = math.hypot(
+                vertex_points[a][0] - vertex_points[b][0],
+                vertex_points[a][1] - vertex_points[b][1],
+            )
+            if distance <= 0.25:
+                pairs.append((distance, a, b))
+    pairs.sort()
+    members: dict[int, list[int]] = {i: [i] for i in range(len(vertex_points))}
+    for _distance, a, b in pairs:
+        root_a, root_b = find_root(a), find_root(b)
+        if root_a == root_b:
+            continue
+        merged = members[root_a] + members[root_b]
+        if all(
+            math.hypot(
+                vertex_points[i][0] - vertex_points[j][0],
+                vertex_points[i][1] - vertex_points[j][1],
+            )
+            <= 0.25
+            for i in merged
+            for j in merged
+        ):
+            parent[root_a] = root_b
+            members[root_b] = merged
+            del members[root_a]
+    centroids: dict[int, tuple[float, float]] = {}
+    for root, cluster in members.items():
+        if len(cluster) > 1:
+            centroids[root] = (
+                sum(vertex_points[i][0] for i in cluster) / len(cluster),
+                sum(vertex_points[i][1] for i in cluster) / len(cluster),
+            )
+    ref_root = {ref: find_root(i) for i, ref in enumerate(vertex_refs)}
+    for facet_index, ring in enumerate(rings_ft):
+        rewritten: list[tuple[float, float]] = []
+        for vertex_index, point in enumerate(ring):
+            centroid = centroids.get(ref_root[(facet_index, vertex_index)])
+            rewritten.append(centroid if centroid is not None else point)
+        # Drop every vertex that repeats an earlier kept one within
+        # a centimetre — consecutive duplicates from the merge above,
+        # and spikes (A -> B -> A'), which the converter's
+        # duplicate-point check rejects just the same. The validity
+        # check below keeps the original ring if dropping a repeat
+        # would break a genuinely pinched facet.
+        deduped: list[tuple[float, float]] = []
+        for point in rewritten:
+            if any(
+                math.hypot(point[0] - kept[0], point[1] - kept[1]) <= 0.01
+                for kept in deduped
+            ):
+                continue
+            deduped.append(point)
+        if len(deduped) < 3:
+            continue
+        changed = len(deduped) != len(ring) or any(
+            math.hypot(p[0] - q[0], p[1] - q[1]) > 0.001
+            for p, q in zip(deduped, ring)
+        )
+        if not changed:
+            continue
+        candidate = Polygon(deduped)
+        if not candidate.is_valid:
+            largest = _largest_polygon_part(make_valid(candidate))
+            candidate = largest if largest is not None else candidate
+        if candidate.is_empty or not candidate.is_valid:
+            continue
+        projected[facet_index] = candidate
+        dirty.add(facet_index)
+
+    order = sorted(range(len(facets)), key=lambda k: -projected[k].area)
+    accepted: list[Polygon] = list(projected)
+    claimed: Any = None
+    for index in order:
+        polygon = projected[index]
+        repaired = polygon
+        try:
+            if not repaired.is_valid:
+                largest = _largest_polygon_part(make_valid(repaired))
+                repaired = largest if largest is not None else repaired
+            if (
+                claimed is not None
+                and repaired.is_valid
+                and repaired.intersects(claimed.buffer(0.03))
+            ):
+                overlap = repaired.intersection(claimed).area
+                if overlap > 0.05:
+                    remainder = _largest_polygon_part(
+                        repaired.difference(claimed.buffer(0.03))
+                    )
+                    if remainder is not None and not remainder.is_empty:
+                        # Same anti-amputation guard as the metric-frame
+                        # resolver: a buffered cut that splits the facet
+                        # and drops a lobe loses to the unbuffered cut.
+                        plain = _largest_polygon_part(repaired.difference(claimed))
+                        if plain is not None and remainder.area < 0.98 * plain.area:
+                            remainder = plain
+                        repaired = remainder
+        except Exception:  # noqa: BLE001 — repair is best-effort only
+            # A partition facet with a narrow neck can round-trip into
+            # a shape GEOS refuses to boolean (side-location conflict).
+            # The repair exists to help the converter; it must never
+            # take the whole measurement down with it — the facet
+            # keeps its serialized ring and the converter's own
+            # trim remains as the next line of defence.
+            repaired = polygon
+        accepted[index] = repaired
+        if not repaired.is_empty and repaired.is_valid:
+            from shapely.ops import unary_union
+
+            claimed = repaired if claimed is None else unary_union([claimed, repaired])
+    def serialize(polygon: Polygon, facet: dict[str, Any]) -> list[list[float]]:
+        model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        boundary: list[list[float]] = []
+        for x_ft, z_ft in _ring_coords(polygon):
+            lat, lon = to_latlon(x_ft, z_ft)
+            rounded_lat, rounded_lon = round(lat, 7), round(lon, 7)
+            # Validity repairs (make_valid, difference) leave cut
+            # vertices millimetres apart along a pinched waist; at the
+            # 7 dp emission grid they serialize as consecutive
+            # duplicate points, which the converter rejects outright.
+            # Such a point carries no geometry — drop it.
+            if boundary and boundary[-1][0] == rounded_lat and boundary[-1][1] == rounded_lon:
+                continue
+            local_x, local_y = to_local.transform(lon, lat)
+            boundary.append([
+                rounded_lat,
+                rounded_lon,
+                round(model_a * local_x + model_b * local_y + model_c, 3),
+            ])
+        if (
+            len(boundary) > 1
+            and boundary[-1][0] == boundary[0][0]
+            and boundary[-1][1] == boundary[0][1]
+        ):
+            boundary.pop()
+        if len(boundary) >= 3:
+            boundary.append(boundary[0])
+        return boundary
+
+    for index, facet in enumerate(facets):
+        if accepted[index] is projected[index] and index not in dirty:
+            boundary = facet["boundary_latlon"]
+        else:
+            boundary = serialize(accepted[index], facet)
+        # Verify the round trip, for every facet: a repair can be
+        # valid in this frame yet serialize into a self-crossing ring
+        # — quantizing a hairline waist to the 7 dp grid pushes one
+        # edge across the other (Ave148's largest facet). If the
+        # emitted ring is not a valid polygon here, rebuild it from
+        # the valid largest part of the round-tripped geometry
+        # itself, whose boundaries are genuine cuts, not hairlines.
+        ring_ft = (
+            [to_feet(lat, lon) for lat, lon, _e in boundary[:-1]]
+            if len(boundary) >= 4
+            else []
+        )
+        if len(ring_ft) >= 3 and not Polygon(ring_ft).is_valid:
+            largest = _largest_polygon_part(make_valid(Polygon(ring_ft)))
+            if largest is not None and not largest.is_empty:
+                boundary = serialize(largest, facet)
+        if len(boundary) >= 4:
+            facet["boundary_latlon"] = boundary
 
 
 def _read_lidar_facets(
@@ -2481,13 +3481,14 @@ def _read_lidar_facets(
         if tile_ring_points
         else np.empty((0, 3))
     )
-    all_facets, edge_lengths = _facets_from_local_points(
+    all_facets, edge_lengths, drawing_ready = _facets_from_local_points(
         unique_points, polygon, to_local, from_local,
         ring_points=unique_ring_points, footprint_provider=footprint_provider,
     )
 
     return all_facets, {
         "edge_lengths_lf": edge_lengths,
+        "drawing_ready": drawing_ready,
         "footprint_provider": footprint_provider,
         "roof_outline_footprint": footprint_provider in ROOF_OUTLINE_PROVIDERS,
         "overhang_ring_m": OVERHANG_RING_M,
@@ -2714,12 +3715,13 @@ def _tnm_points_local(
         if tile_ring_points
         else np.empty((0, 3))
     )
-    all_facets, edge_lengths = _facets_from_local_points(
+    all_facets, edge_lengths, drawing_ready = _facets_from_local_points(
         unique_points, polygon, to_local, from_local,
         ring_points=unique_ring_points, footprint_provider=footprint_provider,
     )
     return all_facets, {
         "edge_lengths_lf": edge_lengths,
+        "drawing_ready": drawing_ready,
         "footprint_provider": footprint_provider,
         "roof_outline_footprint": footprint_provider in ROOF_OUTLINE_PROVIDERS,
         "overhang_ring_m": OVERHANG_RING_M,
@@ -2829,6 +3831,15 @@ async def _read_lidar_facets_tnm(
     for item in tiles:
         url = str(item["downloadURL"])
         dest = LIDAR_CACHE_DIR / url.rsplit("/", 1)[-1]
+        if dest.exists():
+            # Self-healing cache: a tile that entered the cache before
+            # the LASF check existed (or was truncated by a crashed
+            # write) must not poison every future analysis of this
+            # area — drop it and download a fresh copy instead of
+            # failing the request. Nobody babysits the cache.
+            with open(dest, "rb") as handle:
+                if handle.read(4) != b"LASF":
+                    dest.unlink(missing_ok=True)
         if not dest.exists():
             await _download_tile(url, dest)
         tile_paths.append(dest)
@@ -2913,6 +3924,7 @@ async def analyze_roof(request: AnalyzeRequest):
             ),
             "facets": facets,
             "edge_lengths_lf": edge_lengths_lf if facets else None,
+            "drawing_ready": bool(lidar_meta.get("drawing_ready")) if facets else False,
         },
         "fallback": {
             "available": not bool(facets),
@@ -2929,8 +3941,14 @@ async def analyze_roof(request: AnalyzeRequest):
             "or site-verified takeoff. Confirm geometry and quantities before ordering materials or submitting permits."
         ),
     }
-    if len(_RESPONSE_CACHE) >= MAX_RESPONSE_CACHE:
-        expired_or_oldest = min(_RESPONSE_CACHE, key=lambda key: _RESPONSE_CACHE[key][0])
-        _RESPONSE_CACHE.pop(expired_or_oldest, None)
-    _RESPONSE_CACHE[cache_key] = (monotonic() + CACHE_TTL_SECONDS, result)
+    # Only successful measurements are cached. A footprint_only
+    # result usually means a transient provider failure (a USGS
+    # throttle or 5xx during tile download); caching it for the full
+    # TTL would keep the address broken for a day and force a human
+    # to notice — the hands-off flow must heal on the next request.
+    if facets:
+        if len(_RESPONSE_CACHE) >= MAX_RESPONSE_CACHE:
+            expired_or_oldest = min(_RESPONSE_CACHE, key=lambda key: _RESPONSE_CACHE[key][0])
+            _RESPONSE_CACHE.pop(expired_or_oldest, None)
+        _RESPONSE_CACHE[cache_key] = (monotonic() + CACHE_TTL_SECONDS, result)
     return result

@@ -391,6 +391,27 @@ export async function roofDrawingPdf(
       });
     });
   }
+  if (drewPhoto && coverPhoto?.source) {
+    // Imagery attribution (required by the aerial source's terms),
+    // small and unobtrusive at the photo's bottom-left corner.
+    const attribution = `Aerial imagery: ${coverPhoto.source}`;
+    const attributionWidth = font.widthOfTextAtSize(attribution, 6.5);
+    firstPage.drawRectangle({
+      x: 0,
+      y: visualBox.y,
+      width: attributionWidth + 12,
+      height: 14,
+      color: rgb(0, 0, 0),
+      opacity: 0.55,
+    });
+    firstPage.drawText(attribution, {
+      x: 6,
+      y: visualBox.y + 4.5,
+      size: 6.5,
+      font,
+      color: rgb(1, 1, 1),
+    });
+  }
   firstPage.drawText("SKETCH REPORT", { x: 30, y: 296, size: 27, font: bold, color: BLACK });
   firstPage.drawText(`Project from ${projectShort}`, {
     x: 30,
@@ -520,6 +541,10 @@ export async function roofDrawingPdf(
     }),
   );
   labeled.forEach(({ a, b, length }) => {
+    // Junction slivers (segments under 2 ft where facets meet) get
+    // no label: a dozen near-zero lengths pile up illegibly at every
+    // junction. Their lengths still count in the report totals.
+    if (length < 2) return;
     const label = feetInches(length);
     let angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
     if (angle > 90) angle -= 180;

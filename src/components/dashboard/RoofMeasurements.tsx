@@ -293,6 +293,22 @@ export function RoofMeasurements({
           ...(typeof item.longitude === "number" ? { longitude: item.longitude } : {}),
         });
       }
+      // Hands-off cover photo: when the job has no stored aerial,
+      // fetch free Esri World Imagery for the drawing's geographic
+      // origin automatically. Any failure leaves photos unchanged
+      // and the report falls back to its sketch cover.
+      if (!photos.some((photo) => /aerial/i.test(photo.category)) && d.geo_reference) {
+        try {
+          const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
+          const aerial = await fetchAerialPhoto(
+            d.geo_reference.originLatitude,
+            d.geo_reference.originLongitude,
+          );
+          if (aerial) photos.unshift(aerial);
+        } catch {
+          // Imagery is best-effort; never block the report on it.
+        }
+      }
       const bytes = await roofDrawingPdf(
         title,
         d,

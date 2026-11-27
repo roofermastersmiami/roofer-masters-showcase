@@ -714,6 +714,80 @@ def test_broward_county_footprints_are_used_when_nationwide_provider_has_no_matc
     assert metadata["source_id"] == 77
 
 
+def test_footprint_auto_selection_resolves_a_close_neighbourhood(monkeypatch):
+    """Hands-off rule: two similar houses near the pin, neither
+    containing it, 8 m vs 11 m away (the Miramar pattern that used to
+    409 as ambiguous) must auto-select the nearer building and record
+    the basis — the flow never asks a person to pick."""
+    import asyncio
+
+    nearer = Polygon([
+        (-80.39944, 25.98013),
+        (-80.39927, 25.98013),
+        (-80.39927, 25.98029),
+        (-80.39944, 25.98029),
+        (-80.39944, 25.98013),
+    ])
+    farther = Polygon([
+        (-80.39980, 25.98013),
+        (-80.39963, 25.98013),
+        (-80.39963, 25.98029),
+        (-80.39980, 25.98029),
+        (-80.39980, 25.98013),
+    ])
+    features = [
+        {
+            "type": "Feature",
+            "properties": {"OBJECTID": 101, "AREA": 1000, "COUNTY_NAM": "Broward", "capture_dates_range": "2020"},
+            "geometry": mapping(nearer),
+        },
+        {
+            "type": "Feature",
+            "properties": {"OBJECTID": 102, "AREA": 1000, "COUNTY_NAM": "Broward", "capture_dates_range": "2020"},
+            "geometry": mapping(farther),
+        },
+    ]
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None):
+            if "Broward_BuildingFootPrints" in url:
+                return FakeResponse({"features": features})
+            return FakeResponse({"features": []})
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse({"elements": []})
+
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", FakeAsyncClient)
+    footprint, metadata = asyncio.run(
+        roof_service.get_footprint(25.98021, -80.39952, "3062 Southwest 189th Avenue")
+    )
+
+    assert footprint.area == pytest.approx(nearer.area)
+    assert metadata["source_id"] == 101
+    assert metadata["selection"]["method"] == "automatic_score"
+    assert metadata["selection"]["candidates_considered"] == 2
+    assert metadata["selection"]["runner_up_candidate_id"] is not None
+
+
 def test_miami_dade_county_footprints_are_used_when_other_providers_have_no_match(monkeypatch):
     import asyncio
 
@@ -1446,3 +1520,239 @@ def test_fit_facets_reports_frozen_pair_classes():
     assert len(facets) == 2
     assert set(pair_classes) == {(0, 1)}
     assert pair_classes[(0, 1)] in {"ridge", "hip", "valley", "pitch_change"}
+
+
+def test_emission_conditioning_makes_facets_drawing_ready():
+    from main import (
+        EMISSION_MAX_RING_POINTS,
+        _condition_polygons_for_emission,
+        _ring_coords,
+    )
+
+    # Two facets sharing a seam whose endpoints sit 0.15 m apart (inside
+    # the CRM converter's 0.3048 m snap distance, but not coincident),
+    # plus a third facet overlapping the first, plus a fourth whose ring
+    # is densified to hundreds of collinear vertices.
+    left = Polygon([(0, 0), (10, 0), (10, 10), (0, 10)])
+    right = Polygon([(10.15, 0), (20, 0), (20, 10), (10.15, 10)])
+    overlap = Polygon([(5, 5), (15, 5), (15, 15), (5, 15)])
+    dense = Polygon([(30, 0), (70, 0), (70, 40), (30, 40)]).segmentize(0.5)
+    assert len(_ring_coords(dense)) > 300
+    polygons = _condition_polygons_for_emission([left, right, overlap, dense])
+
+    for polygon in polygons:
+        assert polygon.is_valid
+        assert len(_ring_coords(polygon)) <= EMISSION_MAX_RING_POINTS
+    # Every pair is disjoint (the drawing path rejects overlaps), and
+    # the seam neighbours end up separated by only the hairline gap —
+    # conditioning must not drift facets apart either.
+    for i in range(len(polygons)):
+        for j in range(i + 1, len(polygons)):
+            assert polygons[i].intersection(polygons[j]).area <= 0.002
+    assert polygons[0].distance(polygons[1]) <= 0.05
+    # Conditioning barely moves total plan area (the dense facet's
+    # collinear vertices carry no area at all).
+    assert polygons[3].area == pytest.approx(1600.0, rel=0.01)
+
+
+def test_emission_conditioning_keeps_fitted_polygon_when_it_would_gut_it():
+    from main import _condition_polygons_for_emission
+
+    # A sliver facet entirely inside a larger neighbour: conditioning
+    # would erase it, so the facet must keep its fitted polygon rather
+    # than emit an empty ring.
+    big = Polygon([(0, 0), (30, 0), (30, 30), (0, 30)])
+    sliver = Polygon([(10, 10), (12, 10), (12, 12), (10, 12)])
+    polygons = _condition_polygons_for_emission([big, sliver])
+    assert polygons[1].area == pytest.approx(sliver.area)
+    assert polygons[0].is_valid
+
+
+def test_emission_conditioning_preserves_jagged_ring_area():
+    from main import (
+        EMISSION_MAX_RING_POINTS,
+        _condition_polygons_for_emission,
+        _ring_coords,
+    )
+
+    # A small facet whose top edge is a dense sawtooth (a jagged hull
+    # from sparse LiDAR returns, like Maria Piega's largest facet):
+    # thinning it to the vertex cap must not saw its area off — an
+    # uncapped Douglas-Peucker tolerance took a sixth of that facet.
+    points = [(0.0, 0.0), (8.0, 0.0), (8.0, 7.0)]
+    x = 8.0
+    while x > 0.0:
+        x -= 0.06
+        points.append((x, 7.0 + (0.06 if int(x * 16) % 2 else -0.06)))
+    jagged = Polygon(points)
+    assert len(_ring_coords(jagged)) > EMISSION_MAX_RING_POINTS
+    conditioned = _condition_polygons_for_emission([jagged])[0]
+    assert conditioned.is_valid
+    assert len(_ring_coords(conditioned)) <= EMISSION_MAX_RING_POINTS
+    assert conditioned.area == pytest.approx(jagged.area, rel=0.02)
+
+
+def test_emission_conditioning_does_not_amputate_a_pinched_facet():
+    from main import _condition_polygons_for_emission
+
+    # Two large neighbours leave a 3 cm channel between them; a
+    # dumbbell facet threads the channel, joining two big lobes.
+    # Buffering the neighbours by the 2 cm emission gap severs the
+    # thread, and a largest-piece-only subtraction would amputate one
+    # whole lobe (Maria's valley facet lost a quarter of its area this
+    # way). The conditioning must fall back to the unbuffered cut.
+    left = Polygon([(0, 0), (20, 0), (20, 40), (0, 40)])
+    right = Polygon([(20.03, 0), (40, 0), (40, 40), (20.03, 40)])
+    dumbbell = Polygon([
+        (5, -10), (35, -10), (35, 0.5), (20.03, 0.5), (20.03, 39.5),
+        (35, 39.5), (35, 50), (5, 50), (5, 39.5), (20, 39.5),
+        (20, 0.5), (5, 0.5),
+    ])
+    polygons = _condition_polygons_for_emission([left, right, dumbbell])
+    conditioned = polygons[2]
+    assert conditioned.is_valid and not conditioned.is_empty
+    # Only the small genuine overlaps with the neighbours may be lost.
+    assert conditioned.area > 0.9 * dumbbell.area
+
+
+def test_converter_repair_never_raises_on_degenerate_rings():
+    """The converter-frame repair is best-effort: a facet whose ring
+    round-trips into a degenerate shape (the Ave148 failure — a
+    GEOSException there killed the whole measurement) must keep its
+    serialized ring instead of raising."""
+    from pyproj import Transformer
+
+    from main import _repair_boundaries_for_converter
+
+    origin_lat, origin_lon = 25.6781, -80.43488
+    to_local = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+
+    def facet(fid, ring_latlon):
+        ring = [[lat, lon, 10.0] for lat, lon in ring_latlon]
+        ring.append([ring_latlon[0][0], ring_latlon[0][1], 10.0])
+        return {
+            "id": fid,
+            "boundary_latlon": ring,
+            "plane_model": {"z_equals_ax_plus_by_plus_c": (0.0, 0.0, 10.0)},
+        }
+
+    d = 0.0001
+    facets = [
+        # A healthy square facet.
+        facet("facet-1", [
+            (origin_lat, origin_lon),
+            (origin_lat, origin_lon + d),
+            (origin_lat + d, origin_lon + d),
+            (origin_lat + d, origin_lon),
+        ]),
+        # A bowtie (self-crossing) facet.
+        facet("facet-2", [
+            (origin_lat, origin_lon + 2 * d),
+            (origin_lat + d, origin_lon + 3 * d),
+            (origin_lat, origin_lon + 3 * d),
+            (origin_lat + d, origin_lon + 2 * d),
+        ]),
+        # A collinear (zero-area) facet.
+        facet("facet-3", [
+            (origin_lat - d, origin_lon),
+            (origin_lat - d, origin_lon + d),
+            (origin_lat - d, origin_lon + 2 * d),
+        ]),
+    ]
+    _repair_boundaries_for_converter(facets, origin_lat, origin_lon, to_local)
+    for entry in facets:
+        assert len(entry["boundary_latlon"]) >= 3
+
+
+def test_converter_repair_sanitizes_a_spiked_ring():
+    """A partition ring that returns to within millimetres of an
+    earlier vertex (the Ave148 spike) must be re-serialized without
+    the duplicate: the CRM converter rejects duplicate boundary
+    points outright."""
+    from pyproj import Transformer
+
+    from main import _repair_boundaries_for_converter
+
+    origin_lat, origin_lon = 25.6781, -80.43488
+    to_local = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+    d = 0.0001
+    spike_lat = origin_lat + 3e-8  # ~3 mm north of the corner below
+    ring = [
+        [origin_lat, origin_lon, 10.0],
+        [origin_lat, origin_lon + d, 10.0],
+        [origin_lat + d, origin_lon + d, 10.0],
+        [spike_lat, origin_lon + d, 10.0],  # spike: back to ~the 2nd vertex
+        [origin_lat + d, origin_lon, 10.0],
+        [origin_lat, origin_lon, 10.0],
+    ]
+    facets = [{
+        "id": "facet-1",
+        "boundary_latlon": ring,
+        "plane_model": {"z_equals_ax_plus_by_plus_c": (0.0, 0.0, 10.0)},
+    }]
+    _repair_boundaries_for_converter(facets, origin_lat, origin_lon, to_local)
+    keys = {
+        (round(lat, 7), round(lon, 7))
+        for lat, lon, _e in facets[0]["boundary_latlon"][:-1]
+    }
+    assert len(keys) == len(facets[0]["boundary_latlon"]) - 1
+
+
+def test_drawing_partition_tiles_the_outline_with_a_straight_seam():
+    from shapely.ops import unary_union
+
+    from main import _drawing_partition
+
+    # A rectangular roof outline (roof-outline provider: the footprint
+    # IS the outline) and two fitted facets whose hulls wobble across
+    # their shared seam and overshoot the eave line. The drawing
+    # partition must tile the outline exactly, and the seam must come
+    # out as one straight line — the two planes' intersection.
+    footprint = Polygon([(0, 0), (30, 0), (30, 20), (0, 20)])
+    left_hull = Polygon([
+        (0, 0), (16, 0), (15.2, 6), (16.4, 12), (15.4, 18), (15.8, 21),
+        (0, 21),
+    ])
+    right_hull = Polygon([
+        (15.5, -1), (30, -1), (30, 20), (15.8, 20), (16.4, 12),
+        (15.2, 6),
+    ])
+    # Planes sloping away from a ridge near x=15.7: z = -0.4(x-15.7)
+    # and z = +0.4(x-15.7); their intersection is the line x = 15.7.
+    planes = [(-0.4, 0.0, 6.28), (0.4, 0.0, -6.28)]
+    result, fully_partitioned = _drawing_partition(
+        [left_hull, right_hull],
+        planes,
+        footprint,
+        "Miami-Dade County Building Footprints",
+    )
+    assert fully_partitioned
+    assert len(result) == 2
+    union = unary_union(result)
+    assert abs(union.area - footprint.area) < 1e-6
+    assert result[0].intersection(result[1]).area < 1e-9
+    # The shared boundary is a single straight vertical segment.
+    shared = result[0].boundary.intersection(result[1].boundary)
+    assert abs(shared.length - 20.0) < 0.5
+    parts = list(getattr(shared, "geoms", [shared]))
+    xs = [coord[0] for part in parts for coord in part.coords]
+    assert max(xs) - min(xs) < 0.35
+
+
+def test_emission_conflation_does_not_chain_along_a_seam():
+    from main import _conflate_junction_vertices, _ring_coords
+
+    # Two facets sharing a 6 m seam, each with vertices every 0.2 m
+    # along it, the two sides offset by 0.1 m: every cross pair is
+    # within snap distance of the NEXT pair, so transitive clustering
+    # would chain the whole seam into one cluster and collapse both
+    # rings. Diameter-capped clustering must keep both facets intact.
+    seam_a = [(10.0, y) for y in [i * 0.2 for i in range(31)]]
+    seam_b = [(10.1, y) for y in [i * 0.2 + 0.1 for i in range(30)]]
+    left = Polygon([(0.0, 0.0)] + seam_a + [(0.0, 6.0)])
+    right = Polygon([(20.0, 0.0), (20.0, 6.1)] + seam_b[::-1])
+    result = _conflate_junction_vertices([left, right])
+    assert result[0].area == pytest.approx(left.area, rel=0.05)
+    assert result[1].area == pytest.approx(right.area, rel=0.05)
+    assert len(_ring_coords(result[0])) >= 25
+    assert len(_ring_coords(result[1])) >= 25
