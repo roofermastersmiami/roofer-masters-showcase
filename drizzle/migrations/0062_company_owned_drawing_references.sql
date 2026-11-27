@@ -39,7 +39,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.enforce_company_owned_drawing_reference() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.enforce_company_owned_drawing_reference() FROM PUBLIC;
 
 DROP TRIGGER IF EXISTS proposals_company_drawing_guard ON public.proposals;
 CREATE TRIGGER proposals_company_drawing_guard
