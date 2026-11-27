@@ -44,6 +44,7 @@ INSERT INTO lead_messages VALUES('97000000-0000-0000-0000-000000000001','2000000
 INSERT INTO proposal_shares VALUES('98000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001');
 INSERT INTO roof_estimates VALUES('99000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','50000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000001');
 \ir ../drizzle/migrations/0055_secondary_operational_company_ownership.sql
+\ir ../drizzle/migrations/0062_company_owned_drawing_references.sql
 DO $$ BEGIN
  IF (SELECT count(*) FROM proposals)<>2 OR NOT EXISTS(SELECT 1 FROM proposals WHERE id='70000000-0000-0000-0000-000000000002' AND lead_id IS NULL AND property_id IS NULL AND drawing_id IS NULL) THEN RAISE EXCEPTION 'Parentless proposal not preserved'; END IF;
  IF EXISTS(SELECT 1 FROM client_portal_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_activity WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_expenses WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_invoices WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_tasks WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_checkouts WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_payments WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_project_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM job_change_orders WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM lead_messages WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposal_shares WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposals WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM roof_estimates WHERE company_id IS NULL) THEN RAISE EXCEPTION 'Missing company ownership'; END IF;
@@ -117,3 +118,49 @@ BEGIN
  EXCEPTION WHEN foreign_key_violation THEN NULL; END;
 END
 $remaining_tenant_fks$;
+
+
+-- Drawing ownership is inherited through the drawing's property and must
+-- match both the record company and any explicit record property.
+INSERT INTO roof_drawings(id,property_id)
+VALUES('b5000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');
+
+DO $drawing_tenant_guard$
+BEGIN
+  INSERT INTO proposals(id,lead_id,property_id,drawing_id,company_id)
+  VALUES('c7000000-0000-0000-0000-000000000001',NULL,'b3000000-0000-0000-0000-000000000001',
+    'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+  INSERT INTO roof_estimates(id,property_id,drawing_id,company_id)
+  VALUES('c9000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',
+    'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+
+  BEGIN
+    INSERT INTO proposals(id,lead_id,property_id,drawing_id,company_id)
+    VALUES('c7000000-0000-0000-0000-000000000002',NULL,'30000000-0000-0000-0000-000000000001',
+      'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'Cross-company proposal drawing accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Cross-company proposal drawing accepted' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    INSERT INTO roof_estimates(id,property_id,drawing_id,company_id)
+    VALUES('c9000000-0000-0000-0000-000000000002','30000000-0000-0000-0000-000000000001',
+      'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'Cross-company estimate drawing accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Cross-company estimate drawing accepted' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    INSERT INTO proposals(id,lead_id,property_id,drawing_id,company_id)
+    VALUES('c7000000-0000-0000-0000-000000000003',NULL,'30000000-0000-0000-0000-000000000002',
+      'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+    RAISE EXCEPTION 'Mismatched proposal property/drawing accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Mismatched proposal property/drawing accepted' THEN RAISE; END IF;
+  END;
+END
+$drawing_tenant_guard$;
+
+\echo 'Company-owned drawing reference tests passed.'
