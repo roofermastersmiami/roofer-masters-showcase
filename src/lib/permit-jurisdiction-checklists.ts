@@ -160,6 +160,7 @@ export type PermitChecklistRequest = {
   projectKind?: PermitProjectKind;
   folio?: string | null;
   asOfDate?: string;
+  parcelAuthorityVerified?: boolean;
 };
 
 export type PermitChecklistResult = {
@@ -213,8 +214,10 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
   if (profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) {
-    authorityConfirmed = false;
-    warnings.push("Verify the property is inside City of Sunrise limits and confirm its current checklist with the Sunrise Building Division before filing.");
+    if (!request.parcelAuthorityVerified) {
+      authorityConfirmed = false;
+      warnings.push("Verify the property is inside City of Sunrise limits and confirm its current checklist with the Sunrise Building Division before filing.");
+    }
   }
   if (profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id && request.projectKind !== "reroof") {
     authorityConfirmed = false;
@@ -226,9 +229,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
   const requiredRoofingSections = !checklistEnabled ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
-    : profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id
-      ? miamiDadeSections[roofSystem]
-      : [];
+    : [];
 
   const allowedIds = profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? new Set(miamiDadeAttachmentIds[roofSystem])
