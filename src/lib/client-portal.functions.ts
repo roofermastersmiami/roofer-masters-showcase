@@ -97,6 +97,7 @@ export const getClientPortal = createServerFn({ method: "GET" })
         .from("roof_jobs")
         .select("id,title,status,start_date,inspection_at,permit_status,checklist")
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("proposals")
