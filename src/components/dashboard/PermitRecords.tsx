@@ -43,7 +43,7 @@ export function PermitRecords() {
   const [jurisdiction, setJurisdiction] = useState("Miami-Dade County — unincorporated area");
   const [jurisdictionProfileId, setJurisdictionProfileId] = useState(MIAMI_DADE_UNINCORPORATED_PROFILE.id);
   const [propertyFolio, setPropertyFolio] = useState("");
-  const [parcelAuthorityVerified, setSunriseParcelVerified] = useState(false);
+  const [parcelAuthorityVerified, setParcelAuthorityVerified] = useState(false);
   const [roofingSystem, setRoofingSystem] = useState<RoofingSystem>("metal");
   const [projectKind, setProjectKind] = useState<PermitProjectKind>("reroof");
   const [permitType, setPermitType] = useState("Roof replacement");
@@ -76,7 +76,7 @@ export function PermitRecords() {
         `Project type: ${projectKind}`,
         `Roofing system: ${roofingSystem}`,
         propertyFolio.trim() ? `Property folio: ${propertyFolio.trim()}` : "",
-        parcelAuthorityVerified ? "{jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id ? "User confirmed the folio and unincorporated Miami-Dade parcel authority against property records." : "User confirmed property is within City of Sunrise limits and current Building Division requirements were checked."}" : "",
+        parcelAuthorityVerified ? (jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id ? "User confirmed the folio and unincorporated Miami-Dade parcel authority against property records." : "User confirmed property is within City of Sunrise limits and current Building Division requirements were checked.") : "",
         applicationNotes.trim(),
       ].filter(Boolean).join("\n\n"),
     }),
@@ -85,7 +85,7 @@ export function PermitRecords() {
       setPortalUrl("");
       setPermitFee("");
       setApplicationNotes("");
-      setSunriseParcelVerified(false);
+      setParcelAuthorityVerified(false);
       await refresh();
     },
     onError: (error) => toast.error(error.message || "Could not save permit application."),
@@ -322,7 +322,7 @@ export function PermitRecords() {
                 <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); createApplication.mutate(); }}>
                   <div>
                     <label className={labelClass} htmlFor="permit-job">Roofing job</label>
-                    <select id="permit-job" className={inputClass} value={jobId} onChange={(event) => { setJobId(event.target.value); setSunriseParcelVerified(false); }} required>
+                    <select id="permit-job" className={inputClass} value={jobId} onChange={(event) => { setJobId(event.target.value); setParcelAuthorityVerified(false); }} required>
                       <option value="">Choose a job…</option>
                       {jobs.map((job) => <option key={job.id} value={job.id}>{job.title}{job.address ? ` — ${job.address}` : ""}</option>)}
                     </select>
@@ -333,7 +333,7 @@ export function PermitRecords() {
                       <select id="permit-profile" className={inputClass} value={jurisdictionProfileId} onChange={(event) => {
                         const profileId = event.target.value;
                         setJurisdictionProfileId(profileId);
-                        setSunriseParcelVerified(false);
+                        setParcelAuthorityVerified(false);
                         if (profileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) setJurisdiction("Miami-Dade County — unincorporated area");
                         else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
                         else setJurisdiction("City of Sunrise, Broward County");
@@ -377,7 +377,7 @@ export function PermitRecords() {
                         type="checkbox"
                         className="mt-0.5"
                         checked={parcelAuthorityVerified}
-                        onChange={(event) => setSunriseParcelVerified(event.target.checked)}
+                        onChange={(event) => setParcelAuthorityVerified(event.target.checked)}
                       />
                       <span>{jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id ? "I checked the property record, confirmed the folio begins with 30, and verified this address is in unincorporated Miami-Dade. This is an internal intake confirmation, not County approval." : "I verified this property address is within City of Sunrise limits and checked the current requirements with its Building Division. This is an internal intake confirmation, not municipal approval."}</span>
                     </label>
