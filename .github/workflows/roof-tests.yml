@@ -1,10 +1,16 @@
 name: Roofer Masters Roof Tests
 
+# A branch push and its pull_request event otherwise run the same expensive
+# PostgreSQL + build suite twice. Keep only the newest run for each branch.
+concurrency:
+  group: roof-tests-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings]
+    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052, feat/permit-approval-code-edition-0053, feat/permit-stack-clean-0056]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052, feat/company-ownership-trigger-0043]
   workflow_dispatch:
 
 jobs:
@@ -33,13 +39,15 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22.12.0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Validate Python receptionist syntax
         run: python -m compileall -q services/receptionist
+      - name: Upgrade npm to the Arborist-fixed release
+        run: npm install --global npm@11.21.2
       - name: Install dependencies
         run: npm install
       - name: Validate database migration journal
@@ -53,6 +61,42 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
           psql "postgresql://postgres@localhost:5432/roofer_test" -v ON_ERROR_STOP=1 -f scripts/test-company-permit-settings-rls.sql
+      - name: Run CRM company ownership PostgreSQL 16 integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_ownership_test
+          psql "postgresql://postgres@localhost:5432/crm_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-crm-company-ownership-migration.sql
+      - name: Run company-scoped customer delete PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_customer_delete_test
+          psql "postgresql://postgres@localhost:5432/crm_customer_delete_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-customer-delete.sql
+      - name: Run company-scoped permit records PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_permit_records_test
+          psql "postgresql://postgres@localhost:5432/crm_permit_records_test" -v ON_ERROR_STOP=1 -f scripts/test-company-permit-records-rls.sql
+      - name: Run permit document storage PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_permit_storage_test
+          psql "postgresql://postgres@localhost:5432/crm_permit_storage_test" -v ON_ERROR_STOP=1 -f scripts/test-permit-document-storage-rls.sql
+      - name: Run roof product approval PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_product_approvals_test
+          psql "postgresql://postgres@localhost:5432/crm_product_approvals_test" -v ON_ERROR_STOP=1 -f scripts/test-company-roof-product-approvals.sql
+      - name: Run permit NOC tracking PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_permit_noc_test
+          psql "postgresql://postgres@localhost:5432/crm_permit_noc_test" -v ON_ERROR_STOP=1 -f scripts/test-company-permit-noc-tracking.sql
       - name: Run lint checks (baseline audit)
         run: npm run lint
         continue-on-error: true

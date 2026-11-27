@@ -295,6 +295,83 @@
       "when": 1795657000000,
       "tag": "0041_company_permit_qualifier_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795660000000,
+      "tag": "0042_crm_company_ownership_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1795661000000,
+      "tag": "0043_company_aware_lead_customer_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1795662000000,
+      "tag": "0044_company_scoped_customer_save",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1795730000000,
+      "tag": "0045_trusted_public_lead_company",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1795731000000,
+      "tag": "0046_company_scoped_customer_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795732000000,
+      "tag": "0047_company_owned_roof_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795733000000,
+      "tag": "0048_company_permit_applications_and_inspections",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795733100000,
+      "tag": "0049_company_scoped_permit_document_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795733200000,
+      "tag": "0050_company_roof_product_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1795733300000,
+      "tag": "0051_company_permit_noc_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795733400000,
+      "tag": "0052_product_approval_code_edition",
+      "breakpoints": true
     }
   ]
 }
