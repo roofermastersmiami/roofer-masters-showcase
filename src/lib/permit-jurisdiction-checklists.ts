@@ -242,7 +242,9 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const profiles: Record<string, JurisdictionPermitProfile> = {
     [MIAMI_DADE_UNINCORPORATED_PROFILE.id]: MIAMI_DADE_UNINCORPORATED_PROFILE,
     [BROWARD_COUNTY_PROFILE.id]: BROWARD_COUNTY_PROFILE,
-    [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,\n    [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,\n    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
+    [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
+    [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
+    [BROWARD_HOLLYWOOD_ROOFING_PROFILE.id]: BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -289,7 +291,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   }
 
   const roofSystem = request.roofingSystem ?? "other";
-  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id;\n  const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
+  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id;
+  const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
   const requiredRoofingSections = !checklistEnabled ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
@@ -300,7 +303,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     : new Set(profile.checklist.map((item) => item.id));
   const items = (checklistEnabled ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
     if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
-    if (item.id === "commercial-reroof-statement") return request.projectKind === "commercial_reroof";\n    if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
+    if (item.id === "commercial-reroof-statement") return request.projectKind === "commercial_reroof";
+    if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
 
