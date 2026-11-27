@@ -207,7 +207,8 @@ export function FollowUps({
                           .update({
                             completed_at: t.completed_at ? null : new Date().toISOString(),
                           })
-                          .eq("id", t.id),
+                          .eq("id", t.id)
+                          .eq("company_id", t.company_id),
                       t.completed_at ? "Follow-up reopened" : "Follow-up completed",
                     )
                   }
@@ -222,7 +223,7 @@ export function FollowUps({
                   onClick={() => {
                     if (confirm("Delete this follow-up?"))
                       void mutate(
-                        () => supabase.from("crm_tasks").delete().eq("id", t.id),
+                        () => supabase.from("crm_tasks").delete().eq("id", t.id).eq("company_id", t.company_id),
                         "Follow-up deleted",
                       );
                   }}
