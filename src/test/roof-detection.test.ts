@@ -200,6 +200,23 @@ describe("LiDAR address-to-footprint confidence metadata", () => {
     expect(parsed.footprint.address_point_inside_footprint).toBeUndefined();
     expect(parsed.footprint.address_to_footprint_distance_m).toBeUndefined();
   });
+
+  it("preserves the user-pin echo so pin-confirmed runs can skip the geocode warning", () => {
+    const parsed = roofDetectionResponseSchema.parse({
+      ...response,
+      footprint: {
+        ...response.footprint,
+        address_point_inside_footprint: false,
+        address_to_footprint_distance_m: 8.4,
+        point_hint: { lat: 25.97935, lon: -80.18659, source: "user_pin" },
+      },
+    });
+    expect(parsed.footprint.point_hint).toEqual({
+      lat: 25.97935,
+      lon: -80.18659,
+      source: "user_pin",
+    });
+  });
 });
 
 describe("LiDAR edge classification for automatic reports", () => {

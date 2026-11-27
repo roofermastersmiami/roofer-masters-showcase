@@ -45,6 +45,16 @@ export const roofDetectionResponseSchema = z.object({
     area_sqft: z.number().finite().positive(),
     address_point_inside_footprint: z.boolean().optional(),
     address_to_footprint_distance_m: z.number().finite().nonnegative().optional(),
+    // Echoed by the service when the run was steered by a user-confirmed
+    // pin: the pin is the operator's verification of the building, so the
+    // geocode-distance warning must not fire for those runs.
+    point_hint: z
+      .object({
+        lat: z.number().finite().min(-90).max(90),
+        lon: z.number().finite().min(-180).max(180),
+        source: z.literal("user_pin"),
+      })
+      .optional(),
     polygon_geojson: z.object({
       type: z.literal("Polygon"),
       coordinates: z.array(z.array(z.tuple([z.number().finite(), z.number().finite()]))),

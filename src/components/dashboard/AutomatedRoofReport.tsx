@@ -581,21 +581,23 @@ export function AutomatedRoofReport({ address, pointHint, roofType, onApply }: P
       )}
       {visibleResult && (
         <div className="space-y-3">
-          {visibleResult.footprint.address_point_inside_footprint === false && (
-            <div
-              role="alert"
-              className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800"
-            >
-              <strong>Verify the selected building before using these measurements.</strong>
-              <p className="mt-1">
-                The geocoded address point is outside the selected building outline
-                {visibleResult.footprint.address_to_footprint_distance_m !== undefined
-                  ? ` by ${visibleResult.footprint.address_to_footprint_distance_m.toFixed(1)} m`
-                  : ""}
-                . The match is approximate; confirm this is the correct property.
-              </p>
-            </div>
-          )}
+          {visibleResult.footprint.address_point_inside_footprint === false &&
+            !pointHint &&
+            !visibleResult.footprint.point_hint && (
+              <div
+                role="alert"
+                className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-800"
+              >
+                <strong>Verify the selected building before using these measurements.</strong>
+                <p className="mt-1">
+                  The geocoded address point is outside the selected building outline
+                  {visibleResult.footprint.address_to_footprint_distance_m !== undefined
+                    ? ` by ${visibleResult.footprint.address_to_footprint_distance_m.toFixed(1)} m`
+                    : ""}
+                  . The match is approximate; confirm this is the correct property.
+                </p>
+              </div>
+            )}
           {visibleResult.status === "lidar_facets" ? (
             <div className="flex items-start gap-2 text-sm">
               <CheckCircle2 className="mt-0.5 size-4 text-emerald-600" />

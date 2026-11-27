@@ -180,6 +180,73 @@ describe("AutomatedRoofReport background job analysis", () => {
     expect(submits).toBe(2);
   });
 
+  it("warns when the geocoded point falls outside the selected building", async () => {
+    const mismatchResult = {
+      ...FOOTPRINT_ONLY_RESULT,
+      footprint: {
+        ...FOOTPRINT_ONLY_RESULT.footprint,
+        address_point_inside_footprint: false,
+        address_to_footprint_distance_m: 8.4,
+      },
+    };
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/v1/roof/analyze/jobs") && init?.method === "POST") {
+        return jsonResponse(202, { job_id: "job-1", status: "queued" });
+      }
+      if (url.endsWith("/v1/roof/analyze/jobs/job-1")) {
+        return jsonResponse(200, { job_id: "job-1", status: "complete", result: mismatchResult });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    render(<AutomatedRoofReport address="123 Main Street, Miami, FL" onApply={vi.fn()} />);
+
+    expect(
+      await screen.findByText(/Verify the selected building before using these measurements/),
+    ).toBeTruthy();
+  });
+
+  it("does not show the geocode warning when the run was confirmed with a pin", async () => {
+    const mismatchResult = {
+      ...FOOTPRINT_ONLY_RESULT,
+      footprint: {
+        ...FOOTPRINT_ONLY_RESULT.footprint,
+        address_point_inside_footprint: false,
+        address_to_footprint_distance_m: 8.4,
+      },
+    };
+    let submittedBody = "";
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/v1/roof/analyze/jobs") && init?.method === "POST") {
+        submittedBody = String(init.body ?? "");
+        return jsonResponse(202, { job_id: "job-1", status: "queued" });
+      }
+      if (url.endsWith("/v1/roof/analyze/jobs/job-1")) {
+        return jsonResponse(200, { job_id: "job-1", status: "complete", result: mismatchResult });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    render(
+      <AutomatedRoofReport
+        address="123 Main Street, Miami, FL"
+        pointHint={{ lat: 25.97935, lon: -80.18659 }}
+        onApply={vi.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText("Footprint found; roof facets were not measurable"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Verify the selected building/)).toBeNull();
+    expect(JSON.parse(submittedBody)).toMatchObject({
+      pin_lat: 25.97935,
+      pin_lon: -80.18659,
+    });
+  });
+
   it("shows live download progress while the job runs", async () => {
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       const url = String(input);
