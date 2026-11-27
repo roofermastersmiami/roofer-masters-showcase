@@ -102,7 +102,8 @@ describe("Broward authority routing", () => {
       roofingSystem: "tile",
       projectKind: "reroof",
     });
-    expect(residential.authorityConfirmed).toBe(true);
+    expect(residential.authorityConfirmed).toBe(false);
+    expect(residential.warnings.join(" ")).toContain("inside City of Sunrise limits");
     expect(residential.items.map((item) => item.id)).toContain("asbestos-responsibilities");
     expect(residential.items.map((item) => item.id)).toContain("roof-product-approvals");
 
