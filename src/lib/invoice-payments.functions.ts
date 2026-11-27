@@ -211,13 +211,23 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { createStripeClient, getStripeErrorMessage } = await import("./stripe.server");
     try {
-      const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-        _user_id: context.userId,
-        _roles: ["admin", "accounting"],
-      });
-      if (roleError) throw new Error("Could not verify accounting permissions");
-      if (!owner) return { error: "You do not have access to this action" };
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: invoice, error: invoiceError } = await supabaseAdmin
+        .from("crm_invoices")
+        .select("id,company_id")
+        .eq("id", data.invoice_id)
+        .maybeSingle();
+      if (invoiceError || !invoice?.company_id)
+        throw new Error("Could not verify invoice company");
+      const { data: membership, error: membershipError } = await context.supabase
+        .from("crm_company_memberships")
+        .select("role")
+        .eq("company_id", invoice.company_id)
+        .eq("user_id", context.userId)
+        .in("role", ["owner", "admin", "accounting"])
+        .maybeSingle();
+      if (membershipError) throw new Error("Could not verify accounting permissions");
+      if (!membership) return { error: "You do not have access to this company's invoices" };
       const { data: checkout, error: checkoutError } = await supabaseAdmin
         .from("invoice_checkouts")
         .select("id,session_id,environment")
