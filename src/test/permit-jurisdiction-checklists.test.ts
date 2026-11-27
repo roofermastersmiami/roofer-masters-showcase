@@ -241,7 +241,7 @@ describe("Coral Springs residential reroof checklist", () => {
       asOfDate: "2026-11-26",
     });
     expect(unverified.authorityConfirmed).toBe(false);
-    expect(unverified.items.map((item) => item.id)).toContain("zoning-addendum");
+    expect(unverified.items.map((item) => item.id)).toContain("electronic-submittal");\n    expect(unverified.items.map((item) => item.id)).toContain("zoning-addendum");
     expect(unverified.items.map((item) => item.id)).toContain("asbestos-srra");
     expect(unverified.items.map((item) => item.id)).toContain("preapproved-roof-materials");
     expect(unverified.items.map((item) => item.id)).toContain("roof-to-wall-interpretation");
