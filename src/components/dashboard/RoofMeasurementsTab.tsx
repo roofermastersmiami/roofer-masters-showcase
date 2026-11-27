@@ -30,6 +30,7 @@ import {
   type LatLon,
 } from "@/lib/satellite-map";
 import { BUILDING_TYPES, composeRoofOrderNotes, type BuildingType } from "@/lib/roof-order-notes";
+import { locateBuildingPin, roofDetectionApiBase } from "@/lib/roof-analysis";
 import { SatelliteMap, type SatelliteMapPin } from "./SatelliteMap";
 import { Empty, Field, SectionHeading } from "./CrmControls";
 
@@ -64,6 +65,10 @@ export function RoofMeasurementsTab({
   const [locatedAddress, setLocatedAddress] = useState<LocatedAddress | null>(null);
   const [mapCenter, setMapCenter] = useState<LatLon | null>(null);
   const [pins, setPins] = useState<LatLon[]>([]);
+  // Pin 1's position when it came from the detection service's
+  // footprint snap (the selected building's centroid) rather than
+  // the raw geocoded point — used only to label the pin honestly.
+  const [footprintPin, setFootprintPin] = useState<LatLon | null>(null);
   const [buildingType, setBuildingType] = useState<BuildingType>("single_family");
   const [includeOutbuilding, setIncludeOutbuilding] = useState(false);
   const [originalCrmAddress, setOriginalCrmAddress] = useState(initialAddress);
@@ -105,6 +110,7 @@ export function RoofMeasurementsTab({
     setLocatedAddress(null);
     setMapCenter(null);
     setPins([]);
+    setFootprintPin(null);
     setAdding(true);
     onRequestHandled();
   }, [
@@ -129,6 +135,7 @@ export function RoofMeasurementsTab({
     setLocatedAddress(null);
     setMapCenter(null);
     setPins([]);
+    setFootprintPin(null);
     setBuildingType("single_family");
     setIncludeOutbuilding(false);
     setMapZoom(SATELLITE_DEFAULT_ZOOM);
@@ -151,6 +158,7 @@ export function RoofMeasurementsTab({
     setAddressError("");
     setLocatedAddress(null);
     setPins([]);
+    setFootprintPin(null);
     setMapCenter(null);
     try {
       const result = await lookup({ data: { address } });
@@ -159,10 +167,25 @@ export function RoofMeasurementsTab({
         return;
       }
       setLocatedAddress(result);
-      // The map flies to the property and pin 1 drops on the
-      // geocoded point; Fredy can drag it onto the right building.
       setMapCenter({ lat: result.lat, lon: result.lon });
-      setPins([{ lat: result.lat, lon: result.lon }]);
+      // Pin 1 belongs on the house, not on the geocoded street
+      // point: ask the detection service which footprint it would
+      // select for this point and drop the pin on that building's
+      // centroid — the same point that then steers the measurement.
+      // When the service finds no footprint nearby (or cannot be
+      // reached), the pin keeps the geocoded point exactly as
+      // before and Fredy can drag it onto the right building.
+      const snapped = await locateBuildingPin(
+        roofDetectionApiBase(),
+        { lat: result.lat, lon: result.lon },
+        result.matchedAddress,
+      );
+      if (snapped) {
+        setFootprintPin({ lat: snapped.lat, lon: snapped.lon });
+        setPins([{ lat: snapped.lat, lon: snapped.lon }]);
+      } else {
+        setPins([{ lat: result.lat, lon: result.lon }]);
+      }
       setMapZoom(SATELLITE_DEFAULT_ZOOM);
       setForm((current) => ({ ...current, address: result.matchedAddress }));
       toast.success("Property address located");
@@ -425,6 +448,7 @@ export function RoofMeasurementsTab({
             setLocatedAddress(null);
             setMapCenter(null);
             setPins([]);
+            setFootprintPin(null);
             setAddressError("");
           }
         }}
@@ -436,12 +460,12 @@ export function RoofMeasurementsTab({
               {initialCustomer
                 ? `Starting from ${customers.data?.find((customer) => customer.id === initialCustomer)?.name ?? "the selected customer"}’s saved property. `
                 : ""}
-              Search for an address and move the pin to the correct building. For apartment
-              complexes or condos, click to drop multiple pins on each structure. Each pin will
-              create a separate report. Double-click a pin to remove it. The roof is then measured
-              automatically from public LiDAR data, the report PDF is generated and saved, and a
-              material list is built from the measurement — you can review or adjust every result
-              afterwards.
+              Search for an address and the pin drops on the building itself; move it if it lands on
+              the wrong one. For apartment complexes or condos, click to drop multiple pins on each
+              structure. Each pin will create a separate report. Double-click a pin to remove it.
+              The roof is then measured automatically from public LiDAR data, the report PDF is
+              generated and saved, and a material list is built from the measurement — you can
+              review or adjust every result afterwards.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -493,6 +517,7 @@ export function RoofMeasurementsTab({
                       setLocatedAddress(null);
                       setMapCenter(null);
                       setPins([]);
+                      setFootprintPin(null);
                       setAddressError("");
                     }}
                     onKeyDown={(event) => {
@@ -571,10 +596,15 @@ export function RoofMeasurementsTab({
                     <p key={index} className="mt-1 text-xs text-muted-foreground">
                       Pin {index + 1}: {pin.lat.toFixed(6)}, {pin.lon.toFixed(6)}
                       {index === 0 &&
-                      pin.lat === locatedAddress.lat &&
-                      pin.lon === locatedAddress.lon
-                        ? " · geocoded address point"
-                        : ""}
+                      footprintPin &&
+                      pin.lat === footprintPin.lat &&
+                      pin.lon === footprintPin.lon
+                        ? " · building footprint"
+                        : index === 0 &&
+                            pin.lat === locatedAddress.lat &&
+                            pin.lon === locatedAddress.lon
+                          ? " · geocoded address point"
+                          : ""}
                     </p>
                   ))}
                   <p className="mt-2 text-xs text-muted-foreground">

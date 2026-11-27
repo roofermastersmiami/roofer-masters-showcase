@@ -289,6 +289,26 @@ class AnalyzeRequest(BaseModel):
         return self
 
 
+class LocateRequest(BaseModel):
+    """Footprint lookup for the CRM measurement-order form's Locate
+    button: a point (the browser-geocoded address point) and/or a
+    street address. No LiDAR, no measurement — the response is the
+    selected building footprint's centroid so the form's pin can sit
+    on the house instead of on the geocoded street point."""
+
+    street_address: str | None = Field(default=None, min_length=5, max_length=300)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def validate_location(self):
+        if not self.street_address and (self.lat is None or self.lon is None):
+            raise ValueError("Provide street_address or both lat and lon.")
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("Latitude and longitude must be provided together.")
+        return self
+
+
 def _polygon_area_sqft(polygon: Polygon) -> float:
     # Local azimuthal-equidistant projection avoids treating degrees as feet.
     from pyproj import CRS
@@ -4993,6 +5013,60 @@ async def _run_analysis(
             _RESPONSE_CACHE.pop(expired_or_oldest, None)
         _RESPONSE_CACHE[cache_key] = (monotonic() + CACHE_TTL_SECONDS, result)
     return result
+
+
+@app.post("/v1/roof/locate")
+async def locate_building(request: LocateRequest):
+    """Resolve a point/address to the building footprint the
+    measurement pipeline would select for it — lookup only, no LiDAR
+    and no measurement.
+
+    Runs the exact candidate lookup + deterministic auto-selection
+    behind `get_footprint` (the same code `_run_analysis` calls), so
+    the returned candidate is the one a measurement of this point
+    would measure. The CRM measurement-order form uses the returned
+    centroid as its pin: geocoders land on the street in front of the
+    lot, while the centroid sits on the house itself, which is both
+    the honest visual and the stronger steering hint. A point with no
+    eligible footprint nearby answers 200 {"status": "not_found"} so
+    the form can fall back to the geocoded point; provider outages
+    keep the 503 contract of the underlying lookup.
+    """
+    matched_address: str | None = None
+    if request.lat is not None and request.lon is not None:
+        lat, lon = float(request.lat), float(request.lon)
+        matched_address = request.street_address
+    else:
+        lat, lon, matched_address, _provenance = await geocode_with_provenance(
+            str(request.street_address)
+        )
+    try:
+        polygon, metadata = await get_footprint(lat, lon, request.street_address)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 404 and detail.get("code") == "building_footprint_not_found":
+            return {
+                "status": "not_found",
+                "location": {"lat": round(lat, 7), "lon": round(lon, 7)},
+                "matched_address": matched_address,
+            }
+        raise
+    # Internal multi-structure evidence (see get_footprint); never
+    # serialised into a response.
+    metadata.pop("_candidate_pool", None)
+    return {
+        "status": "found",
+        "location": {"lat": round(lat, 7), "lon": round(lon, 7)},
+        "matched_address": matched_address,
+        "footprint": {
+            "provider": metadata.get("provider"),
+            "source_id": metadata.get("source_id"),
+            "area_sqft": metadata.get("area_sqft"),
+            "centroid": metadata.get("centroid"),
+            **_footprint_match_fields(metadata),
+            "polygon_geojson": mapping(polygon),
+        },
+    }
 
 
 @app.post("/v1/roof/analyze")

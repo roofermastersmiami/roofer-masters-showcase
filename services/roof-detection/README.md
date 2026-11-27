@@ -26,6 +26,12 @@ Or pass coordinates:
 { "lat": 38.8977, "lon": -77.0365 }
 ```
 
+Locate: `POST /v1/roof/locate` — footprint lookup only (no LiDAR, no measurement). Accepts the same point/address inputs and runs the same candidate lookup + auto-selection as analyze, returning the selected building's centroid so the CRM's measurement-order form can drop its pin on the house instead of the geocoded street point. Answers `{ "status": "found", "footprint": { "candidate_id", "centroid": { "lat", "lon" }, "polygon_geojson", ... } }`, or `{ "status": "not_found" }` when no eligible footprint is near the point.
+
+```json
+{ "lat": 25.980179, "lon": -80.399509, "street_address": "3062 SW 189th Ave, Miramar, FL 33029" }
+```
+
 ### Asynchronous jobs (cold-cache safe)
 
 A cold-cache analysis is dominated by USGS tile downloads (~180 MB at throttled per-connection speeds) and can outlast the free tier's ~271 s request window, which kills a synchronous `POST /v1/roof/analyze` mid-download. The jobs API runs the same pipeline outside the request lifecycle:

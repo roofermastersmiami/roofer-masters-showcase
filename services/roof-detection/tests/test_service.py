@@ -2670,3 +2670,166 @@ def test_analyze_without_outbuilding_flag_has_no_structures(monkeypatch):
     assert "structures" not in payload
     assert "structures_audit" not in payload
     assert payload["roof"]["area_sqft"] == 2000.0
+
+
+# --- /v1/roof/locate: footprint snap for the order form's pin ----------
+
+# The Miramar pattern from Fredy's 2026-11-27 report: the geocoder
+# lands at (25.980179, -80.399509), on the street ~28 m east of the
+# house; the house itself is centred near (25.980211, -80.399791).
+_MIRAMAR_GEOCODE = (25.980179, -80.399509)
+_MIRAMAR_HOUSE = Polygon([
+    (-80.39990, 25.98013),
+    (-80.39968, 25.98013),
+    (-80.39968, 25.98029),
+    (-80.39990, 25.98029),
+    (-80.39990, 25.98013),
+])
+
+
+def _locate_fake_client(features):
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None):
+            if "Broward_BuildingFootPrints" in url:
+                return FakeResponse({"features": features})
+            return FakeResponse({"features": []})
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse({"elements": []})
+
+    return FakeAsyncClient
+
+
+def test_locate_request_requires_a_point_or_an_address():
+    from main import LocateRequest
+
+    with pytest.raises(ValueError):
+        LocateRequest()
+    with pytest.raises(ValueError):
+        LocateRequest(lat=25.0)
+    assert LocateRequest(lat=25.0, lon=-80.0).lat == 25.0
+    assert LocateRequest(street_address="100 Main Street").street_address
+
+
+def test_locate_endpoint_snaps_the_miramar_street_point_onto_the_house(monkeypatch):
+    import asyncio
+
+    feature = {
+        "type": "Feature",
+        "properties": {"OBJECTID": 77, "AREA": 1000, "COUNTY_NAM": "Broward", "capture_dates_range": "2020"},
+        "geometry": mapping(_MIRAMAR_HOUSE),
+    }
+    monkeypatch.setattr(
+        roof_service.httpx, "AsyncClient", _locate_fake_client([feature])
+    )
+    client = TestClient(roof_service.app)
+
+    response = client.post(
+        "/v1/roof/locate",
+        json={
+            "lat": _MIRAMAR_GEOCODE[0],
+            "lon": _MIRAMAR_GEOCODE[1],
+            "street_address": "3062 Southwest 189th Avenue",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "found"
+    assert payload["location"] == {"lat": _MIRAMAR_GEOCODE[0], "lon": _MIRAMAR_GEOCODE[1]}
+    footprint = payload["footprint"]
+    assert footprint["provider"] == "Broward County Building Footprints"
+    # The snapped pin is the selected footprint's centroid: on the
+    # house (within ~1 m of the point Fredy dragged the pin to by
+    # hand), not the geocoded street point ~28 m east.
+    centroid = footprint["centroid"]
+    assert centroid["lat"] == pytest.approx(25.98021, abs=2e-5)
+    assert centroid["lon"] == pytest.approx(-80.39979, abs=2e-5)
+    assert _MIRAMAR_HOUSE.contains(Point(centroid["lon"], centroid["lat"]))
+    assert centroid["lon"] != pytest.approx(_MIRAMAR_GEOCODE[1], abs=1e-4)
+    # The endpoint selects exactly the candidate a measurement of the
+    # same point selects — one code path, no second heuristic.
+    _polygon, metadata = asyncio.run(
+        roof_service.get_footprint(
+            _MIRAMAR_GEOCODE[0], _MIRAMAR_GEOCODE[1], "3062 Southwest 189th Avenue"
+        )
+    )
+    assert footprint["candidate_id"] == metadata["candidate_id"]
+    assert len(footprint["candidate_id"]) == 24
+    assert footprint["selection"]["method"] == "automatic_score"
+    assert footprint["polygon_geojson"]["type"] == "Polygon"
+
+
+def test_locate_endpoint_reports_not_found_when_no_footprint_is_near(monkeypatch):
+    monkeypatch.setattr(roof_service.httpx, "AsyncClient", _locate_fake_client([]))
+    client = TestClient(roof_service.app)
+
+    response = client.post(
+        "/v1/roof/locate",
+        json={"lat": _MIRAMAR_GEOCODE[0], "lon": _MIRAMAR_GEOCODE[1]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "not_found"
+    assert payload["location"] == {"lat": _MIRAMAR_GEOCODE[0], "lon": _MIRAMAR_GEOCODE[1]}
+    assert "footprint" not in payload
+
+
+def test_locate_endpoint_geocodes_an_address_only_request(monkeypatch):
+    polygon = Polygon([
+        (-80.0, 25.0),
+        (-79.9999, 25.0),
+        (-79.9999, 25.0001),
+        (-80.0, 25.0001),
+    ])
+
+    async def fake_geocode(_address):
+        return 25.00005, -79.99995, "Endpoint test address", {"source": "Test geocoder"}
+
+    async def fake_get_footprint(_lat, _lon, _street_address=None, _selected_candidate_id=None):
+        return polygon, {
+            "provider": "Test footprints",
+            "source_id": 5,
+            "area_sqft": 1200.0,
+            "candidate_id": "candidate-1234567890abcd",
+            "centroid": {"lat": 25.00005, "lon": -79.99995},
+            "address_point_inside_footprint": True,
+            "address_to_footprint_distance_m": 0.0,
+            "_candidate_pool": [("internal", polygon, {})],
+        }
+
+    monkeypatch.setattr(roof_service, "geocode_with_provenance", fake_geocode)
+    monkeypatch.setattr(roof_service, "get_footprint", fake_get_footprint)
+
+    response = TestClient(roof_service.app).post(
+        "/v1/roof/locate",
+        json={"street_address": "Unique locate endpoint test address"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "found"
+    assert payload["matched_address"] == "Endpoint test address"
+    assert payload["footprint"]["centroid"] == {"lat": 25.00005, "lon": -79.99995}
+    # The internal candidate pool never leaks into a response.
+    assert "_candidate_pool" not in str(payload)

@@ -94,6 +94,58 @@ export function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+export type LocatedBuilding = {
+  lat: number;
+  lon: number;
+  candidateId: string | null;
+};
+
+/** Ask the detection service which building footprint it would
+ * select for a geocoded point (POST /v1/roof/locate — the same
+ * candidate lookup + auto-selection the measurement runs, without
+ * the LiDAR) and return that footprint's centroid. The
+ * measurement-order form drops pin 1 there so the pin sits on the
+ * house instead of the geocoded street point in front of the lot,
+ * and the stored pin — the one that steers the measurement — is the
+ * point the user actually sees. Returns null when the service finds
+ * no footprint near the point or cannot be reached; the caller then
+ * keeps the geocoded point exactly as before. */
+export async function locateBuildingPin(
+  base: string,
+  point: { lat: number; lon: number },
+  streetAddress?: string,
+): Promise<LocatedBuilding | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${base}/v1/roof/locate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lat: point.lat,
+        lon: point.lon,
+        ...(streetAddress ? { street_address: streetAddress } : {}),
+      }),
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const body: unknown = await response.json().catch(() => null);
+  if (!body || typeof body !== "object" || !("status" in body) || body.status !== "found") {
+    return null;
+  }
+  const footprint = (body as { footprint?: unknown }).footprint;
+  if (!footprint || typeof footprint !== "object") return null;
+  const centroid = (footprint as { centroid?: unknown }).centroid;
+  if (!centroid || typeof centroid !== "object") return null;
+  const { lat, lon } = centroid as { lat?: unknown; lon?: unknown };
+  if (typeof lat !== "number" || typeof lon !== "number") return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  const candidateId = (footprint as { candidate_id?: unknown }).candidate_id;
+  return { lat, lon, candidateId: typeof candidateId === "string" ? candidateId : null };
+}
+
 /** Run one address analysis hands-off through the jobs API. A failed
  * submission (service restarting, network drop) is retried inside the
  * same resubmit budget as a lost job instead of falling back to the
