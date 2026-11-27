@@ -297,8 +297,11 @@ const permitNocInput = z.object({
   )) {
     context.addIssue({ code: "custom", path: ["recording_status"], message: "A recorded NOC requires county, instrument number, and recording date." });
   }
-  if (value.assessment_status === "required" && !value.assessment_basis?.trim()) {
-    context.addIssue({ code: "custom", path: ["assessment_basis"], message: "Document the current jurisdiction source and why the NOC is required." });
+  if (value.assessment_status !== "not_assessed" && (!value.assessment_basis?.trim() || !value.threshold_source_url)) {
+    context.addIssue({ code: "custom", path: ["assessment_basis"], message: "A required / not-required decision must cite the current jurisdiction source and assessment basis." });
+  }
+  if (value.assessment_status === "required" && (value.contract_value_cents == null || value.threshold_amount_cents == null)) {
+    context.addIssue({ code: "custom", path: ["threshold_amount_cents"], message: "A required NOC assessment must record both contract value and the verified threshold." });
   }
 });
 
