@@ -209,7 +209,7 @@ export function Expenses() {
                     onClick={async () => {
                       if (!confirm("Remove this recorded expense? Financial totals will change."))
                         return;
-                      const { error } = await supabase.from("crm_expenses").delete().eq("id", e.id);
+                      const { error } = await supabase.from("crm_expenses").delete().eq("id", e.id).eq("company_id", e.company_id);
                       if (error) toast.error("Could not remove expense");
                       else {
                         if (e.receipt_path)
