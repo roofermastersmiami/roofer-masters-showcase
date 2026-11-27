@@ -1,3 +1,4 @@
+-- tenant-audit: reviewed — security-definer checkout reservation locks the capability-token invoice, derives company_id only from that row, and is executable only by service_role; no caller-supplied tenant identifier is accepted.
 -- Ensure public invoice checkout reservations inherit tenant ownership from the locked invoice.
 -- The capability-token flow remains public through its server-only service_role boundary.
 CREATE OR REPLACE FUNCTION public.reserve_invoice_checkout(
