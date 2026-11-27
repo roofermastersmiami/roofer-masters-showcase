@@ -73,15 +73,30 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
     const size = options.size ?? 10;
     const font = options.strong ? bold : regular;
     const maxWidth = page.getWidth() - margin * 2;
-    const words = value.split(/\s+/);
+    const tokens = value.split(/\s+/).flatMap((word) => {
+      if (font.widthOfTextAtSize(word, size) <= maxWidth) return [word];
+      const chunks: string[] = [];
+      let chunk = "";
+      for (const character of word) {
+        const candidate = chunk + character;
+        if (chunk && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+          chunks.push(chunk);
+          chunk = character;
+        } else {
+          chunk = candidate;
+        }
+      }
+      if (chunk) chunks.push(chunk);
+      return chunks;
+    });
     let line = "";
-    for (const word of words) {
-      const candidate = line ? line + " " + word : word;
+    for (const token of tokens) {
+      const candidate = line ? line + " " + token : token;
       if (font.widthOfTextAtSize(candidate, size) > maxWidth && line) {
         ensureSpace(size + 5);
         page.drawText(line, { x: margin, y, size, font, color: options.color ?? rgb(0.12, 0.16, 0.22) });
         y -= lineHeight;
-        line = word;
+        line = token;
       } else line = candidate;
     }
     ensureSpace(size + 5);
