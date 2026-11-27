@@ -3,6 +3,7 @@ import {
   BROWARD_COUNTY_PROFILE,
   BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
   BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
+  BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
   BROWARD_HOLLYWOOD_ROOFING_PROFILE,
   BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
   BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
@@ -355,6 +356,58 @@ describe("Fort Lauderdale roofing permit profile", () => {
   it("suppresses Fort Lauderdale's 8th Edition checklist after December 30, 2026", () => {
     const result = getPermitChecklist({
       profileId: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-12-31",
+    });
+    expect(result.codeReferenceCurrent).toBe(false);
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.items).toHaveLength(0);
+  });
+});
+
+
+describe("Miramar residential roofing permit profile", () => {
+  it("includes the official City roofing package documents and requires parcel verification", () => {
+    const unverified = getPermitChecklist({
+      profileId: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      asOfDate: "2026-11-26",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.items.map((item) => item.id)).toContain("hoa-awareness");
+    expect(unverified.items.map((item) => item.id)).toContain("roof-underlayment-affidavit");
+    expect(unverified.items.map((item) => item.id)).toContain("roof-to-wall-mitigation");
+    expect(unverified.items.map((item) => item.id)).toContain("asbestos-certificate");
+
+    const verified = getPermitChecklist({
+      profileId: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      roofingSystem: "metal",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    expect(verified.authorityConfirmed).toBe(true);
+    expect(verified.items.map((item) => item.id)).toContain("notice-of-commencement");
+  });
+
+  it("does not apply the residential City package to commercial reroofs, repairs, or new roofs", () => {
+    for (const projectKind of ["commercial_reroof", "repair", "new_roof"] as const) {
+      const result = getPermitChecklist({
+        profileId: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id,
+        projectKind,
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-11-26",
+      });
+      expect(result.authorityConfirmed).toBe(false);
+      expect(result.items).toHaveLength(0);
+    }
+  });
+
+  it("suppresses the 8th Edition Miramar package after December 30, 2026", () => {
+    const result = getPermitChecklist({
+      profileId: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id,
       projectKind: "reroof",
       parcelAuthorityVerified: true,
       asOfDate: "2026-12-31",

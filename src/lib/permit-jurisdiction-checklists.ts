@@ -274,6 +274,35 @@ const fortLauderdaleRoofingChecklist: ChecklistItem[] = [
   { id: "wind-load-calculations", label: "Wind-load calculations", detail: "Use the City's wind-load calculation form when calculations are required for the proposed roof assembly or project review.", appliesWhen: "When required by the applicable code, assembly, or plan reviewer; the form listing alone does not make it universal.", sourceUrl: "https://www.fortlauderdale.gov/Government/Departments/Development-Services/DSD-Documents-Forms" },
 ];
 
+
+const miramarRoofingChecklist: ChecklistItem[] = [
+  { id: "building-application", label: "Complete City / Broward building permit application", detail: "Complete the current permit application and applicable roofing forms for the proposed scope.", appliesWhen: "Required for City of Miramar roofing permit intake.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "permit-valuation", label: "Roofing permit valuation", detail: "Provide the total project value, including labor and materials; the Building Official may request supporting valuation detail.", appliesWhen: "Required at application.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "hoa-awareness", label: "Homeowners Association Affidavit of Awareness", detail: "Complete the affidavit even when the property is not in a homeowners association.", appliesWhen: "Required by the City roofing package.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "roof-underlayment-affidavit", label: "Roof underlayment affidavit", detail: "Complete the City's roof underlayment affidavit for the applicable roof covering.", appliesWhen: "Shingle and metal roof systems, as identified in the City roofing package.", sourceUrl: "https://www.miramarfl.gov/Departments/Building-Planning-Zoning/Building-Permits-Inspections/Applications-Forms" },
+  { id: "roof-to-wall-mitigation", label: "Roof-to-wall connection hurricane mitigation affidavit", detail: "Complete the City's roof-to-wall connection hurricane mitigation affidavit.", appliesWhen: "Listed in the City roofing package; confirm applicability to the existing structure and proposed scope with plan review.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "rooftop-equipment-affidavit", label: "Mandatory rooftop-mounted equipment affidavit", detail: "Complete the City's rooftop-mounted equipment affidavit.", appliesWhen: "Required by the City roofing package.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "debris-removal-affidavit", label: "Construction debris removal affidavit", detail: "Complete the affidavit included in the City's roofing package.", appliesWhen: "Required by City ordinance and listed in the roofing package.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "roof-product-approvals", label: "Roof-system product approval / NOA", detail: "Provide the applicable Florida Product Approval or Miami-Dade Notice of Acceptance for the roof system and components, including underlayment where applicable.", appliesWhen: "For the proposed shingles, tile, flat roof system, metal panels, underlayment, and other applicable products.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "hvzh-roofing-package", label: "HVHZ Uniform Roofing Application Package", detail: "Include the applicable roofing forms and attachments identified by FBC Section 1525; do not submit unrelated forms.", appliesWhen: "Required as applicable to the selected roof system and scope.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "asbestos-certificate", label: "Broward County Asbestos Certificate", detail: "Obtain the Broward County asbestos certificate and include it with the permit documents.", appliesWhen: "Listed in the City roofing package.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "owner-builder-affidavit", label: "Owner-builder disclosure statement", detail: "Provide the owner-builder disclosure and supporting proof of ownership, matching identification, and homestead verification where applicable. If a contractor is hired, that contractor must pull the permit.", appliesWhen: "Only for eligible residential owner-builder applications.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "digital-identical-documents", label: "Affidavit of Identical Documents", detail: "Include the affidavit with engineered plans and calculations submitted digitally with professional digital seals and signatures.", appliesWhen: "Only when engineered plans or calculations are submitted digitally.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+  { id: "notice-of-commencement", label: "Recorded Notice of Commencement", detail: "Record and post the Notice of Commencement before the first inspection when the statutory project-value threshold applies; verify current statutory instructions.", appliesWhen: "The City package cites construction / renovation / alteration values over $5,000; confirm current law and applicability before relying on this threshold.", sourceUrl: "https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf" },
+];
+
+export const BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "broward-miramar-residential-roofing",
+  label: "City of Miramar — residential roofing",
+  county: "Broward",
+  authorityScope: "City of Miramar residential roofing application package, revision 01/2025. The package is specifically described for residential permits; confirm separate commercial and multifamily requirements with the City.",
+  authorityWarning: "Use only after verifying the parcel is inside City of Miramar limits. This profile is a CRM intake aid, not a municipal determination or approval; check the live City roofing package and portal before filing.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.miramarfl.gov/files/assets/public/v/3/buildingplanningzoning/documents/application-and-forms/roofing-package-fbc-2023-dec.-2024.pdf", "https://www.miramarfl.gov/Departments/Building-Planning-Zoning/Building-Permits-Inspections/Applications-Forms", "https://www.miramarfl.gov/Departments/Building-Planning-Zoning/Building-Permits-Inspections"],
+  checklist: miramarRoofingChecklist,
+};
+
 export const BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE: JurisdictionPermitProfile = {
   id: "broward-fort-lauderdale-roofing",
   label: "City of Fort Lauderdale — roofing",
@@ -330,6 +359,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     [BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id]: BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE,
     [BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id]: BROWARD_POMPANO_BEACH_ROOFING_PROFILE,
     [BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id]: BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE,
+    [BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id]: BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE,
   };
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
@@ -364,8 +394,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
-  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
