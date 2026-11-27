@@ -49,8 +49,8 @@ BEGIN
     VALUES(lid,'Instant roof estimate',p_category,p_qualification,p_total);
   END IF;
 
-  INSERT INTO public.roof_jobs(lead_id,title,status,notes)
-  VALUES(lid,p_category || ' — inspection requested','on_hold',
+  INSERT INTO public.roof_jobs(company_id,lead_id,title,status,notes)
+  VALUES(company_uuid,lid,p_category || ' — inspection requested','on_hold',
     'Instant estimate lead. Unscheduled; scope and final price require owner inspection.');
 
   RETURN lid;
