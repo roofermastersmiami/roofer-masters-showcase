@@ -178,8 +178,9 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       if (!data.job_id) throw new Error("Choose a customer project");
       const { data: job, error: jobError } = await context.supabase
         .from("roof_jobs")
-        .select("id,lead_id,property_id")
+        .select("id,lead_id,property_id,company_id")
         .eq("id", data.job_id)
+        .eq("company_id", membership.company_id)
         .maybeSingle();
       if (jobError) throw new Error("Could not verify customer project");
       if (
@@ -201,6 +202,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
           },
         })
         .eq("id", job.id)
+        .eq("company_id", membership.company_id)
         .select("id")
         .maybeSingle();
       if (error || !updatedJob) throw new Error("Could not transfer the material measurements");
@@ -211,6 +213,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       .from("roof_estimates")
       .select("id")
       .eq("report_order_id", order.id)
+      .eq("company_id", membership.company_id)
       .limit(1)
       .maybeSingle();
     if (existingError) throw new Error("Could not check for an existing estimate");
