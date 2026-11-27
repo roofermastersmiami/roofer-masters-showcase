@@ -444,6 +444,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const items = (checklistEnabled ? profile.checklist : []).filter((item) => allowedIds.has(item.id)).filter((item) => {
     if (item.id === "owner-roofing-notification") return request.projectKind === "reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "commercial-reroof-statement") return request.projectKind === "commercial_reroof";
+    if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment"].includes(item.id)) return request.projectKind === "commercial_reroof";
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
   });
