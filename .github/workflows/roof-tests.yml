@@ -73,6 +73,12 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_secondary_ownership_test
           psql "postgresql://postgres@localhost:5432/crm_secondary_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-secondary-operational-company-ownership.sql
+      - name: Run company-scoped lead activity trigger PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_lead_activity_test
+          psql "postgresql://postgres@localhost:5432/crm_lead_activity_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-lead-activity-trigger.sql
       - name: Run company-scoped invoice RPC PostgreSQL integration test
         env:
           PGPASSWORD: postgres
