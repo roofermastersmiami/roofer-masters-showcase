@@ -404,7 +404,12 @@ export function RoofMeasurements({
       const { roofDrawingPdf } = await import("@/lib/roof-drawing-pdf");
       const photos = [];
       if (pickedEntry.drawing.geo_reference) {
-        const framing = roofCoverFraming(pickedEntry.drawing);
+        // Narrowed object: roofCoverFraming's parameter does not
+        // accept a full drawing under exactOptionalPropertyTypes.
+        const framing = roofCoverFraming({
+          planes: pickedEntry.drawing.planes,
+          geo_reference: pickedEntry.drawing.geo_reference,
+        });
         const coverLatitude = framing?.latitude ?? pickedEntry.drawing.geo_reference.originLatitude;
         const coverLongitude =
           framing?.longitude ?? pickedEntry.drawing.geo_reference.originLongitude;

@@ -2273,19 +2273,37 @@ def test_classify_rejects_provider_tagged_dwelling():
     assert "separate dwelling" in audit[0]["reasons"][0]
 
 
+def test_classify_rejects_small_building_beyond_the_same_lot_centre_limit():
+    # A wide main house can be within the edge-gap limit of a small
+    # building on the next lot (verified live at 600 Mendoza Ave:
+    # a 1,227 sq ft building 58 m east on the street setback line).
+    wide_main = _box(-80.0006, 24.9999, -80.0, 25.0001)
+    wide_main_meta = {"candidate_id": "main-id", "provider": "Test", "area_sqft": 12000.0}
+    small = _box(-79.99965, 24.99995, -79.9995, 25.00015)
+    accepted, audit = _classify_detached_structures(
+        wide_main, wide_main_meta, [_pool_entry(small, "far-id")], "123 Main St"
+    )
+    assert accepted == []
+    assert audit[0]["decision"] == "rejected"
+    assert "same-lot limit" in audit[0]["reasons"][0]
+    assert audit[0]["gap_to_main_m"] < 45.0  # edge gap alone would have passed it
+    assert audit[0]["centroid_to_main_m"] > 40.0
+
+
 def test_classify_caps_detached_structures_at_the_nearest_four():
-    # Six sheds around the main house, all inside the 45 m limit.
+    # Six sheds around the main house, all inside the gap, size and
+    # same-lot centre limits.
     spots = [
-        (-79.99985, 24.999925),  # east
-        (-80.00045, 24.999925),  # west
-        (-80.000175, 25.00025),  # north
-        (-80.000175, 24.9996),  # south
-        (-79.99985, 25.00025),  # north-east
-        (-80.00045, 25.00025),  # north-west
+        (-79.99987, 24.99994, 0.00014),  # east
+        (-80.00041, 24.99994, 0.00014),  # west
+        (-80.00017, 25.00023, 0.00014),  # north
+        (-80.00017, 24.99963, 0.00014),  # south
+        (-79.99987, 25.00016, 0.00012),  # north-east
+        (-80.00039, 25.00016, 0.00012),  # north-west
     ]
     pool = [
-        _pool_entry(_box(west, south, west + 0.00015, south + 0.00015), f"shed-{index}")
-        for index, (west, south) in enumerate(spots)
+        _pool_entry(_box(west, south, west + size, south + size), f"shed-{index}")
+        for index, (west, south, size) in enumerate(spots)
     ]
     accepted, audit = _classify_detached_structures(
         _MAIN_POLYGON, _MAIN_META, pool, "123 Main St"

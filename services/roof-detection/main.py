@@ -322,6 +322,7 @@ def _distance_to_footprint_meters(polygon: Polygon, lat: float, lon: float) -> f
 # houses sat within 45 m of a 1,827 sq ft main house; the size
 # rules reject all four, a genuine 600 sq ft garage passes.)
 DETACHED_MAX_GAP_M = 45.0
+DETACHED_MAX_CENTROID_M = 40.0
 DETACHED_MAX_STRUCTURES = 4
 DETACHED_OVERLAP_FRACTION = 0.10
 DETACHED_MAX_AREA_FRACTION = 0.6
@@ -345,6 +346,18 @@ def _polygon_gap_meters(first: Polygon, second: Polygon) -> float:
         return Polygon([transformer.transform(x, y) for x, y in polygon.exterior.coords])
 
     return float(project(first).distance(project(second)))
+
+
+def _centroid_distance_meters(first: Polygon, second: Polygon) -> float:
+    """Distance between two footprints' centroids, in metres."""
+    center = first.centroid
+    local = CRS.from_proj4(
+        f"+proj=aeqd +lat_0={center.y} +lon_0={center.x} +datum=WGS84 +units=m +no_defs"
+    )
+    transformer = Transformer.from_crs("EPSG:4326", local, always_xy=True)
+    ax, ay = transformer.transform(center.x, center.y)
+    bx, by = transformer.transform(second.centroid.x, second.centroid.y)
+    return float(math.hypot(bx - ax, by - ay))
 
 
 def _classify_detached_structures(
@@ -402,6 +415,17 @@ def _classify_detached_structures(
             rejected = (
                 f"{gap_m:.1f} m from the main footprint exceeds the "
                 f"{DETACHED_MAX_GAP_M:.0f} m same-property limit"
+            )
+        # Edge gap alone is not enough on wide lots: a wide main
+        # house can sit within 45 m edge-to-edge of the NEXT street's
+        # houses. A genuine outbuilding stands within the same lot,
+        # so its centre stays near the main house's centre.
+        centroid_m = _centroid_distance_meters(main_polygon, polygon)
+        entry["centroid_to_main_m"] = round(centroid_m, 2)
+        if rejected is None and centroid_m > DETACHED_MAX_CENTROID_M:
+            rejected = (
+                f"centre is {centroid_m:.1f} m from the main house's centre, beyond the "
+                f"{DETACHED_MAX_CENTROID_M:.0f} m same-lot limit — a building on another lot"
             )
         candidate_area = float(meta.get("area_sqft") or 0.0)
         if rejected is None and (
@@ -4699,6 +4723,7 @@ async def _run_analysis(
             "main_candidate_id": footprint_meta.get("candidate_id"),
             "candidates_considered": len(classification_audit),
             "detached_max_gap_m": DETACHED_MAX_GAP_M,
+            "detached_max_centroid_m": DETACHED_MAX_CENTROID_M,
             "detached_max_structures": DETACHED_MAX_STRUCTURES,
             "detached_max_area_sqft": DETACHED_MAX_AREA_SQFT,
             "detached_max_area_fraction": DETACHED_MAX_AREA_FRACTION,
