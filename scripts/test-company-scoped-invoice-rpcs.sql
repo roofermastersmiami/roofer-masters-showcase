@@ -11,11 +11,12 @@ CREATE TABLE crm_company_memberships(user_id uuid, company_id uuid, role text);
 CREATE TABLE crm_invoices(
   id uuid PRIMARY KEY, company_id uuid NOT NULL, status text NOT NULL,
   paid_cents bigint NOT NULL DEFAULT 0, total_cents bigint NOT NULL,
+  deposit_cents bigint NOT NULL DEFAULT 0, token uuid UNIQUE, expires_at timestamptz DEFAULT now() + interval '1 day',
   environment text NOT NULL
 );
 CREATE TABLE invoice_checkouts(
   id uuid PRIMARY KEY, company_id uuid NOT NULL, invoice_id uuid NOT NULL,
-  session_id text NOT NULL, environment text NOT NULL, amount_cents bigint NOT NULL,
+  session_id text, environment text NOT NULL, amount_cents bigint NOT NULL,
   status text NOT NULL
 );
 CREATE TABLE invoice_payments(
@@ -29,11 +30,13 @@ INSERT INTO crm_company_memberships VALUES
 ('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','accounting');
 INSERT INTO crm_invoices(id,company_id,status,paid_cents,total_cents,environment) VALUES
 ('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','draft',0,10000,'test'),
-('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','issued',0,10000,'test');
+('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','issued',0,10000,'test'),
+('20000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000001','issued',0,10000,2500,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',now()+interval '1 day','test');
 INSERT INTO invoice_checkouts VALUES
 ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','cs_test_1','test',5000,'pending');
 
 \ir ../drizzle/migrations/0056_company_scoped_invoice_payment_rpcs.sql
+\ir ../drizzle/migrations/0057_company_scoped_invoice_checkout_reservation.sql
 
 -- Same-company accounting can issue an invoice.
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
@@ -91,6 +94,21 @@ DO $$ BEGIN
     IF SQLERRM = 'Authenticated checkout settlement was accepted' THEN RAISE; END IF;
   END;
 END $$;
+
+-- Trusted service reserves checkout using the invoice token and inherits invoice company.
+SELECT set_config('request.jwt.claim.role','service_role',false);
+DO $
+DECLARE reservation jsonb; reservation_id uuid;
+BEGIN
+  reservation := public.reserve_invoice_checkout('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','test','deposit');
+  reservation_id := (reservation->>'id')::uuid;
+  IF NOT EXISTS (SELECT 1 FROM invoice_checkouts WHERE id=reservation_id
+    AND invoice_id='20000000-0000-0000-0000-000000000003'
+    AND company_id='10000000-0000-0000-0000-000000000001'
+    AND amount_cents=2500 AND status='pending') THEN
+    RAISE EXCEPTION 'Checkout reservation did not inherit invoice company';
+  END IF;
+END $;
 
 -- Trusted payment service can settle, and the payment inherits checkout/invoice company.
 SELECT set_config('request.jwt.claim.role','service_role',false);
