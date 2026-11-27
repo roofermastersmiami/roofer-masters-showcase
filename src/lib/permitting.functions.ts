@@ -65,6 +65,9 @@ export const getPermitWorkspace = createServerFn({ method: "POST" })
       ? await db.from("roof_permit_inspections").select("*").eq("company_id", companyId).in("application_id", applicationIds).order("scheduled_at", { ascending: true })
       : { data: [], error: null };
     if (inspectionsError) throw new Error("Could not load permit inspections.");
+    const { data: approvals, error: approvalsError } = await db.from("roof_product_approvals")
+      .select("*").eq("company_id", companyId).order("updated_at", { ascending: false });
+    if (approvalsError) throw new Error("Could not load roof product approval records.");
     const propertyIds = [...new Set((jobs ?? []).map((job) => job.property_id).filter(Boolean))];
     const { data: properties, error: propertiesError } = propertyIds.length
       ? await db.from("crm_properties").select("id,address").in("id", propertyIds)
@@ -73,6 +76,7 @@ export const getPermitWorkspace = createServerFn({ method: "POST" })
     return {
       applications: applications ?? [],
       inspections: inspections ?? [],
+      approvals: approvals ?? [],
       jobs: (jobs ?? []).map((job) => ({
         ...job,
         address: properties?.find((property) => property.id === job.property_id)?.address ?? "",
@@ -211,5 +215,57 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
       .update(data.changes).eq("id", data.id).eq("company_id", companyId).eq("updated_at", current.updated_at).select("*").maybeSingle();
     if (error) throw new Error("Could not update this inspection.");
     if (!saved) throw new Error("This inspection changed in another session. Reload it and retry your update.");
+    return saved;
+  });
+
+
+const productApprovalInput = z.object({
+  permit_application_id: z.string().uuid(),
+  approval_kind: z.enum(["miami_dade_noa", "florida_product_approval", "ul_listing", "fire_directory"]),
+  approval_number: z.string().trim().min(1).max(120),
+  manufacturer: z.string().trim().min(1).max(160),
+  product_name: z.string().trim().min(1).max(200),
+  product_category: z.string().trim().max(120).optional(),
+  expires_on: z.string().date().nullable().optional(),
+  hvhz_status: z.enum(["yes", "no", "unknown"]).default("unknown"),
+  system_description: z.string().max(4000).optional(),
+  installation_limitations: z.string().max(4000).optional(),
+  source_url: z.string().url().max(2048).nullable().optional(),
+});
+
+export const createRoofProductApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => productApprovalInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { db, companyId } = await permitContext(context.userId);
+    const { data: application } = await db.from("roof_permit_applications")
+      .select("id").eq("id", data.permit_application_id).eq("company_id", companyId).maybeSingle();
+    if (!application) throw new Error("Select a permit application belonging to your company.");
+    const { data: saved, error } = await db.from("roof_product_approvals")
+      .insert({ ...data, company_id: companyId, created_by: context.userId, approval_status: "unverified" })
+      .select("*").single();
+    if (error || !saved) throw new Error("Could not save the product approval reference.");
+    return saved;
+  });
+
+export const verifyRoofProductApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({ id: z.string().uuid() }).parse(raw))
+  .handler(async ({ data, context }) => {
+    const { db, companyId } = await permitContext(context.userId);
+    const { data: current, error: currentError } = await db.from("roof_product_approvals")
+      .select("approval_status,expires_on,updated_at").eq("id", data.id).eq("company_id", companyId).maybeSingle();
+    if (currentError || !current) throw new Error("Product approval record was not found in your company.");
+    if (current.approval_status === "revoked") throw new Error("A revoked approval cannot be marked verified.");
+    const today = new Date().toISOString().slice(0, 10);
+    if (current.expires_on && current.expires_on < today) {
+      throw new Error("This approval is past its recorded expiration date. Confirm its current status with the issuing authority before changing the record.");
+    }
+    const { data: saved, error } = await db.from("roof_product_approvals")
+      .update({ approval_status: "verified", verified_at: new Date().toISOString(), verified_by: context.userId })
+      .eq("id", data.id).eq("company_id", companyId).eq("updated_at", current.updated_at)
+      .select("*").maybeSingle();
+    if (error) throw new Error("Could not verify this product approval record.");
+    if (!saved) throw new Error("This approval record changed in another session. Reload and retry.");
     return saved;
   });
