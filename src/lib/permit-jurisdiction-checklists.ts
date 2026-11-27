@@ -279,19 +279,17 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
-  if (profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) {
-    if (!request.parcelAuthorityVerified) {
-      authorityConfirmed = false;
-      warnings.push("Verify the property is inside City of Sunrise limits and confirm its current checklist with the Sunrise Building Division before filing.");
-    }
-  }
-  if (profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id && request.projectKind !== "reroof") {
+  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id;
+  if ([BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id, BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id, BROWARD_HOLLYWOOD_ROOFING_PROFILE.id].includes(profile.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
-    warnings.push("The Sunrise source covers residential structural roof / reroof work only; confirm requirements for this different project type.");
+    warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
+  }
+  if (residentialOnlyProfile && request.projectKind !== "reroof") {
+    authorityConfirmed = false;
+    warnings.push(`The ${profile.label} source covers residential reroof work only; confirm requirements for this different project type.`);
   }
 
   const roofSystem = request.roofingSystem ?? "other";
-  const residentialOnlyProfile = profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id;
   const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
   const requiredRoofingSections = !checklistEnabled ? [] : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
