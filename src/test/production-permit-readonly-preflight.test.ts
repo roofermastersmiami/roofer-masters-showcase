@@ -16,9 +16,16 @@ describe("production permitting preflight is read-only and schema-drift tolerant
   });
 
   it("collects operational counts and company ownership coverage", () => {
-    for (const table of ["leads", "crm_customers", "crm_properties", "roof_report_orders", "roof_jobs"]) {
+    const ownershipChecks: Record<string, string> = {
+      leads: "leads_has_company_id",
+      crm_customers: "customers_has_company_id",
+      crm_properties: "properties_has_company_id",
+      roof_report_orders: "orders_has_company_id",
+      roof_jobs: "roof_jobs_has_company_id",
+    };
+    for (const [table, variable] of Object.entries(ownershipChecks)) {
       expect(sql).toContain(`public.${table}`);
-      expect(sql).toContain(`${table}_has_company_id`);
+      expect(sql).toContain(variable);
     }
   });
 
