@@ -64,10 +64,10 @@ UPDATE crm_expenses SET receipt_path='expense/10000000-0000-0000-0000-0000000000
 
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
-DO $ BEGIN
+DO $$ BEGIN
   IF (SELECT count(*) FROM storage.objects WHERE bucket_id='roofing-proposals')<>1
     THEN RAISE EXCEPTION 'Company A can read another tenant or legacy receipt'; END IF;
-END $;
+END $$;
 RESET ROLE;
 
 -- Company B cannot read or delete Company A's object; RLS silently filters DELETE.
