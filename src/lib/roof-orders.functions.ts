@@ -141,12 +141,14 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
     // Material handoff updates roof_jobs, whose RLS policy is production-manager-only.
     // Estimate handoff is a sales workflow and remains available to office and sales.
     const allowedRoles = roofOrderTransferRoles(data.target);
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: [...allowedRoles],
-    });
-    if (roleError) throw new Error("Could not verify report permissions");
-    if (!owner)
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("company_id,role")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (membershipError || !membership) throw new Error("A single company membership is required");
+    if (!allowedRoles.includes(membership.role as (typeof allowedRoles)[number]) &&
+        membership.role !== "owner" && membership.role !== "admin")
       throw new Error("You do not have access to transfer this report to that destination");
 
     const { data: order, error: orderError } = await context.supabase
@@ -238,12 +240,14 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: allowed, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales", "production_manager"],
-    });
-    if (roleError) throw new Error("Could not verify report permissions");
-    if (!allowed) throw new Error("You do not have access to delete roof reports");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("company_id,role")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (membershipError || !membership) throw new Error("A single company membership is required");
+    if (!["owner", "admin", "office", "sales", "production_manager"].includes(membership.role))
+      throw new Error("You do not have access to delete roof reports");
 
     const { data: current, error: readError } = await context.supabase
       .from("roof_report_orders")
