@@ -16,11 +16,13 @@ const journal = JSON.parse(
 
 describe("company-scoped customer save RPC", () => {
   it("registers migration 0044 after the trigger compatibility migration", () => {
-    expect(journal.entries.at(-1)).toMatchObject({
+    const entry = journal.entries.find((item: { idx: number }) => item.idx === 44);
+    const triggerEntry = journal.entries.find((item: { idx: number }) => item.idx === 43);
+    expect(entry).toMatchObject({
       idx: 44,
       tag: "0044_company_scoped_customer_save",
     });
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when);
+    expect(entry!.when).toBeGreaterThan(triggerEntry!.when);
   });
 
   it("runs the migration in the PostgreSQL integration fixture", () => {
