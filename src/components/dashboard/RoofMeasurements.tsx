@@ -29,6 +29,13 @@ import { loadReportAerial } from "@/lib/report-aerial.functions";
 import type { AerialPhoto } from "@/lib/aerial-photo";
 import { ROOF_FEATURE_LEGEND } from "@/lib/roof-feature-styles";
 import { DrawingErrorBoundary } from "./DrawingErrorBoundary";
+import {
+  HousePhotoView,
+  NAIP_AERIAL_SOURCE_LABEL,
+  WorkspaceViewTabs,
+  type HousePhotoState,
+  type WorkspaceView,
+} from "./HousePhotoView";
 const Scene = lazy(() => import("./RoofScene"));
 const initial = roofPreset("gable");
 type Media = RoofDrawingMedia;
@@ -63,7 +70,7 @@ export function RoofMeasurements({
     [parent, setParent] = useState<string | null>(initialDrawing?.id ?? null),
     [dirty, setDirty] = useState(!initialDrawing),
     [busy, setBusy] = useState(false),
-    [view, setView] = useState<"3d" | "plan">("3d"),
+    [view, setView] = useState<WorkspaceView>("photo"),
     [autoRotate, setAutoRotate] = useState(true),
     [fit, setFit] = useState(0),
     [zoomDirection, setZoomDirection] = useState<"in" | "out">("in"),
@@ -103,6 +110,125 @@ export function RoofMeasurements({
       active = false;
     };
   }, [media]);
+  // House photo view: the workspace opens on the property's actual
+  // aerial photo — the same photo the automatic flow prints on the
+  // report PDF cover. Resolution mirrors the cover's own priority:
+  // a stored aerial saved with the drawing first, then the cover
+  // photo cached with the report, then a fresh fetch through the
+  // same server function + framing the PDF export uses (client
+  // stitch as fallback). A photo fetched fresh is cached next to
+  // the report PDF so reopening the report shows it instantly.
+  // View-only: nothing here saves a drawing or touches the
+  // automatic measurement chain.
+  const [photo, setPhoto] = useState<HousePhotoState>({ status: "loading" });
+  const viewPicked = useRef(false);
+  const storedAerialItem = media.find((item) => item.category === "aerial");
+  const coverFraming = roofCoverFraming(d);
+  const coverLatitude = coverFraming?.latitude ?? d.geo_reference?.originLatitude;
+  const coverLongitude = coverFraming?.longitude ?? d.geo_reference?.originLongitude;
+  const photoKey = [
+    storedAerialItem?.path ?? "",
+    report?.id ?? "",
+    coverLatitude?.toFixed(6) ?? "",
+    coverLongitude?.toFixed(6) ?? "",
+    coverFraming?.halfExtentMeters?.toFixed(1) ?? "",
+  ].join("|");
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    const showObjectUrl = (blob: Blob, source: string) => {
+      objectUrl = URL.createObjectURL(blob);
+      if (active) setPhoto({ status: "ready", url: objectUrl, source });
+    };
+    setPhoto({ status: "loading" });
+    void (async () => {
+      if (storedAerialItem) {
+        const { data, error } = await supabase.storage
+          .from("roof-job-photos")
+          .createSignedUrl(storedAerialItem.path, 300);
+        if (active && !error && data?.signedUrl) {
+          setPhoto({
+            status: "ready",
+            url: data.signedUrl,
+            source: storedAerialItem.source ?? "Aerial photo",
+          });
+          return;
+        }
+      }
+      const cachePath = report?.id ? `roof-report/${report.id}/aerial-cover.jpg` : null;
+      if (cachePath) {
+        const { data: cached, error } = await supabase.storage
+          .from("roofing-proposals")
+          .download(cachePath);
+        if (active && !error && cached) {
+          showObjectUrl(cached, NAIP_AERIAL_SOURCE_LABEL);
+          return;
+        }
+      }
+      if (coverLatitude !== undefined && coverLongitude !== undefined) {
+        let bytes: Uint8Array | null = null;
+        let source = NAIP_AERIAL_SOURCE_LABEL;
+        let cacheable = false;
+        try {
+          const result = await reportAerialFn({
+            data: {
+              latitude: coverLatitude,
+              longitude: coverLongitude,
+              ...(coverFraming ? { halfExtentMeters: coverFraming.halfExtentMeters } : {}),
+            },
+          });
+          if ("imageBase64" in result && result.imageBase64) {
+            const binary = atob(result.imageBase64);
+            bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            cacheable = true;
+          }
+        } catch {
+          // Fall through to the client-side stitch, like report generation.
+        }
+        if (!bytes) {
+          try {
+            const { fetchAerialPhoto } = await import("@/lib/aerial-photo");
+            const stitched = await fetchAerialPhoto(
+              coverLatitude,
+              coverLongitude,
+              coverFraming?.halfExtentMeters,
+            );
+            if (stitched) {
+              bytes = stitched.bytes;
+              source = stitched.source;
+            }
+          } catch {
+            // Imagery is best-effort; the photo view degrades honestly.
+          }
+        }
+        if (bytes) {
+          const blob = new Blob([Uint8Array.from(bytes)], { type: "image/jpeg" });
+          showObjectUrl(blob, source);
+          if (cacheable && cachePath) {
+            void supabase.storage
+              .from("roofing-proposals")
+              .upload(cachePath, blob, { contentType: "image/jpeg", upsert: true })
+              .then(undefined, () => undefined);
+          }
+          return;
+        }
+      }
+      if (active) setPhoto({ status: "unavailable" });
+    })();
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // reportAerialFn is a stable server-fn handle; the photo key
+    // captures every input that can change the resolved photo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoKey]);
+  // Until Fredy picks a view himself, a property with no aerial
+  // photo opens on the 3D house instead of an empty photo pane.
+  useEffect(() => {
+    if (photo.status === "unavailable" && !viewPicked.current) setView("3d");
+  }, [photo.status]);
   function edit(next: RoofDrawing) {
     userEditedDrawing.current = true;
     setD({ ...next, verified: false });
@@ -447,20 +573,13 @@ export function RoofMeasurements({
       <div className="min-w-0 border-b border-border">
         <div className="flex items-center justify-between border-b border-border py-3">
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={view === "3d" ? "secondary" : "ghost"}
-              onClick={() => setView("3d")}
-            >
-              3D House
-            </Button>
-            <Button
-              size="sm"
-              variant={view === "plan" ? "secondary" : "ghost"}
-              onClick={() => setView("plan")}
-            >
-              2D Plan
-            </Button>
+            <WorkspaceViewTabs
+              view={view}
+              onChange={(next) => {
+                viewPicked.current = true;
+                setView(next);
+              }}
+            />
             <Button
               size="icon"
               variant="outline"
@@ -511,47 +630,62 @@ export function RoofMeasurements({
           </Button>
         </div>
         <p className="px-3 py-2 text-xs text-muted-foreground">
-          3D House shows a simplified building mass beneath the measured roof. 2D Plan shows the
-          roof from directly above. The building shape is generated from measured roof geometry, not
-          a photorealistic model of the actual home.
+          House photo shows the actual aerial photo of this property — the same photo printed on the
+          report cover. 3D House shows a simplified building mass beneath the measured roof. 2D Plan
+          shows the roof from directly above. The building shape is generated from measured roof
+          geometry, not a photorealistic model of the actual home.
         </p>
         <div className="h-[440px] min-w-0 bg-muted sm:h-[560px]">
-          <DrawingErrorBoundary>
-            <Suspense
-              fallback={<p className="p-8 text-muted-foreground">Loading drawing workspace…</p>}
-            >
-              <Scene
-                drawing={d}
-                aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
-                aerialImageCenter={
-                  aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined
-                }
-                selected={selected}
-                onSelect={setSelected}
-                view={view}
-                fitKey={fit}
-                autoRotate={autoRotate}
-                zoomDirection={zoomDirection}
-                zoomKey={zoomKey}
-              />
-            </Suspense>
-          </DrawingErrorBoundary>
+          {view === "photo" ? (
+            <HousePhotoView
+              photo={photo}
+              zoomDirection={zoomDirection}
+              zoomKey={zoomKey}
+              fitKey={fit}
+            />
+          ) : (
+            <DrawingErrorBoundary>
+              <Suspense
+                fallback={<p className="p-8 text-muted-foreground">Loading drawing workspace…</p>}
+              >
+                <Scene
+                  drawing={d}
+                  aerialImageUrl={aerialGroundImage ? aerialImageUrl : ""}
+                  aerialImageCenter={
+                    aerialImageCenter ? [aerialImageCenter.x, 0.05, aerialImageCenter.z] : undefined
+                  }
+                  selected={selected}
+                  onSelect={setSelected}
+                  view={view}
+                  fitKey={fit}
+                  autoRotate={autoRotate}
+                  zoomDirection={zoomDirection}
+                  zoomKey={zoomKey}
+                />
+              </Suspense>
+            </DrawingErrorBoundary>
+          )}
         </div>
-        <div
-          className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border bg-background px-3 py-3"
-          aria-label="Roof feature color legend"
-        >
-          {ROOF_FEATURE_LEGEND.map((feature) => (
-            <div key={feature.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span
-                aria-hidden="true"
-                className="inline-block h-1 w-6 rounded-full"
-                style={{ backgroundColor: feature.color }}
-              />
-              <span>{feature.label}</span>
-            </div>
-          ))}
-        </div>
+        {view !== "photo" && (
+          <div
+            className="flex flex-wrap gap-x-4 gap-y-2 border-t border-border bg-background px-3 py-3"
+            aria-label="Roof feature color legend"
+          >
+            {ROOF_FEATURE_LEGEND.map((feature) => (
+              <div
+                key={feature.id}
+                className="flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-1 w-6 rounded-full"
+                  style={{ backgroundColor: feature.color }}
+                />
+                <span>{feature.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {error && (
         <p
