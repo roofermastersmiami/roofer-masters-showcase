@@ -57,6 +57,21 @@ describe("Miami-Dade unincorporated roofing checklist", () => {
     expect(result.warnings.some((warning) => warning.includes("does not begin with 30"))).toBe(true);
   });
 
+  it("stops serving the 2023-code checklist after the 9th Edition effective date", () => {
+    const result = getPermitChecklist({
+      profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
+      roofingSystem: "metal",
+      projectKind: "reroof",
+      folio: "30-1234567",
+      asOfDate: "2026-12-31",
+    });
+    expect(result.codeReferenceCurrent).toBe(false);
+    expect(result.authorityConfirmed).toBe(false);
+    expect(result.items).toHaveLength(0);
+    expect(result.requiredRoofingSections).toHaveLength(0);
+    expect(result.warnings.join(" ")).toContain("verify the current code edition");
+  });
+
   it("uses the attachment matrix to include structural calculations where listed", () => {
     const metal = getPermitChecklist({
       profileId: MIAMI_DADE_UNINCORPORATED_PROFILE.id,
