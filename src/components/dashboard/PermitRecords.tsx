@@ -36,6 +36,8 @@ import {
   updatePermitApplication,
   updatePermitInspection,
   recordPermitRejection,
+  createRoofProductApproval,
+  verifyRoofProductApproval,
 } from "@/lib/permitting.functions";
 
 const inputClass = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
@@ -74,6 +76,14 @@ export function PermitRecords() {
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [permitFiles, setPermitFiles] = useState<Record<string, { name: string; path: string }[]>>({});
   const [fileBusy, setFileBusy] = useState<Record<string, boolean>>({});
+  const [approvalApplicationId, setApprovalApplicationId] = useState("");
+  const [approvalKind, setApprovalKind] = useState<"miami_dade_noa" | "florida_product_approval" | "ul_listing" | "fire_directory">("miami_dade_noa");
+  const [approvalNumber, setApprovalNumber] = useState("");
+  const [approvalManufacturer, setApprovalManufacturer] = useState("");
+  const [approvalProductName, setApprovalProductName] = useState("");
+  const [approvalExpiry, setApprovalExpiry] = useState("");
+  const [approvalHvhz, setApprovalHvhz] = useState<"yes" | "no" | "unknown">("unknown");
+  const [approvalSourceUrl, setApprovalSourceUrl] = useState("");
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -103,6 +113,30 @@ export function PermitRecords() {
     },
     onError: (error) => toast.error(error.message || "Could not save permit application."),
   });
+  const createProductApproval = useMutation({
+    mutationFn: () => createRoofProductApproval({
+      permit_application_id: approvalApplicationId,
+      approval_kind: approvalKind,
+      approval_number: approvalNumber,
+      manufacturer: approvalManufacturer,
+      product_name: approvalProductName,
+      expires_on: approvalExpiry || null,
+      hvhz_status: approvalHvhz,
+      source_url: approvalSourceUrl.trim() || null,
+    }),
+    onSuccess: async () => {
+      setApprovalNumber(""); setApprovalManufacturer(""); setApprovalProductName("");
+      setApprovalExpiry(""); setApprovalSourceUrl("");
+      toast.success("Product approval reference saved as unverified. Check the issuing authority before marking it verified.");
+      await refresh();
+    },
+    onError: (error) => toast.error(error.message || "Could not save product approval."),
+  });
+  const verifyProductApproval = useMutation({
+    mutationFn: (id: string) => verifyRoofProductApproval({ id }),
+    onSuccess: async () => { toast.success("Approval verification recorded."); await refresh(); },
+    onError: (error) => toast.error(error.message || "Could not verify approval."),
+  });
   const createInspection = useMutation({
     mutationFn: () => createPermitInspection({
       application_id: applicationId,
@@ -119,6 +153,7 @@ export function PermitRecords() {
   });
   const applications = workspace.data?.applications ?? [];
   const inspections = workspace.data?.inspections ?? [];
+  const approvals = workspace.data?.approvals ?? [];
   const jobs = workspace.data?.jobs ?? [];
   const jurisdictionChecklist = getPermitChecklist({
     profileId: jurisdictionProfileId,
@@ -512,6 +547,34 @@ export function PermitRecords() {
                   })}</tbody>
                 </table></div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">NOA / Florida Product Approval register</CardTitle><CardDescription>Track the exact approval evidence attached to each permit. An approval number alone does not prove the proposed assembly, design pressure, or installation is covered.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" onSubmit={(event) => { event.preventDefault(); createProductApproval.mutate(); }}>
+                <div className="sm:col-span-2"><label className={labelClass} htmlFor="approval-application">Permit application</label><select id="approval-application" className={inputClass} value={approvalApplicationId} onChange={(event) => setApprovalApplicationId(event.target.value)} required><option value="">Choose application…</option>{applications.map((item) => <option key={item.id} value={item.id}>{item.jurisdiction_name} — {item.permit_type}</option>)}</select></div>
+                <div><label className={labelClass} htmlFor="approval-kind">Approval type</label><select id="approval-kind" className={inputClass} value={approvalKind} onChange={(event) => setApprovalKind(event.target.value as typeof approvalKind)}><option value="miami_dade_noa">Miami-Dade NOA</option><option value="florida_product_approval">Florida Product Approval</option><option value="ul_listing">UL listing</option><option value="fire_directory">Fire Directory</option></select></div>
+                <div><label className={labelClass} htmlFor="approval-number">Approval / NOA number</label><Input id="approval-number" value={approvalNumber} onChange={(event) => setApprovalNumber(event.target.value)} maxLength={120} required /></div>
+                <div><label className={labelClass} htmlFor="approval-manufacturer">Manufacturer</label><Input id="approval-manufacturer" value={approvalManufacturer} onChange={(event) => setApprovalManufacturer(event.target.value)} maxLength={160} required /></div>
+                <div><label className={labelClass} htmlFor="approval-product">Product / assembly name</label><Input id="approval-product" value={approvalProductName} onChange={(event) => setApprovalProductName(event.target.value)} maxLength={200} required /></div>
+                <div><label className={labelClass} htmlFor="approval-expiry">Expiration date (if shown)</label><Input id="approval-expiry" type="date" value={approvalExpiry} onChange={(event) => setApprovalExpiry(event.target.value)} /></div>
+                <div><label className={labelClass} htmlFor="approval-hvhz">HVHZ scope</label><select id="approval-hvhz" className={inputClass} value={approvalHvhz} onChange={(event) => setApprovalHvhz(event.target.value as typeof approvalHvhz)}><option value="unknown">Not checked</option><option value="yes">Confirmed in approval</option><option value="no">Not HVHZ approved</option></select></div>
+                <div className="sm:col-span-2"><label className={labelClass} htmlFor="approval-source">Official approval source URL</label><Input id="approval-source" type="url" placeholder="https://..." value={approvalSourceUrl} onChange={(event) => setApprovalSourceUrl(event.target.value)} maxLength={2048} /></div>
+                <div className="flex items-end"><Button type="submit" disabled={!approvalApplicationId || !approvalNumber.trim() || !approvalManufacturer.trim() || !approvalProductName.trim() || createProductApproval.isPending}>{createProductApproval.isPending ? "Saving…" : "Add approval reference"}</Button></div>
+              </form>
+              <div className="space-y-2">
+                {approvals.length === 0 ? <p className="text-sm text-muted-foreground">No product approval references recorded yet.</p> : approvals.map((item) => {
+                  const app = applications.find((candidate) => candidate.id === item.permit_application_id);
+                  const expired = !!item.expires_on && item.expires_on < new Date().toISOString().slice(0, 10);
+                  return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                    <div className="min-w-0"><div className="font-medium">{item.approval_number} · {item.product_name}</div><div className="text-xs text-muted-foreground">{item.manufacturer} · {String(item.approval_kind).replaceAll("_", " ")} · {app?.jurisdiction_name ?? "Permit"}</div><div className="mt-1 text-xs text-muted-foreground">HVHZ: {item.hvhz_status === "yes" ? "Yes" : item.hvhz_status === "no" ? "No" : "Not verified"} · Expires: {item.expires_on ?? "Not stated"}</div>{item.source_url && <a className="text-xs text-primary underline" href={item.source_url} target="_blank" rel="noreferrer">Open official source</a>}</div>
+                    <div className="flex items-center gap-2"><Badge variant={item.approval_status === "verified" && !expired ? "default" : "secondary"}>{expired ? "expired by date" : String(item.approval_status)}</Badge>{item.approval_status === "unverified" && !expired && <Button size="sm" variant="outline" disabled={verifyProductApproval.isPending} onClick={() => verifyProductApproval.mutate(item.id)}>Record verified</Button>}</div>
+                  </div>;
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">Verification is an internal staff record. Confirm the live approval status, HVHZ applicability, approved assembly, design-pressure limits, and installation details against the official NOA / FPA before submission. Store the supporting PDF in the permit application's private document folder.</p>
             </CardContent>
           </Card>
 
