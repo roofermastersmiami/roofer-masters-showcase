@@ -86,6 +86,7 @@ export function AdvancedEstimator() {
     const data = {
       title,
       lead_id: customer.source_lead_id,
+      company_id: property?.company_id,
       property_id: property?.id ?? null,
       drawing_id: drawing.id,
       category: options[0]?.system ?? "Roofing",
@@ -172,7 +173,7 @@ export function AdvancedEstimator() {
       };
       const { data: row, error } = await supabase
         .from("proposals")
-        .insert({ ...details, property_id: property?.id ?? null, drawing_id: drawingId })
+        .insert({ ...details, company_id: property?.company_id, property_id: property?.id ?? null, drawing_id: drawingId })
         .select("id")
         .single();
       if (error || !row) throw error;
