@@ -152,15 +152,12 @@ export function RoofMeasurementsTab({
   // While the measurements grid is open, every still-awaiting report
   // finishes itself here too — the same hands-off chain the Roof
   // reports list runs — so a card never sits at "PDF not generated
-  // yet" waiting for a click. While a workspace is open the finisher
-  // hands over to it (enabled only on the grid), exactly like
-  // leaving the reports list does.
-  const autoFinish = useAutoFinishReports(
-    orders.data,
-    drawings.data,
-    customers.data,
-    activeId === null,
-  );
+  // yet" waiting for a click. An open workspace no longer pauses
+  // this finisher: the workspace claims its own report with the
+  // engine (see RoofMeasurements' useAutoFinishClaim) and hands the
+  // PDF step back when its drawing save lands, so other reports
+  // keep finishing in the background while Fredy works in one.
+  const autoFinish = useAutoFinishReports(orders.data, drawings.data, customers.data);
 
   async function locateAddress() {
     const address = form.address.trim();

@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -13,7 +13,8 @@ import {
   type RoofReportOrderRow,
 } from "@/lib/auto-finish";
 import {
-  useAutoFinishExclusions,
+  requestReportPdfRefresh,
+  useAutoFinishClaim,
   useAutoFinishReports,
   type AutoFinishUiState,
 } from "@/components/dashboard/use-auto-finish";
@@ -38,22 +39,30 @@ const storageDownload = vi.fn(async () => ({
 // optimistic-concurrency guard, plus file_path/status for the
 // stale-attach recovery). Tests reconfigure it per scenario.
 type OrderRowReadResult = {
-  data: { updated_at: string; file_path: string | null; status: string };
+  data: {
+    updated_at: string;
+    file_path: string | null;
+    status: string;
+    drawing_id?: string | null;
+  };
   error: null;
 };
 const orderRowRead = vi.hoisted(() =>
-  vi.fn(
-    async (): Promise<OrderRowReadResult> => ({
-      data: { updated_at: "2026-11-27T12:00:00.000Z", file_path: null, status: "requested" },
-      error: null,
-    }),
-  ),
+  vi.fn(async (): Promise<OrderRowReadResult> => ({
+    data: { updated_at: "2026-11-27T12:00:00.000Z", file_path: null, status: "requested" },
+    error: null,
+  })),
 );
 
-/** Queue the order rows successive attach re-reads will observe;
+/** Queue the order rows successive state re-reads will observe;
  * the last row sticks for any further reads. */
 function stubOrderRowReads(
-  rows: Array<{ updated_at: string; file_path: string | null; status: string }>,
+  rows: Array<{
+    updated_at: string;
+    file_path: string | null;
+    status: string;
+    drawing_id?: string | null;
+  }>,
 ) {
   orderRowRead.mockReset();
   for (const row of rows) orderRowRead.mockResolvedValueOnce({ data: row, error: null });
@@ -216,6 +225,14 @@ beforeEach(() => {
   vi.stubEnv("VITE_ROOF_DETECTION_API_URL", "https://roof-detection.example.com");
   vi.stubGlobal("fetch", vi.fn());
   vi.clearAllMocks();
+  // The finish chain re-reads the order row before it starts, so a
+  // previous test's stubbed rows must not leak into the next test:
+  // restore the default never-moved row.
+  orderRowRead.mockReset();
+  orderRowRead.mockResolvedValue({
+    data: { updated_at: "2026-11-27T12:00:00.000Z", file_path: null, status: "requested" },
+    error: null,
+  });
 });
 
 afterEach(() => {
@@ -366,13 +383,14 @@ describe("useAutoFinishReports on the reports list", () => {
 
 describe("useAutoFinishReports on the measurements tab surface", () => {
   // The Roof measurements tab calls the very same hook as the reports
-  // list, enabled only while its grid is showing — an open workspace
-  // owns its report, exactly like leaving the reports list. These
-  // harnesses mirror both surfaces; the guards under test (attempt
-  // set, concurrency cap) are module-level, so the two surfaces share
-  // them in these renders just like they do in the app. Each test
-  // uses its own report ids because terminal attempts are remembered
-  // for the whole session.
+  // list. An open workspace no longer disables the tab's finisher —
+  // it claims its own report with the engine (the harness mirrors
+  // that with useAutoFinishClaim on the first order), so other
+  // reports keep finishing. The guards under test (attempt set,
+  // concurrency cap, claim registry) are module-level, so the two
+  // surfaces share them in these renders just like they do in the
+  // app. Each test uses its own report ids because terminal attempts
+  // are remembered for the whole session.
   let listStates: ReadonlyMap<string, AutoFinishUiState> = new Map();
   let tabStates: ReadonlyMap<string, AutoFinishUiState> = new Map();
 
@@ -396,7 +414,10 @@ describe("useAutoFinishReports on the measurements tab surface", () => {
     drawings?: RoofDrawingRow[];
     workspaceOpen?: boolean;
   }) {
-    tabStates = useAutoFinishReports(orders, drawings, [], !workspaceOpen);
+    // The claim registers before the finisher's mount sync — the
+    // same order the real workspace (mounted first) achieves.
+    useAutoFinishClaim(workspaceOpen ? (orders[0]?.id ?? null) : null);
+    tabStates = useAutoFinishReports(orders, drawings, []);
     return null;
   }
 
@@ -549,7 +570,7 @@ describe("useAutoFinishReports on the measurements tab surface", () => {
     expect(storageUpload).toHaveBeenCalledTimes(1);
   });
 
-  it("hands over to an open workspace, then starts when Fredy returns to the grid", async () => {
+  it("leaves a claimed report to its open workspace, then starts when the workspace hands it back", async () => {
     const calls = mockDetectionService();
     const order = makeOrder({
       id: "44444444-4444-4444-8444-444444444446",
@@ -578,12 +599,15 @@ describe("useAutoFinishReports on the measurements tab surface", () => {
 });
 
 describe("finishRoofReport when the report moves during the attach", () => {
-  // The race Fredy hit live (2026-11-27 ~6:01 PM): the background
-  // engine and the report's own workspace run the same finish chain;
-  // the workspace attached its PDF first, the engine's attach met
-  // the stale-version guard, and the card recorded a terminal error
-  // for a report that had actually finished. These tests pin the
-  // recovery: re-read, reconcile, retry once — in that order.
+  // The races Fredy hit live (2026-11-27 ~6:01 PM and ~6:18 PM): a
+  // second writer moved the report while the engine finished, the
+  // attach met the stale-version guard, and the card recorded a
+  // terminal error for a report that had actually finished. These
+  // tests pin the reconcile loop: fresh reads before every decision,
+  // keep reconciling while the report is still moving, land done
+  // when its state settles — and fail honestly only when it never
+  // does. (The first stubbed row is consumed by the chain's own
+  // start-of-run fresh read.)
   const STALE_ATTACH = new Error("Reload the report request before attaching this PDF");
   const drawingRow = {
     id: "drawing-1",
@@ -592,13 +616,25 @@ describe("finishRoofReport when the report moves during the attach", () => {
   } as unknown as RoofDrawingRow;
   const savedOrder = () => makeOrder({ drawing_id: "drawing-1" });
 
-  it("resolves as done when the re-read shows a PDF was already attached through the workspace", async () => {
+  it("resolves as done when the re-read shows a PDF was already attached through another writer", async () => {
     stubOrderRowReads([
-      { updated_at: "2026-11-27T18:00:00.000Z", file_path: null, status: "requested" },
+      {
+        updated_at: "2026-11-27T18:00:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:00:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
       {
         updated_at: "2026-11-27T18:01:00.000Z",
         file_path: `roof-report/${ORDER_ID}/workspace.pdf`,
         status: "received",
+        drawing_id: "drawing-1",
       },
     ]);
     const deps = makeDeps();
@@ -621,10 +657,26 @@ describe("finishRoofReport when the report moves during the attach", () => {
     expect(removedPaths[0]).toMatch(new RegExp(`^roof-report/${ORDER_ID}/[a-f0-9-]+\\.pdf$`));
   });
 
-  it("retries the attach once with the freshly read version when the order is still PDF-less", async () => {
+  it("retries the attach with the freshly read version when the order is still PDF-less", async () => {
     stubOrderRowReads([
-      { updated_at: "2026-11-27T18:00:00.000Z", file_path: null, status: "requested" },
-      { updated_at: "2026-11-27T18:02:00.000Z", file_path: null, status: "requested" },
+      {
+        updated_at: "2026-11-27T18:00:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:00:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:02:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
     ]);
     const deps = makeDeps();
     deps.attachPdf.mockRejectedValueOnce(STALE_ATTACH);
@@ -653,10 +705,20 @@ describe("finishRoofReport when the report moves during the attach", () => {
     expect(storageRemove).not.toHaveBeenCalled();
   });
 
-  it("fails honestly when the attach is rejected as stale twice", async () => {
+  it("fails honestly when the report keeps changing under every attach attempt", async () => {
     stubOrderRowReads([
-      { updated_at: "2026-11-27T18:00:00.000Z", file_path: null, status: "requested" },
-      { updated_at: "2026-11-27T18:02:00.000Z", file_path: null, status: "requested" },
+      {
+        updated_at: "2026-11-27T18:00:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:02:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
     ]);
     const deps = makeDeps();
     deps.attachPdf.mockRejectedValue(STALE_ATTACH);
@@ -672,19 +734,79 @@ describe("finishRoofReport when the report moves during the attach", () => {
       expect(outcome.message).toContain("The report changed while it was finishing");
       expect(outcome.message).not.toBe("Reload the report request before attaching this PDF");
     }
-    expect(deps.attachPdf).toHaveBeenCalledTimes(2);
+    // The reconcile loop retried against fresh reads before giving
+    // up — it never errors on the first stale rejection.
+    expect(deps.attachPdf).toHaveBeenCalledTimes(4);
     // The failed chain still cleans up its own upload.
+    expect(storageRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps reconciling while another writer keeps the report moving, and lands done when that writer's PDF attaches", async () => {
+    // Fredy's second live failure (2026-11-27 ~6:18 PM): the
+    // workspace's own chain kept writing while the engine finished —
+    // the report's version moved under the engine's first attach AND
+    // under its single retry, so #247's recovery gave up with the
+    // double-stale error even though the report finished a moment
+    // later through the other writer. The attach must keep
+    // reconciling against fresh reads until the report's state
+    // settles: here the other writer attaches on the fourth read.
+    stubOrderRowReads([
+      {
+        updated_at: "2026-11-27T18:29:40.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:30:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:30:20.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:30:40.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:31:00.000Z",
+        file_path: `roof-report/${ORDER_ID}/workspace.pdf`,
+        status: "received",
+        drawing_id: "drawing-1",
+      },
+    ]);
+    const deps = makeDeps();
+    deps.attachPdf.mockRejectedValue(STALE_ATTACH);
+
+    const outcome = await finishRoofReport(
+      deps,
+      { order: savedOrder(), drawingRow, customerName: "" },
+      new AbortController().signal,
+    );
+
+    expect(outcome.kind).toBe("done");
+    // Three attach attempts met the moving version; the fourth read
+    // showed the finished report, so no fourth attach was needed —
+    // and this chain's duplicate upload was cleaned up.
+    expect(deps.attachPdf).toHaveBeenCalledTimes(3);
     expect(storageRemove).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("the shell runner's open-workspace exclusion", () => {
-  // The CRM shell registers the report whose workspace is open (its
-  // CrmContext selected report on the measurements section) with the
-  // shared engine, before the runner mount — the shell-level mirror
-  // of the tab's per-workspace hand-off. The engine must not start
-  // that report at all; the workspace's own chain owns it.
-  function ShellHarness({
+describe("the open workspace's claim on its report", () => {
+  // A report's workspace claims the report with the shared engine
+  // for as long as it is open — the engine never starts a claimed
+  // report, whatever surface mounted it. The harness mirrors the
+  // real mount order: the claim registers before the finisher's
+  // mount sync runs.
+  function WorkspaceHarness({
     orders,
     drawings = [],
     workspaceReportId,
@@ -693,7 +815,7 @@ describe("the shell runner's open-workspace exclusion", () => {
     drawings?: RoofDrawingRow[];
     workspaceReportId: string | null;
   }) {
-    useAutoFinishExclusions(workspaceReportId ? [workspaceReportId] : []);
+    useAutoFinishClaim(workspaceReportId);
     useAutoFinishReports(orders, drawings, []);
     return null;
   }
@@ -716,7 +838,7 @@ describe("the shell runner's open-workspace exclusion", () => {
     });
     const client = newClient();
     const view = render(
-      tree(client, <ShellHarness orders={[order]} workspaceReportId={order.id} />),
+      tree(client, <WorkspaceHarness orders={[order]} workspaceReportId={order.id} />),
     );
 
     await tick(250);
@@ -724,7 +846,7 @@ describe("the shell runner's open-workspace exclusion", () => {
     expect(vi.mocked(saveRoofDrawing)).not.toHaveBeenCalled();
     expect(vi.mocked(attachRoofOrderPdf)).not.toHaveBeenCalled();
 
-    view.rerender(tree(client, <ShellHarness orders={[order]} workspaceReportId={null} />));
+    view.rerender(tree(client, <WorkspaceHarness orders={[order]} workspaceReportId={null} />));
     await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1));
     expect(calls.submits).toBe(1);
     expect(vi.mocked(saveRoofDrawing)).toHaveBeenCalledTimes(1);
@@ -763,12 +885,16 @@ describe("the shell runner's open-workspace exclusion", () => {
     });
     const client = newClient();
     try {
-      const view = render(tree(client, <ShellHarness orders={[order]} workspaceReportId={null} />));
+      const view = render(
+        tree(client, <WorkspaceHarness orders={[order]} workspaceReportId={null} />),
+      );
       await waitFor(() => expect(calls.submits).toBe(1));
 
       // The workspace opens mid-measurement: the engine hands the
       // report over (aborts its chain) instead of racing it.
-      view.rerender(tree(client, <ShellHarness orders={[order]} workspaceReportId={order.id} />));
+      view.rerender(
+        tree(client, <WorkspaceHarness orders={[order]} workspaceReportId={order.id} />),
+      );
       await tick(250);
       expect(
         getMeasurementActivitySnapshot().find((entry) => entry.id === order.id),
@@ -779,7 +905,7 @@ describe("the shell runner's open-workspace exclusion", () => {
       // The workspace closes without finishing: the engine resumes
       // the report and completes it — exactly one attach overall.
       released = true;
-      view.rerender(tree(client, <ShellHarness orders={[order]} workspaceReportId={null} />));
+      view.rerender(tree(client, <WorkspaceHarness orders={[order]} workspaceReportId={null} />));
       await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1), {
         timeout: 15000,
       });
@@ -791,16 +917,28 @@ describe("the shell runner's open-workspace exclusion", () => {
     }
   }, 20000);
 
-  it("records a ready notification — not an error — when the workspace attached first", async () => {
+  it("records a ready notification — not an error — when a PDF lands through another writer during the attach", async () => {
     resetMeasurementActivityForTests();
     const notices: MeasurementNotice[] = [];
     setMeasurementNotifier((notice) => notices.push(notice));
     stubOrderRowReads([
-      { updated_at: "2026-11-27T18:20:00.000Z", file_path: null, status: "requested" },
+      {
+        updated_at: "2026-11-27T18:20:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
+      {
+        updated_at: "2026-11-27T18:20:00.000Z",
+        file_path: null,
+        status: "requested",
+        drawing_id: "drawing-1",
+      },
       {
         updated_at: "2026-11-27T18:21:00.000Z",
         file_path: "roof-report/66666666-6666-4666-8666-666666666603/workspace.pdf",
         status: "received",
+        drawing_id: "drawing-1",
       },
     ]);
     vi.mocked(attachRoofOrderPdf).mockRejectedValueOnce(
@@ -821,7 +959,7 @@ describe("the shell runner's open-workspace exclusion", () => {
       render(
         tree(
           client,
-          <ShellHarness orders={[order]} drawings={[drawingRow]} workspaceReportId={null} />,
+          <WorkspaceHarness orders={[order]} drawings={[drawingRow]} workspaceReportId={null} />,
         ),
       );
       await waitFor(() =>
@@ -838,13 +976,75 @@ describe("the shell runner's open-workspace exclusion", () => {
     }
   });
 
-  it("wires the open-workspace exclusion into the CRM shell", () => {
+  it("regenerates the PDF when the workspace re-saves a drawing over an existing PDF", async () => {
+    // The refresh hand-off: the workspace saved a new drawing
+    // revision over a report that already carries a PDF and
+    // registered the intent instead of attaching anything itself.
+    // The engine rebuilds the PDF from the new drawing, replaces
+    // the file, and removes the superseded one.
+    resetMeasurementActivityForTests();
+    const notices: MeasurementNotice[] = [];
+    setMeasurementNotifier((notice) => notices.push(notice));
+    const oldPath = "roof-report/66666666-6666-4666-8666-666666666604/old.pdf";
+    const order = makeOrder({
+      id: "66666666-6666-4666-8666-666666666604",
+      updated_at: "2026-11-27T18:25:00.000Z",
+      drawing_id: "drawing-2",
+      file_path: oldPath,
+      status: "received",
+    });
+    const drawingRow = {
+      id: "drawing-2",
+      geometry: roofPreset("gable"),
+      media: [],
+    } as unknown as RoofDrawingRow;
+    const client = newClient();
+    try {
+      render(
+        tree(
+          client,
+          <WorkspaceHarness orders={[order]} drawings={[drawingRow]} workspaceReportId={null} />,
+        ),
+      );
+      // A finished report is not eligible on its own — nothing runs
+      // until the workspace's refresh intent lands.
+      await tick(200);
+      expect(vi.mocked(attachRoofOrderPdf)).not.toHaveBeenCalled();
+      act(() => requestReportPdfRefresh(order.id, "drawing-2"));
+      await waitFor(() => expect(vi.mocked(attachRoofOrderPdf)).toHaveBeenCalledTimes(1));
+      const attached = vi.mocked(attachRoofOrderPdf).mock.calls[0]![0] as {
+        data: { id: string; path: string };
+      };
+      expect(attached.data.id).toBe(order.id);
+      expect(attached.data.path).toMatch(new RegExp(`^roof-report/${order.id}/`));
+      expect(attached.data.path).not.toBe(oldPath);
+      // The superseded file is removed; the refresh notifies once.
+      expect(storageRemove).toHaveBeenCalledWith([oldPath]);
+      expect(notices.filter((notice) => notice.id === order.id)).toEqual([
+        { kind: "ready", id: order.id, address: order.address },
+      ]);
+      // No measurement was submitted and no drawing was re-saved.
+      expect(fetch).not.toHaveBeenCalled();
+      expect(vi.mocked(saveRoofDrawing)).not.toHaveBeenCalled();
+    } finally {
+      setMeasurementNotifier(null);
+    }
+  });
+
+  it("wires the one-finisher claim into the workspace and keeps the shell on the runner only", () => {
     const shell = readFileSync(
       resolve(process.cwd(), "src/components/dashboard/CrmShell.tsx"),
       "utf8",
     );
-    expect(shell).toContain("useAutoFinishExclusions(");
-    expect(shell).toContain("selectedRoofReportId");
     expect(shell).toContain("useMeasurementRunner()");
+    expect(shell).not.toContain("useAutoFinishExclusions");
+    const workspace = readFileSync(
+      resolve(process.cwd(), "src/components/dashboard/RoofMeasurements.tsx"),
+      "utf8",
+    );
+    expect(workspace).toContain("useAutoFinishClaim(");
+    // The workspace never attaches a report PDF itself any more —
+    // the background engine is the only finisher.
+    expect(workspace).not.toContain("attachRoofOrderPdf");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -46,20 +46,23 @@ export type AutoFinishUiState =
 // finish keeps running while the user moves around the CRM (calendar,
 // customers, …) and completes in the background; every transition is
 // mirrored into the measurement activity store, which raises the
-// "report ready" notification. A surface that hands its reports to an
-// open workspace (the measurements tab passes enabled=false while a
-// workspace is open) suppresses the engine: in-flight chains abort —
-// the service jobs keep running server-side — their attempts are
+// "report ready" notification. A surface can still pause the whole
+// engine by mounting with enabled=false (its in-flight chains abort
+// — the service jobs keep running server-side — their attempts are
 // forgotten, and everything resumes when the surface re-enables or
-// unmounts. When the last surface unmounts (leaving the CRM), the
-// browser-side chains stop the same way.
+// unmounts), but an open report workspace no longer does that: it
+// claims only its own report (see the claims block below), so other
+// reports keep finishing while Fredy works in a workspace. When the
+// last surface unmounts (leaving the CRM), the browser-side chains
+// stop the same way.
 // ---------------------------------------------------------------------------
 
 const startedAttempts = new Set<string>();
 const MAX_CONCURRENT_FINISHES = 3;
 let activeFinishCount = 0;
 const controllers = new Map<string, AbortController>();
-let queuedIds: string[] = [];
+type QueueEntry = { id: string; refreshDrawingId?: string };
+let queuedIds: QueueEntry[] = [];
 
 type EngineInputs = {
   orders: RoofOrder[] | undefined;
@@ -188,84 +191,146 @@ function refreshSuppression() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-report workspace exclusions (the shell-level hand-off).
+// Per-report workspace claims (the one-finisher hand-off).
 //
-// The measurements tab hands a report to its open workspace by
-// disabling its own mount, which suppresses the whole engine. The
-// CRM shell has no mount it can disable — it is the always-on
-// runner — but it knows which report's workspace is open (the
-// measurements section's selected report in CrmContext) and
-// registers that report here. An excluded report is never STARTED by
-// the engine: the workspace's own chain owns it, mirroring the tab's
-// hand-off one report at a time instead of stopping everything.
-// Registering an exclusion also hands off a finish already in
-// flight for that report: the run aborts (its attempt is forgotten,
-// never recorded as an error — the same interruption semantics as
-// the tab's suppression), the service job keeps running server-side,
-// and if the aborted chain was already attaching its PDF, that
-// attach reconciles through the finish chain's stale-attach
-// recovery instead of failing the report. Lifting the exclusion
-// re-queues the report, so the engine picks it up if the workspace
-// did not finish it.
+// The engine is the only component that generates and attaches
+// report PDFs. A report's workspace owns the report while it is
+// open — it runs the measurement Fredy watches and saves the
+// drawing revision — so it CLAIMS the report here on mount: the
+// engine never starts a claimed report, whatever surface mounted it
+// and whatever any surface's enabled flag says. (This replaced
+// #247's shell-level exclusion registry and the measurements tab's
+// whole-engine suppression, which only prevented STARTING a chain:
+// an engine chain already past its measuring phase kept writing
+// after the workspace opened, and the two chains staled each
+// other's attaches into a terminal error for a finished report.)
+//
+// Claiming hands off a finish already in flight for the report:
+// the run aborts — and the finish chain now honors the abort
+// between phases, so it stops writing promptly — its attempt is
+// forgotten, never recorded as an error, and the service job keeps
+// running server-side. The workspace releases its claim when its
+// automatic save lands (the engine then takes the drawing-saved →
+// PDF path while Fredy is still looking at the workspace) or on
+// unmount; releasing re-queues the report, so if the workspace did
+// not finish it, the engine picks it up.
 // ---------------------------------------------------------------------------
 
-const exclusionSources = new Set<ReadonlySet<string>>();
+const claimTokens = new Map<string, Set<object>>();
 
-function isAutoFinishExcluded(id: string): boolean {
-  for (const source of exclusionSources) if (source.has(id)) return true;
-  return false;
+function isAutoFinishClaimed(id: string): boolean {
+  return (claimTokens.get(id)?.size ?? 0) > 0;
 }
 
 /**
- * Register report ids the background engine must not start (their
- * workspace is open in the shell). Returns an unregister function;
- * unregistering re-queues the reports.
+ * Claim a report for its open workspace: the background engine
+ * leaves it entirely to the workspace until the returned release
+ * runs. Releases are idempotent; the last release re-queues the
+ * report with the engine.
  */
-export function setAutoFinishExclusions(reportIds: readonly string[]): () => void {
-  const source: ReadonlySet<string> = new Set(reportIds);
-  exclusionSources.add(source);
-  if (source.size > 0) {
-    queuedIds = queuedIds.filter((id) => !source.has(id));
-    for (const id of source) controllers.get(id)?.abort();
+export function claimAutoFinishReport(reportId: string): () => void {
+  let tokens = claimTokens.get(reportId);
+  if (!tokens) {
+    tokens = new Set();
+    claimTokens.set(reportId, tokens);
   }
+  const token = {};
+  tokens.add(token);
+  queuedIds = queuedIds.filter((entry) => entry.id !== reportId);
+  controllers.get(reportId)?.abort();
+  let released = false;
   return () => {
-    exclusionSources.delete(source);
+    if (released) return;
+    released = true;
+    tokens.delete(token);
+    if (tokens.size === 0) claimTokens.delete(reportId);
     syncQueue();
   };
 }
 
-/** Hook form of setAutoFinishExclusions for the CRM shell. The
- * effect re-registers only when the id set actually changes. */
-export function useAutoFinishExclusions(reportIds: readonly string[]) {
-  const joined = reportIds.join("\n");
+/**
+ * Hook form of claimAutoFinishReport for a report workspace: the
+ * claim is held from mount until the workspace hands the PDF step
+ * to the engine by calling the returned release (its automatic
+ * save does), or until unmount — whichever comes first. A null id
+ * (no linked report) claims nothing.
+ */
+export function useAutoFinishClaim(reportId: string | null): () => void {
+  const releaseRef = useRef<(() => void) | null>(null);
   useEffect(() => {
-    if (!joined) return;
-    return setAutoFinishExclusions(joined.split("\n"));
-  }, [joined]);
+    if (!reportId) {
+      releaseRef.current = null;
+      return;
+    }
+    const release = claimAutoFinishReport(reportId);
+    releaseRef.current = release;
+    return () => {
+      if (releaseRef.current === release) releaseRef.current = null;
+      release();
+    };
+  }, [reportId]);
+  return useCallback(() => {
+    releaseRef.current?.();
+    releaseRef.current = null;
+  }, []);
+}
+
+// ---------------------------------------------------------------------------
+// PDF refresh intents.
+//
+// When the workspace re-saves a drawing over a report that already
+// carries a PDF, the on-file PDF no longer matches the current
+// drawing. The workspace registers an intent here instead of
+// regenerating the PDF itself (one finisher); the engine runs the
+// drawing-saved → PDF path for exactly that drawing and replaces
+// the file. Intents are consumed when their run starts and are
+// keyed-attempted like normal finishes, so a failed refresh never
+// loops silently — re-saving the drawing registers a fresh one.
+// ---------------------------------------------------------------------------
+
+const pdfRefreshIntents = new Map<string, string>();
+
+export function requestReportPdfRefresh(reportId: string, drawingId: string) {
+  pdfRefreshIntents.set(reportId, drawingId);
+  syncQueue();
+}
+
+function refreshAttemptKey(reportId: string, drawingId: string): string {
+  return `pdf:${reportId}:${drawingId}`;
 }
 
 function pump() {
   if (engineSuppressed || !engineRuntime) return;
   const runtime = engineRuntime;
   while (activeFinishCount < MAX_CONCURRENT_FINISHES && queuedIds.length > 0) {
-    const id = queuedIds.shift()!;
+    const entry = queuedIds.shift()!;
+    const id = entry.id;
     const order = latestInputs.orders?.find((item) => item.id === id);
-    if (!order || !reportNeedsAutoFinish(order)) continue;
-    // A report whose workspace is open belongs to the workspace's
-    // own chain — the engine never starts it (shell hand-off).
-    if (isAutoFinishExcluded(order.id)) continue;
+    if (!order) continue;
+    // A report whose workspace is open belongs to the workspace —
+    // the engine never starts it (the workspace claims it).
+    if (isAutoFinishClaimed(order.id)) continue;
+    const refreshDrawingId = entry.refreshDrawingId;
+    if (!refreshDrawingId && !reportNeedsAutoFinish(order)) continue;
     // Another surface may have started this report version while it
     // waited in the queue — never submit it twice.
-    if (startedAttempts.has(attemptKey(order))) continue;
-    startedAttempts.add(attemptKey(order));
-    const drawingRow =
-      latestInputs.drawings?.find((drawing) => drawing.id === order.drawing_id) ?? null;
+    const key = refreshDrawingId ? refreshAttemptKey(id, refreshDrawingId) : attemptKey(order);
+    if (startedAttempts.has(key)) continue;
+    startedAttempts.add(key);
+    const drawingRow = refreshDrawingId
+      ? (latestInputs.drawings?.find((drawing) => drawing.id === refreshDrawingId) ?? null)
+      : (latestInputs.drawings?.find((drawing) => drawing.id === order.drawing_id) ?? null);
     const customerName =
       latestInputs.customers?.find((customer) => customer.id === order.customer_id)?.name ?? "";
     const controller = new AbortController();
     controllers.set(id, controller);
     activeFinishCount += 1;
-    applyState(order, { phase: "measuring", percent: 0, detail: null, elapsedSeconds: 0 });
+    applyState(
+      order,
+      refreshDrawingId
+        ? { phase: "building-pdf" }
+        : { phase: "measuring", percent: 0, detail: null, elapsedSeconds: 0 },
+    );
     void (async () => {
       try {
         const outcome = await finishRoofReport(
@@ -277,17 +342,48 @@ function pump() {
               if (!controller.signal.aborted) applyState(order, progressToUiState(update));
             },
           },
-          { order, drawingRow, customerName },
+          {
+            order,
+            drawingRow,
+            customerName,
+            ...(refreshDrawingId ? { refreshDrawingId } : {}),
+          },
           controller.signal,
         );
         if (controller.signal.aborted) {
-          startedAttempts.delete(attemptKey(order));
+          startedAttempts.delete(key);
           setUiState(id, null);
           forgetMeasurementActivity(id);
         } else if (outcome.kind === "done") {
           setUiState(id, null);
-          recordMeasurementReady(order.id, order.address, attemptKey(order));
+          // Keyed by the PDF the report now carries, so the same
+          // completion never notifies twice — however many chains
+          // reconciled into it — while a genuinely new PDF (a
+          // refresh after a re-save) notifies once more.
+          recordMeasurementReady(
+            order.id,
+            order.address,
+            outcome.filePath ? `${order.id}:${outcome.filePath}` : attemptKey(order),
+          );
           await runtime.invalidate();
+        } else if (outcome.kind === "superseded") {
+          // A newer drawing replaced the one this chain worked on
+          // mid-flight. Not an error and not a completion: forget
+          // the attempt and let the current version be finished
+          // fresh — through the normal path when it still needs a
+          // PDF, or a refresh intent when it already carries one.
+          // The intent is re-registered ONLY for a drawing this
+          // chain did not just work on; re-registering the same one
+          // would re-run the same supersede forever.
+          startedAttempts.delete(key);
+          setUiState(id, null);
+          forgetMeasurementActivity(id);
+          const workedDrawingId = refreshDrawingId ?? order.drawing_id;
+          const current = latestInputs.orders?.find((item) => item.id === id);
+          if (current?.drawing_id && current.file_path && current.drawing_id !== workedDrawingId) {
+            pdfRefreshIntents.set(id, current.drawing_id);
+          }
+          syncQueue();
         } else if (outcome.kind === "candidates") {
           applyState(order, { phase: "candidates", message: outcome.message });
         } else if (outcome.kind === "unmeasurable") {
@@ -297,7 +393,7 @@ function pump() {
         }
       } catch (cause) {
         if (controller.signal.aborted) {
-          startedAttempts.delete(attemptKey(order));
+          startedAttempts.delete(key);
           setUiState(id, null);
           forgetMeasurementActivity(id);
         } else {
@@ -325,10 +421,25 @@ function syncQueue() {
   if (!latestInputs.orders) return;
   for (const order of latestInputs.orders) {
     if (!reportNeedsAutoFinish(order)) continue;
-    if (isAutoFinishExcluded(order.id)) continue;
+    if (isAutoFinishClaimed(order.id)) continue;
     if (startedAttempts.has(attemptKey(order))) continue;
-    if (controllers.has(order.id) || queuedIds.includes(order.id)) continue;
-    queuedIds.push(order.id);
+    if (controllers.has(order.id) || queuedIds.some((entry) => entry.id === order.id)) continue;
+    queuedIds.push({ id: order.id });
+  }
+  // PDF refresh intents (the workspace re-saved a drawing over a
+  // report that already carries a PDF): run once the save is
+  // visible in the surfaces' data, for exactly that drawing.
+  for (const [reportId, drawingId] of pdfRefreshIntents) {
+    if (isAutoFinishClaimed(reportId)) continue;
+    if (controllers.has(reportId) || queuedIds.some((entry) => entry.id === reportId)) continue;
+    if (startedAttempts.has(refreshAttemptKey(reportId, drawingId))) {
+      pdfRefreshIntents.delete(reportId);
+      continue;
+    }
+    const order = latestInputs.orders.find((item) => item.id === reportId);
+    if (!order || order.drawing_id !== drawingId) continue;
+    pdfRefreshIntents.delete(reportId);
+    queuedIds.push({ id: reportId, refreshDrawingId: drawingId });
   }
   pump();
 }
@@ -343,12 +454,12 @@ function syncQueue() {
  *
  * The same hook backs the Roof reports list, the Roof measurements
  * tab grid and the CRM shell's background runner. `enabled` lets a
- * surface hand over to an open report workspace: the tab passes false
- * while a workspace is open, which suppresses the shared engine
- * exactly like every surface unmounting, so the workspace owns the
- * report until Fredy returns to the grid. The shell cannot disable
- * its always-on mount, so it hands over one report at a time through
- * useAutoFinishExclusions instead (see the exclusions block above).
+ * surface pause the whole engine (a surface that unmounts or
+ * disables itself hands everything back). An open report workspace
+ * does NOT pause the engine — other companies' reports keep
+ * finishing — it claims just its own report through
+ * useAutoFinishClaim (see the claims block above), and hands the
+ * PDF step back by releasing the claim when its drawing save lands.
  */
 export function useAutoFinishReports(
   orders: RoofOrder[] | undefined,

@@ -56,7 +56,6 @@ import { CrmContext } from "./CrmContext";
 import { LeadSheet } from "./LeadSheet";
 import { MeasurementActivityButton } from "./MeasurementActivity";
 import { useMeasurementRunner } from "./use-measurement-runner";
-import { useAutoFinishExclusions } from "./use-auto-finish";
 import { setMeasurementReadyAction } from "@/lib/measurement-activity";
 import { leadsQuery, formatWhen } from "./data";
 import { tasksQuery } from "./operations-data";
@@ -180,18 +179,12 @@ export function CrmShell({
       doc: { name: string; bytes: Uint8Array } | null;
     } | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  // While a report's workspace is open on the measurements section,
-  // the background measurement engine leaves that one report to the
-  // workspace's own finish chain — the shell-level mirror of the
-  // measurements tab's per-workspace hand-off — so the two chains
-  // never race to attach the report's PDF. Registered before the
-  // runner mounts so the exclusion is in place first.
-  useAutoFinishExclusions(
-    section === "measurements" && selectedRoofReportId ? [selectedRoofReportId] : [],
-  );
   // Roof measurements run as background jobs for the whole session:
   // they keep finishing while the user works anywhere in the CRM,
   // and completions surface in the header's measurement activity.
+  // An open report workspace claims its own report with the engine
+  // (the workspace registers the claim itself — see
+  // use-auto-finish's claim registry), so the runner never races it.
   useMeasurementRunner();
   useEffect(() => {
     let cancelled = false;
