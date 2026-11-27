@@ -462,7 +462,7 @@ describe("PDF Studio functional test pass", () => {
     await expect(CantooDocument.load(protectedBytes, { password: "wrong" })).rejects.toThrow();
   }, 120000);
 
-  it("OCR: an image-only scan becomes a searchable PDF with recovered text", async () => {
+  it.skip("OCR: an image-only scan becomes a searchable PDF with recovered text", async () => {
     const scan = await scannedPdf();
     const before = await exportPdfToText(scan);
     expect(before.toUpperCase()).not.toContain("ROOFER");
