@@ -177,6 +177,17 @@ export type PermitChecklistResult = {
  * authority's published source. An empty checklist is intentional when the
  * exact Broward AHJ / permit type has not been resolved.
  */
+function southFloridaCalendarDate(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export function getPermitChecklist(request: PermitChecklistRequest): PermitChecklistResult {
   const profiles: Record<string, JurisdictionPermitProfile> = {
     [MIAMI_DADE_UNINCORPORATED_PROFILE.id]: MIAMI_DADE_UNINCORPORATED_PROFILE,
@@ -187,7 +198,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
 
   const warnings: string[] = [profile.authorityWarning];
-  const asOfDate = request.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const asOfDate = request.asOfDate ?? southFloridaCalendarDate();
   const codeReferenceCurrent = asOfDate <= profile.codeEditionEffectiveThrough;
   if (!codeReferenceCurrent) {
     warnings.push(`This checklist references ${profile.codeEdition}. That reference expired after ${profile.codeEditionEffectiveThrough}; verify the current code edition and updated local forms before using any checklist item.`);
