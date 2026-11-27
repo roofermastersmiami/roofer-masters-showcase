@@ -366,3 +366,44 @@ Storage remains globally role-scoped for job photos, proposals, and accounting r
 9. Only after clone tests and app caller compatibility pass, apply the reviewed forward migration during an approved maintenance window, verify row counts and tenant isolation, then enable the permitting UI and storage bucket.
 
 **Decision:** production reconciliation is now evidence-backed, but production migration/security cutover is not yet safe to execute. The missing application write-path compatibility and tenant-aware RPC/storage replacement are hard blockers. No production data or permissions have been changed.
+
+## RPC, trigger, RLS, and storage cutover implementation audit — 2026-11-27
+
+This section records a fresh inspection of the live production catalog and the integrated PR branch. It is intentionally explicit about what is and is not converted.
+
+### Confirmed live function state
+
+The live production database still has the legacy definitions for all three create_roof_report_request overloads:
+
+- (text,text,text,text): address lookup is global across crm_properties; creates lead/customer/property without an explicit company; global office/sales role check.
+- (text,text,text,text,text,text): same global address lookup; may update a matching customer's and source lead's contact details without company scope.
+- (uuid,text,text,text,text): customer existence check and property lookup are not constrained by company membership.
+
+The live save_crm_customer(jsonb) also still uses has_any_role(auth.uid(), ['office','sales']) and writes without company scope. The live sync_lead_customer() trigger inserts/updates customer/property rows without copying company_id. The live capture_instant_roof_lead(jsonb,jsonb,text,bigint) inserts lead/job rows without company ownership. Live EXECUTE grants on the three report overloads and save RPC include authenticated and service_role; the intake RPC is service_role-only.
+
+The PR branch already contains forward migration candidates for the company-aware lead sync trigger (0043), customer save (0044), trusted public lead routing (0045), and customer delete (0046). These are repository changes only and have not been applied to production. The migration chain does not yet replace the three report RPC overloads or complete the application-level service-role report mutation paths.
+
+### Confirmed live operational RLS gap
+
+Live permissive policies still authorize by global user_roles / app_role checks on leads, crm_customers, crm_properties, roof_report_orders, and roof_jobs.
+
+These policies must be dropped/replaced as a complete policy set in a single coordinated tenant cutover. Adding company-membership policies without removing the legacy policies leaves cross-company access possible because permissive policies are OR-combined. Current policy behavior also needs to be translated to the actual company role strings (owner/admin/office/sales/production_manager/crew/accounting), not by assuming the old enum exists in the live company schema.
+
+### Confirmed live storage gap
+
+The live storage policy inventory still contains global-role/assignment policies for roof-job-photos and roofing-proposals. The proposal bucket mixes roof-report PDFs and expense-* objects, and current report file paths are roof-report/{report_id}/{filename} without a company segment. The job photo bucket uses {job_id}/... and crew assignment checks. A safe replacement must authorize through the linked company-owned report/job row and preserve the crew assignment rule; it must also handle the accounting expense path separately. Do not replace these policies with a broad company-admin-only rule or guess that every proposal object has a roof report parent.
+
+The existing PR migration 0049 creates the new private permit-documents bucket and its application-linked company authorization policies. It does not replace the existing roof photo/proposal policies. The existing company branding policies are already company-aware and should be preserved after verifying helper EXECUTE grants.
+
+### Current cutover disposition
+
+- Company-aware trigger/customer save/customer delete/public intake candidates: present in PR branch, not production.
+- Report RPC overload conversion: not yet implemented.
+- Roof-report application service-role writes and storage attachment/deletion paths: not yet tenant-scoped end-to-end.
+- Core operational RLS replacement: not yet implemented.
+- Roof-job photo and proposal storage replacement: not yet implemented.
+- Permit document bucket policies: present in PR branch only; not production.
+- Company helper functions remain executable by anon in production; review and revoke unnecessary anon grants as part of the cutover.
+- The current production audit does not establish that every historical staff identity has a company membership. Do not infer memberships from a global role. The cutover must fail closed or use an explicitly reviewed identity mapping.
+
+No production writes, policy changes, RPC replacement, migration execution, or deployment were performed during this audit. The PR remains a draft and must not be merged or deployed until the remaining paths above have coordinated implementation and adversarial clone tests.
