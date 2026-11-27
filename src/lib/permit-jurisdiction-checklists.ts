@@ -167,6 +167,7 @@ const pembrokePinesChecklist: ChecklistItem[] = [
 ];
 
 const coralSpringsChecklist: ChecklistItem[] = [
+  { id: "electronic-submittal", label: "Electronic permit submittal", detail: "The City stopped processing paper submittals effective January 1, 2026. Applications are submitted through the online portal; paper submissions may be converted to electronic format for a fee.", appliesWhen: "Applies to all residential re-roof applications under the current city process.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
   { id: "building-application", label: "Broward County Building Permit Application", detail: "Complete the current building permit application.", appliesWhen: "Required for residential re-roof permit intake.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
   { id: "zoning-addendum", label: "Building Permit Application Zoning Addendum", detail: "Complete the City of Coral Springs zoning addendum.", appliesWhen: "Required for residential re-roof permit intake.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
   { id: "roofers-application-packet", label: "Roofers Application Packet", detail: "Complete the current city roofing application packet.", appliesWhen: "Required for residential re-roof permit intake.", sourceUrl: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf" },
@@ -345,5 +346,5 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   browardBuildingCode: BROWARD_BUILDING_URL,
   browardParticipatingCities: BROWARD_EPERMITS_URL,
   sunriseResidentialRoofChecklist: SUNRISE_CHECKLIST_URL,
-  floridaBuildingCodeMilestones: FBC_CODE_URL,
+  floridaBuildingCodeMilestones: FBC_CODE_URL,\n  coralSpringsResidentialReroofChecklist: "https://www.coralsprings.gov/files/assets/public/v/11/documents/building/checklists/013.0-roof-reroof-permit-application-checklist-ada.pdf",
 } as const;
