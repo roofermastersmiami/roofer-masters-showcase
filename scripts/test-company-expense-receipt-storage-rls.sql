@@ -45,10 +45,10 @@ SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001'
 INSERT INTO storage.objects(bucket_id,name) VALUES
  ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf');
 DELETE FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf';
-DO $ BEGIN
+DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM storage.objects WHERE name='expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf')
     THEN RAISE EXCEPTION 'Accounting member could not clean up unattached receipt'; END IF;
-END $;
+END $$;
 INSERT INTO storage.objects(bucket_id,name) VALUES
  ('roofing-proposals','expense/10000000-0000-0000-0000-000000000001/92000000-0000-0000-0000-000000000001/a.pdf');
 DO $$ BEGIN
