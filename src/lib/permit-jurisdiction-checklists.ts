@@ -183,13 +183,21 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const profile = profiles[request.profileId];
   if (!profile) throw new Error("Select a supported permit jurisdiction profile.");
 
-  const warnings: string[] = [profile.authorityWarning];\n  if (!request.projectKind || request.projectKind === "unknown") {\n    warnings.push("Set the project type so reroof-only documents are not treated as universally required.");\n  }
+  const warnings: string[] = [profile.authorityWarning];
+  if (!request.projectKind || request.projectKind === "unknown") {
+    warnings.push("Set the project type so reroof-only documents are not treated as universally required.");
+  }
   let authorityConfirmed = true;
-  if (profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id && request.folio) {
-    const normalizedFolio = request.folio.replace(/\\D/g, "");
-    if (!normalizedFolio.startsWith("30")) {
+  if (profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id) {
+    if (!request.folio?.trim()) {
       authorityConfirmed = false;
-      warnings.push("The supplied folio does not begin with 30. Confirm the municipality / authority having jurisdiction; do not use the unincorporated County checklist.");
+      warnings.push("Enter and verify the property folio. The County identifies folios beginning with 30 for its unincorporated permit process.");
+    } else {
+      const normalizedFolio = request.folio.replace(/\D/g, "");
+      if (!normalizedFolio.startsWith("30")) {
+        authorityConfirmed = false;
+        warnings.push("The supplied folio does not begin with 30. Confirm the municipality / authority having jurisdiction; do not use the unincorporated County checklist.");
+      }
     }
   }
   if (profile.id === BROWARD_COUNTY_PROFILE.id) {
@@ -205,7 +213,7 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const requiredRoofingSections = profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
     : profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id
-      ? ["A", "B", "D"]
+      ? miamiDadeSections[roofSystem]
       : [];
 
   const allowedIds = profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
