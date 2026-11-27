@@ -80,6 +80,42 @@ const response = {
   disclaimer: "Preliminary public-data result.",
 } as unknown as RoofDetectionResponse;
 
+describe("service edge totals in the report (step 8)", () => {
+  it("carries the service totals into the drawing and still renders", async () => {
+    const drawing = detectedFacetsToDrawing(response, "Metal Roof");
+    expect(drawing.service_edge_lengths_lf).toEqual({
+      ridge: 14,
+      hip: 108,
+      valley: 0,
+      eave: 172,
+      rake: 0,
+      pitch_change: 0,
+    });
+    const withService = await roofDrawingPdf(
+      "Sketch Report",
+      drawing,
+      "Ricardo Rodriguez",
+      "3062 Southwest 189th Avenue, Miramar, FL 33029",
+      [],
+      {},
+      { theme: "roofsnap" },
+    );
+    const withoutService = await roofDrawingPdf(
+      "Sketch Report",
+      { ...drawing, service_edge_lengths_lf: undefined },
+      "Ricardo Rodriguez",
+      "3062 Southwest 189th Avenue, Miramar, FL 33029",
+      [],
+      {},
+      { theme: "roofsnap" },
+    );
+    const pagesWith = (await PDFDocument.load(withService)).getPageCount();
+    const pagesWithout = (await PDFDocument.load(withoutService)).getPageCount();
+    expect(pagesWith).toBe(pagesWithout);
+    expect(pagesWith).toBeGreaterThanOrEqual(5);
+  });
+});
+
 describe("sketch report themes", () => {
   it("renders every theme with the same structure and a resizable logo", async () => {
     const drawing = detectedFacetsToDrawing(response, "Metal Roof");

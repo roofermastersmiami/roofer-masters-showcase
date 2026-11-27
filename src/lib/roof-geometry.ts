@@ -99,6 +99,23 @@ export const drawingSchema = z.object({
     .optional(),
   image_credit: z.string().max(300).optional(),
   geo_reference: geoReferenceSchema.optional(),
+  // Authoritative edge totals from the detection service, when this
+  // drawing came from an automated measurement. The drawing's own
+  // geometry re-classifies every partition seam, so its measured
+  // totals diverge from the service's fitted-facet classification
+  // (step-7 scoreboard: Miramar valley 197 drawing vs 59.6 service).
+  // Reports print these totals when present; the drawing geometry
+  // still drives areas, pitches and the diagrams.
+  service_edge_lengths_lf: z
+    .object({
+      ridge: z.number().finite().nonnegative(),
+      hip: z.number().finite().nonnegative(),
+      valley: z.number().finite().nonnegative(),
+      eave: z.number().finite().nonnegative(),
+      rake: z.number().finite().nonnegative(),
+      pitch_change: z.number().finite().nonnegative(),
+    })
+    .optional(),
 });
 export type RoofDrawing = z.infer<typeof drawingSchema>;
 export type RoofPlane = z.infer<typeof planeSchema>;
