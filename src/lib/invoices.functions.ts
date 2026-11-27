@@ -8,30 +8,34 @@ export const createInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => invoiceSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["admin", "accounting"],
-    });
-    if (roleError) throw new Error("Could not verify accounting permissions");
-    if (!owner) throw new Error("You do not have access to this action");
     const { data: lead, error: leadError } = await context.supabase
       .from("leads")
-      .select("name,email,address")
+      .select("name,email,address,company_id")
       .eq("id", data.lead_id)
       .maybeSingle();
     if (leadError) throw new Error("Could not verify customer details");
-    if (!lead) throw new Error("Choose an existing customer");
+    if (!lead?.company_id) throw new Error("Customer is not assigned to a company");
+
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", lead.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "accounting"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify accounting permissions");
+    if (!membership) throw new Error("You do not have access to this company's invoices");
 
     let propertyId: string | null = null;
     if (data.proposal_id) {
       const { data: proposal, error: proposalError } = await context.supabase
         .from("proposals")
-        .select("lead_id,is_template,property_id")
+        .select("lead_id,is_template,property_id,company_id")
         .eq("id", data.proposal_id)
         .maybeSingle();
       if (proposalError) throw new Error("Could not verify proposal details");
-      if (!proposal || proposal.is_template || proposal.lead_id !== data.lead_id)
-        throw new Error("Proposal must belong to this customer");
+      if (!proposal || proposal.is_template || proposal.lead_id !== data.lead_id || proposal.company_id !== lead.company_id)
+        throw new Error("Proposal must belong to this customer and company");
       propertyId = proposal.property_id;
     }
 
@@ -44,6 +48,7 @@ export const createInvoice = createServerFn({ method: "POST" })
     const { data: invoice, error } = await supabaseAdmin
       .from("crm_invoices")
       .insert({
+        company_id: lead.company_id,
         lead_id: data.lead_id,
         proposal_id: data.proposal_id,
         property_id: propertyId,
