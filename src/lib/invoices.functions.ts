@@ -76,12 +76,23 @@ export const changeInvoiceStatus = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), status: z.enum(["issued", "void"]) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["admin", "accounting"],
-    });
-    if (roleError) throw new Error("Could not verify accounting permissions");
-    if (!owner) throw new Error("You do not have access to this action");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: invoice, error: invoiceError } = await supabaseAdmin
+      .from("crm_invoices")
+      .select("id,company_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (invoiceError || !invoice?.company_id)
+      throw new Error("Could not verify invoice company");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", invoice.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "accounting"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify accounting permissions");
+    if (!membership) throw new Error("You do not have access to this company's invoices");
     const { data: changed, error } = await context.supabase.rpc("set_invoice_status", {
       p_invoice_id: data.id,
       p_status: data.status,
