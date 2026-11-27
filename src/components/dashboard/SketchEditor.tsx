@@ -81,7 +81,9 @@ const MODE_BUTTONS: { mode: SketchMode; label: string; icon: typeof PenTool }[] 
 type SelectedEdge = { planeId: string; edgeIndex: number };
 
 type DragState =
-  { kind: "vertex"; planeId: string; vertexIndex: number } | { kind: "pin"; pinId: string } | null;
+  | { kind: "vertex"; planeId: string; vertexIndex: number }
+  | { kind: "pin"; pinId: string }
+  | null;
 
 /**
  * Edit Sketch: a RoofSnap-style sketch editor for one roof drawing.
