@@ -348,7 +348,7 @@ export function PermitRecords() {
                         setJurisdictionProfileId(profileId);
                         setParcelAuthorityVerified(false);
                         if (profileId === CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id || profileId === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami Gardens, Miami-Dade County");
-                        else (profileId === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami, Miami-Dade County");
+                        else if (profileId === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami, Miami-Dade County");
                         else if (profileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) setJurisdiction("Miami-Dade County — unincorporated area");
                         else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
                         else if (profileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Sunrise, Broward County");
