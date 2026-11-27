@@ -85,6 +85,9 @@ export function PermitRecords() {
   const [approvalExpiry, setApprovalExpiry] = useState("");
   const [approvalHvhz, setApprovalHvhz] = useState<"yes" | "no" | "unknown">("unknown");
   const [approvalSourceUrl, setApprovalSourceUrl] = useState("");
+  const [approvalCodeEdition, setApprovalCodeEdition] = useState<"2023_8th" | "2026_9th" | "legacy" | "unknown">("unknown");
+  const [approvalCodeEditionSource, setApprovalCodeEditionSource] = useState("");
+  const [approvalCodeEditionNotes, setApprovalCodeEditionNotes] = useState("");
   const [nocApplicationId, setNocApplicationId] = useState("");
   const [nocAssessment, setNocAssessment] = useState<"not_assessed" | "required" | "not_required">("not_assessed");
   const [nocRecording, setNocRecording] = useState<"not_started" | "draft" | "recorded">("not_started");
@@ -136,10 +139,13 @@ export function PermitRecords() {
       expires_on: approvalExpiry || null,
       hvhz_status: approvalHvhz,
       source_url: approvalSourceUrl.trim() || null,
+      code_edition: approvalCodeEdition,
+      code_edition_source_url: approvalCodeEditionSource.trim() || null,
+      code_edition_notes: approvalCodeEditionNotes,
     }),
     onSuccess: async () => {
       setApprovalNumber(""); setApprovalManufacturer(""); setApprovalProductName("");
-      setApprovalExpiry(""); setApprovalSourceUrl("");
+      setApprovalExpiry(""); setApprovalSourceUrl(""); setApprovalCodeEdition("unknown"); setApprovalCodeEditionSource(""); setApprovalCodeEditionNotes("");
       toast.success("Product approval reference saved as unverified. Check the issuing authority before marking it verified.");
       await refresh();
     },
@@ -594,6 +600,9 @@ export function PermitRecords() {
                 <div><label className={labelClass} htmlFor="approval-expiry">Expiration date (if shown)</label><Input id="approval-expiry" type="date" value={approvalExpiry} onChange={(event) => setApprovalExpiry(event.target.value)} /></div>
                 <div><label className={labelClass} htmlFor="approval-hvhz">HVHZ scope</label><select id="approval-hvhz" className={inputClass} value={approvalHvhz} onChange={(event) => setApprovalHvhz(event.target.value as typeof approvalHvhz)}><option value="unknown">Not checked</option><option value="yes">Confirmed in approval</option><option value="no">Not HVHZ approved</option></select></div>
                 <div className="sm:col-span-2"><label className={labelClass} htmlFor="approval-source">Official approval source URL</label><Input id="approval-source" type="url" placeholder="https://..." value={approvalSourceUrl} onChange={(event) => setApprovalSourceUrl(event.target.value)} maxLength={2048} /></div>
+                <div><label className={labelClass} htmlFor="approval-code-edition">Code edition stated by approval source</label><select id="approval-code-edition" className={inputClass} value={approvalCodeEdition} onChange={(event) => setApprovalCodeEdition(event.target.value as typeof approvalCodeEdition)}><option value="unknown">Unknown / not stated</option><option value="2023_8th">Florida Building Code 8th Edition (2023)</option><option value="2026_9th">Florida Building Code 9th Edition (2026)</option><option value="legacy">Legacy / earlier edition</option></select></div>
+                <div><label className={labelClass} htmlFor="approval-code-source">Code edition source URL</label><Input id="approval-code-source" type="url" value={approvalCodeEditionSource} onChange={(event) => setApprovalCodeEditionSource(event.target.value)} maxLength={2048} placeholder="Required when an edition is selected" required={approvalCodeEdition !== "unknown"} /></div>
+                <div className="sm:col-span-2"><label className={labelClass} htmlFor="approval-code-notes">Code edition review notes</label><Input id="approval-code-notes" value={approvalCodeEditionNotes} onChange={(event) => setApprovalCodeEditionNotes(event.target.value)} maxLength={2000} /></div>
                 <div className="flex items-end"><Button type="submit" disabled={!approvalApplicationId || !approvalNumber.trim() || !approvalManufacturer.trim() || !approvalProductName.trim() || createProductApproval.isPending}>{createProductApproval.isPending ? "Saving…" : "Add approval reference"}</Button></div>
               </form>
               <div className="space-y-2">
@@ -601,12 +610,12 @@ export function PermitRecords() {
                   const app = applications.find((candidate) => candidate.id === item.permit_application_id);
                   const expired = !!item.expires_on && item.expires_on < new Date().toISOString().slice(0, 10);
                   return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-                    <div className="min-w-0"><div className="font-medium">{item.approval_number} · {item.product_name}</div><div className="text-xs text-muted-foreground">{item.manufacturer} · {String(item.approval_kind).replaceAll("_", " ")} · {app?.jurisdiction_name ?? "Permit"}</div><div className="mt-1 text-xs text-muted-foreground">HVHZ: {item.hvhz_status === "yes" ? "Yes" : item.hvhz_status === "no" ? "No" : "Not verified"} · Expires: {item.expires_on ?? "Not stated"}</div>{item.source_url && <a className="text-xs text-primary underline" href={item.source_url} target="_blank" rel="noreferrer">Open official source</a>}</div>
+                    <div className="min-w-0"><div className="font-medium">{item.approval_number} · {item.product_name}</div><div className="text-xs text-muted-foreground">{item.manufacturer} · {String(item.approval_kind).replaceAll("_", " ")} · {app?.jurisdiction_name ?? "Permit"}</div><div className="mt-1 text-xs text-muted-foreground">HVHZ: {item.hvhz_status === "yes" ? "Yes" : item.hvhz_status === "no" ? "No" : "Not verified"} · Code edition: {String(item.code_edition ?? "unknown").replaceAll("_", " ")} · Expires: {item.expires_on ?? "Not stated"}</div>{item.source_url && <a className="text-xs text-primary underline" href={item.source_url} target="_blank" rel="noreferrer">Open official source</a>}</div>
                     <div className="flex items-center gap-2"><Badge variant={item.approval_status === "verified" && !expired ? "default" : "secondary"}>{expired ? "expired by date" : String(item.approval_status)}</Badge>{item.approval_status === "unverified" && !expired && <Button size="sm" variant="outline" disabled={verifyProductApproval.isPending} onClick={() => verifyProductApproval.mutate(item.id)}>Record verified</Button>}</div>
                   </div>;
                 })}
               </div>
-              <p className="text-xs text-muted-foreground">Verification is an internal staff record. Confirm the live approval status, HVHZ applicability, approved assembly, design-pressure limits, and installation details against the official NOA / FPA before submission. Store the supporting PDF in the permit application's private document folder.</p>
+              <p className="text-xs text-muted-foreground">Verification is an internal staff record. Confirm the live approval status, HVHZ applicability, code edition, approved assembly, design-pressure limits, and installation details against the official NOA / FPA before submission. A code-edition label is not a compatibility determination. Store the supporting PDF in the permit application's private document folder.</p>
             </CardContent>
           </Card>
 
