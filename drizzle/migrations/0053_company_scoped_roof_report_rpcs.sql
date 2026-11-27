@@ -209,7 +209,6 @@ DECLARE
   actor_role text;
   did uuid;
   rep public.roof_report_orders%ROWTYPE;
-  parent_company_id uuid;
   membership_count integer;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
@@ -226,17 +225,20 @@ BEGIN
     RAISE EXCEPTION 'Report unavailable or property does not match';
   END IF;
   IF nullif(p_drawing->>'parent_id','') IS NOT NULL THEN
-    SELECT company_id INTO parent_company_id FROM public.roof_drawings
-    WHERE id=(p_drawing->>'parent_id')::uuid
-      AND property_id=rep.property_id;
-    IF parent_company_id IS DISTINCT FROM actor_company_id THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.roof_drawings d
+      JOIN public.crm_properties p ON p.id=d.property_id
+      WHERE d.id=(p_drawing->>'parent_id')::uuid
+        AND d.property_id=rep.property_id
+        AND p.company_id=actor_company_id
+    ) THEN
       RAISE EXCEPTION 'Drawing revision parent unavailable';
     END IF;
   END IF;
   INSERT INTO public.roof_drawings(
-    company_id,property_id,title,geometry,measurements,revision,parent_id,media,report_order_id
+    property_id,title,geometry,measurements,revision,parent_id,media,report_order_id
   ) VALUES (
-    actor_company_id,rep.property_id,p_drawing->>'title',p_drawing->'geometry',
+    rep.property_id,p_drawing->>'title',p_drawing->'geometry',
     p_drawing->'measurements',(p_drawing->>'revision')::int,
     nullif(p_drawing->>'parent_id','')::uuid,
     coalesce(p_drawing->'media','[]'::jsonb),p_report_id
