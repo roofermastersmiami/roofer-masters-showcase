@@ -1,6 +1,11 @@
 import { z } from "zod";
 import polygonClipping from "polygon-clipping";
-import type { EdgeType, RoofDrawing, RoofPlane } from "@/lib/roof-geometry";
+import {
+  measureDrawing,
+  type EdgeType,
+  type RoofDrawing,
+  type RoofPlane,
+} from "@/lib/roof-geometry";
 
 const facetSchema = z.object({
   id: z.string().min(1),
@@ -168,6 +173,380 @@ type PlanVertex = { x: number; z: number; elevation: number };
 
 const planDistance = (a: { x: number; z: number }, b: { x: number; z: number }) =>
   Math.hypot(a.x - b.x, a.z - b.z);
+
+/* ---------------- Drawing cleanup: micro-segment merging ----------------
+ * The facet rings the service emits follow fine-grained LiDAR hull
+ * points, so a straight 40 ft eave arrives as a dozen ~3 ft fragments
+ * with a vertex (and a length label) on every fragment. The workspace
+ * scenes render facet polygons and hide this, but Edit Sketch exposes
+ * the raw segments and the sketch reads as scribble instead of a
+ * roof. This pass removes the vertices that carry no shape:
+ *
+ * - collinear points along a straight run (direction change ≤ 2.5°
+ *   and the point within ~0.5 in of the straight line), when the two
+ *   adjoining segments carry the same edge classification;
+ * - sliver vertices whose incoming segment is ≤ 0.02 ft (a duplicate
+ *   in all but name);
+ * - spike tips: out-and-back jogs whose return point lands within
+ *   0.1 ft of the departure point with near-equal arms ≤ 3 ft — the
+ *   residue of hull boundaries crossing themselves.
+ *
+ * Removal is decided per PHYSICAL vertex, not per facet: a vertex on
+ * a shared seam is removed from every facet that carries it, or from
+ * none, so the segmentation of a seam stays identical on both sides
+ * and measureDrawing's endpoint pairing (0.05 ft, plan) keeps
+ * matching — merged totals therefore hold by construction, and the
+ * pass validates them anyway (below). A vertex that is a true corner
+ * in ANY facet that carries it (a T-junction corner, a hip foot) is
+ * never removed. Deviation is capped at ~0.5 in, so the outline still
+ * tiles the same facet polygons; this is cosmetic cleanup of
+ * collinear points, not polygon re-shaping. The service payload and
+ * its numbers are untouched.
+ *
+ * The pass is defensive like the consolidation stage above it: any
+ * plane whose cleaned ring fails validation (simplicity, minimum
+ * segment length, area drift) keeps its original ring, with the
+ * clusters it participates in excluded from removal everywhere; if
+ * the drawing-level edge totals move beyond tolerance the whole
+ * cleanup is abandoned and the uncleaned planes are returned.
+ */
+const CLEANUP_CLUSTER_TOL_FT = 0.05;
+const CLEANUP_COLLINEAR_ANGLE_DEG = 2.5;
+const CLEANUP_COLLINEAR_DEV_FT = 0.04;
+const CLEANUP_DEGENERATE_FT = 0.02;
+const CLEANUP_SPIKE_RETURN_FT = 0.1;
+const CLEANUP_SPIKE_ARM_FT = 3;
+const CLEANUP_MIN_SEGMENT_FT = 0.011;
+
+type CleanupVerdict =
+  | { removable: false }
+  | { removable: true; kind: "collinear" | "degenerate" | "spike"; phantomFt: number };
+
+function cleanupLocalVerdict(
+  points: { x: number; z: number }[],
+  edges: EdgeType[],
+  index: number,
+): CleanupVerdict {
+  const n = points.length;
+  if (n <= 3) return { removable: false };
+  const prev = points[(index - 1 + n) % n]!;
+  const vertex = points[index]!;
+  const next = points[(index + 1) % n]!;
+  const typeIn = edges[(index - 1 + n) % n];
+  const typeOut = edges[index];
+  // The merged segment takes the run's first classification, so a
+  // vertex at a classification change is a real drawing feature.
+  if (!typeIn || !typeOut || typeIn !== typeOut) return { removable: false };
+  const dIn = planDistance(prev, vertex);
+  const dOut = planDistance(vertex, next);
+  const dSkip = planDistance(prev, next);
+  if (dSkip < CLEANUP_MIN_SEGMENT_FT) return { removable: false };
+  // Sliver: the segment ending at this vertex is a duplicate in all
+  // but name; dropping the vertex merges it away.
+  if (dIn <= CLEANUP_DEGENERATE_FT && dOut >= 0.05)
+    return { removable: true, kind: "degenerate", phantomFt: 0 };
+  // Spike: the boundary runs out and comes straight back, landing
+  // within a few inches of where it left. The two arms are phantom
+  // length — they are the one totals change this pass allows itself,
+  // accounted as `phantomFt` and checked in validation.
+  if (
+    dSkip <= CLEANUP_SPIKE_RETURN_FT &&
+    dIn >= 0.1 &&
+    dOut >= 0.1 &&
+    Math.max(dIn, dOut) <= CLEANUP_SPIKE_ARM_FT &&
+    Math.abs(dIn - dOut) <= CLEANUP_SPIKE_RETURN_FT
+  ) {
+    const dot =
+      (vertex.x - prev.x) * (next.x - vertex.x) + (vertex.z - prev.z) * (next.z - vertex.z);
+    if (dot < 0) return { removable: true, kind: "spike", phantomFt: dIn + dOut - dSkip };
+  }
+  // Collinear: the vertex sits on the straight line between its
+  // neighbours (small angle AND sub-inch perpendicular deviation,
+  // projecting onto the segment rather than past its ends).
+  if (dIn >= 0.05 && dOut >= 0.05) {
+    const ux = vertex.x - prev.x;
+    const uz = vertex.z - prev.z;
+    const wx = next.x - vertex.x;
+    const wz = next.z - vertex.z;
+    const cross = ux * wz - uz * wx;
+    const dot = ux * wx + uz * wz;
+    const angleDeg = (Math.atan2(Math.abs(cross), dot) * 180) / Math.PI;
+    if (angleDeg <= CLEANUP_COLLINEAR_ANGLE_DEG && dot > 0) {
+      const { distance, t } = pointToSegmentDistance(vertex, prev, next);
+      if (distance <= CLEANUP_COLLINEAR_DEV_FT && t >= -0.05 && t <= 1.05)
+        return { removable: true, kind: "collinear", phantomFt: 0 };
+    }
+  }
+  return { removable: false };
+}
+
+function ringIsSimple(points: { x: number; z: number }[]): boolean {
+  const n = points.length;
+  const orient = (
+    p: { x: number; z: number },
+    q: { x: number; z: number },
+    r: { x: number; z: number },
+  ) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+  const crosses = (
+    a: { x: number; z: number },
+    b: { x: number; z: number },
+    c: { x: number; z: number },
+    d: { x: number; z: number },
+  ) => orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      if (j === i + 1 || (i === 0 && j === n - 1)) continue;
+      if (crosses(points[i]!, points[(i + 1) % n]!, points[j]!, points[(j + 1) % n]!)) return false;
+    }
+  return true;
+}
+
+function planRingArea(points: { x: number; z: number }[]): number {
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!;
+    const b = points[(i + 1) % points.length]!;
+    area += a.x * b.z - b.x * a.z;
+  }
+  return Math.abs(area) / 2;
+}
+
+function cleanedPlaneIsValid(original: RoofPlane, cleaned: RoofPlane): boolean {
+  if (cleaned.points.length < 3) return false;
+  if (cleaned.edges.length !== cleaned.points.length) return false;
+  for (let i = 0; i < cleaned.points.length; i++) {
+    const a = cleaned.points[i]!;
+    const b = cleaned.points[(i + 1) % cleaned.points.length]!;
+    if (Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 0.01) return false;
+  }
+  if (!ringIsSimple(cleaned.points)) return false;
+  const before = planRingArea(original.points);
+  const after = planRingArea(cleaned.points);
+  if (Math.abs(after - before) > Math.max(0.005 * before, 0.25)) return false;
+  return true;
+}
+
+/** One cleanup pass over the drawing's planes. Returns the cleaned
+ * planes and the per-class phantom length removed by spike cleanup
+ * (the allowance the totals validation grants). */
+function cleanupPass(planes: RoofPlane[]): {
+  planes: RoofPlane[];
+  spikeAllowance: Partial<Record<EdgeType, number>>;
+} {
+  // Cluster vertex occurrences across planes by plan position: one
+  // physical vertex, one removal decision. Diameter-capped like the
+  // converter's snap so a chain of near vertices along a seam cannot
+  // collapse into one cluster.
+  type Occurrence = { plane: number; index: number };
+  const occurrences: Occurrence[] = [];
+  planes.forEach((plane, planeIndex) =>
+    plane.points.forEach((_, pointIndex) =>
+      occurrences.push({ plane: planeIndex, index: pointIndex }),
+    ),
+  );
+  const parent = occurrences.map((_, index) => index);
+  const members = new Map<number, number[]>(occurrences.map((_, index) => [index, [index]]));
+  const findRoot = (index: number): number => {
+    let root = index;
+    while (parent[root] !== root) root = parent[root]!;
+    let current = index;
+    while (parent[current] !== root) {
+      const next = parent[current]!;
+      parent[current] = root;
+      current = next;
+    }
+    return root;
+  };
+  const positionOf = (occurrenceIndex: number) => {
+    const occurrence = occurrences[occurrenceIndex]!;
+    return planes[occurrence.plane]!.points[occurrence.index]!;
+  };
+  const pairs: { distance: number; a: number; b: number }[] = [];
+  for (let a = 0; a < occurrences.length; a++)
+    for (let b = a + 1; b < occurrences.length; b++) {
+      if (occurrences[a]!.plane === occurrences[b]!.plane) continue;
+      const distance = planDistance(positionOf(a), positionOf(b));
+      if (distance <= CLEANUP_CLUSTER_TOL_FT) pairs.push({ distance, a, b });
+    }
+  pairs.sort((left, right) => left.distance - right.distance);
+  for (const { a, b } of pairs) {
+    const rootA = findRoot(a);
+    const rootB = findRoot(b);
+    if (rootA === rootB) continue;
+    const membersA = members.get(rootA) ?? [a];
+    const membersB = members.get(rootB) ?? [b];
+    let withinCap = true;
+    for (const memberA of membersA)
+      for (const memberB of membersB)
+        if (planDistance(positionOf(memberA), positionOf(memberB)) > CLEANUP_CLUSTER_TOL_FT * 2) {
+          withinCap = false;
+          break;
+        }
+    if (!withinCap) continue;
+    parent[rootA] = rootB;
+    members.set(rootB, [...membersA, ...membersB]);
+    members.delete(rootA);
+  }
+  const clusterOf = new Map<string, number>();
+  const clusters = new Map<number, Occurrence[]>();
+  occurrences.forEach((occurrence, index) => {
+    const root = findRoot(index);
+    clusterOf.set(`${occurrence.plane}:${occurrence.index}`, root);
+    clusters.set(root, [...(clusters.get(root) ?? []), occurrence]);
+  });
+
+  // A cluster is removable only when EVERY occurrence is locally
+  // removable — a corner in any one facet vetoes removal everywhere.
+  const removable = new Set<number>();
+  const spikeByCluster = new Map<number, { type: EdgeType; phantomFt: number }>();
+  for (const [root, clusterOccurrences] of clusters) {
+    const planesSeen = new Set<number>();
+    let vetoed = false;
+    let spikeType: EdgeType | null = null;
+    let spikePhantomFt = 0;
+    for (const occurrence of clusterOccurrences) {
+      if (planesSeen.has(occurrence.plane)) {
+        // The same physical vertex twice in one ring (a self-touch):
+        // removal bookkeeping cannot stay consistent — keep it.
+        vetoed = true;
+        break;
+      }
+      planesSeen.add(occurrence.plane);
+      const plane = planes[occurrence.plane]!;
+      const verdict = cleanupLocalVerdict(plane.points, plane.edges, occurrence.index);
+      if (!verdict.removable) {
+        vetoed = true;
+        break;
+      }
+      if (verdict.kind === "spike") {
+        spikeType = plane.edges[occurrence.index]!;
+        spikePhantomFt = Math.max(spikePhantomFt, verdict.phantomFt);
+      }
+    }
+    if (vetoed || clusterOccurrences.length === 0) continue;
+    // Removing must leave every touched plane with a real ring.
+    const removalCounts = new Map<number, number>();
+    for (const occurrence of clusterOccurrences)
+      removalCounts.set(occurrence.plane, (removalCounts.get(occurrence.plane) ?? 0) + 1);
+    let tooMany = false;
+    for (const [planeIndex, count] of removalCounts)
+      if (planes[planeIndex]!.points.length - count < 3) tooMany = true;
+    if (tooMany) continue;
+    removable.add(root);
+    if (spikeType) spikeByCluster.set(root, { type: spikeType, phantomFt: spikePhantomFt });
+  }
+  if (removable.size === 0) return { planes, spikeAllowance: {} };
+  const allowanceFor = (applied: Set<number>) => {
+    const allowance: Partial<Record<EdgeType, number>> = {};
+    for (const root of applied) {
+      const spike = spikeByCluster.get(root);
+      if (spike) allowance[spike.type] = (allowance[spike.type] ?? 0) + spike.phantomFt;
+    }
+    return allowance;
+  };
+
+  const applyRemoval = (excluded: Set<number>): RoofPlane[] =>
+    planes.map((plane, planeIndex) => {
+      const keptIndices = plane.points
+        .map((_, pointIndex) => pointIndex)
+        .filter((pointIndex) => {
+          const root = clusterOf.get(`${planeIndex}:${pointIndex}`);
+          return root === undefined || !removable.has(root) || excluded.has(root);
+        });
+      if (keptIndices.length === plane.points.length) return plane;
+      return {
+        ...plane,
+        points: keptIndices.map((pointIndex) => plane.points[pointIndex]!),
+        // A kept vertex's outgoing segment now runs to the next kept
+        // vertex; its classification is the run's first segment's,
+        // which every removed vertex along the run agreed with.
+        edges: keptIndices.map((pointIndex) => plane.edges[pointIndex]!),
+      };
+    });
+
+  // Per-plane validation with cluster exclusion: a plane whose
+  // cleaned ring fails keeps its original ring, and every cluster it
+  // participates in is excluded from removal in ALL planes (a seam
+  // vertex is removed everywhere or nowhere).
+  const excluded = new Set<number>();
+  for (let attempt = 0; attempt <= planes.length; attempt++) {
+    const cleaned = applyRemoval(excluded);
+    const failedPlanes = cleaned
+      .map((plane, index) => ({ plane, index }))
+      .filter(({ plane, index }) => !cleanedPlaneIsValid(planes[index]!, plane));
+    if (failedPlanes.length === 0) {
+      const applied = new Set([...removable].filter((root) => !excluded.has(root)));
+      if (applied.size === 0) return { planes, spikeAllowance: {} };
+      return { planes: cleaned, spikeAllowance: allowanceFor(applied) };
+    }
+    let grew = false;
+    for (const { index } of failedPlanes)
+      for (const [root, clusterOccurrences] of clusters)
+        if (!excluded.has(root) && clusterOccurrences.some((o) => o.plane === index)) {
+          excluded.add(root);
+          grew = true;
+        }
+    if (!grew) return { planes, spikeAllowance: {} };
+  }
+  return { planes, spikeAllowance: {} };
+}
+
+/**
+ * Merge the micro-segments of a freshly converted drawing into clean
+ * roof edges (see the cleanup notes above). Cosmetic only: returns
+ * the input planes unchanged whenever the cleanup cannot prove it
+ * preserved the drawing — per-class edge totals within 0.5% (plus the
+ * accounted phantom length of removed spikes) and, when the drawing
+ * measures cleanly, a full measureDrawing run that still succeeds.
+ */
+export function simplifyDetectedDrawingPlanes(planes: RoofPlane[]): RoofPlane[] {
+  try {
+    if (planes.length === 0) return planes;
+    let current = planes;
+    const spikeAllowance: Partial<Record<EdgeType, number>> = {};
+    for (let pass = 0; pass < 6; pass++) {
+      const result = cleanupPass(current);
+      if (result.planes === current) break;
+      current = result.planes;
+      for (const [type, phantom] of Object.entries(result.spikeAllowance))
+        spikeAllowance[type as EdgeType] = (spikeAllowance[type as EdgeType] ?? 0) + (phantom ?? 0);
+    }
+    if (current === planes) return planes;
+    // Drawing-level proof: measure both versions the way reports do.
+    const shim = (candidate: RoofPlane[]): RoofDrawing => ({
+      planes: candidate,
+      penetrations: [],
+      waste: 10,
+      roof_type: "Metal Roof",
+      notes: "",
+      condition: "",
+      verified: false,
+    });
+    let before: ReturnType<typeof measureDrawing> | null = null;
+    let after: ReturnType<typeof measureDrawing> | null = null;
+    try {
+      before = measureDrawing(shim(planes));
+    } catch {
+      before = null;
+    }
+    try {
+      after = measureDrawing(shim(current));
+    } catch {
+      after = null;
+    }
+    if (before && !after) return planes;
+    if (before && after) {
+      for (const type of Object.keys(before.edges) as EdgeType[]) {
+        const tolerance = Math.max(0.005 * before.edges[type], 0.05) + (spikeAllowance[type] ?? 0);
+        if (Math.abs(after.edges[type] - before.edges[type]) > tolerance) return planes;
+      }
+      if (Math.abs(after.area - before.area) > Math.max(0.005 * before.area, 0.25)) return planes;
+    }
+    return current;
+  } catch {
+    return planes;
+  }
+}
 
 function pointToSegmentDistance(
   point: { x: number; z: number },
@@ -1503,7 +1882,11 @@ export function detectedFacetsToDrawing(
     edges: edgesByFacet[index] ?? [],
   }));
   return {
-    planes,
+    // Cosmetic cleanup: merge the hull-point micro-segments into
+    // clean roof edges so Edit Sketch shows a roof, not scribble.
+    // Runs last, on the finished planes, and abandons itself
+    // whenever it cannot prove the measurement is unchanged.
+    planes: simplifyDetectedDrawingPlanes(planes),
     penetrations: [],
     waste: 10,
     roof_type: roofType,

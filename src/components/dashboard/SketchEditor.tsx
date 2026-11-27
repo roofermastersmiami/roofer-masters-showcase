@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   Box,
+  Compass,
   Info,
   MapPin,
   Minus,
@@ -16,6 +17,7 @@ import {
   Plus,
   Redo2,
   RotateCcw,
+  RotateCw,
   Shapes,
   Spline,
   Trash2,
@@ -31,6 +33,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { satelliteMapTiles, SATELLITE_MAX_ZOOM, SATELLITE_MIN_ZOOM } from "@/lib/satellite-map";
+import {
+  dragPlanRotationDeg,
+  normalizePlanAngleDeg,
+  planRotationFitFactor,
+  pointerAngleDeg,
+  rotateScreenPointDeg,
+  PLAN_ROTATION_STEP_DEG,
+} from "@/lib/plan-rotation";
 import { PENETRATION_COLORS, ROOF_FACE_COLORS } from "@/lib/roof-feature-styles";
 import type { EdgeType, Point, RoofDrawing } from "@/lib/roof-geometry";
 
@@ -94,9 +104,7 @@ const MODE_BUTTONS: { mode: SketchMode; label: string; icon: typeof PenTool }[] 
 type SelectedEdge = { planeId: string; edgeIndex: number };
 
 type DragState =
-  | { kind: "vertex"; planeId: string; vertexIndex: number }
-  | { kind: "pin"; pinId: string }
-  | null;
+  { kind: "vertex"; planeId: string; vertexIndex: number } | { kind: "pin"; pinId: string } | null;
 
 /**
  * Edit Sketch: a RoofSnap-style sketch editor for one roof drawing.
@@ -139,6 +147,14 @@ export function SketchEditor({
   const [facetDirection, setFacetDirection] = useState<PitchDirection>("south");
   const [error, setError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  /* View-only rotation of the 2D sketch, in degrees, counter-
+     clockwise on screen (the workspace 2D Plan's convention, PR
+     #241). Geometry is never touched: project() rotates drawing →
+     screen and unproject() inverts it, so vertex drags, edge
+     picking and pin drops stay exact at any angle. */
+  const [viewRotationDeg, setViewRotationDeg] = useState(0);
+  const [rotateMode, setRotateMode] = useState(false);
+  const rotateDragRef = useRef<{ startPointerDeg: number; startRotationDeg: number } | null>(null);
 
   /* ---------------- canvas size + camera ---------------- */
   const canvasWrapRef = useRef<HTMLDivElement>(null);
@@ -190,7 +206,7 @@ export function SketchEditor({
     [geoRef, geoCenter, geoZoom],
   );
 
-  function project(point: { x: number; z: number }): { px: number; py: number } {
+  function projectBase(point: { x: number; z: number }): { px: number; py: number } {
     if (geoRef) {
       const latLon = drawingPointToLatLon(point, geoRef);
       const world = latLonToWorldPx(latLon.lat, latLon.lon, geoZoom);
@@ -202,7 +218,7 @@ export function SketchEditor({
     };
   }
 
-  function unproject(px: number, py: number, y: number): Point {
+  function unprojectBase(px: number, py: number, y: number): Point {
     if (geoRef) {
       const latLon = worldPxToLatLon(
         px + camWorldPx.x - size.w / 2,
@@ -216,6 +232,35 @@ export function SketchEditor({
       y,
       z: (py - size.h / 2) / scale + localCenter.z,
     };
+  }
+
+  /* The view rotation lives entirely in these two wrappers: every
+     render and every pointer handler goes through project() /
+     unproject(), so rotating the view rotates the drawing, labels
+     and handles together while the stored geometry — and the
+     pointer → geometry mapping — stay exact. The satellite backdrop
+     is rotated by the same angle in the tile layer's CSS transform;
+     its centre is the canvas centre, the same pivot used here. */
+  function project(point: { x: number; z: number }): { px: number; py: number } {
+    const base = projectBase(point);
+    if (viewRotationDeg === 0) return base;
+    return rotateScreenPointDeg(base, { px: size.w / 2, py: size.h / 2 }, viewRotationDeg);
+  }
+
+  function unproject(px: number, py: number, y: number): Point {
+    if (viewRotationDeg !== 0) {
+      const unrotated = rotateScreenPointDeg(
+        { px, py },
+        { px: size.w / 2, py: size.h / 2 },
+        -viewRotationDeg,
+      );
+      return unprojectBase(unrotated.px, unrotated.py, y);
+    }
+    return unprojectBase(px, py, y);
+  }
+
+  function stepViewRotation(deltaDeg: number) {
+    setViewRotationDeg((deg) => normalizePlanAngleDeg(deg + deltaDeg));
   }
 
   function panBy(dxPx: number, dyPx: number) {
@@ -421,22 +466,56 @@ export function SketchEditor({
       lastY: event.clientY,
       moved: false,
     };
+    if (rotateMode) {
+      const { px, py } = pointerPosition(event);
+      rotateDragRef.current = {
+        startPointerDeg: pointerAngleDeg({ x: size.w / 2, y: size.h / 2 }, { x: px, y: py }),
+        startRotationDeg: viewRotationDeg,
+      };
+    }
   }
   function onCanvasPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     if (dragRef.current?.kind === "vertex") return handleVertexDrag(event);
     if (dragRef.current?.kind === "pin") return handlePinDrag(event);
+    const rotateDrag = rotateDragRef.current;
+    if (rotateDrag) {
+      const { px, py } = pointerPosition(event);
+      const currentDeg = pointerAngleDeg({ x: size.w / 2, y: size.h / 2 }, { x: px, y: py });
+      setViewRotationDeg(
+        dragPlanRotationDeg(rotateDrag.startRotationDeg, rotateDrag.startPointerDeg, currentDeg),
+      );
+      // A rotate drag is not a click: keep the pointer-up handler
+      // from dropping a pin / draft point / edge selection.
+      if (panRef.current) panRef.current.moved = true;
+      return;
+    }
     const pan = panRef.current;
     if (!pan) return;
     const dx = event.clientX - pan.lastX;
     const dy = event.clientY - pan.lastY;
     if (Math.hypot(event.clientX - pan.startX, event.clientY - pan.startY) > 4) pan.moved = true;
     if (pan.moved) {
-      panBy(dx, dy);
+      // Pan in the rotated view's own axes: the on-screen delta is
+      // inverse-rotated into the unrotated camera space panBy uses,
+      // so the drawing follows the pointer exactly at any angle.
+      let stepX = dx;
+      let stepY = dy;
+      if (viewRotationDeg !== 0) {
+        const unrotated = rotateScreenPointDeg(
+          { px: dx, py: dy },
+          { px: 0, py: 0 },
+          -viewRotationDeg,
+        );
+        stepX = unrotated.px;
+        stepY = unrotated.py;
+      }
+      panBy(stepX, stepY);
       pan.lastX = event.clientX;
       pan.lastY = event.clientY;
     }
   }
   function onCanvasPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
+    rotateDragRef.current = null;
     if (dragRef.current) {
       dragRef.current = null;
       endTransient();
@@ -496,10 +575,17 @@ export function SketchEditor({
   })();
   const selectedPin = drawing.penetrations.find((pin) => pin.id === selectedPinId);
 
+  const viewRotated = viewRotationDeg !== 0;
   const tileLayer = useMemo(() => {
     if (!geoRef || view !== "sketch") return null;
-    const layerW = Math.ceil(size.w * 1.5) + 256;
-    const layerH = Math.ceil(size.h * 1.5) + 256;
+    // When the view is rotated, the backdrop layer rotates with it
+    // (CSS transform in the render), so it must be a square big
+    // enough to cover the canvas diagonal — otherwise the corners
+    // would show empty background at angles near 45°.
+    const layerW = viewRotated
+      ? Math.ceil(Math.hypot(size.w, size.h)) + 512
+      : Math.ceil(size.w * 1.5) + 256;
+    const layerH = viewRotated ? layerW : Math.ceil(size.h * 1.5) + 256;
     // Past the deepest real tile level, fetch the z20 mosaic for the
     // (proportionally smaller) viewport it has to cover and upscale it
     // by `upscale` when rendering, so the backdrop survives deep zoom.
@@ -517,15 +603,20 @@ export function SketchEditor({
         layerH / upscale,
       ),
     };
-  }, [geoRef, view, size, geoCenter, geoZoom]);
+    // viewRotated (not the angle itself) is the dep: the mosaic only
+    // needs rebuilding when rotation starts/stops, not per degree.
+  }, [geoRef, view, size, geoCenter, geoZoom, viewRotated]);
 
   const gridLines = useMemo(() => {
     if (geoRef || view !== "sketch") return null;
     const stepFt = scale >= 8 ? 5 : scale >= 3 ? 10 : 25;
-    const minX = localCenter.x - size.w / 2 / scale;
-    const maxX = localCenter.x + size.w / 2 / scale;
-    const minZ = localCenter.z - size.h / 2 / scale;
-    const maxZ = localCenter.z + size.h / 2 / scale;
+    // Widen the grid's extent when the view is rotated so the
+    // rotated grid still covers the whole canvas.
+    const fit = planRotationFitFactor(viewRotationDeg);
+    const minX = localCenter.x - (size.w / 2 / scale) * fit;
+    const maxX = localCenter.x + (size.w / 2 / scale) * fit;
+    const minZ = localCenter.z - (size.h / 2 / scale) * fit;
+    const maxZ = localCenter.z + (size.h / 2 / scale) * fit;
     const lines: { x1: number; y1: number; x2: number; y2: number; key: string }[] = [];
     for (let x = Math.floor(minX / stepFt) * stepFt; x <= maxX; x += stepFt) {
       const a = project({ x, z: minZ });
@@ -540,7 +631,7 @@ export function SketchEditor({
     return lines;
     // project closes over camera state; recompute when it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geoRef, view, scale, localCenter, size]);
+  }, [geoRef, view, scale, localCenter, size, viewRotationDeg]);
 
   function handleDone() {
     const problem = validateSketchDrawing(drawing);
@@ -621,6 +712,59 @@ export function SketchEditor({
           <Redo2 />
         </Button>
         <div className="mx-1 h-6 w-px bg-primary-foreground/30" />
+        <Button
+          size="sm"
+          variant={rotateMode && view === "sketch" ? "secondary" : "ghost"}
+          className={
+            rotateMode && view === "sketch"
+              ? ""
+              : "text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+          }
+          onClick={() => {
+            setRotateMode((on) => !on);
+            setView("sketch");
+          }}
+          aria-pressed={rotateMode && view === "sketch"}
+          disabled={view === "3d"}
+        >
+          <RotateCw /> Rotate
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+          aria-label="Rotate view 15° counter-clockwise"
+          onClick={() => stepViewRotation(PLAN_ROTATION_STEP_DEG)}
+          disabled={view === "3d"}
+        >
+          <RotateCcw />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+          aria-label="Rotate view 15° clockwise"
+          onClick={() => stepViewRotation(-PLAN_ROTATION_STEP_DEG)}
+          disabled={view === "3d"}
+        >
+          <RotateCw />
+        </Button>
+        {viewRotationDeg !== 0 && (
+          <span className="min-w-10 text-center text-xs font-medium">
+            {Math.round(viewRotationDeg)}°
+          </span>
+        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+          aria-label="Reset view rotation"
+          onClick={() => setViewRotationDeg(0)}
+          disabled={view === "3d" || viewRotationDeg === 0}
+        >
+          <Compass />
+        </Button>
+        <div className="mx-1 h-6 w-px bg-primary-foreground/30" />
         {MODE_BUTTONS.map(({ mode: buttonMode, label, icon: Icon }) => (
           <Button
             key={buttonMode}
@@ -664,6 +808,7 @@ export function SketchEditor({
           }
           onClick={() => {
             setView("3d");
+            setRotateMode(false);
             setFitKey((key) => key + 1);
           }}
           aria-pressed={view === "3d"}
@@ -696,7 +841,12 @@ export function SketchEditor({
                   style={{
                     width: tileLayer.width,
                     height: tileLayer.height,
-                    transform: "translate(-50%, -50%)",
+                    // CSS rotate() turns clockwise on screen for
+                    // positive angles; the view rotation is counter-
+                    // clockwise positive (plan-rotation convention),
+                    // hence the negation — the backdrop then turns
+                    // exactly with the SVG overlay above it.
+                    transform: `translate(-50%, -50%) rotate(${-viewRotationDeg}deg)`,
                   }}
                   aria-hidden="true"
                 >
@@ -729,6 +879,7 @@ export function SketchEditor({
                 onPointerCancel={() => {
                   dragRef.current = null;
                   panRef.current = null;
+                  rotateDragRef.current = null;
                   endTransient();
                 }}
                 role="img"

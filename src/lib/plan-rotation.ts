@@ -80,3 +80,25 @@ export function planRotationFitFactor(angleDeg: number): number {
   const rad = (angleDeg * Math.PI) / 180;
   return Math.abs(Math.cos(rad)) + Math.abs(Math.sin(rad));
 }
+
+/**
+ * Rotate a screen pixel point around a screen centre, in the same
+ * convention as the plan rotation above: screen x grows right and
+ * screen y grows DOWN, so mapping (px, py) onto the plan helper's
+ * (x, z) makes positive angles turn counter-clockwise on screen —
+ * the Sketch Editor's 2D view rotates exactly the way the
+ * workspace's 2D Plan does. Rotating by −θ is the exact inverse,
+ * which is what pointer → geometry mapping uses.
+ */
+export function rotateScreenPointDeg(
+  point: { px: number; py: number },
+  center: { px: number; py: number },
+  angleDeg: number,
+): { px: number; py: number } {
+  const rotated = rotatePlanPointDeg(
+    { x: point.px - center.px, z: point.py - center.py },
+    { x: 0, z: 0 },
+    angleDeg,
+  );
+  return { px: center.px + rotated.x, py: center.py + rotated.z };
+}
