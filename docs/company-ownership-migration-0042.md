@@ -41,3 +41,10 @@ Legacy global-role policies remain in place until the membership backfill and re
 4. Move signed contract and PDF template objects to company-first paths and verify storage authorization.
 5. Run real two-company integration tests across direct SQL, RPCs, server functions, and storage.
 6. Only after those gates, reconcile and apply permit settings 0041 and build its UI.
+
+
+## Migration-journal sequencing note (2026-11-27)
+
+The NOC migration `0051_company_permit_noc_tracking.sql` belongs to the stacked permitting feature branch, where its journal entry and prerequisite permit-application schema are included together. It must not exist as a standalone SQL file on `main` or be registered there ahead of its prerequisites. The mainline orphan file was removed in PR #213 so migration-journal validation can run against a coherent base. No production migration was applied by that cleanup.
+
+When the permitting stack is promoted, bring the NOC SQL and its matching journal entry forward together, after the company ownership and permit-application migrations. Do not run the general migration runner against production until the documented production drift reconciliation and forward-only rollout plan have been reviewed and approved.
