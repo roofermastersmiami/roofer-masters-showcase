@@ -10,23 +10,27 @@ export const createProposalShare = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     setResponseHeader("Cache-Control", "private, no-store");
     setResponseHeader("Referrer-Policy", "no-referrer");
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales"],
-    });
-    if (roleError || !owner) throw new Error("You do not have access to this action");
     const { data: proposal, error: proposalError } = await context.supabase
       .from("proposals")
-      .select("id, file_path, is_template")
+      .select("id, file_path, is_template, company_id")
       .eq("id", data.proposalId)
       .maybeSingle();
     if (proposalError) throw new Error("Could not verify proposal");
-    if (!proposal?.file_path || proposal.is_template)
+    if (!proposal?.file_path || proposal.is_template || !proposal.company_id)
       throw new Error("Save a proposal PDF before sharing");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", proposal.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify company permissions");
+    if (!membership) throw new Error("You do not have access to this company's proposals");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: share, error } = await supabaseAdmin
       .from("proposal_shares")
-      .insert({ proposal_id: proposal.id })
+      .insert({ proposal_id: proposal.id, company_id: proposal.company_id })
       .select("id, token, expires_at, revoked_at")
       .single();
     if (error || !share) throw new Error("Could not create sharing link");
@@ -37,16 +41,27 @@ export const revokeProposalShare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales"],
-    });
-    if (error || !owner) throw new Error("You do not have access to this action");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: share, error: shareError } = await supabaseAdmin
+      .from("proposal_shares")
+      .select("id, company_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (shareError || !share?.company_id) throw new Error("Could not verify proposal share");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", share.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify company permissions");
+    if (!membership) throw new Error("You do not have access to this company's proposals");
     const { data: revoked, error: updateError } = await supabaseAdmin
       .from("proposal_shares")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", data.id)
+      .eq("company_id", share.company_id)
       .is("revoked_at", null)
       .select("id")
       .maybeSingle();
