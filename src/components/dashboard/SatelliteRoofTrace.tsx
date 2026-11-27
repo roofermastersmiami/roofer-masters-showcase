@@ -107,6 +107,74 @@ const MAP_HEIGHT = 1280;
 const TILE_SPAN = 0.0015;
 const METERS_TO_FEET = 1 / 0.3048;
 
+export type SatelliteTileCell = {
+  key: string;
+  src: string;
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+};
+
+const TILE_SERVICE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+/**
+ * Tile mosaic covering a lat/lon bounds box, positioned in percent
+ * so it fills the trace viewport exactly. This replaces the single
+ * stitched image from the Esri MapServer `export` endpoint, which
+ * returns HTTP 500 ("Error: bytes") for the tight bounding boxes
+ * this tracer requests — the same failure PR #226 fixed in the
+ * address-confirm map. Positions use Web Mercator for latitude; over
+ * the tracer's small spans (≤ ~0.006°) the difference from the SVG
+ * overlay's linear lat mapping is far below one pixel.
+ */
+export function satelliteTileGridForBounds(
+  bounds: { west: number; south: number; east: number; north: number },
+  targetWidthPx: number = MAP_WIDTH,
+): SatelliteTileCell[] {
+  const spanLon = bounds.east - bounds.west;
+  if (!Number.isFinite(spanLon) || spanLon <= 0) return [];
+  const zoom = Math.max(
+    15,
+    Math.min(20, Math.round(Math.log2((targetWidthPx * 360) / (256 * spanLon)))),
+  );
+  const scale = 256 * 2 ** zoom;
+  const x0 = ((bounds.west + 180) / 360) * scale;
+  const x1 = ((bounds.east + 180) / 360) * scale;
+  const mercatorY = (lat: number) => {
+    const rad = (Math.max(-85, Math.min(85, lat)) * Math.PI) / 180;
+    return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * scale;
+  };
+  const y0 = mercatorY(bounds.north);
+  const y1 = mercatorY(bounds.south);
+  const widthPx = x1 - x0;
+  const heightPx = y1 - y0;
+  if (widthPx <= 0 || heightPx <= 0) return [];
+  const tileCount = 2 ** zoom;
+  const firstX = Math.floor(x0 / 256);
+  const lastX = Math.floor((x1 - 1) / 256);
+  const firstY = Math.max(0, Math.floor(y0 / 256));
+  const lastY = Math.min(tileCount - 1, Math.floor((y1 - 1) / 256));
+  const cells: SatelliteTileCell[] = [];
+  for (let tileY = firstY; tileY <= lastY; tileY++) {
+    for (let tileX = firstX; tileX <= lastX; tileX++) {
+      const wrappedX = ((tileX % tileCount) + tileCount) % tileCount;
+      cells.push({
+        key: `${zoom}/${tileY}/${tileX}`,
+        src: TILE_SERVICE_URL.replace("{z}", String(zoom))
+          .replace("{y}", String(tileY))
+          .replace("{x}", String(wrappedX)),
+        leftPct: ((tileX * 256 - x0) / widthPx) * 100,
+        topPct: ((tileY * 256 - y0) / heightPx) * 100,
+        widthPct: (256 / widthPx) * 100,
+        heightPct: (256 / heightPx) * 100,
+      });
+    }
+  }
+  return cells;
+}
+
 export function nextSatelliteZoom(current: number, direction: "in" | "out"): number {
   const factor = direction === "in" ? 1.4 : 1 / 1.4;
   return Math.max(0.5, Math.min(64, Number((current * factor).toFixed(3))));
@@ -424,13 +492,11 @@ export function SatelliteRoofTrace({
     return () => viewport.removeEventListener("wheel", handleWheel);
   }, [mapViewportElement]);
 
-  const imageryUrl = bounds
-    ? `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}&bboxSR=4326&imageSR=4326&size=${MAP_WIDTH},${MAP_HEIGHT}&format=jpg&f=image`
-    : "";
+  const tileGrid = useMemo(() => (bounds ? satelliteTileGridForBounds(bounds) : []), [bounds]);
 
   useEffect(() => {
     setImageryLoadError(false);
-  }, [imageryUrl]);
+  }, [tileGrid]);
 
   useEffect(() => {
     if (skipNextAddressSearch.current) {
@@ -919,14 +985,28 @@ export function SatelliteRoofTrace({
             className="relative aspect-[8/5] overflow-hidden rounded-lg border border-border bg-muted overscroll-contain"
             style={{ touchAction: "none" }}
           >
-            <img
-              src={imageryUrl}
-              alt="Satellite aerial imagery of the selected property"
-              className="absolute inset-0 h-full w-full object-fill"
-              draggable={false}
-              onLoad={() => setImageryLoadError(false)}
-              onError={() => setImageryLoadError(true)}
-            />
+            <div
+              className="absolute inset-0"
+              role="img"
+              aria-label="Satellite aerial imagery of the selected property"
+            >
+              {tileGrid.map((cell) => (
+                <img
+                  key={cell.key}
+                  src={cell.src}
+                  alt=""
+                  draggable={false}
+                  onError={() => setImageryLoadError(true)}
+                  className="absolute max-w-none select-none"
+                  style={{
+                    left: `${cell.leftPct}%`,
+                    top: `${cell.topPct}%`,
+                    width: `${cell.widthPct}%`,
+                    height: `${cell.heightPct}%`,
+                  }}
+                />
+              ))}
+            </div>
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
               className={`relative z-10 block h-full w-full touch-none ${mapInteraction === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
