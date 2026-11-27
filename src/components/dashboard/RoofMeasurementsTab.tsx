@@ -248,7 +248,7 @@ export function RoofMeasurementsTab({
       }
       toast.success(
         createdIds.length > 1
-          ? `${createdIds.length} building reports created. Building 1 is open and measuring automatically; each other report measures automatically when you open it.`
+          ? `${createdIds.length} building reports created. Building 1 is open and measuring automatically; each other report also finishes automatically in Roof reports — no need to open it.`
           : "Property report created. Continue with roof measurements.",
       );
     } catch (error) {

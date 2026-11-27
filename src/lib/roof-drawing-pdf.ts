@@ -100,20 +100,6 @@ export type RoofReportOptions = {
   structureLabel?: string;
 };
 
-export type RoofPdfLayout = {
-  brand: { x: number; y: number };
-  tagline: { x: number; y: number };
-  contact: { x: number; y: number };
-  heading: { x: number; y: number };
-};
-
-export const defaultRoofPdfLayout: RoofPdfLayout = {
-  brand: { x: 7, y: 24 },
-  tagline: { x: 7, y: 49 },
-  contact: { x: 7, y: 78 },
-  heading: { x: 62, y: 25 },
-};
-
 type Photo = {
   bytes: Uint8Array;
   mime: string;
