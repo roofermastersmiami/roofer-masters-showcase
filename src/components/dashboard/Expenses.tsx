@@ -45,8 +45,38 @@ export function Expenses() {
         const { error } = await supabase.storage.from("roofing-proposals").upload(path, receipt);
         if (error) throw error;
       }
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Sign in to record an expense");
+      let companyId: string | null = null;
+      if (record.job_id) {
+        const { data: job, error: jobError } = await supabase
+          .from("roof_jobs")
+          .select("company_id")
+          .eq("id", record.job_id)
+          .maybeSingle();
+        if (jobError || !job?.company_id) throw new Error("Could not verify project company");
+        companyId = job.company_id;
+      } else {
+        const { data: memberships, error: membershipError } = await supabase
+          .from("crm_company_memberships")
+          .select("company_id,role")
+          .eq("user_id", auth.user.id)
+          .in("role", ["owner", "admin", "accounting"]);
+        if (membershipError || memberships?.length !== 1)
+          throw new Error("A single accounting company membership is required");
+        companyId = memberships[0].company_id;
+      }
+      const { data: membership, error: membershipError } = await supabase
+        .from("crm_company_memberships")
+        .select("role")
+        .eq("company_id", companyId)
+        .eq("user_id", auth.user.id)
+        .in("role", ["owner", "admin", "accounting"])
+        .maybeSingle();
+      if (membershipError || !membership) throw new Error("You cannot record expenses for this company");
       const { error } = await supabase.from("crm_expenses").insert({
         ...record,
+        company_id: companyId,
         receipt_path: path,
       });
       if (error) throw error;
