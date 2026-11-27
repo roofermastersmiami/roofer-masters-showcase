@@ -78,17 +78,20 @@ export const getClientPortal = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: link, error: linkError } = await supabaseAdmin
       .from("client_portal_links")
-      .select("lead_id,expires_at,revoked_at")
+      .select("lead_id,company_id,expires_at,revoked_at")
       .eq("token", data.token)
       .maybeSingle();
     if (linkError) throw new Error("Could not load your portal");
-    if (!link || !portalLinkIsActive(link)) return null;
+    if (!link?.company_id || !portalLinkIsActive(link)) return null;
     const [customer, estimates, jobs, proposals, invoices] = await Promise.all([
-      supabaseAdmin.from("leads").select("name").eq("id", link.lead_id).maybeSingle(),
+      supabaseAdmin.from("leads").select("name").eq("id", link.lead_id)
+        .eq("company_id", link.company_id)
+        .maybeSingle(),
       supabaseAdmin
         .from("roof_estimates")
         .select("id,title,category,total_cents,created_at")
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("roof_jobs")
@@ -99,6 +102,7 @@ export const getClientPortal = createServerFn({ method: "GET" })
         .from("proposals")
         .select("id,title,category,file_path,amount")
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .eq("is_template", false)
         .order("created_at", { ascending: false }),
       supabaseAdmin
@@ -107,6 +111,7 @@ export const getClientPortal = createServerFn({ method: "GET" })
           "id,number,title,total_cents,paid_cents,due_date,token,status,environment,expires_at",
         )
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .eq("status", "issued")
         .order("created_at", { ascending: false }),
     ]);
@@ -121,6 +126,7 @@ export const getClientPortal = createServerFn({ method: "GET" })
           .from("proposal_shares")
           .select("proposal_id,signed_name,signed_at,signature_data,expires_at,revoked_at")
           .in("proposal_id", proposalIds)
+          .eq("company_id", link.company_id)
           .not("signed_at", "is", null)
           .order("signed_at", { ascending: false })
       : { data: [], error: null };
