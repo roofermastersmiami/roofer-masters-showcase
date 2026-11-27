@@ -509,7 +509,6 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     if (["weston-asbestos-responsibility", "weston-rooftop-gas-vent", "weston-broward-rooftop-equipment", "davie-asbestos-responsibilities", "davie-anchor-spacing-calculations"].includes(item.id)) return request.projectKind === "multifamily_reroof" || request.projectKind === "commercial_reroof";
     if (item.id === "davie-hurricane-mitigation-retrofit") return request.projectKind === "reroof";
     if (item.id === "davie-commercial-reroof-statement") return request.projectKind === "commercial_reroof";
-    if (item.id === "margate-owner-builder-affidavit") return false;
     if (item.id === "margate-owner-notification") return ["reroof", "multifamily_reroof", "commercial_reroof"].includes(request.projectKind ?? "unknown");
     if (item.id === "notice-of-commencement" || item.id === "hurricane-mitigation-affidavit") return true;
     return true;
