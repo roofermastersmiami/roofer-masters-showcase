@@ -449,6 +449,53 @@ export const CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE: JurisdictionPermitProfil
   checklist: cityOfMiamiResidentialRoofingChecklist,
 };
 
+const miamiGardensResidentialRoofingChecklist: ChecklistItem[] = [
+  { id: "miami-gardens-residential-permit", label: "City permit application and fee sheet", detail: "Complete the City building permit application and include the current roofing permit fee sheet.", appliesWhen: "Residential roofing permit application.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-hoa-affidavit", label: "Homeowners Association Affidavit", detail: "Include the City's HOA affidavit in the residential roofing package.", appliesWhen: "Listed on the City's residential roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-workers-comp", label: "Workers' Compensation Exemption / coverage", detail: "Provide the applicable workers' compensation exemption or coverage documentation.", appliesWhen: "Listed on the City's residential roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-roof-wall", label: "Roof-to-Wall Connection Affidavit", detail: "Complete the City's roof-to-wall connection affidavit or applicable exemption.", appliesWhen: "Listed on the City's residential roofing checklist; confirm project-specific applicability.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-owner-notification", label: "Owner's Notification for Roofing Considerations", detail: "Include the owner notification document required in the HVHZ roofing package.", appliesWhen: "Reroofing only.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7598/Residential-Roofing-Complete-Packet-PDF" },
+  { id: "miami-gardens-hvhz-package", label: "HVHZ Uniform Roofing Application package", detail: "Complete the applicable Uniform Roofing Application sections and attachments for the selected roof system.", appliesWhen: "Residential reroof; low-slope A/B/C, asphalt shingle A/B/D, tile A/B/D/E, metal A/B/D.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7598/Residential-Roofing-Complete-Packet-PDF" },
+  { id: "miami-gardens-anchor-table", label: "Prescriptive anchor/base-sheet table or site-specific engineering", detail: "Provide the Miami-Dade prescriptive anchor/base-sheet attachment table or site-specific engineering calculations.", appliesWhen: "Listed on the City's residential roofing checklist; select the route applicable to the assembly.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-product-approvals", label: "Florida Product Approval / Miami-Dade NOA", detail: "Provide current product approval documentation for the exact roof system and components.", appliesWhen: "Listed on the City's residential roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-ul-listing", label: "UL Listings", detail: "Include the applicable UL listing information for the proposed roof system.", appliesWhen: "Listed on the City's residential roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-osha-ladder", label: "OSHA Ladder Information Sheet", detail: "Include the City's OSHA ladder information sheet.", appliesWhen: "Listed on the City's residential roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+  { id: "miami-gardens-noc", label: "Notice of Commencement", detail: "Record, submit, and display the NOC before scheduling the first inspection for non-mechanical projects valued over $5,000; verify current statutory applicability.", appliesWhen: "Non-mechanical project with job value over $5,000, before first inspection.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist" },
+];
+export const CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "miami-gardens-residential-roofing",
+  label: "City of Miami Gardens — residential reroof",
+  county: "Miami-Dade",
+  authorityScope: "City of Miami Gardens residential roofing checklist and 8th Edition HVHZ residential roofing packet. Limited to residential reroofs.",
+  authorityWarning: "Use only after verifying the property is inside City of Miami Gardens limits against official parcel / boundary records. This CRM profile is an intake aid, not a municipal determination or approval.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist", "https://www.miamigardens-fl.gov/DocumentCenter/View/7598/Residential-Roofing-Complete-Packet-PDF", "https://www.miamigardens-fl.gov/193/Documents-Forms"],
+  checklist: miamiGardensResidentialRoofingChecklist,
+};
+
+const miamiGardensCommercialRoofingChecklist: ChecklistItem[] = [
+  { id: "miami-gardens-commercial-permit", label: "City permit application and fee sheet", detail: "Complete the City building permit application and include the current roofing permit fee sheet.", appliesWhen: "Commercial roofing permit application.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+  { id: "miami-gardens-commercial-reroof-affidavit", label: "Commercial Re-Roofing Affidavit", detail: "Complete the City's commercial reroofing affidavit.", appliesWhen: "Commercial reroofing.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+  { id: "miami-gardens-commercial-asbestos", label: "Asbestos Release Form — Commercial Roofs", detail: "Include the asbestos release form identified by the City for commercial roofs.", appliesWhen: "Commercial roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+  { id: "miami-gardens-commercial-hvhz", label: "HVHZ Uniform Roofing Application package", detail: "Complete the applicable HVHZ roofing package for the proposed commercial roof system.", appliesWhen: "Commercial reroofing.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7598/Residential-Roofing-Complete-Packet-PDF" },
+  { id: "miami-gardens-commercial-engineering", label: "Site-specific engineering calculations", detail: "Provide site-specific engineering calculations for the commercial roof project.", appliesWhen: "Listed on the City's commercial roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+  { id: "miami-gardens-commercial-product-approvals", label: "Product approvals", detail: "Provide product approvals for the proposed roof system and components.", appliesWhen: "Listed on the City's commercial roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+  { id: "miami-gardens-commercial-ul", label: "UL Listings", detail: "Provide UL listings for the proposed roof system.", appliesWhen: "Listed on the City's commercial roofing checklist.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+  { id: "miami-gardens-commercial-noc", label: "Notice of Commencement", detail: "Record, submit, and display the NOC before scheduling the first inspection for non-mechanical projects valued over $5,000; verify current statutory applicability.", appliesWhen: "Non-mechanical project with job value over $5,000, before first inspection.", sourceUrl: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist" },
+];
+export const CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE: JurisdictionPermitProfile = {
+  id: "miami-gardens-commercial-roofing",
+  label: "City of Miami Gardens — commercial reroof",
+  county: "Miami-Dade",
+  authorityScope: "City of Miami Gardens commercial roofing permit checklist. Limited to commercial reroofing.",
+  authorityWarning: "Use only after verifying the property is inside City of Miami Gardens limits against official parcel / boundary records. This CRM profile is an intake aid, not a municipal determination or approval.",
+  codeEdition: "Florida Building Code, 8th Edition (2023)",
+  codeEditionEffectiveThrough: "2026-12-30",
+  sourceUrls: ["https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist", "https://www.miamigardens-fl.gov/DocumentCenter/View/7598/Residential-Roofing-Complete-Packet-PDF", "https://www.miamigardens-fl.gov/193/Documents-Forms"],
+  checklist: miamiGardensCommercialRoofingChecklist,
+};
+
 export type PermitChecklistRequest = {
   profileId: string;
   roofingSystem?: RoofingSystem;
@@ -487,6 +534,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   const profiles: Record<string, JurisdictionPermitProfile> = {
     [MIAMI_DADE_UNINCORPORATED_PROFILE.id]: MIAMI_DADE_UNINCORPORATED_PROFILE,
     [CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id]: CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE,
+    [CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id]: CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE,
+    [CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id]: CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE,
     [BROWARD_COUNTY_PROFILE.id]: BROWARD_COUNTY_PROFILE,
     [BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id]: BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
     [BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id]: BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE,
@@ -548,8 +597,8 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
     authorityConfirmed = false;
     warnings.push("County-level routing is not a roofing document checklist. Confirm the exact municipality, project type, and permit intake checklist before filing.");
   }
-  const residentialOnlyProfile = profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
-  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id || profile.id === BROWARD_HALLANDALE_ROOFING_PROFILE.id || profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
+  const residentialOnlyProfile = profile.id === CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id;
+  if ((profile.id === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_PEMBROKE_PINES_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_HOLLYWOOD_ROOFING_PROFILE.id || profile.id === BROWARD_CORAL_SPRINGS_RESIDENTIAL_PROFILE.id || profile.id === BROWARD_POMPANO_BEACH_ROOFING_PROFILE.id || profile.id === BROWARD_FORT_LAUDERDALE_ROOFING_PROFILE.id || profile.id === BROWARD_MIRAMAR_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === BROWARD_WESTON_ROOFING_PROFILE.id || profile.id === BROWARD_DAVIE_ROOFING_PROFILE.id || profile.id === BROWARD_MARGATE_ROOFING_PROFILE.id || profile.id === BROWARD_HALLANDALE_ROOFING_PROFILE.id || profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id || profile.id === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id) && !request.parcelAuthorityVerified) {
     authorityConfirmed = false;
     warnings.push(`Verify the property is inside ${profile.label.split(" — ")[0]} limits and confirm its current checklist with the Building Division before filing.`);
   }
@@ -559,9 +608,16 @@ export function getPermitChecklist(request: PermitChecklistRequest): PermitCheck
   }
 
   const roofSystem = request.roofingSystem ?? "other";
-  const profileScopeSupported = !residentialOnlyProfile || request.projectKind === "reroof";
+  const commercialOnlyProfile = profile.id === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id;
+  if (commercialOnlyProfile && request.projectKind !== "commercial_reroof") {
+    authorityConfirmed = false;
+    warnings.push("The City of Miami Gardens commercial checklist is limited to commercial reroofing; confirm requirements for this different project type.");
+  }
+  const profileScopeSupported = (!residentialOnlyProfile || request.projectKind === "reroof") && (!commercialOnlyProfile || request.projectKind === "commercial_reroof");
   const checklistEnabled = codeReferenceCurrent && profileScopeSupported;
-  const requiredRoofingSections = !checklistEnabled ? [] : profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id
+  const requiredRoofingSections = !checklistEnabled ? [] : profile.id === CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id
+    ? (roofSystem === "low_slope" ? ["A", "B", "C"] : roofSystem === "tile" ? ["A", "B", "D", "E"] : ["asphalt_shingle", "metal", "wood_shake"].includes(roofSystem) ? ["A", "B", "D"] : [])
+    : profile.id === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id
     ? (roofSystem === "low_slope" ? ["A", "B", "C"] : ["asphalt_shingle", "tile", "metal"].includes(roofSystem) ? ["A", "B", "D"] : [])
     : profile.id === MIAMI_DADE_UNINCORPORATED_PROFILE.id
     ? miamiDadeSections[roofSystem]
@@ -600,4 +656,6 @@ export const PERMIT_JURISDICTION_REFERENCE_SOURCES = {
   davieRoofingPackage: "https://www.davie-fl.gov/DocumentCenter/View/15265/Roofing-Package",
   hallandaleBeachReroofChecklist: "https://hallandalebeachfl.gov/DocumentCenter/View/32554/Reroof-Permit-Checklist?bidId=",
   cityOfMiamiRoofingPermit: "https://www.miami.gov/Permits-Construction/Permit-Catalog/Get-a-Roofing-Permit?lang_update=637748169458966676",
+  miamiGardensResidentialRoofing: "https://www.miamigardens-fl.gov/DocumentCenter/View/7764/Roofing-Permit-Checklist",
+  miamiGardensCommercialRoofing: "https://www.miamigardens-fl.gov/DocumentCenter/View/7775/Commercial-Roofing-Permit-Checklist",
 } as const;

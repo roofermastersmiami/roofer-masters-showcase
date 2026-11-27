@@ -19,6 +19,8 @@ import {
   getPermitChecklist,
   MIAMI_DADE_UNINCORPORATED_PROFILE,
   CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE,
+  CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE,
+  CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE,
 } from "@/lib/permit-jurisdiction-checklists";
 import type { PermitProjectKind, RoofingSystem } from "@/lib/permit-jurisdiction-checklists";
 import { buildPermitDocumentPath, validatePermitDocument } from "@/lib/permit-document-validation";
@@ -345,7 +347,8 @@ export function PermitRecords() {
                         const profileId = event.target.value;
                         setJurisdictionProfileId(profileId);
                         setParcelAuthorityVerified(false);
-                        if (profileId === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami, Miami-Dade County");
+                        if (profileId === CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id || profileId === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami Gardens, Miami-Dade County");
+                        else (profileId === CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id) setJurisdiction("City of Miami, Miami-Dade County");
                         else if (profileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) setJurisdiction("Miami-Dade County — unincorporated area");
                         else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
                         else if (profileId === BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id) setJurisdiction("City of Sunrise, Broward County");
@@ -361,6 +364,8 @@ export function PermitRecords() {
                         else setJurisdiction("City of Hollywood, Broward County");
                       }}>
                         <option value={CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE.id}>Miami-Dade — City of Miami residential reroof</option>
+                        <option value={CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id}>Miami-Dade — Miami Gardens residential reroof</option>
+                        <option value={CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id}>Miami-Dade — Miami Gardens commercial reroof</option>
                         <option value={MIAMI_DADE_UNINCORPORATED_PROFILE.id}>Miami-Dade — unincorporated</option>
                         <option value={BROWARD_COUNTY_PROFILE.id}>Broward — county routing only</option>
                         <option value={BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id}>Broward — City of Sunrise residential reroof</option>

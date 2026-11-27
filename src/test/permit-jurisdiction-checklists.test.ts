@@ -15,6 +15,8 @@ import {
   getPermitChecklist,
   MIAMI_DADE_UNINCORPORATED_PROFILE,
   CITY_OF_MIAMI_RESIDENTIAL_ROOFING_PROFILE,
+  CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE,
+  CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE,
 } from "@/lib/permit-jurisdiction-checklists";
 
 describe("Miami-Dade unincorporated roofing checklist", () => {
@@ -705,5 +707,86 @@ describe("City of Miami residential roofing profile", () => {
     expect(result.codeReferenceCurrent).toBe(false);
     expect(result.authorityConfirmed).toBe(false);
     expect(result.items).toHaveLength(0);
+  });
+});
+
+describe("City of Miami Gardens roofing permit profiles", () => {
+  it("maps residential roof systems to the City's published HVHZ sections", () => {
+    const cases = [
+      ["low_slope", ["A", "B", "C"]],
+      ["asphalt_shingle", ["A", "B", "D"]],
+      ["tile", ["A", "B", "D", "E"]],
+      ["metal", ["A", "B", "D"]],
+    ] as const;
+    for (const [roofingSystem, sections] of cases) {
+      const result = getPermitChecklist({
+        profileId: CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id,
+        projectKind: "reroof",
+        roofingSystem,
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-11-26",
+      });
+      expect(result.authorityConfirmed).toBe(true);
+      expect(result.requiredRoofingSections).toEqual(sections);
+      expect(result.items.map((item) => item.id)).toContain("miami-gardens-anchor-table");
+      expect(result.items.map((item) => item.id)).toContain("miami-gardens-osha-ladder");
+    }
+  });
+
+  it("requires parcel verification and limits residential checklist to residential reroofs", () => {
+    const unverified = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      asOfDate: "2026-11-26",
+    });
+    expect(unverified.authorityConfirmed).toBe(false);
+    expect(unverified.warnings.join(" ")).toContain("inside City of Miami Gardens limits");
+    for (const projectKind of ["new_roof", "repair", "commercial_reroof"] as const) {
+      const result = getPermitChecklist({
+        profileId: CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id,
+        projectKind,
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-11-26",
+      });
+      expect(result.authorityConfirmed).toBe(false);
+      expect(result.items).toHaveLength(0);
+    }
+  });
+
+  it("keeps commercial documents separate and requires commercial reroof scope", () => {
+    const commercial = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id,
+      projectKind: "commercial_reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    const ids = commercial.items.map((item) => item.id);
+    expect(commercial.authorityConfirmed).toBe(true);
+    expect(ids).toContain("miami-gardens-commercial-reroof-affidavit");
+    expect(ids).toContain("miami-gardens-commercial-asbestos");
+    expect(ids).toContain("miami-gardens-commercial-engineering");
+    expect(ids).not.toContain("miami-gardens-hoa-affidavit");
+    const wrongScope = getPermitChecklist({
+      profileId: CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id,
+      projectKind: "reroof",
+      parcelAuthorityVerified: true,
+      asOfDate: "2026-11-26",
+    });
+    expect(wrongScope.authorityConfirmed).toBe(false);
+    expect(wrongScope.items).toHaveLength(0);
+  });
+
+  it("suppresses both profiles after the 8th Edition reference expires", () => {
+    for (const profileId of [CITY_OF_MIAMI_GARDENS_RESIDENTIAL_ROOFING_PROFILE.id, CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id]) {
+      const result = getPermitChecklist({
+        profileId,
+        projectKind: profileId === CITY_OF_MIAMI_GARDENS_COMMERCIAL_ROOFING_PROFILE.id ? "commercial_reroof" : "reroof",
+        parcelAuthorityVerified: true,
+        asOfDate: "2026-12-31",
+      });
+      expect(result.codeReferenceCurrent).toBe(false);
+      expect(result.authorityConfirmed).toBe(false);
+      expect(result.items).toHaveLength(0);
+    }
   });
 });
