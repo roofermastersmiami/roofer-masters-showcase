@@ -33,6 +33,52 @@ export function addressPinPosition(reference: GeoReference) {
   };
 }
 /**
+ * Where the scene's ADDRESS marker should sit. The raw geocoded
+ * point usually lands on the street in front of the lot, while the
+ * measured drawing is the actual building — so when the drawing has
+ * measured planes, the marker anchors to the footprint centroid:
+ * each plane outline's polygon centroid (projected to the ground
+ * plane), weighted by outline area. Without measured geometry it
+ * falls back to the geocoded point, and to null when the drawing
+ * carries neither geometry nor a geo reference. View-layer only:
+ * nothing here changes stored geometry or the geocode itself.
+ */
+export function addressMarkerPosition(drawing: RoofDrawing): { x: number; z: number } | null {
+  let weightedX = 0;
+  let weightedZ = 0;
+  let totalArea = 0;
+  let vertexX = 0;
+  let vertexZ = 0;
+  let vertexCount = 0;
+  for (const plane of drawing.planes) {
+    let crossSum = 0;
+    let cx = 0;
+    let cz = 0;
+    const points = plane.points;
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i]!;
+      const b = points[(i + 1) % points.length]!;
+      const cross = a.x * b.z - b.x * a.z;
+      crossSum += cross;
+      cx += (a.x + b.x) * cross;
+      cz += (a.z + b.z) * cross;
+      vertexX += a.x;
+      vertexZ += a.z;
+      vertexCount++;
+    }
+    const signedArea = crossSum / 2;
+    if (Math.abs(signedArea) > 1e-9) {
+      const area = Math.abs(signedArea);
+      weightedX += (cx / (6 * signedArea)) * area;
+      weightedZ += (cz / (6 * signedArea)) * area;
+      totalArea += area;
+    }
+  }
+  if (totalArea > 0) return { x: weightedX / totalArea, z: weightedZ / totalArea };
+  if (vertexCount > 0) return { x: vertexX / vertexCount, z: vertexZ / vertexCount };
+  return drawing.geo_reference ? addressPinPosition(drawing.geo_reference) : null;
+}
+/**
  * Rebase satellite-traced roof facets into an existing drawing's local feet
  * coordinate frame. The geocoded address anchors must identify the same
  * property; otherwise combining the coordinate systems would corrupt geometry.
