@@ -3,6 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CalendarPlus, ClipboardList, Download, FileText, Plus, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { createPermitPacketPdf } from "@/lib/permit-packet";
+import {
+  BROWARD_COUNTY_PROFILE,
+  BROWARD_SUNRISE_RESIDENTIAL_PROFILE,
+  getPermitChecklist,
+  MIAMI_DADE_UNINCORPORATED_PROFILE,
+} from "@/lib/permit-jurisdiction-checklists";
+import type { PermitProjectKind, RoofingSystem } from "@/lib/permit-jurisdiction-checklists";
 import { buildPermitDocumentPath, validatePermitDocument } from "@/lib/permit-document-validation";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +40,11 @@ export function PermitRecords() {
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["permit-workspace"], queryFn: () => getPermitWorkspace() });
   const [jobId, setJobId] = useState("");
-  const [jurisdiction, setJurisdiction] = useState("Miami-Dade County");
+  const [jurisdiction, setJurisdiction] = useState("Miami-Dade County — unincorporated area");
+  const [jurisdictionProfileId, setJurisdictionProfileId] = useState(MIAMI_DADE_UNINCORPORATED_PROFILE.id);
+  const [propertyFolio, setPropertyFolio] = useState("");
+  const [roofingSystem, setRoofingSystem] = useState<RoofingSystem>("metal");
+  const [projectKind, setProjectKind] = useState<PermitProjectKind>("reroof");
   const [permitType, setPermitType] = useState("Roof replacement");
   const [portalUrl, setPortalUrl] = useState("");
   const [permitFee, setPermitFee] = useState("");
@@ -59,7 +70,12 @@ export function PermitRecords() {
       application_status: "draft",
       portal_url: portalUrl.trim() || null,
       fee_cents: permitFee.trim() ? Math.round(Number(permitFee) * 100) : null,
-      notes: applicationNotes,
+      notes: [
+        `Project type: ${projectKind}`,
+        `Roofing system: ${roofingSystem}`,
+        propertyFolio.trim() ? `Property folio: ${propertyFolio.trim()}` : "",
+        applicationNotes.trim(),
+      ].filter(Boolean).join("\\n\\n"),
     }),
     onSuccess: async () => {
       toast.success("Permit application draft saved.");
@@ -87,6 +103,12 @@ export function PermitRecords() {
   const applications = workspace.data?.applications ?? [];
   const inspections = workspace.data?.inspections ?? [];
   const jobs = workspace.data?.jobs ?? [];
+  const jurisdictionChecklist = getPermitChecklist({
+    profileId: jurisdictionProfileId,
+    roofingSystem,
+    projectKind,
+    folio: propertyFolio,
+  });
 
   const markReady = useMutation({
     mutationFn: (id: string) => updatePermitApplication({ id, changes: { application_status: "ready_to_submit" } }),
@@ -301,9 +323,69 @@ export function PermitRecords() {
                     </select>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div><label className={labelClass} htmlFor="permit-jurisdiction">Jurisdiction</label><Input id="permit-jurisdiction" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)} maxLength={160} required /></div>
+                    <div>
+                      <label className={labelClass} htmlFor="permit-profile">Permit authority / checklist</label>
+                      <select id="permit-profile" className={inputClass} value={jurisdictionProfileId} onChange={(event) => {
+                        const profileId = event.target.value;
+                        setJurisdictionProfileId(profileId);
+                        if (profileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id) setJurisdiction("Miami-Dade County — unincorporated area");
+                        else if (profileId === BROWARD_COUNTY_PROFILE.id) setJurisdiction("Broward County — confirm municipality");
+                        else setJurisdiction("City of Sunrise, Broward County");
+                      }}>
+                        <option value={MIAMI_DADE_UNINCORPORATED_PROFILE.id}>Miami-Dade — unincorporated</option>
+                        <option value={BROWARD_COUNTY_PROFILE.id}>Broward — county routing only</option>
+                        <option value={BROWARD_SUNRISE_RESIDENTIAL_PROFILE.id}>Broward — City of Sunrise residential reroof</option>
+                      </select>
+                    </div>
                     <div><label className={labelClass} htmlFor="permit-type">Permit type</label><Input id="permit-type" value={permitType} onChange={(event) => setPermitType(event.target.value)} maxLength={120} required /></div>
                   </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className={labelClass} htmlFor="permit-project-kind">Project type</label>
+                      <select id="permit-project-kind" className={inputClass} value={projectKind} onChange={(event) => setProjectKind(event.target.value as PermitProjectKind)}>
+                        <option value="reroof">Residential reroof</option>
+                        <option value="new_roof">New roof / new construction</option>
+                        <option value="repair">Roof repair</option>
+                        <option value="commercial_reroof">Commercial reroof</option>
+                        <option value="unknown">Not determined</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass} htmlFor="permit-roof-system">Roof system</label>
+                      <select id="permit-roof-system" className={inputClass} value={roofingSystem} onChange={(event) => setRoofingSystem(event.target.value as RoofingSystem)}>
+                        <option value="low_slope">Low slope / flat</option>
+                        <option value="asphalt_shingle">Asphalt shingles</option>
+                        <option value="tile">Concrete / clay tile</option>
+                        <option value="metal">Metal roof</option>
+                        <option value="wood_shake">Wood shingles / shakes</option>
+                        <option value="other">Other / mixed</option>
+                      </select>
+                    </div>
+                    {jurisdictionProfileId === MIAMI_DADE_UNINCORPORATED_PROFILE.id && (
+                      <div><label className={labelClass} htmlFor="permit-folio">Property folio</label><Input id="permit-folio" value={propertyFolio} onChange={(event) => setPropertyFolio(event.target.value)} placeholder="Required to confirm County jurisdiction" maxLength={40} /></div>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="permit-jurisdiction">Jurisdiction name</label>
+                    <Input id="permit-jurisdiction" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)} maxLength={160} required />
+                  </div>
+                  <Card className="border-dashed">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Source-backed preparation checklist</CardTitle>
+                      <CardDescription>{jurisdictionChecklist.profile.authorityScope} Code reference: {jurisdictionChecklist.profile.codeEdition}, referenced through {jurisdictionChecklist.profile.codeEditionEffectiveThrough}.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-xs">
+                      {jurisdictionChecklist.warnings.map((warning) => <p key={warning} className="text-amber-700 dark:text-amber-400">{warning}</p>)}
+                      {jurisdictionChecklist.requiredRoofingSections.length > 0 && <p><strong>Roof application sections:</strong> {jurisdictionChecklist.requiredRoofingSections.join(", ")}</p>}
+                      {jurisdictionChecklist.items.length === 0 ? (
+                        <p className="text-muted-foreground">No generic checklist is loaded for this selection. Confirm the exact local authority and current permit packet before filing.</p>
+                      ) : (
+                        <ul className="list-disc space-y-1 pl-5">
+                          {jurisdictionChecklist.items.map((item) => <li key={item.id}><strong>{item.label}.</strong> {item.detail} <span className="text-muted-foreground">({item.appliesWhen})</span> <a className="text-primary underline" href={item.sourceUrl} target="_blank" rel="noreferrer">Official source</a></li>)}
+                        </ul>
+                      )}
+                    </CardContent>
+                  </Card>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div><label className={labelClass} htmlFor="permit-fee">Permit fee (USD)</label><Input id="permit-fee" type="number" min="0" step="0.01" value={permitFee} onChange={(event) => setPermitFee(event.target.value)} /></div>
                   </div>
