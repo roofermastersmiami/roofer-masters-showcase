@@ -1,4 +1,4 @@
-// tenant-audit: reviewed — report mutations use the authenticated Supabase client and company membership; the only service-role operations are the post-authorization cleanups inside deleteRoofOrder, which touch solely the drawing revisions, drawing_id references, and storage files collected through the tenant-scoped reads of the report being deleted.
+// tenant-audit: reviewed — report mutations use the authenticated Supabase client and company membership; inside deleteRoofOrder the service-role operations are the delete of the exact report row proven visible by the preceding RLS-scoped read (the live database carries no DELETE RLS policy on roof_report_orders — verified 2026-11-27, only the legacy SELECT policies exist — so an authenticated delete can never match a row) plus the post-authorization cleanups, which touch solely the drawing revisions, drawing_id references, and storage files collected through the tenant-scoped reads of the report being deleted.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -243,8 +243,11 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
  * Permanently remove one company-owned roof report together with its
  * drawing revisions and stored files. The customer and property records
  * are preserved. All authorization and record reads run through the
- * authenticated client (RLS); the service-role client only cleans up the
- * exact records and files collected from those tenant-scoped reads.
+ * authenticated client (RLS); the service-role client deletes the exact
+ * report row those reads proved visible (no DELETE RLS policy exists on
+ * roof_report_orders in the live database, so the row delete cannot run
+ * under RLS) and cleans up the exact records and files collected from
+ * those tenant-scoped reads.
  */
 export const deleteRoofOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -282,7 +285,13 @@ export const deleteRoofOrder = createServerFn({ method: "POST" })
           return rows ?? [];
         },
         deleteReportRow: async (reportId) => {
-          const { data: deleted, error } = await auth
+          // Service-role on purpose: authorization is already proven by the
+          // membership/role gate and the RLS-scoped getReport read above —
+          // another company's report is invisible there and never reaches
+          // this point. The live database has no DELETE RLS policy on
+          // roof_report_orders, so an authenticated delete silently matches
+          // zero rows; the service-role delete targets the exact proven id.
+          const { data: deleted, error } = await supabaseAdmin
             .from("roof_report_orders")
             .delete()
             .eq("id", reportId)
