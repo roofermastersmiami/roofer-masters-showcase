@@ -38,6 +38,7 @@ import {
   recordPermitRejection,
   createRoofProductApproval,
   verifyRoofProductApproval,
+  savePermitNocTracking,
 } from "@/lib/permitting.functions";
 
 const inputClass = "h-9 w-full rounded-md border border-input bg-background px-3 text-sm";
@@ -84,6 +85,18 @@ export function PermitRecords() {
   const [approvalExpiry, setApprovalExpiry] = useState("");
   const [approvalHvhz, setApprovalHvhz] = useState<"yes" | "no" | "unknown">("unknown");
   const [approvalSourceUrl, setApprovalSourceUrl] = useState("");
+  const [nocApplicationId, setNocApplicationId] = useState("");
+  const [nocAssessment, setNocAssessment] = useState<"not_assessed" | "required" | "not_required">("not_assessed");
+  const [nocRecording, setNocRecording] = useState<"not_started" | "draft" | "recorded">("not_started");
+  const [nocContractValue, setNocContractValue] = useState("");
+  const [nocThreshold, setNocThreshold] = useState("");
+  const [nocBasis, setNocBasis] = useState("");
+  const [nocSourceUrl, setNocSourceUrl] = useState("");
+  const [nocCounty, setNocCounty] = useState("");
+  const [nocInstrument, setNocInstrument] = useState("");
+  const [nocRecordedOn, setNocRecordedOn] = useState("");
+  const [nocClerkUrl, setNocClerkUrl] = useState("");
+  const [nocNotes, setNocNotes] = useState("");
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
   const createApplication = useMutation({
@@ -137,6 +150,24 @@ export function PermitRecords() {
     onSuccess: async () => { toast.success("Approval verification recorded."); await refresh(); },
     onError: (error) => toast.error(error.message || "Could not verify approval."),
   });
+  const saveNoc = useMutation({
+    mutationFn: () => savePermitNocTracking({
+      permit_application_id: nocApplicationId,
+      assessment_status: nocAssessment,
+      recording_status: nocRecording,
+      contract_value_cents: nocContractValue.trim() ? Math.round(Number(nocContractValue) * 100) : null,
+      threshold_amount_cents: nocThreshold.trim() ? Math.round(Number(nocThreshold) * 100) : null,
+      assessment_basis: nocBasis,
+      threshold_source_url: nocSourceUrl.trim() || null,
+      recording_county: nocCounty,
+      instrument_number: nocInstrument.trim() || null,
+      recorded_on: nocRecordedOn || null,
+      clerk_receipt_url: nocClerkUrl.trim() || null,
+      notes: nocNotes,
+    }),
+    onSuccess: async () => { toast.success("Notice of Commencement tracking saved. Requirement remains a staff-confirmed determination."); await refresh(); },
+    onError: (error) => toast.error(error.message || "Could not save NOC tracking."),
+  });
   const createInspection = useMutation({
     mutationFn: () => createPermitInspection({
       application_id: applicationId,
@@ -154,6 +185,7 @@ export function PermitRecords() {
   const applications = workspace.data?.applications ?? [];
   const inspections = workspace.data?.inspections ?? [];
   const approvals = workspace.data?.approvals ?? [];
+  const nocTracking = workspace.data?.nocTracking ?? [];
   const jobs = workspace.data?.jobs ?? [];
   const jurisdictionChecklist = getPermitChecklist({
     profileId: jurisdictionProfileId,
@@ -575,6 +607,32 @@ export function PermitRecords() {
                 })}
               </div>
               <p className="text-xs text-muted-foreground">Verification is an internal staff record. Confirm the live approval status, HVHZ applicability, approved assembly, design-pressure limits, and installation details against the official NOA / FPA before submission. Store the supporting PDF in the permit application's private document folder.</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Notice of Commencement (NOC) tracking</CardTitle><CardDescription>Record the applicable authority's current threshold and the Clerk's recording evidence. The CRM does not decide whether an NOC is legally required.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(event) => { event.preventDefault(); saveNoc.mutate(); }}>
+                <div className="sm:col-span-2"><label className={labelClass} htmlFor="noc-application">Permit application</label><select id="noc-application" className={inputClass} value={nocApplicationId} onChange={(event) => setNocApplicationId(event.target.value)} required><option value="">Choose application…</option>{applications.map((item) => <option key={item.id} value={item.id}>{item.jurisdiction_name} — {item.permit_type}</option>)}</select></div>
+                <div><label className={labelClass} htmlFor="noc-assessment">NOC requirement assessment</label><select id="noc-assessment" className={inputClass} value={nocAssessment} onChange={(event) => setNocAssessment(event.target.value as typeof nocAssessment)}><option value="not_assessed">Not assessed</option><option value="required">Required (confirmed from source)</option><option value="not_required">Not required (confirmed)</option></select></div>
+                <div><label className={labelClass} htmlFor="noc-contract">Contract value (USD)</label><Input id="noc-contract" type="number" min="0" step="0.01" value={nocContractValue} onChange={(event) => setNocContractValue(event.target.value)} /></div>
+                <div><label className={labelClass} htmlFor="noc-threshold">Verified NOC threshold (USD)</label><Input id="noc-threshold" type="number" min="0" step="0.01" value={nocThreshold} onChange={(event) => setNocThreshold(event.target.value)} /></div>
+                <div className="sm:col-span-2"><label className={labelClass} htmlFor="noc-basis">Assessment basis / current jurisdiction instructions</label><Input id="noc-basis" value={nocBasis} onChange={(event) => setNocBasis(event.target.value)} maxLength={3000} placeholder="Record the exact source and applicability; do not rely on a generic threshold." required={nocAssessment !== "not_assessed"} /></div>
+                <div><label className={labelClass} htmlFor="noc-source">Official threshold source URL</label><Input id="noc-source" type="url" value={nocSourceUrl} onChange={(event) => setNocSourceUrl(event.target.value)} maxLength={2048} placeholder="https://..." required={nocAssessment !== "not_assessed"} /></div>
+                <div><label className={labelClass} htmlFor="noc-recording-status">Recording status</label><select id="noc-recording-status" className={inputClass} value={nocRecording} onChange={(event) => setNocRecording(event.target.value as typeof nocRecording)}><option value="not_started">Not started</option><option value="draft">Draft prepared</option><option value="recorded">Recorded by Clerk</option></select></div>
+                <div><label className={labelClass} htmlFor="noc-county">Recording county</label><Input id="noc-county" value={nocCounty} onChange={(event) => setNocCounty(event.target.value)} maxLength={100} /></div>
+                <div><label className={labelClass} htmlFor="noc-instrument">Official instrument / book-page number</label><Input id="noc-instrument" value={nocInstrument} onChange={(event) => setNocInstrument(event.target.value)} maxLength={120} /></div>
+                <div><label className={labelClass} htmlFor="noc-date">Recorded date</label><Input id="noc-date" type="date" value={nocRecordedOn} onChange={(event) => setNocRecordedOn(event.target.value)} /></div>
+                <div><label className={labelClass} htmlFor="noc-clerk-url">Clerk receipt / official record URL</label><Input id="noc-clerk-url" type="url" value={nocClerkUrl} onChange={(event) => setNocClerkUrl(event.target.value)} maxLength={2048} /></div>
+                <div className="sm:col-span-2 lg:col-span-3"><label className={labelClass} htmlFor="noc-notes">Notes</label><Input id="noc-notes" value={nocNotes} onChange={(event) => setNocNotes(event.target.value)} maxLength={4000} /></div>
+                <div><Button type="submit" disabled={!nocApplicationId || (nocAssessment === "required" && (!nocBasis.trim() || !nocSourceUrl.trim() || nocContractValue.trim() === "" || nocThreshold.trim() === "")) || (nocAssessment === "not_required" && (!nocBasis.trim() || !nocSourceUrl.trim())) || (nocContractValue.trim() !== "" && (!Number.isFinite(Number(nocContractValue)) || Number(nocContractValue) < 0)) || (nocThreshold.trim() !== "" && (!Number.isFinite(Number(nocThreshold)) || Number(nocThreshold) < 0)) || saveNoc.isPending}>{saveNoc.isPending ? "Saving…" : "Save NOC tracking"}</Button></div>
+              </form>
+              <div className="space-y-2">{nocTracking.length === 0 ? <p className="text-sm text-muted-foreground">No NOC assessments recorded yet.</p> : nocTracking.map((item) => {
+                const app = applications.find((candidate) => candidate.id === item.permit_application_id);
+                return <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><div><div className="font-medium">{app?.jurisdiction_name ?? "Permit"} · {app?.permit_type ?? "Application"}</div><div className="text-xs text-muted-foreground">Requirement: {String(item.assessment_status).replaceAll("_", " ")} · Recording: {String(item.recording_status).replaceAll("_", " ")}</div><div className="text-xs text-muted-foreground">Instrument: {item.instrument_number ?? "Not recorded"} · Date: {item.recorded_on ?? "—"} · County: {item.recording_county || "—"}</div>{item.threshold_source_url && <a className="text-xs text-primary underline" href={item.threshold_source_url} target="_blank" rel="noreferrer">Open threshold source</a>}</div></div>;
+              })}</div>
+              <p className="text-xs text-muted-foreground">Thresholds and exemption rules vary by jurisdiction, project type, and current law. Record the official source and assessment basis. Mark “Recorded by Clerk” only after receiving the official recording evidence.</p>
             </CardContent>
           </Card>
 
