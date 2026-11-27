@@ -171,7 +171,10 @@ export function CrmShell({
       customerId: string;
       address: string;
     } | null>(null),
-    [selectedRoofReportId, setSelectedRoofReportId] = useState<string | null>(null);
+    [selectedRoofReportId, setSelectedRoofReportId] = useState<string | null>(null),
+    [pdfStudioRequest, setPdfStudioRequest] = useState<{
+      doc: { name: string; bytes: Uint8Array } | null;
+    } | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let cancelled = false;
@@ -691,6 +694,13 @@ export function CrmShell({
         },
         proposalLeadId,
         clearProposalLead: () => setProposalLeadId(null),
+        pdfStudioRequest,
+        openPdfStudio: (doc) => {
+          setPdfStudioRequest({ doc });
+          setOpenId(null);
+          go("pdf-tools");
+        },
+        clearPdfStudioRequest: () => setPdfStudioRequest(null),
         go,
       }}
     >

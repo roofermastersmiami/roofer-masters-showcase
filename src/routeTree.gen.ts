@@ -26,6 +26,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as ClientPortalTokenRouteImport } from './routes/client-portal.$token'
 import { Route as InvoiceTokenRouteImport } from './routes/invoice.$token'
 import { Route as ProposalTokenRouteImport } from './routes/proposal.$token'
+import { Route as SignTokenRouteImport } from './routes/sign.$token'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard.index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard.$section'
@@ -116,6 +117,11 @@ const ProposalTokenRoute = ProposalTokenRouteImport.update({
   path: '/proposal/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignTokenRoute = SignTokenRouteImport.update({
+  id: '/sign/$token',
+  path: '/sign/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   id: '/.lovable/oauth/consent',
   path: '/.lovable/oauth/consent',
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
+  '/sign/$token': typeof SignTokenRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
+  '/sign/$token': typeof SignTokenRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/client-portal/$token': typeof ClientPortalTokenRoute
   '/invoice/$token': typeof InvoiceTokenRoute
   '/proposal/$token': typeof ProposalTokenRoute
+  '/sign/$token': typeof SignTokenRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
@@ -226,6 +235,7 @@ export interface FileRouteTypes {
     | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
+    | '/sign/$token'
     | '/.lovable/oauth/consent'
     | '/dashboard/$section'
     | '/dashboard/'
@@ -247,6 +257,7 @@ export interface FileRouteTypes {
     | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
+    | '/sign/$token'
     | '/.lovable/oauth/consent'
     | '/dashboard/$section'
     | '/dashboard'
@@ -270,6 +281,7 @@ export interface FileRouteTypes {
     | '/client-portal/$token'
     | '/invoice/$token'
     | '/proposal/$token'
+    | '/sign/$token'
     | '/.lovable/oauth/consent'
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/dashboard/'
@@ -293,6 +305,7 @@ export interface RootRouteChildren {
   ClientPortalTokenRoute: typeof ClientPortalTokenRoute
   InvoiceTokenRoute: typeof InvoiceTokenRoute
   ProposalTokenRoute: typeof ProposalTokenRoute
+  SignTokenRoute: typeof SignTokenRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
 }
@@ -418,6 +431,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProposalTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign/$token': {
+      id: '/sign/$token'
+      path: '/sign/$token'
+      fullPath: '/sign/$token'
+      preLoaderRoute: typeof SignTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.lovable/oauth/consent': {
       id: '/.lovable/oauth/consent'
       path: '/.lovable/oauth/consent'
@@ -494,6 +514,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientPortalTokenRoute: ClientPortalTokenRoute,
   InvoiceTokenRoute: InvoiceTokenRoute,
   ProposalTokenRoute: ProposalTokenRoute,
+  SignTokenRoute: SignTokenRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
 }
