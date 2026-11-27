@@ -17,7 +17,7 @@ CREATE TABLE crm_invoices(
 CREATE TABLE invoice_checkouts(
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL, invoice_id uuid NOT NULL,
   session_id text, environment text NOT NULL, amount_cents bigint NOT NULL,
-  status text NOT NULL
+  status text NOT NULL DEFAULT 'pending'
 );
 CREATE TABLE invoice_payments(
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
