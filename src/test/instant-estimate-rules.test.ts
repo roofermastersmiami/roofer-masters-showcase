@@ -67,7 +67,7 @@ describe("Instant estimator and changes", () => {
     ).toBeNull());
   it("flags nonowner requests", () =>
     expect(qualifyRoofLead({ ...input, owner: false })).toBe("owner_authorization_needed"));
-  it("requires recorded customer name on approval", () =>
+  it("rejects approval claims without verified customer authorization", () =>
     expect(
       changeOrderSchema.safeParse({
         job_id: "00000000-0000-4000-8000-000000000001",
@@ -76,7 +76,6 @@ describe("Instant estimator and changes", () => {
         amount_cents: 50000,
         days_added: 1,
         status: "approved",
-        approved_by: "",
       }).success,
     ).toBe(false));
   it("accepts credits and schedule reductions", () =>

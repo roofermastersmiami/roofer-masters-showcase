@@ -50,11 +50,13 @@ export async function uploadProposalPdf(id: string, bytes: Uint8Array) {
 }
 
 export async function saveProposalPdf(proposal: Proposal, bytes: Uint8Array) {
+  if (!proposal.company_id) throw new Error("Proposal is missing company ownership");
   const path = await uploadProposalPdf(proposal.id, bytes);
   const { error } = await supabase
     .from("proposals")
     .update({ file_path: path })
-    .eq("id", proposal.id);
+    .eq("id", proposal.id)
+    .eq("company_id", proposal.company_id);
   if (error) {
     await supabase.storage.from("roofing-proposals").remove([path]);
     throw error;

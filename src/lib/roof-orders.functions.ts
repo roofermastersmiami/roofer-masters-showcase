@@ -191,6 +191,8 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       .maybeSingle();
     if (orderError) throw new Error("Could not load report request");
     if (!order) throw new Error("Report request not found");
+    if (order.company_id !== membership.company_id)
+      throw new Error("Report request belongs to another company");
     const report = reviewedReport(order);
 
     const { data: customer, error: customerError } = await context.supabase
@@ -205,8 +207,9 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       if (!data.job_id) throw new Error("Choose a customer project");
       const { data: job, error: jobError } = await context.supabase
         .from("roof_jobs")
-        .select("id,lead_id,property_id")
+        .select("id,lead_id,property_id,company_id")
         .eq("id", data.job_id)
+        .eq("company_id", membership.company_id)
         .maybeSingle();
       if (jobError) throw new Error("Could not verify customer project");
       if (
@@ -228,6 +231,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
           },
         })
         .eq("id", job.id)
+        .eq("company_id", membership.company_id)
         .select("id")
         .maybeSingle();
       if (error || !updatedJob) throw new Error("Could not transfer the material measurements");
@@ -238,6 +242,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
       .from("roof_estimates")
       .select("id")
       .eq("report_order_id", order.id)
+      .eq("company_id", membership.company_id)
       .limit(1)
       .maybeSingle();
     if (existingError) throw new Error("Could not check for an existing estimate");
@@ -251,6 +256,7 @@ export const transferRoofOrder = createServerFn({ method: "POST" })
         lead_id: customer.source_lead_id,
         property_id: order.property_id,
         report_order_id: order.id,
+        company_id: membership.company_id,
         inputs: {
           sqft: report.area_sqft,
           waste: report.waste_pct,

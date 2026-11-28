@@ -97,3 +97,34 @@ Therefore:
 **Production schema reconciliation:** blocked pending repeat read-only evidence and forward-only migration plan.  
 **Production migrations applied:** none as part of this work.  
 **Permitting release deployed:** not verified; do not claim it is live.
+
+
+---
+
+## Current status refresh — 2026-11-28
+
+This section supersedes earlier statements above that the permit implementation had not yet reached main. The current GitHub main branch and published Lovable project now contain the permit feature implementation and migrations through 0055.
+
+### Application implementation
+- Permit applications and records, inspection tracking, jurisdiction checklists, roof product approvals, code-edition references, Notice of Commencement tracking, and permit packet generation are present in the main application.
+- Permit server functions resolve the signed-in user's company membership server-side and currently restrict permit workspace operations to company owners/admins.
+- Permit packet preparation and workflow tracking are automated in the CRM. Actual filing into a county/municipal portal, permit issuance, and inspection scheduling remain human-confirmed unless an official jurisdiction API is integrated.
+
+### Tenant security release
+- PR #257 adds migrations 0056–0067 and the corresponding PostgreSQL regression fixtures.
+- The branch is rebased onto current main with zero commits behind.
+- The full push-triggered GitHub Actions workflow passed on commit `00c731bf13dd989f0efb3ee0b260a265c09883e0`: migration journal validation, privileged-code audit, PostgreSQL integration tests, lint, application tests, and production build.
+- The PR-triggered run for the same commit is still being checked before the PR is marked ready.
+
+### Current production database snapshot (read-only, 2026-11-28)
+- PostgreSQL 17.12; migration ledger has 30 entries. Current main has 56 journal entries and PR #257 has 68.
+- Current row counts: 9 leads, 23 customers, 20 properties, 4 roof jobs, and 3 roof-report orders. The report-order count differs from the previous snapshot and must be reconciled before any backfill.
+- Referential-integrity checks found zero orphaned lead/customer/property/report/job references and zero duplicate normalized property-address groups. Fourteen customers have no source lead; three roof jobs have neither a lead nor a property and must retain the documented single-company backfill treatment.
+- Core production tables still lack `company_id`; permit applications, inspections, product approvals, NOC tracking, and company permit settings are not yet present in production.
+- Existing company branding and membership tables are already present but differ from historical migration 0038/0039 assumptions. Production also grants anonymous execution to legacy authorization helpers, including `has_role`; PR #257 revokes anonymous access while retaining authenticated/service-role execution.
+- The currently present storage buckets are private. Permit-document, signed-contract, and PDF-signature buckets are not yet provisioned in production.
+
+### Release safety
+- No production SQL, DDL, migration-ledger edits, storage mutations, customer-record changes, or deployments were performed during this review.
+- Do not run the full Drizzle migration chain blindly. Migrations 0038/0039 are not safe to replay against the existing production schema; use the controlled forward-only reconciliation plan and verify each postcondition.
+- Production migration, storage/RLS cutover, and live permit workflow verification remain release gates. Do not expose the permit workspace to additional company roles until those gates pass.

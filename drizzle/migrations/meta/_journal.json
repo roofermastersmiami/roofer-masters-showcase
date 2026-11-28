@@ -393,6 +393,90 @@
       "when": 1795754300000,
       "tag": "0055_pdf_signature_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1795790000000,
+      "tag": "0056_secondary_operational_company_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795790100000,
+      "tag": "0057_company_scoped_invoice_payment_rpcs",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1795790200000,
+      "tag": "0058_company_scoped_invoice_checkout_reservation",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1795790300000,
+      "tag": "0059_company_scope_instant_estimate_intake",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1795790400000,
+      "tag": "0060_company_scoped_lead_activity_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1795790500000,
+      "tag": "0061_company_scoped_proposal_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1795790600000,
+      "tag": "0062_company_scoped_expense_receipt_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1795790700000,
+      "tag": "0063_company_owned_drawing_references",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1795790800000,
+      "tag": "0064_prevent_drawing_parent_reassignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1795790900000,
+      "tag": "0065_replace_secondary_operational_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1795791000000,
+      "tag": "0066_prevent_unverified_change_order_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1795791100000,
+      "tag": "0067_enforce_core_company_role_matrix",
+      "breakpoints": true
     }
   ]
 }

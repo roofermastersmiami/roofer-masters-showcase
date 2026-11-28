@@ -13,6 +13,27 @@ export interface PermitPacketData {
   expiresAt?: string | null;
   feeCents?: number | null;
   applicationNotes?: string | null;
+  documents?: string[];
+  productApprovals?: Array<{
+    kind: string;
+    number: string;
+    manufacturer: string;
+    productName: string;
+    status: string;
+    expiresOn?: string | null;
+    hvhzStatus?: string | null;
+    codeEdition?: string | null;
+  }>;
+  noticeOfCommencement?: {
+    assessmentStatus: string;
+    recordingStatus: string;
+    contractValueCents?: number | null;
+    thresholdAmountCents?: number | null;
+    recordingCounty?: string | null;
+    instrumentNumber?: string | null;
+    recordedOn?: string | null;
+    assessmentBasis?: string | null;
+  } | null;
   inspections: Array<{
     type: string;
     status: string;
@@ -149,6 +170,30 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
     `Fee recorded: ${data.feeCents == null ? "Not recorded" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(data.feeCents / 100)}`,
   );
   write(`Portal URL entered: ${data.portalUrl || "Not recorded"}`);
+  gap();
+  write("PRODUCT APPROVAL EVIDENCE", { strong: true, size: 12 });
+  if (!data.productApprovals?.length) write("No product approval references attached.");
+  for (const approval of data.productApprovals ?? []) {
+    write(`${approval.kind.replaceAll("_", " ")} — ${approval.number}`, { strong: true });
+    write(`Product: ${approval.manufacturer} ${approval.productName}`);
+    write(`Recorded status: ${approval.status.replaceAll("_", " ")} | HVHZ: ${approval.hvhzStatus || "Not recorded"} | Code edition: ${approval.codeEdition || "Not recorded"}`);
+    write(`Expiration: ${displayPermitDate(approval.expiresOn)}`);
+  }
+  gap();
+  write("NOTICE OF COMMENCEMENT", { strong: true, size: 12 });
+  if (!data.noticeOfCommencement) write("No NOC assessment record attached.");
+  else {
+    const noc = data.noticeOfCommencement;
+    write(`Assessment: ${noc.assessmentStatus.replaceAll("_", " ")} | Recording: ${noc.recordingStatus.replaceAll("_", " ")}`);
+    write(`Contract value: ${noc.contractValueCents == null ? "Not recorded" : (noc.contractValueCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`);
+    write(`Recorded threshold: ${noc.thresholdAmountCents == null ? "Not recorded" : (noc.thresholdAmountCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`);
+    write(`County: ${noc.recordingCounty || "Not recorded"} | Instrument: ${noc.instrumentNumber || "Not recorded"} | Recorded: ${displayPermitDate(noc.recordedOn)}`);
+    if (noc.assessmentBasis) write(`Assessment basis: ${noc.assessmentBasis}`);
+  }
+  gap();
+  write("ATTACHED DOCUMENTS", { strong: true, size: 12 });
+  if (!data.documents?.length) write("No permit documents attached.");
+  for (const documentName of data.documents ?? []) write(`• ${documentName}`);
   gap();
   write("INSPECTIONS", { strong: true, size: 12 });
   if (!data.inspections.length) write("No inspection records are attached to this application.");

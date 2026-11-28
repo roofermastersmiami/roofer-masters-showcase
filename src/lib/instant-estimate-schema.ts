@@ -48,10 +48,5 @@ export const changeOrderSchema = z
     scope: z.string().trim().min(1).max(4000),
     amount_cents: z.number().int().min(-100000000).max(100000000),
     days_added: z.number().int().min(-365).max(365),
-    status: z.enum(["draft", "pending", "approved", "rejected"]),
-    approved_by: z.string().trim().max(100),
-  })
-  .refine(
-    (v) => v.status !== "approved" || v.approved_by.length >= 2,
-    "Record the customer name before approving",
-  );
+    status: z.enum(["draft", "pending", "rejected"]),
+  });
