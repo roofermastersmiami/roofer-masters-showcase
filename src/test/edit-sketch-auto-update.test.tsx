@@ -227,9 +227,7 @@ function Surface() {
   const order = orders?.[0];
   const drawingRow = drawings?.find((row) => row.id === order?.drawing_id) ?? null;
   if (!order) return null;
-  const totals = drawingRow
-    ? measureDrawing(drawingRow.geometry as unknown as RoofDrawing)
-    : null;
+  const totals = drawingRow ? measureDrawing(drawingRow.geometry as unknown as RoofDrawing) : null;
   return (
     <div>
       <EditSketchButton report={order} drawingRow={drawingRow} />
@@ -307,9 +305,9 @@ describe("Edit Sketch save → automatic update everywhere", () => {
         { kind: "ready", id: ORDER_ID, address: state.store.order.address },
       ]),
     );
-    expect(
-      getMeasurementActivitySnapshot().find((entry) => entry.id === ORDER_ID)?.status,
-    ).toBe("ready");
+    expect(getMeasurementActivitySnapshot().find((entry) => entry.id === ORDER_ID)?.status).toBe(
+      "ready",
+    );
 
     // The card totals now come from the edited drawing — the retyped
     // edge moved from eave to valley — with no remount or reload.
