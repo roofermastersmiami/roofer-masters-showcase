@@ -87,7 +87,7 @@ CREATE POLICY "Company office sales record CRM activity"
     SELECT 1 FROM public.crm_company_memberships m
     WHERE m.company_id=crm_activity.company_id
       AND m.user_id=auth.uid()
-      AND m.role IN ('owner','admin','office','sales')
+      AND m.role IN ('owner','admin','office','sales','production_manager')
   ));
 
 -- Expenses are restricted to accounting and company administrators.
@@ -149,7 +149,8 @@ CREATE POLICY "Company office production manage tasks"
       AND m.role IN ('owner','admin','office','sales','production_manager')
   ));
 
--- Invoice allocations and change orders are accounting workflows.
+-- Invoice allocations are accounting-only. Change orders retain the
+-- legacy production-manager write path and accounting read/delete access.
 CREATE POLICY "Company accounting manage invoice allocations"
   ON public.invoice_project_links FOR ALL TO authenticated
   USING (EXISTS (
@@ -164,19 +165,43 @@ CREATE POLICY "Company accounting manage invoice allocations"
       AND m.user_id=auth.uid()
       AND m.role IN ('owner','admin','accounting')
   ));
-CREATE POLICY "Company accounting manage change orders"
-  ON public.job_change_orders FOR ALL TO authenticated
+CREATE POLICY "Company production and accounting read change orders"
+  ON public.job_change_orders FOR SELECT TO authenticated
   USING (EXISTS (
     SELECT 1 FROM public.crm_company_memberships m
     WHERE m.company_id=job_change_orders.company_id
       AND m.user_id=auth.uid()
-      AND m.role IN ('owner','admin','accounting')
+      AND m.role IN ('owner','admin','production_manager','accounting')
+  ));
+CREATE POLICY "Company production create change orders"
+  ON public.job_change_orders FOR INSERT TO authenticated
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.crm_company_memberships m
+    WHERE m.company_id=job_change_orders.company_id
+      AND m.user_id=auth.uid()
+      AND m.role IN ('owner','admin','production_manager')
+  ));
+CREATE POLICY "Company production update change orders"
+  ON public.job_change_orders FOR UPDATE TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.crm_company_memberships m
+    WHERE m.company_id=job_change_orders.company_id
+      AND m.user_id=auth.uid()
+      AND m.role IN ('owner','admin','production_manager','accounting')
   ))
   WITH CHECK (EXISTS (
     SELECT 1 FROM public.crm_company_memberships m
     WHERE m.company_id=job_change_orders.company_id
       AND m.user_id=auth.uid()
-      AND m.role IN ('owner','admin','accounting')
+      AND m.role IN ('owner','admin','production_manager')
+  ));
+CREATE POLICY "Company production and accounting delete change orders"
+  ON public.job_change_orders FOR DELETE TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.crm_company_memberships m
+    WHERE m.company_id=job_change_orders.company_id
+      AND m.user_id=auth.uid()
+      AND m.role IN ('owner','admin','production_manager','accounting')
   ));
 
 -- Staff can read customer messages and send staff replies. Public chat
