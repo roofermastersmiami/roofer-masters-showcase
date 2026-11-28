@@ -1,5 +1,5 @@
 -- Prevent parent reassignment from invalidating existing tenant-owned drawing references.
--- tenant-audit: reviewed — parent mutation triggers and KEY SHARE locks keep proposal/estimate drawing ownership consistent under concurrent writes.
+-- tenant-audit: reviewed — parent mutation triggers and SHARE locks keep proposal/estimate drawing ownership consistent under concurrent writes.
 -- A drawing inherits company ownership from crm_properties. Guard both sides
 -- of that relationship: moving a drawing, or changing its property's company.
 
@@ -22,7 +22,7 @@ BEGIN
   FROM public.roof_drawings d
   JOIN public.crm_properties p ON p.id = d.property_id
   WHERE d.id = NEW.drawing_id
-  FOR KEY SHARE OF d, p;
+  FOR SHARE OF d, p;
 
   IF drawing_property_id IS NULL OR drawing_company_id IS NULL THEN
     RAISE EXCEPTION 'Drawing must belong to a company-owned property';
