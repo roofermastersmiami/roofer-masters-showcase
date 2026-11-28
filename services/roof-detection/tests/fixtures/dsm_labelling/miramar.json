@@ -4499,11 +4499,11 @@
     "n_discovered": 2
   },
   "expected_totals": {
-    "ridge": 63.2,
-    "hip": 343.9,
+    "ridge": 65.2,
+    "hip": 283.0,
     "valley": 0.0,
-    "eave": 207.6,
-    "rake": 179.6,
-    "pitch_change": 19.3
+    "eave": 311.9,
+    "rake": 258.6,
+    "pitch_change": 12.5
   }
 }

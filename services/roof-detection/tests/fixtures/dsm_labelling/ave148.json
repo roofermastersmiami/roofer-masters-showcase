@@ -1766,11 +1766,11 @@
   "drawing_ready": true,
   "expected_extension": { "areas_sqft": [1177.8, 308.5, 107.6, 111.3, 131.2], "n_discovered": 0 },
   "expected_totals": {
-    "ridge": 90.1,
+    "ridge": 80.1,
     "hip": 0.0,
-    "valley": 111.6,
-    "eave": 70.4,
-    "rake": 114.5,
+    "valley": 73.2,
+    "eave": 81.8,
+    "rake": 102.2,
     "pitch_change": 0.0
   }
 }
