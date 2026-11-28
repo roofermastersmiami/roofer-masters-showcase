@@ -1,11 +1,11 @@
 \set ON_ERROR_STOP on
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA auth;
-DO $ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $;
+DO $role$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $role$;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
-LANGUAGE sql STABLE AS $
+LANGUAGE sql STABLE AS $auth_uid$
   SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
-$;
+$auth_uid$;
 GRANT USAGE ON SCHEMA auth TO authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 CREATE TABLE auth.users(id uuid PRIMARY KEY);
