@@ -463,6 +463,13 @@
       "when": 1795790900000,
       "tag": "0065_replace_secondary_operational_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1795791000000,
+      "tag": "0066_prevent_unverified_change_order_approval",
+      "breakpoints": true
     }
   ]
 }
