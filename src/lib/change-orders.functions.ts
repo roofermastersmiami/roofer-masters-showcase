@@ -25,12 +25,11 @@ export const createChangeOrder = createServerFn({ method: "POST" })
     if (membershipError) throw new Error("Could not verify company permissions");
     if (!membership) throw new Error("You do not have access to this company's change orders");
 
-    const { approved_by, ...fields } = data;
     const { error } = await context.supabase.from("job_change_orders").insert({
-      ...fields,
+      ...data,
       company_id: job.company_id,
-      approved_by: data.status === "approved" ? approved_by : null,
-      approved_at: data.status === "approved" ? new Date().toISOString() : null,
+      approved_by: null,
+      approved_at: null,
     });
     if (error) throw new Error("Could not save change order");
     return { ok: true };
