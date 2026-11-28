@@ -3097,9 +3097,10 @@ def _compute_edge_lengths(
     Shared boundaries between two planes are classified with a cross-section
     chord test: if the edge sits above the chord joining the two surfaces it
     is a peak (ridge when level, hip when sloped); below the chord it is a
-    valley. Unshared boundary is perimeter: segments running across the
-    facet's downslope direction are eaves, segments running along it are
-    rakes. Lengths are true 3D lengths on the facet planes, in feet.
+    valley. Unshared boundary is perimeter, split by _perimeter_edge_class:
+    segments the facet drains across are eaves, segments the downslope runs
+    along without draining across are rakes. Lengths are true 3D lengths on
+    the facet planes, in feet.
 
     `frozen_pair_classes` carries the classifications _fit_facets froze
     when the facet structure was established (see _classify_record_pairs):
@@ -3155,7 +3156,6 @@ def _compute_edge_lengths(
         else:
             perimeter = polygons[i].boundary
         a, b, _c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
-        gradient = math.hypot(a, b)
         # Classify per straight segment: a perimeter component can turn a
         # corner (rake into eave), so endpoints alone misclassify it.
         for component in _line_components(perimeter):
@@ -3167,12 +3167,10 @@ def _compute_edge_lengths(
                 ux, uy = (x1 - x0) / span, (y1 - y0) / span
                 slope_along = a * ux + b * uy
                 length_ft = span * math.sqrt(1.0 + slope_along * slope_along) * feet_per_meter
-                if gradient <= 1e-6:
-                    totals["eave"] += length_ft
-                    continue
-                downslope_x, downslope_y = -a / gradient, -b / gradient
-                alignment = abs(ux * downslope_x + uy * downslope_y)
-                totals["eave" if alignment < 0.5 else "rake"] += length_ft
+                nx, ny = _outward_normal(
+                    polygons[i], (x0 + x1) / 2.0, (y0 + y1) / 2.0, ux, uy
+                )
+                totals[_perimeter_edge_class(a, b, ux, uy, nx, ny)] += length_ft
 
     return {key: round(value, 1) for key, value in totals.items()}
 
@@ -4269,6 +4267,247 @@ def _classify_pair_local_chord(
     return "valley"
 
 
+# ---------------------------------------------------------------------
+# Perimeter totals (Phase 5b): single-counting + eave/rake classes.
+#
+# Classification: a perimeter segment is an EAVE unless the facet's
+# water runs ALONG it. Two tests, both read off the facet's fitted
+# plane — no house-specific constants:
+#
+# * Parallel: the downslope direction's component along the segment
+#   is at least half the downslope (|cos| >= 0.5, the cone the
+#   totals have always used). Across-slope segments fail here and
+#   are eaves.
+# * Non-draining: the downslope's component along the segment's
+#   OUTWARD normal is at most _PERIMETER_RAKE_MAX_OUTWARD_FLOW.
+#   A true gable end's dip is parallel to its rake, so its outward
+#   flow is ~0 (fitted planes put it within a few hundredths on
+#   every validation house); an oblique hip facet whose bottom
+#   edge the water DOES drain off — Miramar's big south-east slope
+#   runs ~16 degrees off its eave line — sits at +0.23..+0.27.
+#   The old alignment-only rule called those segments rakes
+#   (Miramar rake 258.6 ft against a 7.9 ft pro figure); the flow
+#   test is what separates them.
+_PERIMETER_RAKE_MAX_OUTWARD_FLOW = 0.15
+
+# How far off the outline a facet's perimeter chain may run and
+# still claim that stretch of outline (see _perimeter_totals).
+# Graph construction and micro-segment contraction displace a
+# shipped chain by centimetres at most (Phase 5b measured 4.6 cm
+# worst case); the tolerance must clear that, and overlapping
+# claims resolve by chain distance, so a generous value cannot
+# steal a neighbouring facet's stretch.
+_PERIMETER_CLAIM_TOLERANCE_M = 0.10
+
+
+def _outward_normal(
+    polygon: Polygon, mx: float, my: float, ux: float, uy: float
+) -> tuple[float, float]:
+    """Unit normal of the segment through (mx, my) with direction
+    (ux, uy), pointing AWAY from ``polygon``'s interior. Decided by
+    probing 5 cm to each side and asking which side the polygon
+    covers — coverage, not distance: a probe just across a hairline
+    boundary is still within centimetres of the polygon, and a
+    representative-point side test flips on concave polygons.
+    Falls back to the representative point's side when both probes
+    land on the same side (a neck thinner than the probe offset)."""
+    px, py = -uy, ux
+    plus = polygon.covers(Point(mx + px * 0.05, my + py * 0.05))
+    minus = polygon.covers(Point(mx - px * 0.05, my - py * 0.05))
+    if plus and not minus:
+        return -px, -py
+    if minus and not plus:
+        return px, py
+    rep = polygon.representative_point()
+    side = (rep.x - mx) * px + (rep.y - my) * py
+    return (-px, -py) if side > 0 else (px, py)
+
+
+def _perimeter_edge_class(
+    a: float, b: float, ux: float, uy: float, nx: float, ny: float
+) -> str:
+    """Eave/rake verdict for one perimeter segment of the facet
+    whose plane gradient is (a, b): (ux, uy) is the segment's unit
+    direction and (nx, ny) its outward unit normal. A flat facet's
+    perimeter is all eave. Otherwise the segment is a RAKE only
+    when the downslope runs along it without draining across it
+    (a gable end); every segment the facet drains across —
+    straight out or obliquely — is an EAVE."""
+    gradient = math.hypot(a, b)
+    if gradient <= 1e-6:
+        return "eave"
+    downslope_x, downslope_y = -a / gradient, -b / gradient
+    alignment = abs(ux * downslope_x + uy * downslope_y)
+    if alignment < 0.5:
+        return "eave"
+    outward_flow = downslope_x * nx + downslope_y * ny
+    if outward_flow <= _PERIMETER_RAKE_MAX_OUTWARD_FLOW:
+        return "rake"
+    return "eave"
+
+
+def _perimeter_totals(
+    by_pair: dict[frozenset, list[dict[str, Any]]],
+    polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    outline: Polygon,
+) -> dict[str, float]:
+    """Eave/rake totals (feet) for the tiling's perimeter, each
+    physical edge counted exactly once, measured ON THE OUTLINE.
+
+    The boundary graph nodes every boundary it is given — the
+    outline's and each facet ring's — so where a ring runs parallel
+    to the outline a hair inside it, the graph carries TWO traces
+    of one physical edge, both labelled {-1, i}: the outline's own
+    trace and the ring's. Summing chain lengths counts the
+    perimeter twice wherever that happens (the labelled path's
+    straightened rings run micrometres inside the outline around
+    whole houses — Phase 4 counted 115 m of Miramar perimeter
+    against its 85.9 m outline, Phase 5a 169 m). The traces sit at
+    micrometre-to-millimetre offsets, so no distance filter can
+    separate the true trace from its echo; but both traces CLAIM
+    the same stretch of outline. So the outline is cut at every
+    point where any facet's claim starts or ends — a facet claims
+    the stretches within _PERIMETER_CLAIM_TOLERANCE_M of its
+    perimeter chains — and each atomic interval between cuts goes
+    to the facet whose chains run nearest its midpoint. The
+    interval's own outline geometry — a single trace, the survey
+    line — is then measured and classified per segment with the
+    owning facet's plane. An interval no chain claims (a ring the
+    graph displaced past the tolerance) falls to the facet the
+    tiling has just inside the outline there, so the counted
+    perimeter still covers the outline exactly once.
+
+    The assignment runs on linear references (project /
+    interpolate / substring along the outline), never on line
+    differences: claim geometry clipped from the outline differs
+    from it by floating-point dust, and GEOS line difference
+    silently fails to subtract such near-coincident lines —
+    measured on Maria, a difference-based version recounted a
+    third of the outline."""
+    from shapely.ops import substring, unary_union
+
+    totals = {"eave": 0.0, "rake": 0.0}
+    outline_line = outline.boundary
+    total_length = outline_line.length
+    if total_length <= 0:
+        return totals
+    facet_chains: dict[int, Any] = {}
+    cuts = {0.0, total_length}
+    # No interval may cross an outline vertex: a corner-straddling
+    # interval would be measured with one facet's plane while its
+    # far piece lies on the neighbouring facet's edge (a square hip
+    # roof grew 1.1 ft of phantom rake that way).
+    for coord in outline_line.coords:
+        cuts.add(outline_line.project(Point(coord)))
+    for pair, pair_chains in by_pair.items():
+        if -1 not in pair:
+            continue
+        i = next(k for k in pair if k != -1)
+        chain_lines = [
+            LineString(chain["verts"])
+            for chain in pair_chains
+            if len(chain["verts"]) >= 2
+        ]
+        if not chain_lines:
+            continue
+        chains_union = unary_union(chain_lines)
+        facet_chains[i] = chains_union
+        covered = outline_line.intersection(
+            chains_union.buffer(_PERIMETER_CLAIM_TOLERANCE_M)
+        )
+        for component in _line_components(covered):
+            if component.length <= 1e-9:
+                continue
+            for coord in (component.coords[0], component.coords[-1]):
+                cuts.add(outline_line.project(Point(coord)))
+    if not facet_chains:
+        return totals
+    ordered_cuts = sorted(cuts)
+    intervals: list[tuple[float, float, int]] = []
+    for start, end in zip(ordered_cuts, ordered_cuts[1:]):
+        if end - start < 1e-9:
+            continue
+        mid_distance = (start + end) / 2.0
+        midpoint = outline_line.interpolate(mid_distance)
+        owner, best = -1, math.inf
+        for i, chains_union in facet_chains.items():
+            distance = chains_union.distance(midpoint)
+            if distance < best:
+                owner, best = i, distance
+        if owner < 0 or best > _PERIMETER_CLAIM_TOLERANCE_M:
+            owner = _tiling_side_label(
+                _outline_interior_probe(outline, outline_line, mid_distance),
+                polygons,
+            )
+        if owner >= 0:
+            intervals.append((start, end, owner))
+    # Group consecutive intervals of one facet into runs (the first
+    # and last runs merge when the same facet owns both sides of
+    # the outline's zero point). A run shorter than 0.3 m in total
+    # is corner noise — a sliver claim at a junction — and does not
+    # count. Within a run, the service's long-standing 0.3 m
+    # segment floor applies as in _compute_edge_lengths: it drops
+    # the claim-bleed slivers at corners (at most ~0.2 m per
+    # corner) and the county outlines' shortest wiggle segments,
+    # the same convention the chain totals used.
+    runs: list[tuple[int, list[tuple[float, float]]]] = []
+    for start, end, owner in intervals:
+        if runs and runs[-1][0] == owner:
+            runs[-1][1].append((start, end))
+        else:
+            runs.append((owner, [(start, end)]))
+    if len(runs) > 1 and runs[0][0] == runs[-1][0]:
+        runs[0][1].extend(runs[-1][1])
+        runs.pop()
+    for owner, spans in runs:
+        if sum(end - start for start, end in spans) < 0.3:
+            continue
+        a, b, _c = plane_models[owner]
+        for start, end in spans:
+            piece = substring(outline_line, start, end)
+            for component in _line_components(piece):
+                coords = list(component.coords)
+                for (x0, y0), (x1, y1) in zip(coords, coords[1:]):
+                    span = math.hypot(x1 - x0, y1 - y0)
+                    if span < 0.3:
+                        continue
+                    ux, uy = (x1 - x0) / span, (y1 - y0) / span
+                    nx, ny = _outward_normal(
+                        outline, (x0 + x1) / 2.0, (y0 + y1) / 2.0, ux, uy
+                    )
+                    slope_along = a * ux + b * uy
+                    length_ft = (
+                        span * math.sqrt(1.0 + slope_along * slope_along)
+                        * _FT_PER_M
+                    )
+                    totals[_perimeter_edge_class(a, b, ux, uy, nx, ny)] += (
+                        length_ft
+                    )
+    return totals
+
+
+def _outline_interior_probe(
+    outline: Polygon, outline_line: Any, distance_along: float
+) -> Point:
+    """A point 2 cm INSIDE the outline at the given distance along
+    its boundary: the probe _tiling_side_label reads to name the
+    facet owning an unclaimed outline stretch. The inward side is
+    decided by _outward_normal against the local boundary
+    direction."""
+    midpoint = outline_line.interpolate(distance_along)
+    ahead = outline_line.interpolate(
+        min(distance_along + 0.05, outline_line.length)
+    )
+    behind = outline_line.interpolate(max(distance_along - 0.05, 0.0))
+    ux, uy = ahead.x - behind.x, ahead.y - behind.y
+    norm = math.hypot(ux, uy)
+    if norm <= 1e-9:
+        return midpoint
+    nx, ny = _outward_normal(outline, midpoint.x, midpoint.y, ux / norm, uy / norm)
+    return Point(midpoint.x - nx * 0.02, midpoint.y - ny * 0.02)
+
+
 def _graph_edge_totals(
     polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
@@ -4278,9 +4517,11 @@ def _graph_edge_totals(
     """EagleView-style edge totals measured on the drawing's boundary
     graph itself: for each facet pair, the summed 3D length of the
     chains they share in the emitted tiling, classified once per pair
-    by the local chord test (_classify_pair_local_chord); perimeter
-    chains are split into eave/rake per segment by the facet's
-    gradient, as _compute_edge_lengths does. Measuring the graph —
+    by the local chord test (_classify_pair_local_chord); the
+    perimeter is measured separately by _perimeter_totals, which
+    counts each physical edge once on the outline itself and splits
+    eave/rake with _perimeter_edge_class, as _compute_edge_lengths
+    does. Measuring the graph —
     instead of re-running the polygon-sensitive _shared_edge_span on
     reshaped polygons — means the totals describe exactly the lines
     the drawing ships, and a pair's class cannot drift when a polygon
@@ -4304,49 +4545,34 @@ def _graph_edge_totals(
         )
 
     for pair, pair_chains in by_pair.items():
-        if -1 not in pair:
-            i, j = sorted(pair)
-            classification = _classify_pair_local_chord(
-                polygons[i], plane_models[i], pitches[i],
-                polygons[j], plane_models[j], pitches[j],
-            )
-            if classification is None:
+        if -1 in pair:
+            # Perimeter: measured once, on the outline, below —
+            # summing these chains would count every edge whose
+            # facet ring runs parallel to the outline twice (the
+            # outline's trace plus the ring's; see _perimeter_totals).
+            continue
+        i, j = sorted(pair)
+        classification = _classify_pair_local_chord(
+            polygons[i], plane_models[i], pitches[i],
+            polygons[j], plane_models[j], pitches[j],
+        )
+        if classification is None:
+            continue
+        a_i, b_i, _ = plane_models[i]
+        a_j, b_j, _ = plane_models[j]
+        length_m = 0.0
+        for chain in pair_chains:
+            if chain_plan_length(chain) < _GRAPH_MIN_SEAM_M:
                 continue
-            a_i, b_i, _ = plane_models[i]
-            a_j, b_j, _ = plane_models[j]
-            length_m = 0.0
-            for chain in pair_chains:
-                if chain_plan_length(chain) < _GRAPH_MIN_SEAM_M:
-                    continue
-                verts = chain["verts"]
-                for (x0, y0), (x1, y1) in zip(verts, verts[1:]):
-                    dx, dy = x1 - x0, y1 - y0
-                    dz = ((a_i + a_j) / 2.0) * dx + ((b_i + b_j) / 2.0) * dy
-                    length_m += math.hypot(math.hypot(dx, dy), dz)
-            totals[classification] += length_m * _FT_PER_M
-        else:
-            i = next(k for k in pair if k != -1)
-            a, b, _c = plane_models[i]
-            gradient = math.hypot(a, b)
-            for chain in pair_chains:
-                verts = chain["verts"]
-                for (x0, y0), (x1, y1) in zip(verts, verts[1:]):
-                    span = math.hypot(x1 - x0, y1 - y0)
-                    if span < 0.3:
-                        continue
-                    ux, uy = (x1 - x0) / span, (y1 - y0) / span
-                    slope_along = a * ux + b * uy
-                    length_ft = (
-                        span * math.sqrt(1.0 + slope_along * slope_along)
-                        * _FT_PER_M
-                    )
-                    if gradient <= 1e-6:
-                        totals["eave"] += length_ft
-                        continue
-                    alignment = abs(
-                        ux * (-a / gradient) + uy * (-b / gradient)
-                    )
-                    totals["eave" if alignment < 0.5 else "rake"] += length_ft
+            verts = chain["verts"]
+            for (x0, y0), (x1, y1) in zip(verts, verts[1:]):
+                dx, dy = x1 - x0, y1 - y0
+                dz = ((a_i + a_j) / 2.0) * dx + ((b_i + b_j) / 2.0) * dy
+                length_m += math.hypot(math.hypot(dx, dy), dz)
+        totals[classification] += length_m * _FT_PER_M
+    perimeter = _perimeter_totals(by_pair, polygons, plane_models, outline)
+    totals["eave"] = perimeter["eave"]
+    totals["rake"] = perimeter["rake"]
     return {key: round(value, 1) for key, value in totals.items()}
 
 

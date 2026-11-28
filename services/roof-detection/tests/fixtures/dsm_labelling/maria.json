@@ -1628,8 +1628,8 @@
     "ridge": 54.4,
     "hip": 64.8,
     "valley": 47.2,
-    "eave": 126.8,
-    "rake": 59.2,
+    "eave": 161.2,
+    "rake": 24.2,
     "pitch_change": 0.0
   }
 }

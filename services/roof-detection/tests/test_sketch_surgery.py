@@ -73,7 +73,11 @@ def test_surgery_puts_the_seam_on_the_plane_intersection_line():
     assert totals["ridge"] == pytest.approx(20 * 3.28084, abs=0.2)
     assert totals["hip"] == 0.0 and totals["valley"] == 0.0
     assert totals["eave"] == pytest.approx(40 * 3.28084, abs=0.5)
-    assert totals["rake"] == pytest.approx(60 * math.sqrt(1.16) * 3.28084, abs=0.5)
+    # Phase 5b measures the perimeter on the outline itself; the
+    # 0.3 m segment floor drops the ~0.1 m claim-bleed pieces at
+    # the four corners (~0.4 m of rake in total), so the rake
+    # tolerance absorbs that documented loss.
+    assert totals["rake"] == pytest.approx(60 * math.sqrt(1.16) * 3.28084, abs=2.0)
 
 
 def test_surgery_keeps_a_polyline_when_the_planes_disagree_with_it():
