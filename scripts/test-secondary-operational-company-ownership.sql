@@ -54,6 +54,7 @@ INSERT INTO roof_estimates VALUES('99000000-0000-0000-0000-000000000001','200000
 \ir ../drizzle/migrations/0063_company_owned_drawing_references.sql
 \ir ../drizzle/migrations/0064_prevent_drawing_parent_reassignment.sql
 \ir ../drizzle/migrations/0065_replace_secondary_operational_rls.sql
+\ir ../drizzle/migrations/0066_prevent_unverified_change_order_approval.sql
 DO $$ BEGIN
  IF (SELECT count(*) FROM proposals)<>2 OR NOT EXISTS(SELECT 1 FROM proposals WHERE id='70000000-0000-0000-0000-000000000002' AND lead_id IS NULL AND property_id IS NULL AND drawing_id IS NULL) THEN RAISE EXCEPTION 'Parentless proposal not preserved'; END IF;
  IF EXISTS(SELECT 1 FROM client_portal_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_activity WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_expenses WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_invoices WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_tasks WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_checkouts WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_payments WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_project_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM job_change_orders WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM lead_messages WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposal_shares WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposals WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM roof_estimates WHERE company_id IS NULL) THEN RAISE EXCEPTION 'Missing company ownership'; END IF;
@@ -297,6 +298,23 @@ BEGIN
 END
 $rls_company_b$;
 RESET ROLE;
+
+
+-- Even a same-company accounting user cannot claim customer approval by
+-- writing approved_by/approved_at directly; only a future verified-signature
+-- RPC may introduce that state.
+DO $change_order_approval_guard$
+BEGIN
+  BEGIN
+    UPDATE job_change_orders
+    SET status='approved', approved_by='Typed customer name', approved_at=now()
+    WHERE id='d8000000-0000-0000-0000-000000000001';
+    RAISE EXCEPTION 'Unverified change order approval accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Unverified change order approval accepted' THEN RAISE; END IF;
+  END;
+END
+$change_order_approval_guard$;
 
 \echo 'Secondary operational company RLS tests passed.'
 
