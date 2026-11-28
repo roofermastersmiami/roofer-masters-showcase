@@ -53,6 +53,7 @@ INSERT INTO roof_estimates VALUES('99000000-0000-0000-0000-000000000001','200000
 \ir ../drizzle/migrations/0056_secondary_operational_company_ownership.sql
 \ir ../drizzle/migrations/0063_company_owned_drawing_references.sql
 \ir ../drizzle/migrations/0064_prevent_drawing_parent_reassignment.sql
+\ir ../drizzle/migrations/0065_replace_secondary_operational_rls.sql
 DO $$ BEGIN
  IF (SELECT count(*) FROM proposals)<>2 OR NOT EXISTS(SELECT 1 FROM proposals WHERE id='70000000-0000-0000-0000-000000000002' AND lead_id IS NULL AND property_id IS NULL AND drawing_id IS NULL) THEN RAISE EXCEPTION 'Parentless proposal not preserved'; END IF;
  IF EXISTS(SELECT 1 FROM client_portal_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_activity WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_expenses WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_invoices WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_tasks WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_checkouts WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_payments WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_project_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM job_change_orders WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM lead_messages WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposal_shares WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposals WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM roof_estimates WHERE company_id IS NULL) THEN RAISE EXCEPTION 'Missing company ownership'; END IF;
@@ -215,3 +216,87 @@ END
 $parent_reassignment_guard$;
 
 \echo 'Drawing parent reassignment tests passed.'
+
+-- Build one Company B record in every table governed by migration 0065.
+INSERT INTO roof_jobs(id,company_id) VALUES
+  ('b4000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO client_portal_links(id,lead_id,company_id) VALUES
+  ('d1000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002');
+INSERT INTO crm_activity(id,lead_id,company_id) VALUES
+  ('d2000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002');
+INSERT INTO crm_expenses(id,job_id,company_id) VALUES
+  ('d3000000-0000-0000-0000-000000000001','b4000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO crm_invoices(id,lead_id,proposal_id,property_id,company_id) VALUES
+  ('d4000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','b7000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO crm_tasks(id,lead_id,company_id) VALUES
+  ('d5000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002');
+INSERT INTO invoice_checkouts(id,invoice_id,company_id) VALUES
+  ('d6000000-0000-0000-0000-000000000001','d4000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO invoice_payments(id,invoice_id,company_id) VALUES
+  ('d7000000-0000-0000-0000-000000000001','d4000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO invoice_project_links(invoice_id,job_id,company_id) VALUES
+  ('d4000000-0000-0000-0000-000000000001','b4000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO job_change_orders(id,job_id,company_id) VALUES
+  ('d8000000-0000-0000-0000-000000000001','b4000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO lead_messages(id,lead_id,company_id,sender) VALUES
+  ('d9000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','customer');
+INSERT INTO proposal_shares(id,proposal_id,company_id) VALUES
+  ('da000000-0000-0000-0000-000000000001','b7000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO roof_estimates(id,lead_id,property_id,company_id) VALUES
+  ('db000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','b3000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+
+INSERT INTO crm_company_memberships(company_id,user_id,role) VALUES
+  ('10000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002','owner');
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+  public.client_portal_links, public.crm_activity, public.crm_expenses,
+  public.crm_invoices, public.crm_tasks, public.invoice_checkouts,
+  public.invoice_payments, public.invoice_project_links, public.job_change_orders,
+  public.lead_messages, public.proposal_shares, public.proposals,
+  public.roof_estimates, public.crm_company_memberships
+TO authenticated;
+
+-- Company A cannot see Company B rows in any of the 13 protected tables.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+DO $rls_company_a$
+BEGIN
+  IF EXISTS (SELECT 1 FROM client_portal_links WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM crm_activity WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM crm_expenses WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM crm_invoices WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM crm_tasks WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM invoice_checkouts WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM invoice_payments WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM invoice_project_links WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM job_change_orders WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM lead_messages WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM proposal_shares WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM proposals WHERE company_id='10000000-0000-0000-0000-000000000002')
+    OR EXISTS (SELECT 1 FROM roof_estimates WHERE company_id='10000000-0000-0000-0000-000000000002') THEN
+    RAISE EXCEPTION 'Company A can read Company B operational records';
+  END IF;
+  BEGIN
+    INSERT INTO crm_tasks(id,lead_id,company_id)
+    VALUES('dc000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002');
+    RAISE EXCEPTION 'Company A inserted a Company B task';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$rls_company_a$;
+RESET ROLE;
+
+-- Company B can read its own task but not Company A's task.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
+DO $rls_company_b$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM crm_tasks WHERE id='d5000000-0000-0000-0000-000000000001')
+     OR EXISTS (SELECT 1 FROM crm_tasks WHERE id='93000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION 'Company B task visibility is incorrect';
+  END IF;
+END
+$rls_company_b$;
+RESET ROLE;
+
+\echo 'Secondary operational company RLS tests passed.'
+
