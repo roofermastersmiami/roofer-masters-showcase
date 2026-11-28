@@ -253,3 +253,195 @@ def test_chain_simplification_thins_staircases_keeps_endpoints():
     assert kept[-1] == verts[-1]
     assert (11.0, 0.6) in kept
     assert len(kept) < len(verts) // 2
+
+
+# ------------------------------------------------------------------
+# Phase 5c: split + boundary passes and facet-admission arbitration.
+# The discovery gates above are unchanged; the new passes carry
+# their own gates (see main.py's Phase 5c constants block).
+# ------------------------------------------------------------------
+
+# Three mutually-different faces sharing one 8 x 6 m zone inside
+# the right plane's territory (x 12..20, y 3..9). Each face sits
+# >= 0.5 m from both fitted planes everywhere in the zone, so the
+# zone is ONE unexplained component at the 0.30 m seed tolerance —
+# and no single plane (true face or compromise) can halve the
+# whole component's mean residual, which is exactly why discovery
+# refuses it.
+SPLIT_FACE_A = (0.5, 0.2, -3.0)
+SPLIT_FACE_B = (-0.2, -0.55, 13.5)
+SPLIT_FACE_C = (0.15, 0.45, -2.5)
+
+
+def _split_zone_pool(**kwargs):
+    def plane_at(x, y):
+        if 12 <= x <= 20 and 3 <= y <= 9:
+            if x < 14.67:
+                return SPLIT_FACE_A, 0.0
+            if x < 17.33:
+                return SPLIT_FACE_B, 0.0
+            return SPLIT_FACE_C, 0.0
+        return (PLANE_LEFT, 0.0) if x <= 10 else (PLANE_RIGHT, 0.0)
+
+    return _pool(plane_at, **kwargs)
+
+
+def _split_zone_tiling(max_discovered=None):
+    fitted = [
+        Polygon([(0, 0), (10.5, 0), (10.5, 12), (0, 12)]),
+        Polygon([(9.5, 0), (20, 0), (20, 12), (9.5, 12)]),
+    ]
+    planes = [PLANE_LEFT, PLANE_RIGHT]
+    partition = main._partition_facets_to_outline(fitted, OUTLINE)
+    return main._dsm_labelling_tiling(
+        fitted, planes, [_pitch(p) for p in planes],
+        _areas(fitted, planes), _split_zone_pool(), OUTLINE, partition,
+        max_discovered=max_discovered,
+    )
+
+
+def test_split_pass_recovers_the_faces_discovery_refused():
+    result = _split_zone_tiling()
+    assert result is not None
+    # Discovery alone refuses the mixed component (its whole-
+    # component cut cannot be met by any one plane); the split
+    # pass recovers all three faces, one claim at a time.
+    assert result["stats"]["split"] == 3
+    assert len(result["discovered"]) == 3
+    found = [d["plane"] for d in result["discovered"]]
+    for expected in (SPLIT_FACE_A, SPLIT_FACE_B, SPLIT_FACE_C):
+        assert any(
+            abs(p[0] - expected[0]) < 0.06
+            and abs(p[1] - expected[1]) < 0.06
+            and abs(p[2] - expected[2]) < 0.35
+            for p in found
+        ), f"face {expected} not recovered: {found}"
+    # Total-preserving transfer still holds with split facets.
+    fitted = [
+        Polygon([(0, 0), (10.5, 0), (10.5, 12), (0, 12)]),
+        Polygon([(9.5, 0), (20, 0), (20, 12), (9.5, 12)]),
+    ]
+    before = sum(_areas(fitted, [PLANE_LEFT, PLANE_RIGHT]))
+    after = sum(result["areas_sqft"])
+    assert abs(after - before) / before < 0.001
+
+
+def test_split_pass_refuses_a_noisy_component():
+    # A large component of pure scatter around the right plane:
+    # discovery's whole-component cut refuses it (the fitted mean
+    # plane barely improves the component's mean residual), and
+    # the split pass's RANSAC can only find "densest slabs" through
+    # the scatter — whose fitting cells pepper the component with
+    # no dominant connected piece, so the claim-coherence gate
+    # refuses them. No stage may invent a facet here.
+    rng = np.random.default_rng(13)
+
+    def plane_at(x, y):
+        if 12 <= x <= 19 and 3 <= y <= 10:
+            return PLANE_RIGHT, float(rng.normal(0, 0.5))
+        return (PLANE_LEFT, 0.0) if x <= 10 else (PLANE_RIGHT, 0.0)
+
+    fitted = [
+        Polygon([(0, 0), (10.5, 0), (10.5, 12), (0, 12)]),
+        Polygon([(9.5, 0), (20, 0), (20, 12), (9.5, 12)]),
+    ]
+    planes = [PLANE_LEFT, PLANE_RIGHT]
+    partition = main._partition_facets_to_outline(fitted, OUTLINE)
+    result = main._dsm_labelling_tiling(
+        fitted, planes, [_pitch(p) for p in planes],
+        _areas(fitted, planes), _pool(plane_at), OUTLINE, partition,
+    )
+    assert result is not None
+    assert result["discovered"] == []
+
+
+# A hip-like face: a plane meeting the right slope along their
+# intersection line (the s = 0 line below), deviating from it by
+# s metres — at most ~0.3 m over the corner triangle, so it sits
+# under the discovery seed tolerance almost everywhere and only
+# the boundary pass's per-point evidence (the 0.12..0.30 m band)
+# can see it. The planes meet at ~13 degrees, a real angle, as a
+# hip face differs from the slopes it displaces. The deviation of
+# HIP_PLANE from PLANE_RIGHT is exactly s(x, y) by construction.
+HIP_PLANE = (-0.11, -0.13, 7.73)
+
+
+def _hip_side(x: float, y: float) -> bool:
+    return (
+        16 <= x <= 20 and 0 <= y <= 5
+        and 0.19 * (x - 17.9) - 0.13 * (y - 1) > 0
+    )
+
+
+def test_boundary_pass_recovers_a_hip_triangle():
+    def plane_at(x, y):
+        if _hip_side(x, y):
+            return HIP_PLANE, 0.0
+        return (PLANE_LEFT, 0.0) if x <= 10 else (PLANE_RIGHT, 0.0)
+
+    fitted = [
+        Polygon([(0, 0), (10.5, 0), (10.5, 12), (0, 12)]),
+        Polygon([(9.5, 0), (20, 0), (20, 12), (9.5, 12)]),
+    ]
+    planes = [PLANE_LEFT, PLANE_RIGHT]
+    partition = main._partition_facets_to_outline(fitted, OUTLINE)
+    result = main._dsm_labelling_tiling(
+        fitted, planes, [_pitch(p) for p in planes],
+        _areas(fitted, planes), _pool(plane_at, spacing=0.2),
+        OUTLINE, partition,
+    )
+    assert result is not None
+    assert result["stats"]["boundary"] == 1
+    assert len(result["discovered"]) == 1
+    a, b, c = result["discovered"][0]["plane"]
+    assert a == pytest.approx(HIP_PLANE[0], abs=0.06)
+    assert b == pytest.approx(HIP_PLANE[1], abs=0.06)
+    assert c == pytest.approx(HIP_PLANE[2], abs=0.35)
+
+
+def test_boundary_pass_rejects_a_parallel_offset_refit():
+    # A broad zone following the right plane exactly, offset by
+    # +0.20 m: squarely inside the boundary band, heavily
+    # evidenced — and still not a new face. The near-refit guard
+    # (angle < 5 degrees and offset < 0.45 m) and the boundary
+    # angle gate both refuse it.
+    def plane_at(x, y):
+        if 14 <= x <= 20 and 3 <= y <= 9:
+            a, b, c = PLANE_RIGHT
+            return (a, b, c + 0.20), 0.0
+        return (PLANE_LEFT, 0.0) if x <= 10 else (PLANE_RIGHT, 0.0)
+
+    fitted = [
+        Polygon([(0, 0), (10.5, 0), (10.5, 12), (0, 12)]),
+        Polygon([(9.5, 0), (20, 0), (20, 12), (9.5, 12)]),
+    ]
+    planes = [PLANE_LEFT, PLANE_RIGHT]
+    partition = main._partition_facets_to_outline(fitted, OUTLINE)
+    result = main._dsm_labelling_tiling(
+        fitted, planes, [_pitch(p) for p in planes],
+        _areas(fitted, planes), _pool(plane_at), OUTLINE, partition,
+    )
+    assert result is not None
+    assert result["discovered"] == []
+
+
+def test_arbitration_truncation_drops_the_newest_facets_first():
+    # max_discovered rebuilds the tiling as if the stages had
+    # stopped at that many discovered facets: the surviving
+    # facets are the earliest admissions, in order, and the
+    # regions still tile the outline exactly.
+    full = _split_zone_tiling()
+    assert full is not None and len(full["discovered"]) == 3
+    one = _split_zone_tiling(max_discovered=1)
+    assert one is not None
+    assert len(one["discovered"]) == 1
+    assert one["discovered"][0]["plane"] == full["discovered"][0]["plane"]
+    assert one["stats"]["split"] == 1
+    assert one["stats"]["boundary"] == 0
+    union = unary_union(one["regions"])
+    assert union.area == pytest.approx(OUTLINE.area, rel=0.01)
+    zero = _split_zone_tiling(max_discovered=0)
+    assert zero is not None
+    assert zero["discovered"] == []
+    union = unary_union(zero["regions"])
+    assert union.area == pytest.approx(OUTLINE.area, rel=0.01)

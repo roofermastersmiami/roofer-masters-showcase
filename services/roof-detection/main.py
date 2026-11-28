@@ -4811,6 +4811,29 @@ _LAB_DEAD_FACET_AREA_M2 = 0.5     # a label owning less is not a facet
 _LAB_SLIVER_COMPONENT_M2 = 0.75   # label components smaller dissolve
 _LAB_DSM_FILL_RADIUS_M = 1.5      # nearest-measured fill for empty cells
 _LAB_CHAIN_SIMPLIFY_TOL_M = 0.15  # graph chain thinning for raster tilings
+# Phase 5c fitter-stage passes. These run AFTER bounded discovery,
+# whose gates above are unchanged; each new pass has its own gates,
+# documented at its function. Both passes propose planes by
+# deterministic RANSAC over a component's raw points and judge the
+# proposal by the discovery acceptance numbers (inliers, trimmed
+# rmse, pitch, residual cut) applied to the territory the plane
+# actually claims, plus a near-refit guard: a candidate almost
+# parallel to an existing plane and within _LAB_REFIT_OFFSET_M of
+# it over its claim is that same face re-measured, not a new face.
+_LAB_RANSAC_TOL_M = 0.10          # RANSAC inlier band for proposals
+_LAB_RANSAC_SEEDS = (0, 1, 2, 3, 4, 5)
+_LAB_RANSAC_MAX_TRIALS = 250
+_LAB_CLAIM_TOL_M = 0.12           # a plane claims cells it fits this well
+_LAB_CLAIM_MAIN_SHARE = 0.8       # the claim's largest connected piece
+                                  # must hold this share of it (a real
+                                  # face is one territory; a RANSAC slab
+                                  # through scatter is not)
+_LAB_REFIT_ANGLE_DEG = 5.0        # below this, two planes are one face...
+_LAB_REFIT_OFFSET_M = 0.45        # ...when this close over the claim
+_LAB_SPLIT_MAX_ACCEPTED = 3       # split-pass planes per house
+_LAB_BOUNDARY_TOL_M = 0.12        # boundary pass seeds above this...
+_LAB_BOUNDARY_MAX_ACCEPTED = 3    # boundary-pass planes per house
+_LAB_BOUNDARY_MIN_ANGLE_DEG = 8.0  # vs the planes it displaces
 _SQFT_PER_SQM = 10.7639104167
 
 
@@ -5046,6 +5069,483 @@ def _lab_discover_planes(
         if not accepted_any:
             break
     return planes, discovered, labels, best, masks
+
+
+def _lab_ransac_propose(
+    pool: np.ndarray, excluded: np.ndarray | None = None
+) -> np.ndarray | None:
+    """Deterministic RANSAC plane proposal over a point pool: the
+    service's own RANSAC shape (3-point minimal samples, fixed
+    seeds, best inlier set wins). Returns the inlier mask over
+    `pool` for the strongest hypothesis, or None. `excluded` drops
+    points from consideration before proposing (used to re-propose
+    past a rejected hypothesis without re-finding it)."""
+    from sklearn.linear_model import LinearRegression, RANSACRegressor
+
+    avail = np.ones(len(pool), dtype=bool)
+    if excluded is not None:
+        avail &= ~excluded
+    pts = pool[avail]
+    if len(pts) < _LAB_DISC_MIN_POINTS:
+        return None
+    best_inliers: np.ndarray | None = None
+    for seed in _LAB_RANSAC_SEEDS:
+        estimator = RANSACRegressor(
+            estimator=LinearRegression(),
+            min_samples=3,
+            residual_threshold=_LAB_RANSAC_TOL_M,
+            max_trials=_LAB_RANSAC_MAX_TRIALS,
+            random_state=seed,
+        )
+        try:
+            estimator.fit(pts[:, :2], pts[:, 2])
+        except (ValueError, FloatingPointError):
+            continue
+        inliers = estimator.inlier_mask_
+        if inliers is None:
+            continue
+        if best_inliers is None or int(inliers.sum()) > int(
+            best_inliers.sum()
+        ):
+            best_inliers = inliers
+    if best_inliers is None:
+        return None
+    out = np.zeros(len(pool), dtype=bool)
+    out[np.where(avail)[0][best_inliers]] = True
+    return out
+
+
+def _lab_trimmed_refit(
+    pool: np.ndarray, seed_inliers: np.ndarray
+) -> tuple[tuple[float, float, float], int, float] | None:
+    """Discovery's trimmed-LSQ procedure, seeded from a RANSAC
+    inlier set instead of the whole pool: fit on the seed, then
+    re-keep the pool at <= 0.12 m and refit (three rounds). A raw
+    component pool is a mixture of faces, so discovery's
+    whole-pool seed converges on a compromise; the RANSAC seed
+    starts the same trim on one face's own points. Returns
+    (plane, inlier count, trimmed rmse) or None."""
+    keep = pool[seed_inliers]
+    if len(keep) < _LAB_DISC_MIN_POINTS:
+        return None
+    a = b = c = float("nan")
+    for _trim in range(3):
+        a, b, c, _rmse = _fit_plane_lsq(keep)
+        resid = np.abs(a * pool[:, 0] + b * pool[:, 1] + c - pool[:, 2])
+        keep = pool[resid <= 0.12]
+        if len(keep) < _LAB_DISC_MIN_POINTS:
+            return None
+    a2, b2, c2, rmse2 = _fit_plane_lsq(keep)
+    return (a2, b2, c2), int(len(keep)), float(rmse2)
+
+
+def _lab_plane_angle_deg(
+    first: tuple[float, float, float], second: tuple[float, float, float]
+) -> float:
+    """Angle between two planes' normals, degrees."""
+    n1 = np.array([-first[0], -first[1], 1.0])
+    n2 = np.array([-second[0], -second[1], 1.0])
+    cos = float(n1 @ n2) / (np.linalg.norm(n1) * np.linalg.norm(n2))
+    return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+
+
+def _lab_split_cell_mask(
+    mask: np.ndarray, grid: _DsmGrid
+) -> list[np.ndarray]:
+    """Split a component's cells into two halves along its longer
+    axis at the median cell centre; [] when the component is too
+    thin to split (span under two cells on both axes)."""
+    ys_c, xs_c = np.where(mask)
+    if len(ys_c) < 2:
+        return []
+    xs_g, ys_g = grid.centres()
+    cx = xs_g[ys_c, xs_c]
+    cy = ys_g[ys_c, xs_c]
+    span_x = float(cx.max() - cx.min())
+    span_y = float(cy.max() - cy.min())
+    if max(span_x, span_y) < 2 * grid.cell:
+        return []
+    halves = []
+    if span_x >= span_y:
+        med = float(np.median(cx))
+        for side in (cx <= med, cx > med):
+            half = np.zeros_like(mask)
+            half[ys_c[side], xs_c[side]] = True
+            halves.append(half)
+    else:
+        med = float(np.median(cy))
+        for side in (cy <= med, cy > med):
+            half = np.zeros_like(mask)
+            half[ys_c[side], xs_c[side]] = True
+            halves.append(half)
+    return [h for h in halves if h.any()]
+
+
+def _lab_hypotheses(
+    pool: np.ndarray,
+    pool_cells: np.ndarray,
+    comp: np.ndarray,
+    grid: _DsmGrid,
+):
+    """Yield trimmed-refit hypotheses (plane, inliers, rmse) for
+    one component, strongest evidence first:
+
+    1. whole-pool RANSAC, re-proposing past each hypothesis's
+       inliers (a rejected dominant plane must not end the search);
+    2. RANSAC seeded on spatial sub-pools — the component split
+       into halves, then quarters. A mixture component's dominant
+       face can starve a smaller real face out of every whole-pool
+       proposal (the pool's points interleave), but a sub-pool the
+       smaller face dominates proposes it directly. Refits and all
+       gate statistics always run on the FULL component pool; a
+       sub-pool only chooses the hypothesis.
+    Duplicate hypotheses (same plane to 1e-6) are yielded once.
+    """
+    seen: set[tuple[int, int, int]] = set()
+
+    def fresh(refit):
+        if refit is None:
+            return None
+        key = tuple(round(v, 6) for v in refit[0])
+        if key in seen:
+            return None
+        seen.add(key)
+        return refit
+
+    excluded: np.ndarray | None = None
+    for _ in range(3):
+        inliers = _lab_ransac_propose(pool, excluded)
+        if inliers is None:
+            break
+        refit = fresh(_lab_trimmed_refit(pool, inliers))
+        if refit is not None:
+            yield refit
+        excluded = inliers if excluded is None else (excluded | inliers)
+    frontier = [comp]
+    for _depth in range(2):
+        nxt: list[np.ndarray] = []
+        for sub in frontier:
+            for half in _lab_split_cell_mask(sub, grid):
+                nxt.append(half)
+                ids = set(np.where(half.ravel())[0].tolist())
+                sel = np.array([f in ids for f in pool_cells])
+                sub_pool = pool[sel]
+                if len(sub_pool) < _LAB_DISC_MIN_POINTS:
+                    continue
+                local = _lab_ransac_propose(sub_pool)
+                if local is None:
+                    continue
+                inliers = np.zeros(len(pool), dtype=bool)
+                inliers[np.where(sel)[0][local]] = True
+                refit = fresh(_lab_trimmed_refit(pool, inliers))
+                if refit is not None:
+                    yield refit
+        frontier = nxt
+
+
+def _lab_judge_candidate(
+    pool: np.ndarray,
+    pool_cells: np.ndarray,
+    comp: np.ndarray,
+    grid: _DsmGrid,
+    best: np.ndarray,
+    planes: list[tuple[float, float, float]],
+    angle_gate: list[tuple[float, float, float]] | None = None,
+) -> tuple[
+    tuple[float, float, float], np.ndarray, dict[str, Any]
+] | None:
+    """Judge a component's hypotheses (see _lab_hypotheses) by the
+    Phase 5c gates; returns (plane, claim cells, descriptor) for
+    the first hypothesis that passes all of them, else None.
+
+    Gates (the discovery acceptance numbers, applied to the
+    territory the plane claims rather than the whole component —
+    a split plane by definition explains only part of its
+    component):
+    - trimmed refit gathers >= _LAB_DISC_MIN_POINTS inliers at
+      rmse <= _LAB_DISC_MAX_RMSE_M and pitch <= _LAB_DISC_MAX_PITCH_DEG;
+    - the claim (component cells the plane fits within
+      _LAB_CLAIM_TOL_M on the DSM) covers >= _LAB_DISC_MIN_AREA_M2
+      and the plane at least halves the claim's mean residual —
+      discovery's >= 50% residual cut, localized to the claim;
+    - claim coherence: the claim's largest connected component
+      holds >= _LAB_CLAIM_MAIN_SHARE of it and becomes the claim
+      (a real face is one territory; a RANSAC "densest slab"
+      through scattered points peppers cells everywhere and has
+      no dominant piece);
+    - near-refit guard: a candidate within _LAB_REFIT_ANGLE_DEG of
+      an existing plane and within _LAB_REFIT_OFFSET_M of it over
+      the claim centroid is that face re-measured, not a new face;
+    - `angle_gate`, when given, lists planes the candidate must
+      differ from by >= _LAB_BOUNDARY_MIN_ANGLE_DEG (the boundary
+      pass's displaced faces): a hip is a genuinely different
+      surface from the slopes it displaces, and anything more
+      parallel is a refit of one of them.
+    """
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    xs_g, ys_g = grid.centres()
+    for (a, b, c), n_inliers, rmse in _lab_hypotheses(
+        pool, pool_cells, comp, grid
+    ):
+        pitch = math.degrees(math.atan(math.hypot(a, b)))
+        if rmse > _LAB_DISC_MAX_RMSE_M or pitch > _LAB_DISC_MAX_PITCH_DEG:
+            continue
+        claim = comp & (
+            np.abs(a * xs_g + b * ys_g + c - grid.z) <= _LAB_CLAIM_TOL_M
+        )
+        if float(claim.sum()) * grid.cell**2 < _LAB_DISC_MIN_AREA_M2:
+            continue
+        # Claim coherence: a real face's claim is one territory.
+        # RANSAC can also find a "densest slab" through scattered
+        # points (noise, vegetation, mixed pixels) whose fitting
+        # cells pepper the whole component — such a claim has no
+        # dominant connected piece and is refused. The claim is
+        # trimmed to its largest connected component either way.
+        from scipy import ndimage
+
+        claim_parts, n_parts = ndimage.label(
+            claim, structure=np.ones((3, 3), int)
+        )
+        if n_parts > 1:
+            part_sizes = ndimage.sum(
+                claim, claim_parts, index=np.arange(1, n_parts + 1)
+            )
+            largest = int(np.argmax(part_sizes)) + 1
+            if float(part_sizes[largest - 1]) < _LAB_CLAIM_MAIN_SHARE * float(
+                claim.sum()
+            ):
+                continue
+            claim = claim_parts == largest
+            if float(claim.sum()) * grid.cell**2 < _LAB_DISC_MIN_AREA_M2:
+                continue
+        if (
+            float(np.mean(np.abs(a * xs_g[claim] + b * ys_g[claim] + c - grid.z[claim])))
+            > 0.5 * float(np.mean(best[claim]))
+        ):
+            continue
+        centroid = (
+            float(xs_g[claim].mean()),
+            float(ys_g[claim].mean()),
+        )
+        refit_of_existing = False
+        for existing in planes:
+            if _lab_plane_angle_deg((a, b, c), existing) >= _LAB_REFIT_ANGLE_DEG:
+                continue
+            offset = abs(
+                (a - existing[0]) * centroid[0]
+                + (b - existing[1]) * centroid[1]
+                + (c - existing[2])
+            )
+            if offset < _LAB_REFIT_OFFSET_M:
+                refit_of_existing = True
+                break
+        if refit_of_existing:
+            continue
+        if angle_gate is not None and any(
+            _lab_plane_angle_deg((a, b, c), other) < _LAB_BOUNDARY_MIN_ANGLE_DEG
+            for other in angle_gate
+        ):
+            continue
+        ys_c, xs_c = np.where(claim)
+        region = unary_union([
+            box(
+                grid.x0 + gx * grid.cell,
+                grid.y0 + gy * grid.cell,
+                grid.x0 + (gx + 1) * grid.cell,
+                grid.y0 + (gy + 1) * grid.cell,
+            )
+            for gy, gx in zip(ys_c, xs_c)
+        ])
+        descriptor = {
+            "plane": (a, b, c),
+            "pitch_degrees": pitch,
+            "point_count": n_inliers,
+            "fit_rmse_m": rmse,
+            "region": region,
+        }
+        return (a, b, c), claim, descriptor
+    return None
+
+
+def _lab_ransac_stage(
+    planes: list[tuple[float, float, float]],
+    discovered: list[dict[str, Any]],
+    labels: np.ndarray,
+    best: np.ndarray,
+    masks: list[np.ndarray | None],
+    grid: _DsmGrid,
+    points: np.ndarray,
+    *,
+    band: Any,
+    max_accepted: int,
+    boundary: bool,
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[dict[str, Any]],
+    np.ndarray,
+    np.ndarray,
+    list[np.ndarray | None],
+]:
+    """One Phase 5c growth stage: while acceptances remain, take
+    the largest candidate component in `band` (a boolean mask over
+    the grid, recomputed after every acceptance), judge its point
+    pool with _lab_judge_candidate, and on acceptance append the
+    plane with a discovery-style competition mask (its claim,
+    dilated one cell) and relabel. Mirrors the discovery loop's
+    shape — largest first, one acceptance per pass, relabel before
+    judging the next component — so the new planes enter the
+    labelling on exactly the same terms as discovered ones. With
+    `boundary=True`, each component's dominant current owners
+    (>= 20% of its cells) form the candidate's angle gate."""
+    from scipy import ndimage
+
+    planes = list(planes)
+    masks = list(masks)
+    discovered = list(discovered)
+    ix, iy, ok = grid.point_cell
+    point_flat = np.where(ok, iy * grid.nx + ix, -1)
+    structure = np.ones((3, 3), dtype=int)
+    accepted = 0
+    while accepted < max_accepted:
+        seed = band(labels, best, grid)
+        if not seed.any():
+            break
+        comps, n = ndimage.label(seed, structure=structure)
+        sizes = (
+            ndimage.sum(seed, comps, index=np.arange(1, n + 1))
+            * grid.cell**2
+        )
+        first_cell = np.full(n, np.inf)
+        flat_idx = np.arange(comps.size)
+        for idx in range(n):
+            cells = flat_idx[comps.ravel() == idx + 1]
+            if len(cells):
+                first_cell[idx] = cells.min()
+        order = sorted(
+            range(n), key=lambda i: (-sizes[i], first_cell[i])
+        )
+        progressed = False
+        for comp_idx in order:
+            if float(sizes[comp_idx]) < _LAB_DISC_MIN_AREA_M2:
+                break
+            comp = comps == (comp_idx + 1)
+            cell_ids = set(np.where(comp.ravel())[0].tolist())
+            sel = np.array([f in cell_ids for f in point_flat])
+            pool_mask = sel & (point_flat >= 0)
+            pool = points[pool_mask]
+            pool_cells = point_flat[pool_mask]
+            if len(pool) < _LAB_DISC_MIN_POINTS:
+                continue
+            angle_gate = None
+            if boundary:
+                owners, counts = np.unique(
+                    labels[comp][labels[comp] >= 0], return_counts=True
+                )
+                angle_gate = [
+                    planes[int(owner)]
+                    for owner, count in zip(owners, counts)
+                    if count >= 0.2 * counts.sum()
+                ]
+            judged = _lab_judge_candidate(
+                pool, pool_cells, comp, grid, best, planes, angle_gate
+            )
+            if judged is None:
+                continue
+            plane, claim, descriptor = judged
+            planes.append(plane)
+            masks.append(
+                ndimage.binary_dilation(claim, structure=structure)
+                & grid.inside
+            )
+            discovered.append(descriptor)
+            labels, best = _lab_label_grid(planes, grid, masks)
+            accepted += 1
+            progressed = True
+            break
+        if not progressed:
+            break
+    return planes, discovered, labels, best, masks
+
+
+def _lab_split_planes(
+    planes: list[tuple[float, float, float]],
+    discovered: list[dict[str, Any]],
+    labels: np.ndarray,
+    best: np.ndarray,
+    masks: list[np.ndarray | None],
+    grid: _DsmGrid,
+    points: np.ndarray,
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[dict[str, Any]],
+    np.ndarray,
+    np.ndarray,
+    list[np.ndarray | None],
+]:
+    """Phase 5c split pass: multi-plane splitting of the
+    unexplained components discovery refused. A component that no
+    single plane fits (Miramar's valley-convergence core, Ave
+    148's crossing surface) can still hold real faces — discovery's
+    whole-pool trim converges on a compromise and correctly
+    refuses, but a RANSAC proposal seeded on one face's points
+    passes the same acceptance numbers on the territory that face
+    claims. The pass works the same components discovery seeds
+    from (best residual > _LAB_DISC_SEED_TOL_M); the discovery
+    gates themselves are untouched."""
+
+    def band(labels_: np.ndarray, best_: np.ndarray, grid_: _DsmGrid):
+        return grid_.inside & (labels_ >= 0) & (best_ > _LAB_DISC_SEED_TOL_M)
+
+    return _lab_ransac_stage(
+        planes, discovered, labels, best, masks, grid, points,
+        band=band, max_accepted=_LAB_SPLIT_MAX_ACCEPTED, boundary=False,
+    )
+
+
+def _lab_boundary_planes(
+    planes: list[tuple[float, float, float]],
+    discovered: list[dict[str, Any]],
+    labels: np.ndarray,
+    best: np.ndarray,
+    masks: list[np.ndarray | None],
+    grid: _DsmGrid,
+    points: np.ndarray,
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[dict[str, Any]],
+    np.ndarray,
+    np.ndarray,
+    list[np.ndarray | None],
+]:
+    """Phase 5c boundary pass: faces the seeding tolerance hides.
+    A hip triangle at a roof end sits within ~0.3 m of the two
+    slopes it joins over most of its small area, so its cells never
+    cross the discovery seed and no component forms — but the
+    cells ARE systematically worse-explained than their
+    surroundings. This pass seeds components from the moderately
+    explained band (_LAB_BOUNDARY_TOL_M < best residual <= the
+    discovery seed) and holds each RANSAC proposal to the same
+    acceptance numbers, plus an angle gate: the candidate must
+    differ by >= _LAB_BOUNDARY_MIN_ANGLE_DEG from every plane
+    owning a fifth or more of its component — a hip is a genuinely
+    different surface from the slopes it displaces, and a
+    near-parallel winner is a refit of one of them, which the
+    near-refit guard also refuses."""
+
+    def band(labels_: np.ndarray, best_: np.ndarray, grid_: _DsmGrid):
+        return (
+            grid_.inside
+            & (labels_ >= 0)
+            & (best_ > _LAB_BOUNDARY_TOL_M)
+            & (best_ <= _LAB_DISC_SEED_TOL_M)
+        )
+
+    return _lab_ransac_stage(
+        planes, discovered, labels, best, masks, grid, points,
+        band=band, max_accepted=_LAB_BOUNDARY_MAX_ACCEPTED, boundary=True,
+    )
 
 
 def _lab_evidence_masks(
@@ -5333,6 +5833,7 @@ def _dsm_labelling_tiling(
     points: np.ndarray,
     outline: Polygon,
     prior_partition: list[Polygon],
+    max_discovered: int | None = None,
 ) -> dict[str, Any] | None:
     """The Phase 4 tiling: DSM-residual labelling + bounded
     discovery over the fitted planes, as validated in Phase 3.
@@ -5365,6 +5866,43 @@ def _dsm_labelling_tiling(
     planes_all, discovered, labels, best, masks = _lab_discover_planes(
         group_planes, grid, points, labels, best
     )
+    # Phase 5c fitter-stage passes: split the components discovery
+    # refused into their real faces, then look for boundary faces
+    # (hip triangles) hiding under the seeding tolerance. Both
+    # append (plane, mask, descriptor) on discovery's terms, so
+    # everything downstream treats their facets as discovered.
+    n_discovery = len(discovered)
+    planes_all, discovered, labels, best, masks = _lab_split_planes(
+        planes_all, discovered, labels, best, masks, grid, points
+    )
+    n_split = len(discovered) - n_discovery
+    planes_all, discovered, labels, best, masks = _lab_boundary_planes(
+        planes_all, discovered, labels, best, masks, grid, points
+    )
+    n_boundary = len(discovered) - n_discovery - n_split
+    if max_discovered is not None and len(discovered) > max_discovered:
+        # Facet-admission arbitration (see _labelled_drawing_attempt):
+        # rebuild the tiling as if the most recently accepted
+        # discovered facets had never been admitted. Their planes,
+        # competition masks and descriptors are dropped and the
+        # label grid is recomputed from the surviving planes, so
+        # the evidence masks below derive exactly as they would
+        # have had the stages stopped at that facet. Discovery's
+        # facets are never dropped here (the caller floors the
+        # ladder at the discovery count) — only the Phase 5c
+        # split/boundary admissions are arbitrated.
+        keep = len(groups) + max_discovered
+        planes_all = planes_all[:keep]
+        discovered = discovered[:max_discovered]
+        masks = masks[:keep]
+        # Relabel WITH the surviving stage masks: the stages'
+        # returned grid is itself a masked relabel over the full
+        # plane set, so this reproduces — bit for bit — the state
+        # the pipeline would have reached had the stages stopped
+        # at the kept facet.
+        labels, best = _lab_label_grid(planes_all, grid, masks)
+        n_split = min(n_split, max(0, max_discovered - n_discovery))
+        n_boundary = max(0, max_discovered - n_discovery - n_split)
     masks = _lab_evidence_masks(labels, best, grid, masks)
     labels, best = _lab_label_grid(planes_all, grid, masks)
     labels = _lab_smooth_labels(planes_all, labels, grid, masks)
@@ -5521,6 +6059,8 @@ def _dsm_labelling_tiling(
             "cell_m": round(grid.cell, 3),
             "groups": len(groups),
             "discovered": len(discovered),
+            "split": n_split,
+            "boundary": n_boundary,
             "interpolated_cells": int(
                 (grid.inside & grid.interpolated).sum()
             ),
@@ -5572,7 +6112,12 @@ def _drawing_partition(
     discovered ones) AND its shipped-ring divergent seam is no
     worse than the hull drawing's under the same ruler — a
     per-house fallback expressed as a relative comparison, with no
-    house-specific constants. The extended facet set's
+    house-specific constants. Phase 5c adds facet-admission
+    arbitration inside the attempt: when the full facet set
+    rebuilds worse than the hull, the newest (split/boundary)
+    facets are withdrawn one at a time down to the Phase 4 set
+    and the best-scoring variant is what faces the comparison.
+    The extended facet set's
     planes/pitches/areas and the discovered facets' descriptors
     are then written into `extension_out` for the caller to
     serialize. Houses the hull path cannot fully partition never
@@ -5629,6 +6174,20 @@ def _drawing_partition(
             and points is not None
             and facet_areas_sqft is not None
         ):
+            # Per-house fallback, the Phase 4 gate in general
+            # form: the labelled drawing ships only when its
+            # shipped-ring divergent seam is no worse than the
+            # hull drawing it would replace — same ruler, both
+            # geometries, no house-specific constants. A house
+            # whose evidence-based tiling rebuilds worse keeps
+            # the hull drawing (and its production facet set:
+            # the extension is discarded with the drawing). The
+            # hull's score is computed first so the attempt can
+            # arbitrate its Phase 5c facet admissions against it
+            # (see _labelled_drawing_attempt).
+            hull_divergent = _divergent_seam_ft(
+                result, plane_models, outline
+            )
             labelled = _labelled_drawing_attempt(
                 fitted_polygons,
                 plane_models,
@@ -5637,20 +6196,10 @@ def _drawing_partition(
                 points,
                 outline,
                 partition,
+                hull_divergent=hull_divergent,
             )
             if labelled is not None:
                 lab_result, lab_totals, extension, lab_divergent = labelled
-                # Per-house fallback, the Phase 4 gate in general
-                # form: the labelled drawing ships only when its
-                # shipped-ring divergent seam is no worse than the
-                # hull drawing it would replace — same ruler, both
-                # geometries, no house-specific constants. A house
-                # whose evidence-based tiling rebuilds worse keeps
-                # the hull drawing (and its production facet set:
-                # the extension is discarded with the drawing).
-                hull_divergent = _divergent_seam_ft(
-                    result, plane_models, outline
-                )
                 if lab_divergent <= hull_divergent:
                     if totals_out is not None:
                         totals_out.clear()
@@ -5712,6 +6261,75 @@ def _resolve_multipart_regions(
             return regions, reassigned
 
 
+def _labelled_attempt_once(
+    fitted_polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    pitches: list[float],
+    facet_areas_sqft: list[float],
+    points: np.ndarray,
+    outline: Polygon,
+    partition: list[Polygon],
+    max_discovered: int | None = None,
+) -> tuple[list[Polygon], dict[str, float], dict[str, Any], float] | None:
+    """One labelled-drawing attempt at a given discovered-facet
+    budget: label the outline from the point cloud, run the
+    boundary-graph surgery over the labelled tiling, and accept
+    only a fully-partitioned, single-polygon-per-facet result.
+    Returns (polygons, graph totals, extension, divergent_seam_ft)
+    or None. The surgery runs with graph-level chain
+    simplification: raster tilings carry per-cell staircase chains
+    that hull tilings never produce (see
+    _simplify_boundary_chains)."""
+    labelled = _dsm_labelling_tiling(
+        fitted_polygons,
+        plane_models,
+        pitches,
+        facet_areas_sqft,
+        points,
+        outline,
+        partition,
+        max_discovered=max_discovered,
+    )
+    if labelled is None:
+        return None
+    ext_planes = labelled["planes"]
+    ext_pitches = labelled["pitches"]
+    ext_fitted = list(fitted_polygons) + [
+        desc["region"] for desc in labelled["discovered"]
+    ]
+    resolved_regions, parts_moved = _resolve_multipart_regions(
+        labelled["regions"]
+    )
+    surgeried, _stats = _surgery_partition_boundaries(
+        resolved_regions,
+        ext_planes,
+        ext_pitches,
+        outline,
+        simplify_tol_m=_LAB_CHAIN_SIMPLIFY_TOL_M,
+    )
+    result: list[Polygon] = []
+    for fitted, region in zip(ext_fitted, surgeried):
+        if region.is_empty or region.geom_type != "Polygon":
+            # A facet the rebuild erased (or left as fragments)
+            # voids the upgrade: the discovered facets have no
+            # hull to fall back to, and a production facet
+            # falling back would leave the totals describing a
+            # different facet set than the areas do.
+            return None
+        result.append(region)
+    totals = _graph_edge_totals(result, ext_planes, ext_pitches, outline)
+    extension = {
+        "areas_sqft": labelled["areas_sqft"],
+        "discovered": labelled["discovered"],
+        "stats": {
+            **labelled["stats"],
+            "multipart_parts_reassigned": parts_moved,
+        },
+    }
+    divergent = _divergent_seam_ft(result, ext_planes, outline)
+    return result, totals, extension, divergent
+
+
 def _labelled_drawing_attempt(
     fitted_polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
@@ -5720,64 +6338,58 @@ def _labelled_drawing_attempt(
     points: np.ndarray,
     outline: Polygon,
     partition: list[Polygon],
+    hull_divergent: float | None = None,
 ) -> tuple[list[Polygon], dict[str, float], dict[str, Any], float] | None:
-    """One Phase 4 attempt: label the outline from the point cloud,
-    run the boundary-graph surgery over the labelled tiling, and
-    accept only a fully-partitioned, single-polygon-per-facet
-    result. Returns (polygons, graph totals, extension,
+    """The Phase 4 attempt, with Phase 5c facet-admission
+    arbitration. Returns (polygons, graph totals, extension,
     divergent_seam_ft) or None — any doubt at all keeps the hull
-    drawing the caller already has. The surgery runs with
-    graph-level chain simplification: raster tilings carry per-cell
-    staircase chains that hull tilings never produce (see
-    _simplify_boundary_chains)."""
+    drawing the caller already has.
+
+    The full attempt admits every discovered facet (Phase 4
+    discovery plus the Phase 5c split/boundary passes). When the
+    Phase 5c passes admitted facets and the full attempt's
+    shipped-ring divergent seam is not already perfect, the
+    attempt is retried with those facets withdrawn one at a
+    time, most recent admission first, down to the Phase 4 facet
+    set — a facet is only worth shipping if the drawing stays
+    self-consistent with it in. The best (lowest-divergent)
+    variant is returned; ties keep the variant with more facets,
+    so the labelled candidate never scores worse than the Phase
+    4 facet set's own attempt. The caller's divergent comparison
+    (`hull_divergent`, same ruler) still arbitrates
+    labelled-vs-hull exactly as in Phase 4, so arbitration can
+    improve the labelled candidate but never weaken the hull
+    fallback. Houses with no Phase 5c admissions, or a perfect
+    full score, never pay for the ladder."""
     try:
-        labelled = _dsm_labelling_tiling(
-            fitted_polygons,
-            plane_models,
-            pitches,
-            facet_areas_sqft,
-            points,
-            outline,
-            partition,
+        full = _labelled_attempt_once(
+            fitted_polygons, plane_models, pitches, facet_areas_sqft,
+            points, outline, partition,
         )
-        if labelled is None:
+        if full is None:
             return None
-        ext_planes = labelled["planes"]
-        ext_pitches = labelled["pitches"]
-        ext_fitted = list(fitted_polygons) + [
-            desc["region"] for desc in labelled["discovered"]
-        ]
-        resolved_regions, parts_moved = _resolve_multipart_regions(
-            labelled["regions"]
-        )
-        surgeried, _stats = _surgery_partition_boundaries(
-            resolved_regions,
-            ext_planes,
-            ext_pitches,
-            outline,
-            simplify_tol_m=_LAB_CHAIN_SIMPLIFY_TOL_M,
-        )
-        result: list[Polygon] = []
-        for fitted, region in zip(ext_fitted, surgeried):
-            if region.is_empty or region.geom_type != "Polygon":
-                # A facet the rebuild erased (or left as fragments)
-                # voids the upgrade: the discovered facets have no
-                # hull to fall back to, and a production facet
-                # falling back would leave the totals describing a
-                # different facet set than the areas do.
-                return None
-            result.append(region)
-        totals = _graph_edge_totals(result, ext_planes, ext_pitches, outline)
-        extension = {
-            "areas_sqft": labelled["areas_sqft"],
-            "discovered": labelled["discovered"],
-            "stats": {
-                **labelled["stats"],
-                "multipart_parts_reassigned": parts_moved,
-            },
-        }
-        divergent = _divergent_seam_ft(result, ext_planes, outline)
-        return result, totals, extension, divergent
+        stats = full[2]["stats"]
+        n_total = int(stats.get("discovered", 0))
+        n_phase5c = int(stats.get("split", 0)) + int(stats.get("boundary", 0))
+        if n_phase5c == 0 or full[3] <= 0.0:
+            return full
+        best = full
+        for keep in range(n_total - 1, n_total - n_phase5c - 1, -1):
+            candidate = _labelled_attempt_once(
+                fitted_polygons, plane_models, pitches, facet_areas_sqft,
+                points, outline, partition, max_discovered=keep,
+            )
+            if candidate is None:
+                continue
+            if candidate[3] < best[3]:
+                best = candidate
+                if best[3] <= 0.0:
+                    break
+        if best is not full:
+            best[2]["stats"]["arbitrated_to_discovered"] = len(
+                best[2]["discovered"]
+            )
+        return best
     except Exception:  # noqa: BLE001 — the upgrade must never break a drawing
         return None
 
