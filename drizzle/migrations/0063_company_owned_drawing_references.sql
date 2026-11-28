@@ -1,5 +1,5 @@
 -- Enforce same-company ownership for drawing references on proposals and estimates.
--- tenant-audit: reviewed — SECURITY DEFINER trigger resolves drawing ownership through crm_properties and rejects company or property mismatches on every insert/update.
+-- tenant-audit: reviewed — SECURITY DEFINER trigger resolves drawing ownership through crm_properties, takes SHARE locks on both parent rows to serialize against reassignment, and rejects company or property mismatches on every insert/update.
 -- roof_drawings is property-owned rather than directly company-owned, so resolve
 -- its company through the authoritative crm_properties parent on every write.
 CREATE OR REPLACE FUNCTION public.enforce_company_owned_drawing_reference()
