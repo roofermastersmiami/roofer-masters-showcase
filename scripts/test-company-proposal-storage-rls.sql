@@ -23,9 +23,7 @@ CREATE TABLE storage.objects (
   UNIQUE(bucket_id,name)
 );
 INSERT INTO storage.buckets(id,name,public) VALUES ('roofing-proposals','roofing-proposals',false);
-CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
-  SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid
-$$;
+-- auth.uid() is provided by the shared secondary-ownership fixture.
 CREATE FUNCTION public.is_crm_company_member(target_company uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT EXISTS (SELECT 1 FROM public.crm_company_memberships m
