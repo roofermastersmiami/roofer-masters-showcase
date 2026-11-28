@@ -1,4 +1,4 @@
--- Two-company adversarial integration test for migration 0061 expense receipt storage.
+-- Two-company adversarial integration test for migration 0062 expense receipt storage.
 -- Run only in a disposable PostgreSQL database.
 \set ON_ERROR_STOP on
 \ir test-secondary-operational-company-ownership.sql
