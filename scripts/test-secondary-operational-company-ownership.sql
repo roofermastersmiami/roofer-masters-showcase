@@ -45,6 +45,7 @@ INSERT INTO proposal_shares VALUES('98000000-0000-0000-0000-000000000001','70000
 INSERT INTO roof_estimates VALUES('99000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','50000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000001');
 \ir ../drizzle/migrations/0056_secondary_operational_company_ownership.sql
 \ir ../drizzle/migrations/0063_company_owned_drawing_references.sql
+\ir ../drizzle/migrations/0064_prevent_drawing_parent_reassignment.sql
 DO $$ BEGIN
  IF (SELECT count(*) FROM proposals)<>2 OR NOT EXISTS(SELECT 1 FROM proposals WHERE id='70000000-0000-0000-0000-000000000002' AND lead_id IS NULL AND property_id IS NULL AND drawing_id IS NULL) THEN RAISE EXCEPTION 'Parentless proposal not preserved'; END IF;
  IF EXISTS(SELECT 1 FROM client_portal_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_activity WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_expenses WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_invoices WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM crm_tasks WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_checkouts WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_payments WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM invoice_project_links WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM job_change_orders WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM lead_messages WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposal_shares WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM proposals WHERE company_id IS NULL) OR EXISTS(SELECT 1 FROM roof_estimates WHERE company_id IS NULL) THEN RAISE EXCEPTION 'Missing company ownership'; END IF;
@@ -164,3 +165,46 @@ END
 $drawing_tenant_guard$;
 
 \echo 'Company-owned drawing reference tests passed.'
+
+
+-- A proposal/estimate may rely on the drawing's property when its own
+-- property_id is NULL. Parent updates must not invalidate that ownership.
+INSERT INTO proposals(id,lead_id,property_id,drawing_id,company_id)
+VALUES('c7000000-0000-0000-0000-000000000004',NULL,NULL,
+  'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+INSERT INTO roof_estimates(id,lead_id,property_id,drawing_id,company_id)
+VALUES('c9000000-0000-0000-0000-000000000003',NULL,NULL,
+  'b5000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002');
+
+DO $parent_reassignment_guard$
+BEGIN
+  BEGIN
+    UPDATE roof_drawings
+    SET property_id='30000000-0000-0000-0000-000000000001'
+    WHERE id='b5000000-0000-0000-0000-000000000001';
+    RAISE EXCEPTION 'Referenced drawing reassignment accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Referenced drawing reassignment accepted' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    UPDATE crm_properties
+    SET company_id='10000000-0000-0000-0000-000000000001'
+    WHERE id='b3000000-0000-0000-0000-000000000001';
+    RAISE EXCEPTION 'Referenced property company reassignment accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Referenced property company reassignment accepted' THEN RAISE; END IF;
+  END;
+
+  IF (SELECT property_id FROM roof_drawings WHERE id='b5000000-0000-0000-0000-000000000001')
+       IS DISTINCT FROM 'b3000000-0000-0000-0000-000000000001'::uuid THEN
+    RAISE EXCEPTION 'Rejected drawing reassignment changed its property';
+  END IF;
+  IF (SELECT company_id FROM crm_properties WHERE id='b3000000-0000-0000-0000-000000000001')
+       IS DISTINCT FROM '10000000-0000-0000-0000-000000000002'::uuid THEN
+    RAISE EXCEPTION 'Rejected property reassignment changed its company';
+  END IF;
+END
+$parent_reassignment_guard$;
+
+\echo 'Drawing parent reassignment tests passed.'
