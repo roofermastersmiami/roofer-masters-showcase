@@ -7,6 +7,27 @@ import {
   canTransitionPermitApplication,
   canTransitionPermitInspection,
 } from "@/lib/permitting-rules";
+import {
+  attemptPermitCustomerEmail,
+  createPermitNotification,
+  describePermit,
+  documentAddedBody,
+  inspectionRequestedBody,
+  inspectionResultBody,
+  inspectionResultEmail,
+  inspectionResultNotification,
+  inspectionScheduledBody,
+  inspectionScheduledNotification,
+  permitCreatedBody,
+  permitStatusChangeEmail,
+  permitStatusChangedBody,
+  productApprovalRecordedBody,
+  productApprovalVerifiedBody,
+  recordPermitActivity,
+  statusChangeNotification,
+  sweepPermitExpirations,
+  type PermitEmailTransport,
+} from "@/lib/permit-notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const applicationStatuses = [
@@ -44,7 +65,7 @@ const inspectionInput = z.object({
   notes: z.string().max(5000).optional(),
 });
 
-// tenant-audit: reviewed — every server function is authenticated, resolves exactly one membership from the middleware-verified user ID, rejects non-admin roles, and applies company_id predicates to reads/writes. Job/application links are revalidated within that company; RLS and composite FKs remain defense in depth. Service-role access is never based on browser-supplied company IDs.
+// tenant-audit: reviewed — every server function is authenticated, resolves exactly one membership from the middleware-verified user ID, rejects non-admin roles, and applies company_id predicates to reads/writes. Job/application links are revalidated within that company; RLS and composite FKs remain defense in depth. Service-role access is never based on browser-supplied company IDs. The automation helpers below write crm_activity / crm_notifications rows only with the membership-derived companyId and a lead resolved through the company-scoped job link.
 async function permitContext(userId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const db = supabaseAdmin as SupabaseClient;
@@ -62,6 +83,142 @@ async function permitContext(userId: string) {
   if (membership.role !== "owner" && membership.role !== "admin")
     throw new Error("Only company owners and administrators can manage permit records.");
   return { db, companyId: membership.company_id as string };
+}
+
+type PermitApplicationRow = {
+  id: string;
+  roof_job_id: string;
+  permit_type: string | null;
+  permit_number: string | null;
+  jurisdiction_name: string | null;
+  application_status: string;
+  expires_at: string | null;
+};
+
+async function loadApplicationSummary(
+  db: SupabaseClient,
+  companyId: string,
+  applicationId: string,
+): Promise<PermitApplicationRow | null> {
+  const { data } = await db
+    .from("roof_permit_applications")
+    .select(
+      "id,roof_job_id,permit_type,permit_number,jurisdiction_name,application_status,expires_at",
+    )
+    .eq("id", applicationId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  return (data as PermitApplicationRow | null) ?? null;
+}
+
+/** Resolve the customer contact for a job through its company-scoped lead. */
+async function customerContactForJob(
+  db: SupabaseClient,
+  companyId: string,
+  jobId: string,
+): Promise<{ leadId: string | null; name: string | null; email: string | null }> {
+  const { data: job } = await db
+    .from("roof_jobs")
+    .select("lead_id")
+    .eq("id", jobId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const leadId = (job?.lead_id as string | null) ?? null;
+  if (!leadId) return { leadId: null, name: null, email: null };
+  const { data: lead } = await db
+    .from("leads")
+    .select("name,email")
+    .eq("id", leadId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const rawEmail = typeof lead?.email === "string" ? lead.email.trim() : "";
+  return {
+    leadId,
+    name: (lead?.name as string | null) ?? null,
+    email: rawEmail.includes("@") ? rawEmail : null,
+  };
+}
+
+async function permitEmailTransport(): Promise<PermitEmailTransport> {
+  const smtp = await import("@/lib/smtp.server");
+  return {
+    missingConfig: smtp.missingSmtpConfig,
+    send: (input) => smtp.sendSmtpMessage({ ...input, attachments: [] }),
+  };
+}
+
+/**
+ * Automation for an application status change: audit row, in-app
+ * notification, and a best-effort customer email whose real outcome is
+ * itself recorded in the activity log. Never throws.
+ */
+async function onPermitStatusChanged(
+  db: SupabaseClient,
+  companyId: string,
+  application: PermitApplicationRow,
+  fromStatus: string,
+  toStatus: string,
+): Promise<void> {
+  const contact = await customerContactForJob(db, companyId, application.roof_job_id);
+  await recordPermitActivity(db, {
+    companyId,
+    leadId: contact.leadId,
+    body: permitStatusChangedBody(application, fromStatus, toStatus),
+  });
+  const note = statusChangeNotification(application, fromStatus, toStatus);
+  await createPermitNotification(db, {
+    companyId,
+    kind: note.kind,
+    title: note.title,
+    body: note.body,
+    applicationId: application.id,
+  });
+  if (contact.email) {
+    const email = permitStatusChangeEmail(application, toStatus, contact.name ?? "there");
+    await attemptPermitCustomerEmail(db, {
+      companyId,
+      leadId: contact.leadId,
+      to: contact.email,
+      subject: email.subject,
+      message: email.message,
+      transport: await permitEmailTransport(),
+    });
+  }
+}
+
+/** Automation for a recorded inspection outcome (passed/failed). Never throws. */
+async function onInspectionResult(
+  db: SupabaseClient,
+  companyId: string,
+  application: PermitApplicationRow,
+  inspection: { inspection_type: string | null; scheduled_at: string | null },
+  result: "passed" | "failed",
+): Promise<void> {
+  const contact = await customerContactForJob(db, companyId, application.roof_job_id);
+  await recordPermitActivity(db, {
+    companyId,
+    leadId: contact.leadId,
+    body: inspectionResultBody(inspection, application, result),
+  });
+  const note = inspectionResultNotification(inspection, application, result);
+  await createPermitNotification(db, {
+    companyId,
+    kind: note.kind,
+    title: note.title,
+    body: note.body,
+    applicationId: application.id,
+  });
+  if (contact.email) {
+    const email = inspectionResultEmail(inspection, application, result, contact.name ?? "there");
+    await attemptPermitCustomerEmail(db, {
+      companyId,
+      leadId: contact.leadId,
+      to: contact.email,
+      subject: email.subject,
+      message: email.message,
+      transport: await permitEmailTransport(),
+    });
+  }
 }
 
 export const getPermitWorkspace = createServerFn({ method: "POST" })
@@ -82,6 +239,20 @@ export const getPermitWorkspace = createServerFn({ method: "POST" })
           .order("created_at", { ascending: false }),
       ]);
     if (applicationsError || jobsError) throw new Error("Could not load company permit records.");
+    // Expiration sweep: runs whenever the permits workspace loads and
+    // creates each threshold notification once per permit (dedupe key).
+    // Best-effort — the writers never throw, and a workspace load must not
+    // fail because the notifications table is not migrated yet.
+    try {
+      await sweepPermitExpirations(
+        db,
+        companyId,
+        (applications ?? []) as PermitApplicationRow[],
+        new Date().toISOString().slice(0, 10),
+      );
+    } catch {
+      // Notifications are additive; ignore sweep failures on load.
+    }
     const applicationIds = (applications ?? []).map((item) => item.id);
     const { data: inspections, error: inspectionsError } = applicationIds.length
       ? await db
@@ -109,7 +280,31 @@ export const getPermitWorkspace = createServerFn({ method: "POST" })
       ? await db.from("crm_properties").select("id,address").in("id", propertyIds)
       : { data: [], error: null };
     if (propertiesError) throw new Error("Could not load roof-job properties.");
+    type PermitNotificationRow = {
+      id: string;
+      company_id: string;
+      kind: string;
+      title: string;
+      body: string;
+      permit_application_id: string | null;
+      dedupe_key: string | null;
+      read_at: string | null;
+      created_at: string;
+    };
+    let notifications: PermitNotificationRow[] = [];
+    try {
+      const { data: notificationRows } = await db
+        .from("crm_notifications")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      notifications = (notificationRows ?? []) as PermitNotificationRow[];
+    } catch {
+      notifications = [];
+    }
     return {
+      notifications,
       applications: applications ?? [],
       inspections: inspections ?? [],
       approvals: approvals ?? [],
@@ -133,7 +328,7 @@ export const createPermitApplication = createServerFn({ method: "POST" })
     const { db, companyId } = await permitContext(context.userId);
     const { data: job } = await db
       .from("roof_jobs")
-      .select("id")
+      .select("id,lead_id")
       .eq("id", data.roof_job_id)
       .eq("company_id", companyId)
       .maybeSingle();
@@ -144,6 +339,11 @@ export const createPermitApplication = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error || !saved) throw new Error("Could not save the permit application.");
+    await recordPermitActivity(db, {
+      companyId,
+      leadId: (job.lead_id as string | null) ?? null,
+      body: permitCreatedBody(saved as PermitApplicationRow),
+    });
     return saved;
   });
 
@@ -161,7 +361,9 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db
       .from("roof_permit_applications")
-      .select("application_status,permit_number,submitted_at,issued_at,expires_at,notes,updated_at")
+      .select(
+        "application_status,permit_number,submitted_at,issued_at,expires_at,notes,updated_at,roof_job_id,permit_type,jurisdiction_name",
+      )
       .eq("id", data.id)
       .eq("company_id", companyId)
       .maybeSingle();
@@ -213,6 +415,15 @@ export const updatePermitApplication = createServerFn({ method: "POST" })
       throw new Error(
         "This permit application changed in another session. Reload it and retry your update.",
       );
+    if (nextStatus && nextStatus !== current.application_status) {
+      await onPermitStatusChanged(
+        db,
+        companyId,
+        saved as PermitApplicationRow,
+        current.application_status as string,
+        nextStatus,
+      );
+    }
     return saved;
   });
 
@@ -230,7 +441,9 @@ export const recordPermitRejection = createServerFn({ method: "POST" })
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db
       .from("roof_permit_applications")
-      .select("application_status,notes,updated_at")
+      .select(
+        "application_status,notes,updated_at,roof_job_id,permit_type,permit_number,jurisdiction_name",
+      )
       .eq("id", data.id)
       .eq("company_id", companyId)
       .maybeSingle();
@@ -261,6 +474,13 @@ export const recordPermitRejection = createServerFn({ method: "POST" })
       throw new Error(
         "This permit application changed in another session. Reload it and retry recording the rejection.",
       );
+    await onPermitStatusChanged(
+      db,
+      companyId,
+      saved as PermitApplicationRow,
+      current.application_status as string,
+      "rejected",
+    );
     return saved;
   });
 
@@ -287,6 +507,15 @@ export const createPermitInspection = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error || !saved) throw new Error("Could not save the inspection.");
+    const applicationSummary = await loadApplicationSummary(db, companyId, data.application_id);
+    if (applicationSummary) {
+      const contact = await customerContactForJob(db, companyId, applicationSummary.roof_job_id);
+      await recordPermitActivity(db, {
+        companyId,
+        leadId: contact.leadId,
+        body: inspectionRequestedBody(saved, applicationSummary),
+      });
+    }
     return saved;
   });
 
@@ -304,7 +533,9 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db
       .from("roof_permit_inspections")
-      .select("scheduling_status,scheduled_at,completed_at,updated_at")
+      .select(
+        "scheduling_status,scheduled_at,completed_at,updated_at,application_id,inspection_type",
+      )
       .eq("id", data.id)
       .eq("company_id", companyId)
       .maybeSingle();
@@ -348,6 +579,40 @@ export const updatePermitInspection = createServerFn({ method: "POST" })
       throw new Error(
         "This inspection changed in another session. Reload it and retry your update.",
       );
+    if (nextStatus && nextStatus !== current.scheduling_status) {
+      const application = await loadApplicationSummary(
+        db,
+        companyId,
+        current.application_id as string,
+      );
+      if (application) {
+        if (nextStatus === "scheduled") {
+          const contact = await customerContactForJob(db, companyId, application.roof_job_id);
+          await recordPermitActivity(db, {
+            companyId,
+            leadId: contact.leadId,
+            body: inspectionScheduledBody(saved, application),
+          });
+          const note = inspectionScheduledNotification(saved, application);
+          await createPermitNotification(db, {
+            companyId,
+            kind: note.kind,
+            title: note.title,
+            body: note.body,
+            applicationId: application.id,
+          });
+        } else if (nextStatus === "passed" || nextStatus === "failed") {
+          await onInspectionResult(db, companyId, application, saved, nextStatus);
+        } else if (nextStatus === "cancelled") {
+          const contact = await customerContactForJob(db, companyId, application.roof_job_id);
+          await recordPermitActivity(db, {
+            companyId,
+            leadId: contact.leadId,
+            body: `${(saved.inspection_type as string) || "Inspection"} inspection cancelled for ${describePermit(application)}.`,
+          });
+        }
+      }
+    }
     return saved;
   });
 
@@ -406,6 +671,19 @@ export const createRoofProductApproval = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error || !saved) throw new Error("Could not save the product approval reference.");
+    const applicationSummary = await loadApplicationSummary(
+      db,
+      companyId,
+      data.permit_application_id,
+    );
+    if (applicationSummary) {
+      const contact = await customerContactForJob(db, companyId, applicationSummary.roof_job_id);
+      await recordPermitActivity(db, {
+        companyId,
+        leadId: contact.leadId,
+        body: productApprovalRecordedBody(saved, applicationSummary),
+      });
+    }
     return saved;
   });
 
@@ -416,7 +694,7 @@ export const verifyRoofProductApproval = createServerFn({ method: "POST" })
     const { db, companyId } = await permitContext(context.userId);
     const { data: current, error: currentError } = await db
       .from("roof_product_approvals")
-      .select("approval_status,expires_on,updated_at")
+      .select("approval_status,expires_on,updated_at,permit_application_id,approval_number")
       .eq("id", data.id)
       .eq("company_id", companyId)
       .maybeSingle();
@@ -445,6 +723,19 @@ export const verifyRoofProductApproval = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not verify this product approval record.");
     if (!saved)
       throw new Error("This approval record changed in another session. Reload and retry.");
+    const applicationSummary = await loadApplicationSummary(
+      db,
+      companyId,
+      current.permit_application_id as string,
+    );
+    if (applicationSummary) {
+      const contact = await customerContactForJob(db, companyId, applicationSummary.roof_job_id);
+      await recordPermitActivity(db, {
+        companyId,
+        leadId: contact.leadId,
+        body: productApprovalVerifiedBody(saved, applicationSummary),
+      });
+    }
     return saved;
   });
 
@@ -527,4 +818,51 @@ export const savePermitNocTracking = createServerFn({ method: "POST" })
       .single();
     if (error || !saved) throw new Error("Could not save the NOC tracking record.");
     return saved;
+  });
+
+/**
+ * Record a completed permit-document upload in the audit trail. Uploads go
+ * straight from the browser to the private permit-documents bucket, so the
+ * client calls this after a successful upload; the storage path must match
+ * the company/application folder the bucket policy enforces.
+ */
+export const recordPermitDocumentUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        application_id: z.string().uuid(),
+        file_name: z.string().trim().min(1).max(255),
+        storage_path: z.string().trim().min(1).max(1024),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data, context }) => {
+    const { db, companyId } = await permitContext(context.userId);
+    const application = await loadApplicationSummary(db, companyId, data.application_id);
+    if (!application) throw new Error("Permit application was not found in your company.");
+    const expectedPrefix = `${companyId}/${data.application_id}/`;
+    if (!data.storage_path.startsWith(expectedPrefix))
+      throw new Error("Document path does not match this permit application.");
+    const contact = await customerContactForJob(db, companyId, application.roof_job_id);
+    await recordPermitActivity(db, {
+      companyId,
+      leadId: contact.leadId,
+      body: documentAddedBody(application, data.file_name),
+    });
+    return { recorded: true };
+  });
+
+export const markPermitNotificationRead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({ id: z.string().uuid() }).parse(raw))
+  .handler(async ({ data, context }) => {
+    const { db, companyId } = await permitContext(context.userId);
+    const { error } = await db
+      .from("crm_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .eq("company_id", companyId);
+    if (error) throw new Error("Could not mark this notification as read.");
+    return { ok: true };
   });

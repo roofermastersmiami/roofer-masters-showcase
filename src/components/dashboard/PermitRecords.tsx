@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Bell,
   CalendarPlus,
   ClipboardList,
   Download,
@@ -45,6 +46,8 @@ import {
   updatePermitApplication,
   updatePermitInspection,
   recordPermitRejection,
+  recordPermitDocumentUpload,
+  markPermitNotificationRead,
   createRoofProductApproval,
   verifyRoofProductApproval,
   savePermitNocTracking,
@@ -128,6 +131,11 @@ export function PermitRecords() {
   const [nocNotes, setNocNotes] = useState("");
 
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["permit-workspace"] });
+  const markNotificationRead = useMutation({
+    mutationFn: (id: string) => markPermitNotificationRead({ id }),
+    onSuccess: refresh,
+    onError: (error) => toast.error(error.message || "Could not mark notification as read."),
+  });
   const createApplication = useMutation({
     mutationFn: () =>
       createPermitApplication({
@@ -242,6 +250,7 @@ export function PermitRecords() {
     },
     onError: (error) => toast.error(error.message || "Could not save inspection."),
   });
+  const notifications = workspace.data?.notifications ?? [];
   const applications = workspace.data?.applications ?? [];
   const inspections = workspace.data?.inspections ?? [];
   const approvals = workspace.data?.approvals ?? [];
@@ -408,6 +417,13 @@ export function PermitRecords() {
       });
       if (error) throw error;
       toast.success("Permit document uploaded securely.");
+      // Audit trail: record the upload server-side (best-effort; the file
+      // is already stored, so a logging failure must not fail the upload).
+      void recordPermitDocumentUpload({
+        application_id: application.id,
+        file_name: validation.safeName,
+        storage_path: path,
+      }).catch(() => undefined);
       await loadPermitFiles(application);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not upload permit document.");
@@ -586,6 +602,55 @@ export function PermitRecords() {
         </Card>
       ) : (
         <>
+          {notifications.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Bell className="size-4" /> Notifications
+                  {notifications.some((item) => !item.read_at) ? (
+                    <Badge variant="secondary">
+                      {notifications.filter((item) => !item.read_at).length} unread
+                    </Badge>
+                  ) : null}
+                </CardTitle>
+                <CardDescription>
+                  Status changes, inspection scheduling and results, and permit expiration alerts
+                  for your company.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3">
+                  {notifications.slice(0, 10).map((item) => (
+                    <li
+                      key={item.id as string}
+                      className="flex flex-wrap items-start justify-between gap-2 border-b pb-3 last:border-b-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{item.title as string}</p>
+                        <p className="text-sm text-muted-foreground">{item.body as string}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {localDateTime(item.created_at as string)}
+                        </p>
+                      </div>
+                      {item.read_at ? (
+                        <Badge variant="outline">Read</Badge>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => markNotificationRead.mutate(item.id as string)}
+                          disabled={markNotificationRead.isPending}
+                        >
+                          Mark read
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <div className="grid gap-3 md:grid-cols-2">
             <Card>
               <CardHeader>
