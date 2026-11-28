@@ -181,7 +181,7 @@ describe("HousePhotoView", () => {
     );
     const img = screen.getByAltText("Aerial photo of this property") as HTMLImageElement;
     expect(img.src).toContain("blob:photo");
-    expect(screen.getByText(/USGS National Agriculture Imagery Program \(NAIP\)/)).toBeTruthy();
+    expect(screen.getByText(/USDA National Agriculture Imagery Program \(NAIP\)/)).toBeTruthy();
   });
 
   it("shows an honest empty state when no photo is available", () => {

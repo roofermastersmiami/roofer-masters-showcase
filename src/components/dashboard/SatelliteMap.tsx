@@ -7,6 +7,8 @@ import {
   latLonAtViewportOffset,
   projectToViewport,
   satelliteLabelTiles,
+  satelliteLabelUpscale,
+  satelliteLabelZoom,
   satelliteMapTiles,
   satelliteTileZoom,
   satelliteUpscale,
@@ -27,10 +29,12 @@ type DragState = {
 
 /**
  * Interactive satellite map for the measurement-order form: a
- * mosaic of Esri World Imagery tiles with the Esri reference label
- * overlays (street names, places) on top — see
- * src/lib/satellite-map.ts for why tiles replaced the MapServer
- * export image. Interactions follow the order-form model Fredy
+ * mosaic of aerial tiles — Broward County's own sharper
+ * Aerials2026_V2 tiles when the centre is in Broward (with a
+ * per-tile swap to Esri on error), Esri World Imagery elsewhere —
+ * with the Esri reference label overlays (street names, places)
+ * on top — see src/lib/satellite-map.ts for why tiles replaced
+ * the MapServer export image. Interactions follow the order-form model Fredy
  * asked for: drag to pan, scroll to zoom, click the map to drop a
  * pin on another structure, drag a pin to move it onto the correct
  * building, double-click a pin to remove it. Each pin's final
@@ -75,12 +79,12 @@ export function SatelliteMap({
   // the drag commits a new centre.
   const layerWidth = size.width + SATELLITE_TILE_PX * 4;
   const layerHeight = size.height + SATELLITE_TILE_PX * 4;
-  // Deep zoom (the Sketch Editor's PR #233 pattern): Esri serves
-  // no tiles past z20, so past that the z20 mosaic is fetched for
-  // the proportionally smaller viewport it has to cover and
-  // upscaled on screen. Pins and pointer math below keep using
-  // the VIEW zoom's exact Mercator projection, so a pin dropped
-  // at z24 lands on the precise lat/lon under the cursor.
+  // Deep zoom (the Sketch Editor's PR #233 pattern): real tiles
+  // end at z21, so past that the z21 mosaic is fetched for the
+  // proportionally smaller viewport it has to cover and upscaled
+  // on screen. Pins and pointer math below keep using the VIEW
+  // zoom's exact Mercator projection, so a pin dropped at z24
+  // lands on the precise lat/lon under the cursor.
   const tileZoom = satelliteTileZoom(zoom);
   const upscale = satelliteUpscale(zoom);
   const tiles = satelliteMapTiles(
@@ -90,12 +94,19 @@ export function SatelliteMap({
     layerWidth / upscale,
     layerHeight / upscale,
   );
+  // Labels ride their own, shallower grid: Esri's reference
+  // layers carry real content only to z19 (transparent
+  // placeholders past it), so they are fetched at the label zoom
+  // and upscaled by the label factor — street names stay visible
+  // at every view zoom, on top of either base layer.
+  const labelZoom = satelliteLabelZoom(zoom);
+  const labelUpscale = satelliteLabelUpscale(zoom);
   const labelLayers = satelliteLabelTiles(
     center.lat,
     center.lon,
-    tileZoom,
-    layerWidth / upscale,
-    layerHeight / upscale,
+    labelZoom,
+    layerWidth / labelUpscale,
+    layerHeight / labelUpscale,
   );
 
   useEffect(() => {
@@ -259,6 +270,15 @@ export function SatelliteMap({
               width: SATELLITE_TILE_PX * upscale,
               height: SATELLITE_TILE_PX * upscale,
             }}
+            onError={(event) => {
+              // Per-tile fallback: a Broward County tile that
+              // 404s (outside the flown blocks) swaps to the Esri
+              // tile for the same slot — that tile only, never the
+              // whole map. The src check keeps a failing fallback
+              // from looping.
+              const img = event.currentTarget;
+              if (tile.fallbackSrc && img.src !== tile.fallbackSrc) img.src = tile.fallbackSrc;
+            }}
           />
         ))}
         {labelLayers.flatMap((layerTiles) =>
@@ -270,10 +290,10 @@ export function SatelliteMap({
               draggable={false}
               className="absolute max-w-none"
               style={{
-                left: tile.left * upscale,
-                top: tile.top * upscale,
-                width: SATELLITE_TILE_PX * upscale,
-                height: SATELLITE_TILE_PX * upscale,
+                left: tile.left * labelUpscale,
+                top: tile.top * labelUpscale,
+                width: SATELLITE_TILE_PX * labelUpscale,
+                height: SATELLITE_TILE_PX * labelUpscale,
               }}
             />
           )),

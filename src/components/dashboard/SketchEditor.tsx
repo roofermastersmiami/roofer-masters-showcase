@@ -698,7 +698,7 @@ export function SketchEditor({
       ? Math.ceil(Math.hypot(size.w, size.h)) + 512
       : Math.ceil(size.w * 1.5) + 256;
     const layerH = viewRotated ? layerW : Math.ceil(size.h * 1.5) + 256;
-    // Past the deepest real tile level, fetch the z20 mosaic for the
+    // Past the deepest real tile level, fetch the z21 mosaic for the
     // (proportionally smaller) viewport it has to cover and upscale it
     // by `upscale` when rendering, so the backdrop survives deep zoom.
     const tileZoom = satelliteTileZoom(geoZoom);
@@ -976,6 +976,14 @@ export function SketchEditor({
                         top: tile.top * tileLayer.upscale,
                         width: 256 * tileLayer.upscale,
                         height: 256 * tileLayer.upscale,
+                      }}
+                      onError={(event) => {
+                        // Per-tile fallback, same as the order map:
+                        // a Broward County tile that 404s swaps to
+                        // the Esri tile for the same slot only.
+                        const img = event.currentTarget;
+                        if (tile.fallbackSrc && img.src !== tile.fallbackSrc)
+                          img.src = tile.fallbackSrc;
                       }}
                     />
                   ))}

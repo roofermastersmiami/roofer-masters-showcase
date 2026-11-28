@@ -72,10 +72,16 @@ describe("SketchEditor", () => {
 
   it("draws the facets over satellite tiles with live length labels that toggle off", () => {
     const { container } = renderEditor();
+    // The editor's drawing sits in Broward, so the backdrop tiles
+    // are the county's Aerials2026_V2 tiles (Esri World Imagery is
+    // their per-tile fallback, not the primary src).
     const tileImages = [...container.querySelectorAll("img")].filter((img) =>
-      (img.getAttribute("src") ?? "").includes("/World_Imagery/MapServer/tile/"),
+      (img.getAttribute("src") ?? "").includes("/MapServer/tile/"),
     );
     expect(tileImages.length).toBeGreaterThan(0);
+    expect(
+      tileImages.some((img) => (img.getAttribute("src") ?? "").includes("Aerials2026_V2")),
+    ).toBe(true);
     // The 40ft eave reads "40.0ft" like the reference editor.
     expect(screen.getAllByText("40.0ft").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("switch", { name: "Line Length" }));

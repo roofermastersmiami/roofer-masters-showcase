@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  BROWARD_AERIAL_EXTENT,
   SATELLITE_DEFAULT_ZOOM,
+  SATELLITE_LABEL_MAX_ZOOM,
   SATELLITE_MAX_VIEW_ZOOM,
   SATELLITE_MAX_ZOOM,
   SATELLITE_TILE_PX,
   SATELLITE_VIEW_HEIGHT,
   SATELLITE_VIEW_WIDTH,
+  browardAerialApplies,
   latLonAtViewportOffset,
   latLonToWorldPixels,
   projectToViewport,
   satelliteLabelTiles,
+  satelliteLabelUpscale,
+  satelliteLabelZoom,
   satelliteMapTiles,
   satelliteTileZoom,
   satelliteUpscale,
@@ -18,21 +23,42 @@ import {
 
 // 4311 SW 32nd Dr, West Park, FL 33023 — the address from the bug
 // report where the old Esri export image rendered as a blank box.
+// West Park is in Broward County, inside the Aerials2026_V2
+// extent, so its base tiles now come from the county service
+// (with the Esri tile for each slot as fallbackSrc).
 const LAT = 25.979306;
 const LON = -80.186822;
+// Downtown Miami — Miami-Dade, outside the Broward extent.
+const MIA_LAT = 25.7617;
+const MIA_LON = -80.1918;
+// Miramar — Broward, inside the extent (its z19 county tile 404s
+// live; the per-tile fallback exists for exactly this case).
+const MIR_LAT = 25.9802;
+const MIR_LON = -80.3995;
 
 describe("satelliteMapTiles", () => {
-  it("requests the Esri tile that contains the address at the default zoom", () => {
+  it("requests the Broward County tile that contains the address at the default zoom, with the Esri tile as its fallback", () => {
     const tiles = satelliteMapTiles(LAT, LON, SATELLITE_DEFAULT_ZOOM);
-    // Tile indices verified against the live Esri World Imagery
-    // tile service for these coordinates.
+    // Tile indices verified against the live tile services for
+    // these coordinates.
     expect(
       tiles.some(
         (tile) =>
           tile.src ===
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/19/222941/145363",
+            "https://tiles.arcgis.com/tiles/JMAJrTsHNLrSsWf5/arcgis/rest/services/Aerials2026_V2/MapServer/tile/19/222941/145363" &&
+          tile.fallbackSrc ===
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/19/222941/145363",
       ),
     ).toBe(true);
+  });
+
+  it("outside Broward, requests Esri tiles with no fallback layer", () => {
+    const tiles = satelliteMapTiles(MIA_LAT, MIA_LON, SATELLITE_DEFAULT_ZOOM);
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const tile of tiles) {
+      expect(tile.src).toContain("server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/");
+      expect(tile.fallbackSrc).toBeUndefined();
+    }
   });
 
   it("places the address point at the exact centre of the viewport", () => {
@@ -74,9 +100,9 @@ describe("satelliteMapTiles", () => {
     expect(zoomedIn.some((tile) => tile.src.endsWith("/tile/20/445883/290726"))).toBe(true);
   });
 
-  it("only builds Esri World Imagery tile URLs", () => {
-    for (const zoom of [17, 18, 19, 20]) {
-      for (const tile of satelliteMapTiles(LAT, LON, zoom)) {
+  it("only builds Esri World Imagery tile URLs outside Broward", () => {
+    for (const zoom of [17, 18, 19, 20, 21]) {
+      for (const tile of satelliteMapTiles(MIA_LAT, MIA_LON, zoom)) {
         expect(tile.src).toMatch(
           new RegExp(
             `^https://server\\.arcgisonline\\.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/\\d+/\\d+$`,
@@ -84,6 +110,41 @@ describe("satelliteMapTiles", () => {
         );
       }
     }
+  });
+
+  it("inside Broward, every tile is a county tile whose fallback is the Esri tile for the same slot", () => {
+    for (const zoom of [17, 19, 20, 21]) {
+      for (const tile of satelliteMapTiles(MIR_LAT, MIR_LON, zoom)) {
+        const slot = tile.src.match(/\/tile\/(\d+)\/(\d+)\/(\d+)$/);
+        expect(tile.src).toContain("tiles.arcgis.com/tiles/JMAJrTsHNLrSsWf5/");
+        expect(tile.src).toContain("Aerials2026_V2");
+        expect(slot?.[1]).toBe(String(zoom));
+        expect(tile.fallbackSrc).toBe(
+          `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${slot?.[1]}/${slot?.[2]}/${slot?.[3]}`,
+        );
+      }
+    }
+  });
+});
+
+describe("browardAerialApplies", () => {
+  it("covers the urban Broward points and nothing outside the published extent", () => {
+    expect(browardAerialApplies(MIR_LAT, MIR_LON)).toBe(true); // Miramar
+    expect(browardAerialApplies(26.1224, -80.1373)).toBe(true); // Fort Lauderdale
+    expect(browardAerialApplies(LAT, LON)).toBe(true); // West Park
+    expect(browardAerialApplies(MIA_LAT, MIA_LON)).toBe(false); // downtown Miami
+    expect(browardAerialApplies(25.65, -80.42)).toBe(false); // SW Miami-Dade
+    expect(browardAerialApplies(26.1, -80.6)).toBe(false); // Everglades (west of extent)
+    expect(browardAerialApplies(30.3322, -81.6557)).toBe(false); // Jacksonville
+    // The extent corners themselves are inclusive.
+    expect(browardAerialApplies(BROWARD_AERIAL_EXTENT.minLat, BROWARD_AERIAL_EXTENT.minLon)).toBe(
+      true,
+    );
+    expect(browardAerialApplies(BROWARD_AERIAL_EXTENT.maxLat, BROWARD_AERIAL_EXTENT.maxLon)).toBe(
+      true,
+    );
+    expect(browardAerialApplies(BROWARD_AERIAL_EXTENT.minLat - 0.001, MIR_LON)).toBe(false);
+    expect(browardAerialApplies(MIR_LAT, BROWARD_AERIAL_EXTENT.maxLon + 0.001)).toBe(false);
   });
 });
 
@@ -156,20 +217,33 @@ describe("world-pixel projection (pan and pins)", () => {
   });
 });
 
-describe("deep zoom past the last real tile level (z21–z24)", () => {
+describe("deep zoom past the last real tile level (z22–z24)", () => {
   const center = { lat: LAT, lon: LON };
 
-  it("caps the fetched tile level at z20 and doubles the upscale per level past it", () => {
+  it("caps the fetched tile level at z21 and doubles the upscale per level past it", () => {
+    expect(SATELLITE_MAX_ZOOM).toBe(21);
     expect(SATELLITE_MAX_VIEW_ZOOM).toBe(24);
-    for (const viewZoom of [17, 19, 20]) {
+    for (const viewZoom of [17, 19, 20, 21]) {
       expect(satelliteTileZoom(viewZoom)).toBe(viewZoom);
       expect(satelliteUpscale(viewZoom)).toBe(1);
     }
-    for (const viewZoom of [21, 22, 23, 24]) {
+    for (const viewZoom of [22, 23, 24]) {
       expect(satelliteTileZoom(viewZoom)).toBe(SATELLITE_MAX_ZOOM);
       expect(satelliteUpscale(viewZoom)).toBe(2 ** (viewZoom - SATELLITE_MAX_ZOOM));
     }
-    expect(satelliteUpscale(SATELLITE_MAX_VIEW_ZOOM)).toBe(16);
+    expect(satelliteUpscale(SATELLITE_MAX_VIEW_ZOOM)).toBe(8);
+  });
+
+  it("caps the label level at z19 — the deepest level with real label content — and upscales labels from there", () => {
+    expect(SATELLITE_LABEL_MAX_ZOOM).toBe(19);
+    for (const viewZoom of [17, 19]) {
+      expect(satelliteLabelZoom(viewZoom)).toBe(viewZoom);
+      expect(satelliteLabelUpscale(viewZoom)).toBe(1);
+    }
+    for (const viewZoom of [20, 21, 22, 23, 24]) {
+      expect(satelliteLabelZoom(viewZoom)).toBe(SATELLITE_LABEL_MAX_ZOOM);
+      expect(satelliteLabelUpscale(viewZoom)).toBe(2 ** (viewZoom - SATELLITE_LABEL_MAX_ZOOM));
+    }
   });
 
   it("round-trips lat/lon through world pixels at every deep zoom", () => {
@@ -191,17 +265,17 @@ describe("deep zoom past the last real tile level (z21–z24)", () => {
     }
   });
 
-  it("a screen offset at z24 names the same ground point as 1/16th of it at z20", () => {
+  it("a screen offset at z24 names the same ground point as 1/8th of it at z21", () => {
     // The pin math runs on the VIEW zoom: 256px east at z24 covers
-    // exactly the ground that 16px east covers at z20 — the tile
+    // exactly the ground that 32px east covers at z21 — the tile
     // level must never leak into the projection.
     const deep = latLonAtViewportOffset(center, 24, 256, -128);
-    const tileLevel = latLonAtViewportOffset(center, 20, 256 / 16, -128 / 16);
+    const tileLevel = latLonAtViewportOffset(center, 21, 256 / 8, -128 / 8);
     expect(deep.lat).toBeCloseTo(tileLevel.lat, 9);
     expect(deep.lon).toBeCloseTo(tileLevel.lon, 9);
   });
 
-  it("builds the deep-zoom mosaic from z20 tiles only, upscaled gaplessly over the layer", () => {
+  it("builds the deep-zoom mosaic from z21 tiles only, upscaled gaplessly over the layer", () => {
     // Exactly what SatelliteMap renders at z24: tiles fetched at
     // the capped tile zoom for a viewport shrunk by the upscale,
     // then each tile drawn at (left, top) * upscale with size
@@ -221,7 +295,7 @@ describe("deep zoom past the last real tile level (z21–z24)", () => {
     expect(tiles.length).toBeGreaterThan(0);
     for (const tile of tiles) {
       expect(tile.src).toContain(`/tile/${SATELLITE_MAX_ZOOM}/`);
-      expect(tile.src).not.toMatch(/\/tile\/2[1-9]\//);
+      expect(tile.src).not.toMatch(/\/tile\/2[2-9]\//);
     }
     const scaled = tiles.map((tile) => ({
       left: tile.left * upscale,
@@ -256,15 +330,19 @@ describe("deep zoom past the last real tile level (z21–z24)", () => {
     expect(centreTile).toBeDefined();
   });
 
-  it("keeps the label overlays on the same capped grid at deep zoom", () => {
+  it("keeps the label overlays on their own capped grid at deep zoom", () => {
+    // Exactly what SatelliteMap renders at z23: labels fetched at
+    // the label zoom (z19, the deepest level with real content)
+    // for a viewport shrunk by the label upscale.
     const viewZoom = 23;
-    const tileZoom = satelliteTileZoom(viewZoom);
-    const upscale = satelliteUpscale(viewZoom);
-    const layers = satelliteLabelTiles(LAT, LON, tileZoom, 400 / upscale, 300 / upscale);
+    const labelZoom = satelliteLabelZoom(viewZoom);
+    const labelUpscale = satelliteLabelUpscale(viewZoom);
+    expect(labelZoom).toBe(SATELLITE_LABEL_MAX_ZOOM);
+    const layers = satelliteLabelTiles(LAT, LON, labelZoom, 400 / labelUpscale, 300 / labelUpscale);
     expect(layers).toHaveLength(2);
     for (const layer of layers) {
       expect(layer.length).toBeGreaterThan(0);
-      for (const tile of layer) expect(tile.src).toContain(`/tile/${SATELLITE_MAX_ZOOM}/`);
+      for (const tile of layer) expect(tile.src).toContain(`/tile/${SATELLITE_LABEL_MAX_ZOOM}/`);
     }
   });
 });
