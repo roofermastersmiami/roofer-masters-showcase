@@ -413,5 +413,8 @@ export async function isPdfEncrypted(bytes: Uint8Array): Promise<boolean> {
 /** Lossless compression pass: rebuild the file with object streams. */
 export async function compressPdfLossless(bytes: Uint8Array): Promise<Uint8Array> {
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  return doc.save({ useObjectStreams: true });
+  const compressed = await doc.save({ useObjectStreams: true });
+  // A small PDF can gain a few bytes from object-stream metadata.
+  // Keep the original valid file when the serialization is not smaller.
+  return compressed.length < bytes.length ? compressed : bytes;
 }
