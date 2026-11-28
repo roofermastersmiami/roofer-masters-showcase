@@ -58,7 +58,7 @@ BEGIN
     SELECT company_id INTO next_company_id
     FROM public.crm_properties
     WHERE id = NEW.property_id
-    FOR KEY SHARE;
+    FOR SHARE;
   END IF;
 
   IF next_company_id IS NULL AND (
