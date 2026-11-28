@@ -36,7 +36,7 @@ BEGIN
         policy.polname, target.schema_name, target.table_name);
     END LOOP;
   END LOOP;
-END
+END;
 $drop_legacy$;
 
 ALTER TABLE public.client_portal_links ENABLE ROW LEVEL SECURITY;
