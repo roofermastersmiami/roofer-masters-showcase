@@ -28,7 +28,7 @@ CREATE TABLE crm_tasks(id uuid PRIMARY KEY,lead_id uuid);
 CREATE TABLE invoice_checkouts(id uuid PRIMARY KEY,invoice_id uuid);
 CREATE TABLE invoice_payments(id uuid PRIMARY KEY,invoice_id uuid);
 CREATE TABLE invoice_project_links(invoice_id uuid,job_id uuid);
-CREATE TABLE job_change_orders(id uuid PRIMARY KEY,job_id uuid);
+CREATE TABLE job_change_orders(id uuid PRIMARY KEY,job_id uuid,status text NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','pending','approved','rejected')),approved_by text,approved_at timestamptz);
 CREATE TABLE lead_messages(id uuid PRIMARY KEY,lead_id uuid,sender text NOT NULL DEFAULT 'customer');
 CREATE TABLE proposal_shares(id uuid PRIMARY KEY,proposal_id uuid);
 CREATE TABLE roof_estimates(id uuid PRIMARY KEY,lead_id uuid,property_id uuid,drawing_id uuid,report_order_id uuid);
