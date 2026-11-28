@@ -129,14 +129,12 @@ export const startChat = createServerFn({ method: "POST" })
       console.error("startChat failed", error);
       throw new Error("Chat is unavailable right now. Please call 305-942-3093.");
     }
-    const { error: messageError } = await db
-      .from("lead_messages")
-      .insert({
-        lead_id: lead.id,
-        company_id: lead.company_id,
-        sender: "customer",
-        body: data.message,
-      });
+    const { error: messageError } = await db.from("lead_messages").insert({
+      lead_id: lead.id,
+      company_id: lead.company_id,
+      sender: "customer",
+      body: data.message,
+    });
     if (messageError) {
       console.error("startChat message insert failed", messageError);
       const { error: cleanupError } = await db

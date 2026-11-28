@@ -29,7 +29,7 @@ in order, with preflight aborts and post-assertions:
   schema foundation).
 - **S4 repairs** —
   - **R-1:** adds `roof_report_orders_id_company_id_key
-    UNIQUE (id, company_id)`. Migration 0056 references this composite
+UNIQUE (id, company_id)`. Migration 0056 references this composite
     key but no migration creates it; without R-1, 0056 fails on any
     journal-built database (the repo CI fixture masks this by creating
     the constraint by hand). Found in rehearsal.
@@ -62,7 +62,7 @@ beyond the R-2 policy drop.
 3. A verified production backup / PITR point confirmed in Supabase
    immediately before execution. **There is no down-migration; the
    recovery path is restore-from-backup.** The single-transaction
-   design means a failed run changes nothing; a *successful* run that
+   design means a failed run changes nothing; a _successful_ run that
    later proves wrong is recovered by restore.
 4. Maintenance window: brief; the script runs in seconds-to-minutes,
    but schedule it when no proposals/invoices are being edited.
