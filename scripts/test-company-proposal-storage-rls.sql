@@ -1,4 +1,4 @@
--- Dedicated two-company integration test for migration 0060 proposal storage.
+-- Dedicated two-company integration test for migration 0061 proposal storage.
 -- Run only in a disposable PostgreSQL database.
 \set ON_ERROR_STOP on
 \ir test-secondary-operational-company-ownership.sql
