@@ -281,9 +281,9 @@ SELECT
  (SELECT count(*) FROM public.crm_customers WHERE source_lead_id IS NULL) AS customers_without_source_lead,
  (SELECT count(*) FROM public.roof_jobs WHERE lead_id IS NULL AND property_id IS NULL) AS jobs_without_lead_or_property,
  (SELECT count(*) FROM (
-   SELECT customer_id, lower(regexp_replace(trim(address), '\\s+', ' ', 'g')) AS normalized_address
+   SELECT customer_id, lower(regexp_replace(trim(address), '\s+', ' ', 'g')) AS normalized_address
    FROM public.crm_properties
-   GROUP BY customer_id, lower(regexp_replace(trim(address), '\\s+', ' ', 'g'))
+   GROUP BY customer_id, lower(regexp_replace(trim(address), '\s+', ' ', 'g'))
    HAVING count(*)>1
  ) duplicate_properties) AS duplicate_property_address_groups;
 
