@@ -36,8 +36,8 @@ INSERT INTO crm_invoices(id,company_id,status,paid_cents,total_cents,deposit_cen
 INSERT INTO invoice_checkouts VALUES
 ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','cs_test_1','test',5000,'pending');
 
-\ir ../drizzle/migrations/0056_company_scoped_invoice_payment_rpcs.sql
-\ir ../drizzle/migrations/0057_company_scoped_invoice_checkout_reservation.sql
+\ir ../drizzle/migrations/0057_company_scoped_invoice_payment_rpcs.sql
+\ir ../drizzle/migrations/0058_company_scoped_invoice_checkout_reservation.sql
 
 -- Same-company accounting can issue an invoice.
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
