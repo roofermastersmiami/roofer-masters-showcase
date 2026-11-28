@@ -17,9 +17,7 @@ CREATE SCHEMA storage;
 CREATE TABLE storage.buckets(id text PRIMARY KEY,name text NOT NULL,public boolean NOT NULL DEFAULT false);
 CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text NOT NULL REFERENCES storage.buckets(id),name text NOT NULL,owner_id uuid,UNIQUE(bucket_id,name));
 INSERT INTO storage.buckets(id,name,public) VALUES ('roofing-proposals','roofing-proposals',false);
-CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
-  SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid
-$$;
+-- auth.uid() is provided by the shared secondary-ownership fixture.
 GRANT USAGE ON SCHEMA public,auth,storage TO authenticated;
 GRANT SELECT,INSERT,DELETE ON storage.objects TO authenticated;
 GRANT SELECT ON storage.buckets,public.crm_expenses,public.crm_company_memberships TO authenticated;
