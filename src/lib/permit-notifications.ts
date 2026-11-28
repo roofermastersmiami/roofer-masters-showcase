@@ -338,7 +338,8 @@ export type PermitEmailTransport = {
 };
 
 export type PermitEmailOutcome =
-  { sent: true } | { sent: false; reason: "not_configured" | "transport_failed"; detail: string };
+  | { sent: true }
+  | { sent: false; reason: "not_configured" | "transport_failed"; detail: string };
 
 /**
  * Attempt a customer email through the CRM's SMTP transport and record
