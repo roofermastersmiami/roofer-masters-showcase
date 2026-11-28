@@ -134,6 +134,63 @@ export async function renderPagePreview(
   return { dataUrl, widthPt: base.width, heightPt: base.height };
 }
 
+export type PdfPagePreview = {
+  pageNumber: number; // 1-based
+  dataUrl: string;
+  widthPt: number;
+  heightPt: number;
+};
+
+/**
+ * Render every page to a PNG data URL for an in-app viewer, opening
+ * the document once (unlike renderPagePreview's per-page loads) and
+ * reporting each finished page so the viewer can advance real
+ * render progress — pages done out of pages total — instead of
+ * guessing. Used by the CRM's PDF viewer, which draws pages as
+ * images rather than trusting the browser's built-in PDF plugin.
+ */
+export async function renderPdfPagePreviews(
+  bytes: Uint8Array,
+  options: {
+    targetWidth?: number;
+    onPage?: (done: number, total: number) => void;
+  } = {},
+): Promise<PdfPagePreview[]> {
+  const pdfjs = await loadPdfJs();
+  const loadingTask = pdfjs.getDocument({ data: Uint8Array.from(bytes) });
+  const pdf = await loadingTask.promise;
+  const targetWidth = options.targetWidth ?? 1100;
+  const previews: PdfPagePreview[] = [];
+  try {
+    for (let index = 1; index <= pdf.numPages; index++) {
+      const page = await pdf.getPage(index);
+      const base = page.getViewport({ scale: 1 });
+      const scale = targetWidth / base.width;
+      const viewport = page.getViewport({ scale });
+      const canvas = createPdfCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is not available in this browser.");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({
+        canvas: canvas as unknown as HTMLCanvasElement,
+        canvasContext: context,
+        viewport,
+      }).promise;
+      previews.push({
+        pageNumber: index,
+        dataUrl: canvas.toDataURL("image/png"),
+        widthPt: base.width,
+        heightPt: base.height,
+      });
+      options.onPage?.(index, pdf.numPages);
+    }
+  } finally {
+    await loadingTask.destroy();
+  }
+  return previews;
+}
+
 /** Export every page as an image blob (PNG or JPEG). */
 export async function exportPdfToImages(
   bytes: Uint8Array,

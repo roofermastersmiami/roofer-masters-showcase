@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -24,6 +24,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { DeleteRoofReportButton } from "./DeleteRoofReport";
 import { EditSketchButton } from "./EditSketchButton";
+import { PdfViewer } from "./PdfViewer";
 import { useAutoFinishReports } from "./use-auto-finish";
 import { AutoFinishStatus } from "./AutoFinishStatus";
 import { customersQuery } from "./foundation-data";
@@ -48,15 +49,7 @@ export function RoofReports({
   const [search, setSearch] = useState("");
   const [swipedReportId, setSwipedReportId] = useState<string | null>(null);
   const [viewingReport, setViewingReport] = useState<RoofOrder | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
-  useEffect(
-    () => () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    },
-    [pdfUrl],
-  );
   const touchStartX = useRef<number | null>(null);
 
   async function downloadReport(row: RoofOrder) {
@@ -95,27 +88,14 @@ export function RoofReports({
     }
   }
 
-  async function viewReport(row: RoofOrder) {
+  // The viewer fetches and renders the PDF itself (pdf.js page
+  // images with real load progress and an error state) — the old
+  // blob:-URL iframe depended on the browser's built-in PDF plugin,
+  // which silently showed a white page when it would not render.
+  function viewReport(row: RoofOrder) {
     if (!row.file_path) return;
     setViewingReport(row);
-    setPdfLoading(true);
     setZoom(1);
-    try {
-      const { data, error } = await supabase.storage
-        .from("roofing-proposals")
-        .download(row.file_path);
-      if (error || !data) throw error ?? new Error("PDF file not found");
-      const nextUrl = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
-      setPdfUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
-        return nextUrl;
-      });
-    } catch (error) {
-      setViewingReport(null);
-      toast.error(error instanceof Error ? error.message : "Could not open roof report PDF");
-    } finally {
-      setPdfLoading(false);
-    }
   }
 
   const query = search.trim().toLocaleLowerCase();
@@ -225,7 +205,7 @@ export function RoofReports({
                   <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     {row.file_path && (
                       <>
-                        <Button variant="outline" onClick={() => void viewReport(row)}>
+                        <Button variant="outline" onClick={() => viewReport(row)}>
                           <Eye /> View PDF
                         </Button>
                         <Button onClick={() => void downloadReport(row)}>
@@ -260,10 +240,6 @@ export function RoofReports({
         onOpenChange={(open) => {
           if (!open) {
             setViewingReport(null);
-            setPdfUrl((previous) => {
-              if (previous) URL.revokeObjectURL(previous);
-              return null;
-            });
             setZoom(1);
           }
         }}
@@ -311,23 +287,14 @@ export function RoofReports({
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-md bg-muted/50">
-            {pdfLoading ? (
-              <p className="p-6 text-sm text-muted-foreground">Loading PDF…</p>
-            ) : pdfUrl ? (
-              <div
-                className="mx-auto"
-                style={{
-                  width: `${100 * zoom}%`,
-                  height: `${100 * zoom}%`,
-                  minHeight: `${70 * zoom}vh`,
-                }}
-              >
-                <iframe
-                  title="Roof measurement PDF preview"
-                  src={pdfUrl}
-                  className="h-full w-full border-0"
-                />
-              </div>
+            {viewingReport?.file_path ? (
+              <PdfViewer
+                key={viewingReport.id}
+                bucket="roofing-proposals"
+                path={viewingReport.file_path}
+                zoom={zoom}
+                onDownload={() => void downloadReport(viewingReport)}
+              />
             ) : (
               <p className="p-6 text-sm text-muted-foreground">PDF preview is unavailable.</p>
             )}
