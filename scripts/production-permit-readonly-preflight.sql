@@ -142,7 +142,7 @@ WHERE n.nspname='public'
     'leads','crm_customers','crm_properties','roof_report_orders',
     'roof_jobs','crm_companies','crm_company_memberships',
     'roof_permit_applications','roof_permit_inspections',
-    'roof_permit_documents','roof_product_approvals',
+    'crm_company_permit_settings','roof_product_approvals',
     'roof_permit_noc_tracking'
   )
 ORDER BY table_name::text, c.conname;
@@ -153,7 +153,7 @@ WHERE schemaname='public'
   AND tablename IN (
     'leads','crm_customers','crm_properties','roof_report_orders',
     'roof_jobs','roof_permit_applications','roof_permit_inspections',
-    'roof_permit_documents','roof_product_approvals','roof_permit_noc_tracking'
+    'crm_company_permit_settings','roof_product_approvals','roof_permit_noc_tracking'
   )
 ORDER BY tablename, indexname;
 
@@ -166,7 +166,7 @@ JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE (n.nspname='public' AND c.relname IN (
     'leads','crm_customers','crm_properties','roof_report_orders',
     'roof_jobs','roof_permit_applications','roof_permit_inspections',
-    'roof_permit_documents','roof_product_approvals','roof_permit_noc_tracking',
+    'crm_company_permit_settings','roof_product_approvals','roof_permit_noc_tracking',
     'crm_companies','crm_company_memberships','crm_company_branding'
   ))
    OR (n.nspname='storage' AND c.relname IN ('objects','buckets'))
@@ -203,7 +203,9 @@ WHERE n.nspname='public'
   AND p.proname IN (
     'is_crm_company_member','is_crm_company_admin',
     'save_crm_customer','delete_crm_customer',
-    'capture_instant_roof_lead','create_roof_report_request'
+    'capture_instant_roof_lead','create_roof_report_request',
+    'has_role','has_any_role','can_access_company_proposal_file',
+    'can_access_company_expense_receipt','can_access_company_job_photo'
   )
 ORDER BY p.proname, identity_arguments;
 
@@ -218,13 +220,90 @@ ORDER BY name;
 SELECT expected.bucket_id AS expected_bucket,
        (b.id IS NOT NULL) AS bucket_present,
        b.public AS bucket_public
-FROM (VALUES ('roof-job-photos'), ('roofing-proposals'), ('permit-documents'))
+FROM (VALUES ('crm-company-branding'), ('roof-job-photos'), ('roofing-proposals'),
+        ('signed-contracts'), ('permit-documents'), ('pdf-signature-documents'))
   AS expected(bucket_id)
 LEFT JOIN storage.buckets b ON b.id = expected.bucket_id
 ORDER BY expected.bucket_id;
 \else
 \echo 'MISSING: storage.buckets'
 \endif
+
+\echo '=== 9. Permit-specific schema and company backfill integrity ==='
+SELECT expected.table_name,
+       (to_regclass(format('public.%I', expected.table_name)) IS NOT NULL) AS table_present
+FROM (VALUES
+  ('crm_company_permit_settings'),
+  ('roof_permit_applications'),
+  ('roof_permit_inspections'),
+  ('roof_product_approvals'),
+  ('roof_permit_noc_tracking')
+) AS expected(table_name)
+ORDER BY expected.table_name;
+
+SELECT expected.table_name,
+       EXISTS (
+         SELECT 1 FROM information_schema.columns c
+         WHERE c.table_schema='public'
+           AND c.table_name=expected.table_name
+           AND c.column_name='company_id'
+       ) AS company_id_present
+FROM (VALUES
+  ('leads'),('crm_customers'),('crm_properties'),('roof_report_orders'),
+  ('roof_jobs'),('crm_company_permit_settings'),
+  ('roof_permit_applications'),('roof_permit_inspections'),
+  ('roof_product_approvals'),('roof_permit_noc_tracking')
+) AS expected(table_name)
+ORDER BY expected.table_name;
+
+SELECT
+ (SELECT count(*) FROM public.leads l
+   LEFT JOIN public.crm_customers c ON c.id=l.customer_id
+   WHERE l.customer_id IS NOT NULL AND c.id IS NULL) AS lead_customer_orphans,
+ (SELECT count(*) FROM public.crm_customers c
+   LEFT JOIN public.leads l ON l.id=c.source_lead_id
+   WHERE c.source_lead_id IS NOT NULL AND l.id IS NULL) AS customer_source_lead_orphans,
+ (SELECT count(*) FROM public.crm_properties p
+   LEFT JOIN public.crm_customers c ON c.id=p.customer_id
+   WHERE p.customer_id IS NOT NULL AND c.id IS NULL) AS property_customer_orphans,
+ (SELECT count(*) FROM public.roof_report_orders r
+   LEFT JOIN public.crm_customers c ON c.id=r.customer_id
+   WHERE r.customer_id IS NOT NULL AND c.id IS NULL) AS report_customer_orphans,
+ (SELECT count(*) FROM public.roof_report_orders r
+   LEFT JOIN public.crm_properties p ON p.id=r.property_id
+   WHERE r.property_id IS NOT NULL AND p.id IS NULL) AS report_property_orphans,
+ (SELECT count(*) FROM public.roof_jobs j
+   LEFT JOIN public.leads l ON l.id=j.lead_id
+   WHERE j.lead_id IS NOT NULL AND l.id IS NULL) AS job_lead_orphans,
+ (SELECT count(*) FROM public.roof_jobs j
+   LEFT JOIN public.crm_properties p ON p.id=j.property_id
+   WHERE j.property_id IS NOT NULL AND p.id IS NULL) AS job_property_orphans,
+ (SELECT count(*) FROM public.crm_customers WHERE source_lead_id IS NULL) AS customers_without_source_lead,
+ (SELECT count(*) FROM public.roof_jobs WHERE lead_id IS NULL AND property_id IS NULL) AS jobs_without_lead_or_property,
+ (SELECT count(*) FROM (
+   SELECT customer_id, lower(regexp_replace(trim(address), '\\s+', ' ', 'g')) AS normalized_address
+   FROM public.crm_properties
+   GROUP BY customer_id, lower(regexp_replace(trim(address), '\\s+', ' ', 'g'))
+   HAVING count(*)>1
+ ) duplicate_properties) AS duplicate_property_address_groups;
+
+\echo '=== 10. Authorization helper grants ==='
+SELECT expected.signature,
+       (to_regprocedure(expected.signature) IS NOT NULL) AS function_present,
+       CASE WHEN to_regprocedure(expected.signature) IS NULL THEN NULL
+            ELSE has_function_privilege('anon', to_regprocedure(expected.signature), 'EXECUTE') END AS anon_can_execute,
+       CASE WHEN to_regprocedure(expected.signature) IS NULL THEN NULL
+            ELSE has_function_privilege('authenticated', to_regprocedure(expected.signature), 'EXECUTE') END AS authenticated_can_execute
+FROM (VALUES
+  ('public.is_crm_company_member(uuid)'),
+  ('public.is_crm_company_admin(uuid)'),
+  ('public.has_role(uuid,public.app_role)'),
+  ('public.has_any_role(uuid,public.app_role[])'),
+  ('public.can_access_company_proposal_file(text,boolean)'),
+  ('public.can_access_company_expense_receipt(text,boolean)'),
+  ('public.can_access_company_job_photo(text,boolean)')
+) AS expected(signature)
+ORDER BY expected.signature;
 
 \echo '=== PREFLIGHT COMPLETE ==='
 \echo 'Review exact outputs and compare against the repository migrations before any write operation.'
