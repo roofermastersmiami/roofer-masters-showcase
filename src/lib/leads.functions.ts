@@ -123,7 +123,7 @@ export const startChat = createServerFn({ method: "POST" })
         source: "chat",
         page: "chat",
       })
-      .select("id, chat_token")
+      .select("id, chat_token, company_id")
       .single();
     if (error || !lead) {
       console.error("startChat failed", error);
@@ -131,7 +131,7 @@ export const startChat = createServerFn({ method: "POST" })
     }
     const { error: messageError } = await db
       .from("lead_messages")
-      .insert({ lead_id: lead.id, sender: "customer", body: data.message });
+      .insert({ lead_id: lead.id, company_id: lead.company_id, sender: "customer", body: data.message });
     if (messageError) {
       console.error("startChat message insert failed", messageError);
       const { error: cleanupError } = await db
@@ -149,7 +149,7 @@ async function verifyChat(leadId: string, token: string) {
   const db = await admin();
   const { data, error } = await db
     .from("leads")
-    .select("id")
+    .select("id, company_id")
     .eq("id", leadId)
     .eq("chat_token", token)
     .maybeSingle();
@@ -158,16 +158,17 @@ async function verifyChat(leadId: string, token: string) {
     throw new Error("Could not verify your chat session. Please try again.");
   }
   if (!data) throw new Error("Chat session not found");
-  return db;
+  if (!data.company_id) throw new Error("Chat company is not configured");
+  return { db, companyId: data.company_id };
 }
 
 export const sendChatMessage = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => chatMessageSchema.parse(data))
   .handler(async ({ data }) => {
-    const db = await verifyChat(data.leadId, data.token);
+    const { db, companyId } = await verifyChat(data.leadId, data.token);
     const { error } = await db
       .from("lead_messages")
-      .insert({ lead_id: data.leadId, sender: "customer", body: data.body });
+      .insert({ lead_id: data.leadId, company_id: companyId, sender: "customer", body: data.body });
     if (error) throw new Error("Message failed to send");
     return { ok: true as const };
   });
@@ -175,11 +176,12 @@ export const sendChatMessage = createServerFn({ method: "POST" })
 export const getChatMessages = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => chatFetchSchema.parse(data))
   .handler(async ({ data }) => {
-    const db = await verifyChat(data.leadId, data.token);
+    const { db, companyId } = await verifyChat(data.leadId, data.token);
     const { data: rows, error } = await db
       .from("lead_messages")
       .select("id, sender, body, created_at")
       .eq("lead_id", data.leadId)
+      .eq("company_id", companyId)
       .order("created_at", { ascending: true })
       .limit(200);
     if (error) {

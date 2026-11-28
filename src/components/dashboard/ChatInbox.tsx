@@ -100,18 +100,32 @@ function Conversation({
     const body = draft.trim();
     if (!body) return;
     setSending(true);
-    const { error } = await supabase
-      .from("lead_messages")
-      .insert({ lead_id: lead.id, sender: "owner", body });
-    setSending(false);
-    if (error) {
-      toast.error("Reply failed to send");
+    try {
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in to reply");
+      if (!lead.company_id) throw new Error("Customer is not assigned to a company");
+      const { data: membership, error: membershipError } = await supabase
+        .from("crm_company_memberships")
+        .select("company_id")
+        .eq("company_id", lead.company_id)
+        .eq("user_id", auth.user.id)
+        .in("role", ["owner", "admin", "office", "sales"])
+        .maybeSingle();
+      if (membershipError || !membership) throw new Error("You cannot reply for this company");
+      const { error } = await supabase
+        .from("lead_messages")
+        .insert({ lead_id: lead.id, company_id: lead.company_id, sender: "owner", body });
+      if (error) throw error;
+    } catch (error) {
+      setSending(false);
+      toast.error(error instanceof Error ? error.message : "Reply failed to send");
       return;
     }
+    setSending(false);
     setDraft("");
     qc.invalidateQueries({ queryKey: ["lead-messages", lead.id] });
     if (lead.status === "new") {
-      await supabase.from("leads").update({ status: "contacted" }).eq("id", lead.id);
+      await supabase.from("leads").update({ status: "contacted" }).eq("id", lead.id).eq("company_id", lead.company_id);
       qc.invalidateQueries({ queryKey: ["leads"] });
     }
   }

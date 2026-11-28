@@ -1,3 +1,4 @@
+// tenant-audit: reviewed — portal issuance/revocation require same-company membership and company_id is inherited from the lead; public portal access is gated by an expiring/revocable capability token and every returned dataset is filtered to that lead.
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
@@ -13,21 +14,25 @@ export const createClientPortal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ leadId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales"],
-    });
-    if (roleError || !owner) throw new Error("You do not have access to this action");
     const { data: lead, error: leadError } = await context.supabase
       .from("leads")
-      .select("id")
+      .select("id,company_id")
       .eq("id", data.leadId)
       .maybeSingle();
     if (leadError) throw new Error("Could not verify customer record");
-    if (!lead) throw new Error("Customer not found");
+    if (!lead?.company_id) throw new Error("Customer is not assigned to a company");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", lead.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify company permissions");
+    if (!membership) throw new Error("You do not have access to this company's customer portal");
     const { data: link, error } = await context.supabase
       .from("client_portal_links")
-      .insert({ lead_id: lead.id })
+      .insert({ lead_id: lead.id, company_id: lead.company_id })
       .select("id,token,expires_at,revoked_at")
       .single();
     if (error || !link) throw new Error("Could not create customer portal");
@@ -38,15 +43,26 @@ export const revokeClientPortal = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: owner, error: roleError } = await context.supabase.rpc("has_any_role", {
-      _user_id: context.userId,
-      _roles: ["office", "sales"],
-    });
-    if (roleError || !owner) throw new Error("You do not have access to this action");
+    const { data: link, error: linkError } = await context.supabase
+      .from("client_portal_links")
+      .select("id,company_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (linkError || !link?.company_id) throw new Error("Could not verify customer portal");
+    const { data: membership, error: membershipError } = await context.supabase
+      .from("crm_company_memberships")
+      .select("role")
+      .eq("company_id", link.company_id)
+      .eq("user_id", context.userId)
+      .in("role", ["owner", "admin", "office", "sales"])
+      .maybeSingle();
+    if (membershipError) throw new Error("Could not verify company permissions");
+    if (!membership) throw new Error("You do not have access to this company's customer portal");
     const { data: revoked, error } = await context.supabase
       .from("client_portal_links")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", data.id)
+      .eq("company_id", link.company_id)
       .select("id")
       .maybeSingle();
     if (error || !revoked) throw new Error("Could not revoke customer portal");
@@ -62,27 +78,32 @@ export const getClientPortal = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: link, error: linkError } = await supabaseAdmin
       .from("client_portal_links")
-      .select("lead_id,expires_at,revoked_at")
+      .select("lead_id,company_id,expires_at,revoked_at")
       .eq("token", data.token)
       .maybeSingle();
     if (linkError) throw new Error("Could not load your portal");
-    if (!link || !portalLinkIsActive(link)) return null;
+    if (!link?.company_id || !portalLinkIsActive(link)) return null;
     const [customer, estimates, jobs, proposals, invoices] = await Promise.all([
-      supabaseAdmin.from("leads").select("name").eq("id", link.lead_id).maybeSingle(),
+      supabaseAdmin.from("leads").select("name").eq("id", link.lead_id)
+        .eq("company_id", link.company_id)
+        .maybeSingle(),
       supabaseAdmin
         .from("roof_estimates")
         .select("id,title,category,total_cents,created_at")
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("roof_jobs")
         .select("id,title,status,start_date,inspection_at,permit_status,checklist")
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .order("created_at", { ascending: false }),
       supabaseAdmin
         .from("proposals")
         .select("id,title,category,file_path,amount")
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .eq("is_template", false)
         .order("created_at", { ascending: false }),
       supabaseAdmin
@@ -91,6 +112,7 @@ export const getClientPortal = createServerFn({ method: "GET" })
           "id,number,title,total_cents,paid_cents,due_date,token,status,environment,expires_at",
         )
         .eq("lead_id", link.lead_id)
+        .eq("company_id", link.company_id)
         .eq("status", "issued")
         .order("created_at", { ascending: false }),
     ]);
@@ -105,6 +127,7 @@ export const getClientPortal = createServerFn({ method: "GET" })
           .from("proposal_shares")
           .select("proposal_id,signed_name,signed_at,signature_data,expires_at,revoked_at")
           .in("proposal_id", proposalIds)
+          .eq("company_id", link.company_id)
           .not("signed_at", "is", null)
           .order("signed_at", { ascending: false })
       : { data: [], error: null };

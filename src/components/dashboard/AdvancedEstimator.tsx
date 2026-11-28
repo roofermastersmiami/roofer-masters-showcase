@@ -70,6 +70,7 @@ export function AdvancedEstimator() {
     if (
       !drawing ||
       !customer?.source_lead_id ||
+      !property?.company_id ||
       options.some((v) => !advancedOptionSchema.safeParse(v).success)
     ) {
       toast.error("Choose a drawing and complete each option");
@@ -86,6 +87,7 @@ export function AdvancedEstimator() {
     const data = {
       title,
       lead_id: customer.source_lead_id,
+      company_id: property?.company_id,
       property_id: property?.id ?? null,
       drawing_id: drawing.id,
       category: options[0]?.system ?? "Roofing",
@@ -94,7 +96,7 @@ export function AdvancedEstimator() {
       total_cents: prices[0]?.total ?? 0,
     };
     const result = savedId
-      ? await supabase.from("roof_estimates").update(data).eq("id", savedId).select("id").single()
+      ? await supabase.from("roof_estimates").update(data).eq("id", savedId).eq("company_id", property.company_id).select("id").single()
       : await supabase.from("roof_estimates").insert(data).select("id").single();
     setBusy(false);
     if (result.error || !result.data) {
@@ -146,7 +148,7 @@ export function AdvancedEstimator() {
     }
   }
   async function proposal() {
-    if (!savedId || dirty || !o || !totals || !customer?.source_lead_id) {
+    if (!savedId || dirty || !o || !totals || !customer?.source_lead_id || !property?.company_id) {
       toast.error("Save the estimate before preparing a proposal");
       return;
     }
@@ -172,7 +174,7 @@ export function AdvancedEstimator() {
       };
       const { data: row, error } = await supabase
         .from("proposals")
-        .insert({ ...details, property_id: property?.id ?? null, drawing_id: drawingId })
+        .insert({ ...details, company_id: property?.company_id, property_id: property?.id ?? null, drawing_id: drawingId })
         .select("id")
         .single();
       if (error || !row) throw error;
@@ -188,13 +190,14 @@ export function AdvancedEstimator() {
       const { error: updated } = await supabase
         .from("proposals")
         .update({ file_path: file })
-        .eq("id", row.id);
+        .eq("id", row.id)
+        .eq("company_id", property.company_id);
       if (updated) throw updated;
       await qc.invalidateQueries({ queryKey: ["proposals"] });
       toast.success("Customer proposal created without internal costs");
       go("proposals");
     } catch {
-      if (id) await supabase.from("proposals").delete().eq("id", id);
+      if (id && property?.company_id) await supabase.from("proposals").delete().eq("id", id).eq("company_id", property.company_id);
       toast.error("Could not create customer proposal");
     } finally {
       setBusy(false);

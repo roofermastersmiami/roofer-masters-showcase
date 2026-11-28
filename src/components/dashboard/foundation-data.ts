@@ -38,7 +38,27 @@ export function useMoveStage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: PipelineStage }) => {
-      const { error } = await supabase.from("leads").update({ pipeline_stage: stage }).eq("id", id);
+      const { data: auth } = await supabase.auth.getUser();
+      const { data: lead, error: leadError } = await supabase
+        .from("leads")
+        .select("company_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (!auth.user || leadError || !lead?.company_id)
+        throw new Error("Could not verify lead company");
+      const { data: membership, error: membershipError } = await supabase
+        .from("crm_company_memberships")
+        .select("role")
+        .eq("user_id", auth.user.id)
+        .eq("company_id", lead.company_id)
+        .in("role", ["owner", "admin", "office", "sales"])
+        .maybeSingle();
+      if (membershipError || !membership) throw new Error("You cannot update this lead");
+      const { error } = await supabase
+        .from("leads")
+        .update({ pipeline_stage: stage })
+        .eq("id", id)
+        .eq("company_id", lead.company_id);
       if (error) throw error;
     },
     onSuccess: async () => {

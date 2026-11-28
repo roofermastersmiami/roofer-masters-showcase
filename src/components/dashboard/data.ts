@@ -7,7 +7,7 @@ export type Lead = Omit<Database["public"]["Tables"]["leads"]["Row"], "chat_toke
 export type LeadMessage = Database["public"]["Tables"]["lead_messages"]["Row"];
 
 const LEAD_COLS =
-  "id, created_at, updated_at, name, phone, email, address, service, message, source, status, notes, page, last_message_at, qualification, customer_id, pipeline_stage";
+  "id, created_at, updated_at, name, phone, email, address, service, message, source, status, notes, page, last_message_at, qualification, customer_id, pipeline_stage, company_id";
 
 export const leadsQuery = queryOptions({
   queryKey: ["leads"],
@@ -45,7 +45,27 @@ export function useUpdateLead() {
       const patch: { status?: LeadStatus; notes?: string } = {};
       if (vars.status) patch.status = vars.status;
       if (vars.notes !== undefined) patch.notes = vars.notes;
-      const { error } = await supabase.from("leads").update(patch).eq("id", vars.id);
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError || !auth.user) throw new Error("Sign in to update this customer");
+      const { data: lead, error: leadError } = await supabase
+        .from("leads")
+        .select("id,company_id")
+        .eq("id", vars.id)
+        .maybeSingle();
+      if (leadError || !lead?.company_id) throw new Error("Could not verify customer company");
+      const { data: membership, error: membershipError } = await supabase
+        .from("crm_company_memberships")
+        .select("company_id")
+        .eq("company_id", lead.company_id)
+        .eq("user_id", auth.user.id)
+        .in("role", ["owner", "admin", "office", "sales"])
+        .maybeSingle();
+      if (membershipError || !membership) throw new Error("You cannot update this company's customer");
+      const { error } = await supabase
+        .from("leads")
+        .update(patch)
+        .eq("id", vars.id)
+        .eq("company_id", lead.company_id);
       if (error) throw error;
     },
     onMutate: async (vars) => {

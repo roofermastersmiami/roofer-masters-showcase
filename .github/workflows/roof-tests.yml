@@ -1,14 +1,14 @@
 name: Roofer Masters Roof Tests
 
-# A branch push and its pull_request event otherwise run the same expensive
-# PostgreSQL + build suite twice. Keep only the newest run for each branch.
+# Keep the newest run per event and branch. Push and pull_request events are
+# separate so they do not cancel one another while validating the same commit.
 concurrency:
-  group: roof-tests-${{ github.head_ref || github.ref_name }}
+  group: roof-tests-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 on:
   push:
-    branches: [main, master, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052, feat/permit-approval-code-edition-0053, feat/permit-stack-clean-0056]
+    branches: [main, master, audit/secondary-tenant-scope-20261127, fix/tenant-isolation-rebased-20261128, feat/company-permit-qualifier-settings, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052, feat/permit-approval-code-edition-0053, feat/permit-stack-clean-0056]
   pull_request:
     branches: [main, master, feat/company-owned-crm-records-0042, feat/trusted-public-lead-company-0045, feat/company-scoped-customer-delete-0046, feat/company-owned-roof-jobs-0047, feat/company-scoped-team-policy-0048, feat/permit-records-and-inspections-0048, feat/permit-management-workflows-0049, feat/permit-jurisdiction-checklists-0050, feat/permit-product-approvals-0051, feat/permit-noc-tracking-0052, feat/company-ownership-trigger-0043]
   workflow_dispatch:
@@ -67,6 +67,30 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_ownership_test
           psql "postgresql://postgres@localhost:5432/crm_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-crm-company-ownership-migration.sql
+      - name: Run secondary operational company ownership PostgreSQL 16 migration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_secondary_ownership_test
+          psql "postgresql://postgres@localhost:5432/crm_secondary_ownership_test" -v ON_ERROR_STOP=1 -f scripts/test-secondary-operational-company-ownership.sql
+      - name: Run core company role matrix PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_core_role_matrix_test
+          psql "postgresql://postgres@localhost:5432/crm_core_role_matrix_test" -v ON_ERROR_STOP=1 -f scripts/test-company-core-role-matrix.sql
+      - name: Run company-scoped lead activity trigger PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_lead_activity_test
+          psql "postgresql://postgres@localhost:5432/crm_lead_activity_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-lead-activity-trigger.sql
+      - name: Run company-scoped invoice RPC PostgreSQL integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_invoice_rpc_test
+          psql "postgresql://postgres@localhost:5432/crm_invoice_rpc_test" -v ON_ERROR_STOP=1 -f scripts/test-company-scoped-invoice-rpcs.sql
       - name: Run company-scoped customer delete PostgreSQL integration test
         env:
           PGPASSWORD: postgres
@@ -85,6 +109,18 @@ jobs:
         run: |
           createdb -h localhost -U postgres crm_permit_storage_test
           psql "postgresql://postgres@localhost:5432/crm_permit_storage_test" -v ON_ERROR_STOP=1 -f scripts/test-permit-document-storage-rls.sql
+      - name: Run company-scoped proposal storage PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_proposal_storage_test
+          psql "postgresql://postgres@localhost:5432/crm_proposal_storage_test" -v ON_ERROR_STOP=1 -f scripts/test-company-proposal-storage-rls.sql
+      - name: Run company-scoped expense receipt storage PostgreSQL RLS integration test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          createdb -h localhost -U postgres crm_expense_receipt_test
+          psql "postgresql://postgres@localhost:5432/crm_expense_receipt_test" -v ON_ERROR_STOP=1 -f scripts/test-company-expense-receipt-storage-rls.sql
       - name: Run roof product approval PostgreSQL RLS integration test
         env:
           PGPASSWORD: postgres
