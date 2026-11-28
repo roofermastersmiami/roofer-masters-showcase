@@ -40,7 +40,12 @@ export function CustomerActivity({ leadId }: { leadId: string }) {
     }
     const { error } = await supabase
       .from("crm_activity")
-      .insert({ lead_id: leadId, company_id: lead.company_id, kind: "call_note", body: note.trim().slice(0, 4000) });
+      .insert({
+        lead_id: leadId,
+        company_id: lead.company_id,
+        kind: "call_note",
+        body: note.trim().slice(0, 4000),
+      });
     setBusy(false);
     if (error) {
       toast.error("Could not record call note");

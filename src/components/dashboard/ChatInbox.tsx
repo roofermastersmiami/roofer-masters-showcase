@@ -125,7 +125,11 @@ function Conversation({
     setDraft("");
     qc.invalidateQueries({ queryKey: ["lead-messages", lead.id] });
     if (lead.status === "new") {
-      await supabase.from("leads").update({ status: "contacted" }).eq("id", lead.id).eq("company_id", lead.company_id);
+      await supabase
+        .from("leads")
+        .update({ status: "contacted" })
+        .eq("id", lead.id)
+        .eq("company_id", lead.company_id);
       qc.invalidateQueries({ queryKey: ["leads"] });
     }
   }

@@ -87,7 +87,8 @@ export function FollowUps({
                   .select("company_id")
                   .eq("id", customer)
                   .maybeSingle();
-                if (leadError || !lead?.company_id) throw new Error("Could not verify customer company");
+                if (leadError || !lead?.company_id)
+                  throw new Error("Could not verify customer company");
                 companyId = lead.company_id;
               } else {
                 const { data: memberships, error: membershipError } = await supabase
@@ -106,7 +107,8 @@ export function FollowUps({
                 .eq("user_id", auth.user.id)
                 .in("role", ["owner", "admin", "office", "sales"])
                 .maybeSingle();
-              if (membershipError || !membership) throw new Error("You cannot schedule follow-ups for this company");
+              if (membershipError || !membership)
+                throw new Error("You cannot schedule follow-ups for this company");
               const result = await supabase.from("crm_tasks").insert({
                 title: title.trim(),
                 lead_id: customer || null,
@@ -223,7 +225,12 @@ export function FollowUps({
                   onClick={() => {
                     if (confirm("Delete this follow-up?"))
                       void mutate(
-                        () => supabase.from("crm_tasks").delete().eq("id", t.id).eq("company_id", t.company_id),
+                        () =>
+                          supabase
+                            .from("crm_tasks")
+                            .delete()
+                            .eq("id", t.id)
+                            .eq("company_id", t.company_id),
                         "Follow-up deleted",
                       );
                   }}

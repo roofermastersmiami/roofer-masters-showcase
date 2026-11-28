@@ -8,21 +8,21 @@
 
 The following 13 operational tables have no `company_id` column and still have legacy global-role RLS policies. These policies are permissive and PostgreSQL combines permissive policies with OR semantics; adding company policies without removing the legacy policies will not isolate tenants.
 
-| Table | Tenant parent candidates from live columns | Existing policy family |
-|---|---|---|
-| `client_portal_links` | `lead_id` | office/sales and admin |
-| `crm_activity` | optional `lead_id` | admin, office, sales, production |
-| `crm_expenses` | optional `job_id` | accounting and admin |
-| `crm_invoices` | optional `lead_id`, `proposal_id`, `property_id` | accounting and admin read |
-| `crm_tasks` | optional `lead_id` | office, sales, production, admin |
-| `invoice_checkouts` | `invoice_id` | accounting/admin read |
-| `invoice_payments` | `invoice_id` | accounting/admin read |
-| `invoice_project_links` | `invoice_id`, `job_id` | accounting and admin |
-| `job_change_orders` | `job_id` | accounting and admin |
-| `lead_messages` | `lead_id` | office/sales and admin |
-| `proposal_shares` | `proposal_id` | office/sales and admin read |
-| `proposals` | optional `lead_id`, `property_id`, `drawing_id` | office/sales and admin |
-| `roof_estimates` | optional `lead_id`, `property_id`, `drawing_id`, `report_order_id` | office/sales and admin |
+| Table                   | Tenant parent candidates from live columns                         | Existing policy family           |
+| ----------------------- | ------------------------------------------------------------------ | -------------------------------- |
+| `client_portal_links`   | `lead_id`                                                          | office/sales and admin           |
+| `crm_activity`          | optional `lead_id`                                                 | admin, office, sales, production |
+| `crm_expenses`          | optional `job_id`                                                  | accounting and admin             |
+| `crm_invoices`          | optional `lead_id`, `proposal_id`, `property_id`                   | accounting and admin read        |
+| `crm_tasks`             | optional `lead_id`                                                 | office, sales, production, admin |
+| `invoice_checkouts`     | `invoice_id`                                                       | accounting/admin read            |
+| `invoice_payments`      | `invoice_id`                                                       | accounting/admin read            |
+| `invoice_project_links` | `invoice_id`, `job_id`                                             | accounting and admin             |
+| `job_change_orders`     | `job_id`                                                           | accounting and admin             |
+| `lead_messages`         | `lead_id`                                                          | office/sales and admin           |
+| `proposal_shares`       | `proposal_id`                                                      | office/sales and admin read      |
+| `proposals`             | optional `lead_id`, `property_id`, `drawing_id`                    | office/sales and admin           |
+| `roof_estimates`        | optional `lead_id`, `property_id`, `drawing_id`, `report_order_id` | office/sales and admin           |
 
 ## Migration design requirements
 
@@ -52,26 +52,25 @@ The following 13 operational tables have no `company_id` column and still have l
 - Secondary operational tables: live schema audit complete; ownership/RLS conversion remains unimplemented.
 - Production database: unchanged by this audit.
 
-
 ## Application write-path inventory (read-only source scan)
 
 The connected Lovable project revision `9bc3a802d316ad8fce5217cef3a4b34e24232c5e` was scanned for direct Supabase table access. This is an inventory, not proof that every dynamic or generated call site has been found.
 
-| Table | Located callers / components | Cutover concern |
-|---|---|---|
-| `crm_expenses` | `src/components/dashboard/Expenses.tsx` | Direct browser insert; optional job parent; receipt uploaded to legacy `roofing-proposals` bucket before row insert. |
-| `crm_tasks` | `src/components/dashboard/FollowUps.tsx` | Direct browser insert; optional lead parent. |
-| `roof_estimates` | `AdvancedEstimator.tsx`, `Estimates.tsx`, `RoofMeasurements.tsx`, `roof-orders.functions.ts`, `client-portal.functions.ts` | Multiple browser and server writes; optional lead/property/drawing/report parents. |
-| `proposals` | `AdvancedEstimator.tsx`, `Estimates.tsx`, `ProposalComposer.tsx`, `Proposals.tsx`, `RoofMeasurements.tsx`, `proposals.functions.ts`, `invoices.functions.ts`, `client-portal.functions.ts` | Browser and server writes; proposal creation can be followed by file upload and cleanup. |
-| `crm_invoices` | `invoices.functions.ts`, `invoice-payments.functions.ts`, `client-portal.functions.ts`, `operations-data.ts`, `mcp/tools/list-invoices.ts` | Server-side creation/payment paths; invoice company must be resolved from trusted proposal/property relationships. |
-| `invoice_checkouts` | `invoice-payments.functions.ts`, `invoice-payments.server.ts`, `routes/api/public/payments/webhook.ts` | Public webhook/service-role paths must resolve company from the stored invoice, not request payload. |
-| `invoice_payments` | `operations-data.ts` | Read path located; writes may be mediated through payment functions/RPCs and need a separate RPC/trigger inventory. |
-| `crm_activity` | `CustomerActivity.tsx`, `foundation-data.ts` | Read paths located; activity creation may be trigger-driven or elsewhere and needs explicit scan. |
-| `lead_messages` | `ChatInbox.tsx`, `data.ts`, `leads.functions.ts` | Authenticated and public lead-message flows need distinct authorization treatment. |
-| `proposal_shares` | `proposal-data.ts`, `operations-data.ts`, `proposals.functions.ts`, `client-portal.functions.ts` | Share-token operations must inherit company from the proposal and remain narrowly scoped. |
-| `client_portal_links` | `ClientPortalShare.tsx`, `client-portal.functions.ts` | Public capability token must inherit lead/company from trusted stored row. |
-| `job_change_orders` | `change-orders.functions.ts`, `ChangeOrders.tsx` | Server function currently writes supplied fields after a role check; job ownership must be checked server-side. |
-| `invoice_project_links` | No direct table caller found in this scan | Likely RPC/trigger or unused; inspect database functions and migrations before cutover. |
+| Table                   | Located callers / components                                                                                                                                                               | Cutover concern                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `crm_expenses`          | `src/components/dashboard/Expenses.tsx`                                                                                                                                                    | Direct browser insert; optional job parent; receipt uploaded to legacy `roofing-proposals` bucket before row insert. |
+| `crm_tasks`             | `src/components/dashboard/FollowUps.tsx`                                                                                                                                                   | Direct browser insert; optional lead parent.                                                                         |
+| `roof_estimates`        | `AdvancedEstimator.tsx`, `Estimates.tsx`, `RoofMeasurements.tsx`, `roof-orders.functions.ts`, `client-portal.functions.ts`                                                                 | Multiple browser and server writes; optional lead/property/drawing/report parents.                                   |
+| `proposals`             | `AdvancedEstimator.tsx`, `Estimates.tsx`, `ProposalComposer.tsx`, `Proposals.tsx`, `RoofMeasurements.tsx`, `proposals.functions.ts`, `invoices.functions.ts`, `client-portal.functions.ts` | Browser and server writes; proposal creation can be followed by file upload and cleanup.                             |
+| `crm_invoices`          | `invoices.functions.ts`, `invoice-payments.functions.ts`, `client-portal.functions.ts`, `operations-data.ts`, `mcp/tools/list-invoices.ts`                                                 | Server-side creation/payment paths; invoice company must be resolved from trusted proposal/property relationships.   |
+| `invoice_checkouts`     | `invoice-payments.functions.ts`, `invoice-payments.server.ts`, `routes/api/public/payments/webhook.ts`                                                                                     | Public webhook/service-role paths must resolve company from the stored invoice, not request payload.                 |
+| `invoice_payments`      | `operations-data.ts`                                                                                                                                                                       | Read path located; writes may be mediated through payment functions/RPCs and need a separate RPC/trigger inventory.  |
+| `crm_activity`          | `CustomerActivity.tsx`, `foundation-data.ts`                                                                                                                                               | Read paths located; activity creation may be trigger-driven or elsewhere and needs explicit scan.                    |
+| `lead_messages`         | `ChatInbox.tsx`, `data.ts`, `leads.functions.ts`                                                                                                                                           | Authenticated and public lead-message flows need distinct authorization treatment.                                   |
+| `proposal_shares`       | `proposal-data.ts`, `operations-data.ts`, `proposals.functions.ts`, `client-portal.functions.ts`                                                                                           | Share-token operations must inherit company from the proposal and remain narrowly scoped.                            |
+| `client_portal_links`   | `ClientPortalShare.tsx`, `client-portal.functions.ts`                                                                                                                                      | Public capability token must inherit lead/company from trusted stored row.                                           |
+| `job_change_orders`     | `change-orders.functions.ts`, `ChangeOrders.tsx`                                                                                                                                           | Server function currently writes supplied fields after a role check; job ownership must be checked server-side.      |
+| `invoice_project_links` | No direct table caller found in this scan                                                                                                                                                  | Likely RPC/trigger or unused; inspect database functions and migrations before cutover.                              |
 
 ### Required next engineering sequence
 
@@ -83,19 +82,18 @@ The connected Lovable project revision `9bc3a802d316ad8fce5217cef3a4b34e24232c5e
 
 **Important:** migration 0055 remains a draft backfill/FK migration. The source scan confirms it would be unsafe to apply until these write paths and database-side writers are made compatible.
 
-
 ## Server-side authorization review (source revision 9bc3a802)
 
 The following files were read directly at the project revision; this review found concrete gaps but intentionally did not patch them against a schema that is not yet deployed:
 
-| File | Observed behavior | Required correction / release dependency |
-|---|---|---|
-| `src/lib/invoices.functions.ts` | `createInvoice` and `changeInvoiceStatus` authorize with global `has_any_role` checks (`admin` / `accounting`). Invoice creation reads lead and proposal relationship, then writes through service-role client. | Verify user membership and role against the specific lead/proposal company; derive invoice company from trusted parent; ensure status RPC independently scopes invoice to caller's company. Requires company ownership columns and scoped helper/RPC contract. |
-| `src/lib/invoice-payments.functions.ts` | Public checkout/confirmation are token-based and confirmation checks that session belongs to the invoice selected by token. Authenticated cancellation uses global `has_any_role` then service-role lookup by invoice ID. | Preserve token capability checks. Cancellation must load invoice company and authorize membership/role for that company before using service role. Checkout/payment rows must inherit company from invoice in DB, not metadata/request. |
-| `src/lib/invoice-payments.server.ts` | Reconciliation retrieves Stripe session, validates amount/currency/environment and checks metadata invoice/checkout IDs against stored checkout before calling settlement RPC. | Settlement RPC must derive company from stored checkout/invoice and remain idempotent; webhook event updates must never accept company from Stripe metadata or request. Add tests for replay, mismatched metadata, and wrong environment. |
-| `src/routes/api/public/payments/webhook.ts` | Verifies Stripe signature; completed events call reconciliation. Expired/failed events update pending checkout by session ID and environment. | Keep signature verification. Confirm checkout is tied to invoice in the DB-side update path; test replay/out-of-order events and never accept tenant identity from event metadata. |
-| `src/lib/proposals.functions.ts` | Share creation/revocation use global `has_any_role` checks; creation reads proposal then inserts share using service role. Public get/sign endpoints use exact capability token and constrain operations to the matched share/proposal. | Scope office/sales authorization to the proposal's company. Keep exact-token public capability model; ensure share row company derives from proposal in DB and signed URL path is bound to that proposal. |
-| `src/lib/change-orders.functions.ts` | Global accounting role check then inserts supplied change-order fields through authenticated client. | Load job by ID, resolve its company, check caller's membership/role for that company, and whitelist fields rather than spreading client data. Database must derive company from job. |
+| File                                        | Observed behavior                                                                                                                                                                                                                       | Required correction / release dependency                                                                                                                                                                                                                       |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/invoices.functions.ts`             | `createInvoice` and `changeInvoiceStatus` authorize with global `has_any_role` checks (`admin` / `accounting`). Invoice creation reads lead and proposal relationship, then writes through service-role client.                         | Verify user membership and role against the specific lead/proposal company; derive invoice company from trusted parent; ensure status RPC independently scopes invoice to caller's company. Requires company ownership columns and scoped helper/RPC contract. |
+| `src/lib/invoice-payments.functions.ts`     | Public checkout/confirmation are token-based and confirmation checks that session belongs to the invoice selected by token. Authenticated cancellation uses global `has_any_role` then service-role lookup by invoice ID.               | Preserve token capability checks. Cancellation must load invoice company and authorize membership/role for that company before using service role. Checkout/payment rows must inherit company from invoice in DB, not metadata/request.                        |
+| `src/lib/invoice-payments.server.ts`        | Reconciliation retrieves Stripe session, validates amount/currency/environment and checks metadata invoice/checkout IDs against stored checkout before calling settlement RPC.                                                          | Settlement RPC must derive company from stored checkout/invoice and remain idempotent; webhook event updates must never accept company from Stripe metadata or request. Add tests for replay, mismatched metadata, and wrong environment.                      |
+| `src/routes/api/public/payments/webhook.ts` | Verifies Stripe signature; completed events call reconciliation. Expired/failed events update pending checkout by session ID and environment.                                                                                           | Keep signature verification. Confirm checkout is tied to invoice in the DB-side update path; test replay/out-of-order events and never accept tenant identity from event metadata.                                                                             |
+| `src/lib/proposals.functions.ts`            | Share creation/revocation use global `has_any_role` checks; creation reads proposal then inserts share using service role. Public get/sign endpoints use exact capability token and constrain operations to the matched share/proposal. | Scope office/sales authorization to the proposal's company. Keep exact-token public capability model; ensure share row company derives from proposal in DB and signed URL path is bound to that proposal.                                                      |
+| `src/lib/change-orders.functions.ts`        | Global accounting role check then inserts supplied change-order fields through authenticated client.                                                                                                                                    | Load job by ID, resolve its company, check caller's membership/role for that company, and whitelist fields rather than spreading client data. Database must derive company from job.                                                                           |
 
 ### Why these source changes are gated
 
@@ -104,7 +102,6 @@ At the audited application revision, generated Supabase row/insert/update types 
 Before these functions can be safely tightened, the release must provide: (a) applied and verified core ownership schema; (b) membership/role helper that accepts a company UUID and checks `auth.uid()`; (c) company-scoped RPCs for invoice status and settlement; (d) service-role write functions that resolve company only from trusted stored parents; and (e) tests with at least two companies proving same-company success and cross-company denial.
 
 **No code path in this review was represented as fixed. No production migration, deployment, or live data mutation was performed.**
-
 
 ## CI refresh — 2026-11-27
 

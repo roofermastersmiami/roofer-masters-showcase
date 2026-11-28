@@ -35,7 +35,12 @@ export const createInvoice = createServerFn({ method: "POST" })
         .eq("id", data.proposal_id)
         .maybeSingle();
       if (proposalError) throw new Error("Could not verify proposal details");
-      if (!proposal || proposal.is_template || proposal.lead_id !== data.lead_id || proposal.company_id !== lead.company_id)
+      if (
+        !proposal ||
+        proposal.is_template ||
+        proposal.lead_id !== data.lead_id ||
+        proposal.company_id !== lead.company_id
+      )
         throw new Error("Proposal must belong to this customer and company");
       propertyId = proposal.property_id;
     }
@@ -83,8 +88,7 @@ export const changeInvoiceStatus = createServerFn({ method: "POST" })
       .select("id,company_id")
       .eq("id", data.id)
       .maybeSingle();
-    if (invoiceError || !invoice?.company_id)
-      throw new Error("Could not verify invoice company");
+    if (invoiceError || !invoice?.company_id) throw new Error("Could not verify invoice company");
     const { data: membership, error: membershipError } = await context.supabase
       .from("crm_company_memberships")
       .select("role")

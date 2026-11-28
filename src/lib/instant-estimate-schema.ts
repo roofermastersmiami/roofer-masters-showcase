@@ -41,12 +41,11 @@ export function qualifyRoofLead(input: z.infer<typeof instantInputSchema>) {
         ? "urgent"
         : "qualified";
 }
-export const changeOrderSchema = z
-  .object({
-    job_id: z.string().uuid(),
-    title: z.string().trim().min(1).max(180),
-    scope: z.string().trim().min(1).max(4000),
-    amount_cents: z.number().int().min(-100000000).max(100000000),
-    days_added: z.number().int().min(-365).max(365),
-    status: z.enum(["draft", "pending", "rejected"]),
-  });
+export const changeOrderSchema = z.object({
+  job_id: z.string().uuid(),
+  title: z.string().trim().min(1).max(180),
+  scope: z.string().trim().min(1).max(4000),
+  amount_cents: z.number().int().min(-100000000).max(100000000),
+  days_added: z.number().int().min(-365).max(365),
+  status: z.enum(["draft", "pending", "rejected"]),
+});

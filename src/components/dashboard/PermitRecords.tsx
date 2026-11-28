@@ -463,7 +463,9 @@ export function PermitRecords() {
         expiresAt: application.expires_at,
         feeCents: application.fee_cents,
         applicationNotes: application.notes,
-        documents: (storedDocuments ?? []).filter((file) => file.id && file.name).map((file) => file.name),
+        documents: (storedDocuments ?? [])
+          .filter((file) => file.id && file.name)
+          .map((file) => file.name),
         productApprovals: approvals
           .filter((item) => item.permit_application_id === application.id)
           .map((item) => ({

@@ -131,7 +131,12 @@ export const startChat = createServerFn({ method: "POST" })
     }
     const { error: messageError } = await db
       .from("lead_messages")
-      .insert({ lead_id: lead.id, company_id: lead.company_id, sender: "customer", body: data.message });
+      .insert({
+        lead_id: lead.id,
+        company_id: lead.company_id,
+        sender: "customer",
+        body: data.message,
+      });
     if (messageError) {
       console.error("startChat message insert failed", messageError);
       const { error: cleanupError } = await db

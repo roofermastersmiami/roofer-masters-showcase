@@ -84,7 +84,10 @@ export const getClientPortal = createServerFn({ method: "GET" })
     if (linkError) throw new Error("Could not load your portal");
     if (!link?.company_id || !portalLinkIsActive(link)) return null;
     const [customer, estimates, jobs, proposals, invoices] = await Promise.all([
-      supabaseAdmin.from("leads").select("name").eq("id", link.lead_id)
+      supabaseAdmin
+        .from("leads")
+        .select("name")
+        .eq("id", link.lead_id)
         .eq("company_id", link.company_id)
         .maybeSingle(),
       supabaseAdmin

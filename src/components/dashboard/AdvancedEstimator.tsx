@@ -96,7 +96,13 @@ export function AdvancedEstimator() {
       total_cents: prices[0]?.total ?? 0,
     };
     const result = savedId
-      ? await supabase.from("roof_estimates").update(data).eq("id", savedId).eq("company_id", property.company_id).select("id").single()
+      ? await supabase
+          .from("roof_estimates")
+          .update(data)
+          .eq("id", savedId)
+          .eq("company_id", property.company_id)
+          .select("id")
+          .single()
       : await supabase.from("roof_estimates").insert(data).select("id").single();
     setBusy(false);
     if (result.error || !result.data) {
@@ -174,7 +180,12 @@ export function AdvancedEstimator() {
       };
       const { data: row, error } = await supabase
         .from("proposals")
-        .insert({ ...details, company_id: property?.company_id, property_id: property?.id ?? null, drawing_id: drawingId })
+        .insert({
+          ...details,
+          company_id: property?.company_id,
+          property_id: property?.id ?? null,
+          drawing_id: drawingId,
+        })
         .select("id")
         .single();
       if (error || !row) throw error;
@@ -197,7 +208,12 @@ export function AdvancedEstimator() {
       toast.success("Customer proposal created without internal costs");
       go("proposals");
     } catch {
-      if (id && property?.company_id) await supabase.from("proposals").delete().eq("id", id).eq("company_id", property.company_id);
+      if (id && property?.company_id)
+        await supabase
+          .from("proposals")
+          .delete()
+          .eq("id", id)
+          .eq("company_id", property.company_id);
       toast.error("Could not create customer proposal");
     } finally {
       setBusy(false);

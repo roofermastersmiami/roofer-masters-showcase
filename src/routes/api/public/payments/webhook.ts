@@ -44,7 +44,9 @@ export const Route = createFileRoute("/api/public/payments/webhook")({
               if (!checkout.company_id) throw new Error("Checkout company is missing");
               const { error } = await supabaseAdmin
                 .from("invoice_checkouts")
-                .update({ status: event.type === "checkout.session.expired" ? "expired" : "failed" })
+                .update({
+                  status: event.type === "checkout.session.expired" ? "expired" : "failed",
+                })
                 .eq("id", checkout.id)
                 .eq("company_id", checkout.company_id)
                 .eq("status", "pending");

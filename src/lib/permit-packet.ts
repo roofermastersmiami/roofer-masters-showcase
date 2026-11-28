@@ -176,7 +176,9 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
   for (const approval of data.productApprovals ?? []) {
     write(`${approval.kind.replaceAll("_", " ")} — ${approval.number}`, { strong: true });
     write(`Product: ${approval.manufacturer} ${approval.productName}`);
-    write(`Recorded status: ${approval.status.replaceAll("_", " ")} | HVHZ: ${approval.hvhzStatus || "Not recorded"} | Code edition: ${approval.codeEdition || "Not recorded"}`);
+    write(
+      `Recorded status: ${approval.status.replaceAll("_", " ")} | HVHZ: ${approval.hvhzStatus || "Not recorded"} | Code edition: ${approval.codeEdition || "Not recorded"}`,
+    );
     write(`Expiration: ${displayPermitDate(approval.expiresOn)}`);
   }
   gap();
@@ -184,10 +186,18 @@ export async function createPermitPacketPdf(data: PermitPacketData): Promise<Uin
   if (!data.noticeOfCommencement) write("No NOC assessment record attached.");
   else {
     const noc = data.noticeOfCommencement;
-    write(`Assessment: ${noc.assessmentStatus.replaceAll("_", " ")} | Recording: ${noc.recordingStatus.replaceAll("_", " ")}`);
-    write(`Contract value: ${noc.contractValueCents == null ? "Not recorded" : (noc.contractValueCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`);
-    write(`Recorded threshold: ${noc.thresholdAmountCents == null ? "Not recorded" : (noc.thresholdAmountCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`);
-    write(`County: ${noc.recordingCounty || "Not recorded"} | Instrument: ${noc.instrumentNumber || "Not recorded"} | Recorded: ${displayPermitDate(noc.recordedOn)}`);
+    write(
+      `Assessment: ${noc.assessmentStatus.replaceAll("_", " ")} | Recording: ${noc.recordingStatus.replaceAll("_", " ")}`,
+    );
+    write(
+      `Contract value: ${noc.contractValueCents == null ? "Not recorded" : (noc.contractValueCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`,
+    );
+    write(
+      `Recorded threshold: ${noc.thresholdAmountCents == null ? "Not recorded" : (noc.thresholdAmountCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}`,
+    );
+    write(
+      `County: ${noc.recordingCounty || "Not recorded"} | Instrument: ${noc.instrumentNumber || "Not recorded"} | Recorded: ${displayPermitDate(noc.recordedOn)}`,
+    );
     if (noc.assessmentBasis) write(`Assessment basis: ${noc.assessmentBasis}`);
   }
   gap();

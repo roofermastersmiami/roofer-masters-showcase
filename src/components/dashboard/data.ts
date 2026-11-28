@@ -60,7 +60,8 @@ export function useUpdateLead() {
         .eq("user_id", auth.user.id)
         .in("role", ["owner", "admin", "office", "sales"])
         .maybeSingle();
-      if (membershipError || !membership) throw new Error("You cannot update this company's customer");
+      if (membershipError || !membership)
+        throw new Error("You cannot update this company's customer");
       const { error } = await supabase
         .from("leads")
         .update(patch)

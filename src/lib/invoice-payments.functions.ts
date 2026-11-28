@@ -224,8 +224,7 @@ export const cancelInvoiceCheckout = createServerFn({ method: "POST" })
         .select("id,company_id")
         .eq("id", data.invoice_id)
         .maybeSingle();
-      if (invoiceError || !invoice?.company_id)
-        throw new Error("Could not verify invoice company");
+      if (invoiceError || !invoice?.company_id) throw new Error("Could not verify invoice company");
       const { data: membership, error: membershipError } = await context.supabase
         .from("crm_company_memberships")
         .select("role")
