@@ -184,20 +184,64 @@ describe("SatelliteMap pan, click-to-drop and pins", () => {
   });
 });
 
-describe("SatelliteMap deep zoom (z21–z24)", () => {
-  it("never requests tiles past z20 and draws them upscaled", () => {
+describe("SatelliteMap Broward layer fallback", () => {
+  it("swaps a failed Broward tile to the Esri tile for the same slot, per tile, without looping", () => {
+    const { container } = renderMap({ zoom: 19 });
+    const images = [...container.querySelectorAll("img")];
+    const broward = images.find((img) => img.getAttribute("src")?.includes("Aerials2026_V2"));
+    expect(broward).toBeDefined();
+    const slot = broward!.getAttribute("src")!.match(/\/tile\/(\d+)\/(\d+)\/(\d+)$/)!;
+    fireEvent.error(broward!);
+    // That tile — and only that tile — now shows the Esri tile
+    // for the same z/y/x slot.
+    expect(broward!.getAttribute("src")).toBe(
+      `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${slot[1]}/${slot[2]}/${slot[3]}`,
+    );
+    const others = images.filter(
+      (img) => img !== broward && img.getAttribute("src")?.includes("Aerials2026_V2"),
+    );
+    expect(others.length).toBeGreaterThan(0);
+    // A second error on the swapped tile does not loop or clear it.
+    fireEvent.error(broward!);
+    expect(broward!.getAttribute("src")).toContain("World_Imagery");
+  });
+
+  it("renders Esri tiles directly outside Broward (downtown Miami centre)", () => {
+    const { container } = render(
+      <SatelliteMap
+        center={{ lat: 25.7617, lon: -80.1918 }}
+        zoom={19}
+        pins={[]}
+        label="Satellite map"
+      />,
+    );
+    const images = [...container.querySelectorAll("img")];
+    const imagery = images.filter((img) => !img.getAttribute("src")?.includes("Reference"));
+    expect(imagery.length).toBeGreaterThan(0);
+    for (const img of imagery) expect(img.getAttribute("src")).toContain("World_Imagery");
+  });
+});
+
+describe("SatelliteMap deep zoom (z22–z24)", () => {
+  it("never requests tiles past z21 and draws them upscaled", () => {
     const { container } = renderMap({ zoom: 24 });
     const images = [...container.querySelectorAll("img")];
     expect(images.length).toBeGreaterThan(0);
     for (const img of images) {
-      expect(img.getAttribute("src")).toContain("/tile/20/");
-      expect(img.getAttribute("src")).not.toMatch(/\/tile\/2[1-9]\//);
+      expect(img.getAttribute("src")).not.toMatch(/\/tile\/2[2-9]\//);
     }
-    // Imagery tiles are drawn at 256 * 2^(24-20) = 4096px: the
-    // z20 mosaic upscaled to the z24 frame.
-    const imagery = images.find((img) => img.getAttribute("src")?.includes("World_Imagery"));
-    expect(imagery?.style.width).toBe("4096px");
-    expect(imagery?.style.height).toBe("4096px");
+    // Imagery tiles are drawn at 256 * 2^(24-21) = 2048px: the
+    // z21 mosaic upscaled to the z24 frame. West Park is in
+    // Broward, so the base tiles are the county's.
+    const imagery = images.find((img) => img.getAttribute("src")?.includes("Aerials2026_V2"));
+    expect(imagery?.getAttribute("src")).toContain("/tile/21/");
+    expect(imagery?.style.width).toBe("2048px");
+    expect(imagery?.style.height).toBe("2048px");
+    // Label overlays ride their own grid: real label content ends
+    // at z19, so at z24 they are z19 tiles upscaled by 2^(24-19).
+    const label = images.find((img) => img.getAttribute("src")?.includes("Reference"));
+    expect(label?.getAttribute("src")).toContain("/tile/19/");
+    expect(label?.style.width).toBe("8192px");
   });
 
   it("drops a pin on the exact lat/lon under the cursor at z24", () => {

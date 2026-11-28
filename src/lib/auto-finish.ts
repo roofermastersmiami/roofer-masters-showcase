@@ -189,7 +189,7 @@ async function collectReportPhotos(
           bytes,
           mime: result.mime,
           category: "aerial",
-          name: "Aerial photo (Esri World Imagery)",
+          name: `Aerial photo (${result.source})`,
           source: result.source,
           latitude: result.latitude,
           longitude: result.longitude,

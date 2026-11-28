@@ -15,14 +15,19 @@
 
 export const SATELLITE_TILE_PX = 256;
 export const SATELLITE_MIN_ZOOM = 17;
-/** Deepest zoom level Esri actually serves tiles for. No tile
- * request may ever go past this — see satelliteTileZoom. */
-export const SATELLITE_MAX_ZOOM = 20;
+/** Deepest zoom level tiles are fetched at. Esri World Imagery
+ * serves real tiles to z21 (verified live 2026-11-27 in both
+ * service counties) — and in Miami-Dade that matters: Esri's
+ * z21 tiles there ARE Miami-Dade County's 2025 3-inch orthos at
+ * near-native detail, while the old z20 cap delivered only
+ * ~0.134 m/px, about half the source. No tile request may ever
+ * go past this — see satelliteTileZoom. */
+export const SATELLITE_MAX_ZOOM = 21;
 /** Deepest VIEW zoom the maps offer. Past SATELLITE_MAX_ZOOM the
- * z20 mosaic is upscaled on screen (softer, but present) while
+ * z21 mosaic is upscaled on screen (softer, but present) while
  * every overlay and pointer calculation keeps projecting with
  * exact Mercator math at the view zoom, so pins stay registered
- * to the imagery at every level. z24 is 16x closer than z20 —
+ * to the imagery at every level. z24 is 8x closer than z21 —
  * at the deepest level a single house fills the frame, which is
  * what precise pin placement needs. Shared by the measurement-
  * order map (SatelliteMap) and the Sketch Editor (PR #233). */
@@ -37,11 +42,32 @@ export function satelliteTileZoom(viewZoom: number): number {
 
 /** How much the fetched mosaic must be upscaled on screen to fill
  * the same frame at a view zoom: 1 while real tiles exist, then
- * doubling per level past them (16 at z24). Tiles are fetched for
+ * doubling per level past them (8 at z24). Tiles are fetched for
  * a viewport shrunk by this factor and rendered scaled back up,
  * so the mosaic's centre stays glued to the frame centre. */
 export function satelliteUpscale(viewZoom: number): number {
   return 2 ** Math.max(0, viewZoom - SATELLITE_MAX_ZOOM);
+}
+
+/** Deepest zoom at which Esri's reference (label) layers carry
+ * real content. Past z19 both reference services answer z20/z21
+ * requests with a byte-identical transparent placeholder tile
+ * (verified live 2026-11-27: same MD5 across services and
+ * locations), so labels fetched deeper render as nothing. The
+ * label layer therefore caps here and upscales — street names
+ * stay visible at deep zooms instead of silently vanishing. */
+export const SATELLITE_LABEL_MAX_ZOOM = 19;
+
+/** The tile level to fetch LABEL tiles at for a view zoom. */
+export function satelliteLabelZoom(viewZoom: number): number {
+  return Math.min(viewZoom, SATELLITE_LABEL_MAX_ZOOM);
+}
+
+/** Upscale factor for the label layer at a view zoom — its own
+ * factor, since labels are fetched at satelliteLabelZoom, which
+ * can sit below the imagery's satelliteTileZoom. */
+export function satelliteLabelUpscale(viewZoom: number): number {
+  return 2 ** Math.max(0, viewZoom - satelliteLabelZoom(viewZoom));
 }
 /** Fixed size of the centred tile layer. It overscans the visible
  * dialog map area (max ~930×520) so the imagery fills the frame at
@@ -52,6 +78,48 @@ export const SATELLITE_VIEW_HEIGHT = 1024;
 
 const TILE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+/** Broward County's own aerial tile service ("Aerials2026_V2",
+ * Broward County Property Appraiser / BCGIS): 6-inch (0.152 m)
+ * orthos flown January 2026 on the standard XYZ scheme — roughly
+ * 2x sharper as delivered than Esri's Broward tiles (Esri embeds
+ * the county's 2024 orthos but caps that block at z19, ≈0.27 m/px
+ * delivered) and two years fresher. Free, anonymous, published by
+ * the county for basemap use. (The v1 "Aerials2026" service is
+ * deprecated by the county — V2 only.)
+ *
+ * Coverage is flight-block based, NOT the full rectangle below:
+ * the item extent is the eastern county plus a buffer, and tiles
+ * 404 outside the flown blocks (verified live 2026-11-27: a z19
+ * tile at a Miramar point inside the extent 404s while z20/z21
+ * tiles at the same point exist). Every Broward tile therefore
+ * carries the Esri tile for the same slot as its fallbackSrc,
+ * and the map components swap to it per tile on error — never
+ * whole-map. */
+export const BROWARD_AERIAL_TILE_URL =
+  "https://tiles.arcgis.com/tiles/JMAJrTsHNLrSsWf5/arcgis/rest/services/Aerials2026_V2/MapServer/tile/{z}/{y}/{x}";
+
+/** The Aerials2026_V2 item extent (lon −80.4590…−80.0700,
+ * lat 25.9567…26.3638) — the rectangle inside which the Broward
+ * layer is attempted. Points outside it never request Broward
+ * tiles; points inside it may still 404 per tile (see above). */
+export const BROWARD_AERIAL_EXTENT = {
+  minLat: 25.9567,
+  maxLat: 26.3638,
+  minLon: -80.459,
+  maxLon: -80.07,
+} as const;
+
+/** True when a map centre should try the Broward County aerial
+ * layer first (per-tile Esri fallback still applies). */
+export function browardAerialApplies(latitude: number, longitude: number): boolean {
+  return (
+    latitude >= BROWARD_AERIAL_EXTENT.minLat &&
+    latitude <= BROWARD_AERIAL_EXTENT.maxLat &&
+    longitude >= BROWARD_AERIAL_EXTENT.minLon &&
+    longitude <= BROWARD_AERIAL_EXTENT.maxLon
+  );
+}
 
 /** Esri reference overlays drawn over the imagery so the map reads
  * like the labelled satellite view in the measurement-order form
@@ -69,6 +137,11 @@ export const SATELLITE_LABEL_TILE_URLS = [
 export type SatelliteMapTile = {
   key: string;
   src: string;
+  /** Same-slot tile from the fallback layer (Esri World Imagery),
+   * present only on Broward County tiles: when a Broward tile
+   * fails to load (a 404 outside the flown blocks), the component
+   * swaps this URL in for that tile only. */
+  fallbackSrc?: string;
   left: number;
   top: number;
 };
@@ -163,7 +236,14 @@ function tilesForUrl(
 /** Pure tile math (unit-tested): the tiles covering a
  * width×height viewport centred on the address point, with each
  * tile's pixel offset inside that viewport. The address point sits
- * at (width/2, height/2) of the viewport by construction. */
+ * at (width/2, height/2) of the viewport by construction.
+ *
+ * Base layer: when the centre is inside the Broward County
+ * aerial extent, tiles come from the county's sharper
+ * Aerials2026_V2 service and each carries the Esri tile for the
+ * same slot as fallbackSrc (the county's flight-block coverage
+ * 404s per tile — see BROWARD_AERIAL_TILE_URL). Everywhere else
+ * the tiles are Esri World Imagery directly. */
 export function satelliteMapTiles(
   latitude: number,
   longitude: number,
@@ -171,7 +251,18 @@ export function satelliteMapTiles(
   width = SATELLITE_VIEW_WIDTH,
   height = SATELLITE_VIEW_HEIGHT,
 ): SatelliteMapTile[] {
-  return tilesForUrl(TILE_URL, "imagery", latitude, longitude, zoom, width, height);
+  if (!browardAerialApplies(latitude, longitude))
+    return tilesForUrl(TILE_URL, "imagery", latitude, longitude, zoom, width, height);
+  const fallback = tilesForUrl(TILE_URL, "imagery", latitude, longitude, zoom, width, height);
+  return tilesForUrl(
+    BROWARD_AERIAL_TILE_URL,
+    "broward",
+    latitude,
+    longitude,
+    zoom,
+    width,
+    height,
+  ).map((tile, index) => ({ ...tile, fallbackSrc: fallback[index]!.src }));
 }
 
 /** The label-overlay tiles aligned with satelliteMapTiles for the

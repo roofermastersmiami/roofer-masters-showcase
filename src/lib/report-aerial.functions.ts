@@ -3,9 +3,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 // tenant-audit: reviewed — authenticated staff-only proxy for the free
-// Esri World Imagery export endpoint. It reads no tenant data and
-// writes nothing; it returns public imagery bytes for a report cover
-// so the browser never has to fetch cross-origin tiles itself.
+// public aerial imagery sources (county GIS ImageServer/tile services
+// and USDA NAIP; see report-aerial.server.ts for the source chain).
+// It reads no tenant data and writes nothing; it returns public
+// imagery bytes for a report cover so the browser never has to fetch
+// cross-origin tiles itself.
 export const loadReportAerial = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) =>

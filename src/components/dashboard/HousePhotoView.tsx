@@ -14,13 +14,16 @@ export const WORKSPACE_VIEWS: { id: WorkspaceView; label: string }[] = [
 ];
 
 /**
- * Source label for the NAIP cover photo. Mirrors REPORT_AERIAL_SOURCE
- * in src/lib/report-aerial.server.ts — that module is server-only and
- * cannot be imported into the browser bundle, so the string is kept
- * in step here.
+ * Fallback source label for a cover photo whose exact source isn't
+ * recorded (the cached aerial-cover.jpg stores no source metadata).
+ * Mirrors REPORT_AERIAL_SOURCE in src/lib/report-aerial.server.ts —
+ * that module is server-only and cannot be imported into the
+ * browser bundle, so the string is kept in step here. A photo
+ * fetched fresh through the server function carries its own exact
+ * per-source attribution (county GIS / USDA NAIP) and that is what
+ * the view shows instead.
  */
-export const NAIP_AERIAL_SOURCE_LABEL =
-  "USGS National Agriculture Imagery Program (NAIP) via The National Map";
+export const NAIP_AERIAL_SOURCE_LABEL = "USDA National Agriculture Imagery Program (NAIP)";
 
 export type HousePhotoState =
   | { status: "loading" }

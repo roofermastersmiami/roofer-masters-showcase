@@ -227,6 +227,11 @@ export function RoofMeasurements({
             bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
             cacheable = true;
+            // The server chain names the imagery that actually
+            // produced the photo (county GIS / USDA NAIP) — show
+            // that attribution, not the generic fallback label.
+            if ("source" in result && typeof result.source === "string" && result.source)
+              source = result.source;
           }
         } catch {
           // Fall through to the client-side stitch, like report generation.

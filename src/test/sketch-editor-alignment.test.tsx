@@ -218,7 +218,7 @@ describe("SketchEditor satellite alignment (drawing on the house, not the street
     expectAligned(container, drawing, 19, 4);
   });
 
-  it("zooms to z24, stays aligned, upscales the z20 tiles, and drags a vertex exactly", () => {
+  it("zooms to z24, stays aligned, upscales the z21 tiles, and drags a vertex exactly", () => {
     const onDone = vi.fn();
     const drawing = makeDrawing();
     const { container } = render(
@@ -233,15 +233,16 @@ describe("SketchEditor satellite alignment (drawing on the house, not the street
 
     const { w, h } = expectAligned(container, drawing, 24, 8);
 
-    // Backdrop: tiles are still requested at z20 (the deepest real
-    // Esri level) and upscaled — never requested at z24, where they
-    // would 404 and leave a blank map.
+    // Backdrop: tiles are still requested at z21 (the deepest real
+    // tile level) and upscaled — never requested at z24, where they
+    // would 404 and leave a blank map. The test drawing sits in
+    // Miramar (Broward), so these are the county's tiles.
     const tileImgs = [...container.querySelectorAll("img")].filter((img) =>
       (img.getAttribute("src") ?? "").includes("/tile/"),
     );
     expect(tileImgs.length).toBeGreaterThan(0);
     for (const img of tileImgs) {
-      expect(img.getAttribute("src")).toContain("/tile/20/");
+      expect(img.getAttribute("src")).toContain("/tile/21/");
     }
     const widths = tileImgs.map((img) => parseFloat(img.style.width || "0"));
     expect(Math.max(...widths)).toBeGreaterThanOrEqual(1024);
