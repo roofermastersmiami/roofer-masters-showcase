@@ -582,6 +582,111 @@ export function SketchEditor({
   })();
   const selectedPin = drawing.penetrations.find((pin) => pin.id === selectedPinId);
 
+  /* ---------------- selection deletes (panel buttons + keyboard) ---
+     One code path per selection kind: the Edge Actions / Facets /
+     Pins panel buttons and the Delete/Backspace shortcut all call
+     these, so the keyboard can never drift from what the UI does. */
+  function deleteSelectedEdge() {
+    if (!selectedEdge) return;
+    const next = deleteEdge(drawing, selectedEdge.planeId, selectedEdge.edgeIndex);
+    if (!next) {
+      setError("A facet needs at least 3 corners — this edge cannot be deleted.");
+      return;
+    }
+    commit(next);
+    setSelectedEdge(null);
+  }
+
+  function deleteSelectedFacet() {
+    if (!selectedPlane) return;
+    commit({
+      ...drawing,
+      planes: drawing.planes.filter((plane) => plane.id !== selectedPlane.id),
+    });
+    setSelectedPlaneId(drawing.planes.find((plane) => plane.id !== selectedPlane.id)?.id ?? "");
+  }
+
+  function deleteSelectedPin() {
+    if (!selectedPin) return;
+    commit({
+      ...drawing,
+      penetrations: drawing.penetrations.filter((pin) => pin.id !== selectedPin.id),
+    });
+    setSelectedPinId(null);
+  }
+
+  /** Delete whatever the current mode has selected — the same target
+   *  the visible panel's delete button would act on. */
+  function deleteSelection() {
+    if (mode === "edges" && selectedEdge) deleteSelectedEdge();
+    else if (mode === "facets" && selectedPlane) deleteSelectedFacet();
+    else if (mode === "pins" && selectedPin) deleteSelectedPin();
+  }
+
+  /* ---------------- keyboard shortcuts ----------------
+     Delete/Backspace removes the current selection; Cmd+Z / Ctrl+Z
+     undoes and Cmd+Shift+Z / Ctrl+Shift+Z / Ctrl+Y redoes, through
+     the same undo()/redo() the toolbar buttons call; Escape clears
+     the selection and any in-progress draft. Nothing fires while the
+     user is typing in a form field (Backspace in the facet-name
+     input must edit text, not delete geometry) or while the Help
+     dialog is open. There is deliberately no vertex shortcut: the
+     editor has no persistent vertex selection — corners are dragged,
+     and removing one is exactly what Delete Edge does. */
+  useEffect(() => {
+    function isFormField(target: EventTarget | null): boolean {
+      if (!(target instanceof HTMLElement)) return false;
+      if (target.isContentEditable) return true;
+      return target.closest("input, textarea, select, [contenteditable]") !== null;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (helpOpen) return;
+      if (isFormField(event.target)) return;
+      const key = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (event.ctrlKey && key === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "Delete" || event.key === "Backspace") {
+        // Selections live in the Sketch view; in 3D there is nothing
+        // visible to delete.
+        if (view !== "sketch") return;
+        event.preventDefault();
+        deleteSelection();
+        return;
+      }
+      if (event.key === "Escape") {
+        setSelectedEdge(null);
+        setSelectedPinId(null);
+        if (draftPoints.length) setDraftPoints([]);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // The handler reads the current selection/history closures, so it
+    // re-subscribes whenever they change — cheap and always fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    helpOpen,
+    view,
+    mode,
+    drawing,
+    past,
+    future,
+    selectedEdge,
+    selectedPlane,
+    selectedPin,
+    draftPoints,
+  ]);
+
   const viewRotated = viewRotationDeg !== 0;
   const tileLayer = useMemo(() => {
     if (!geoRef || view !== "sketch") return null;
@@ -703,6 +808,7 @@ export function SketchEditor({
           variant="ghost"
           className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
           aria-label="Undo"
+          title="Undo (⌘Z)"
           onClick={undo}
           disabled={!past.length}
         >
@@ -713,6 +819,7 @@ export function SketchEditor({
           variant="ghost"
           className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
           aria-label="Redo"
+          title="Redo (⌘⇧Z)"
           onClick={redo}
           disabled={!future.length}
         >
@@ -1311,16 +1418,8 @@ export function SketchEditor({
                   size="sm"
                   variant="outline"
                   disabled={!selectedEdgeData}
-                  onClick={() => {
-                    if (!selectedEdge) return;
-                    const next = deleteEdge(drawing, selectedEdge.planeId, selectedEdge.edgeIndex);
-                    if (!next) {
-                      setError("A facet needs at least 3 corners — this edge cannot be deleted.");
-                      return;
-                    }
-                    commit(next);
-                    setSelectedEdge(null);
-                  }}
+                  title="Delete edge (⌫)"
+                  onClick={deleteSelectedEdge}
                 >
                   <Trash2 /> Delete Edge
                 </Button>
@@ -1454,15 +1553,8 @@ export function SketchEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      commit({
-                        ...drawing,
-                        planes: drawing.planes.filter((plane) => plane.id !== selectedPlane.id),
-                      });
-                      setSelectedPlaneId(
-                        drawing.planes.find((plane) => plane.id !== selectedPlane.id)?.id ?? "",
-                      );
-                    }}
+                    title="Delete facet (⌫)"
+                    onClick={deleteSelectedFacet}
                   >
                     <Trash2 /> Delete facet
                   </Button>
@@ -1625,15 +1717,8 @@ export function SketchEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      commit({
-                        ...drawing,
-                        penetrations: drawing.penetrations.filter(
-                          (pin) => pin.id !== selectedPin.id,
-                        ),
-                      });
-                      setSelectedPinId(null);
-                    }}
+                    title="Delete pin (⌫)"
+                    onClick={deleteSelectedPin}
                   >
                     <Trash2 /> Delete pin
                   </Button>
@@ -1705,6 +1790,12 @@ export function SketchEditor({
               Drag green corners to reshape. Drag the map to pan and scroll to zoom — including with
               a Magic Mouse. 90 Mode snaps segments to right-angle and 45° angles. Done saves a new
               revision and marks the drawing unreviewed.
+            </p>
+            <p>
+              <strong>Keyboard</strong> — Delete (⌫) removes the selected edge, facet or pin. Undo
+              with ⌘Z (Ctrl+Z) and redo with ⌘⇧Z (Ctrl+Shift+Z or Ctrl+Y) — the same history as the
+              toolbar buttons. Esc clears the selection. Shortcuts pause while you are typing in a
+              field.
             </p>
           </div>
         </DialogContent>
