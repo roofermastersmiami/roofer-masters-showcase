@@ -34,7 +34,7 @@ INSERT INTO crm_company_memberships(company_id,user_id,role) VALUES
 INSERT INTO crm_expenses(id,company_id,description,category,amount_cents,incurred_at,receipt_path)
 VALUES ('80000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','Company B expense','materials',20000,current_date,NULL);
 
-\ir ../drizzle/migrations/0061_company_scoped_expense_receipt_storage.sql
+\ir ../drizzle/migrations/0062_company_scoped_expense_receipt_storage.sql
 
 -- Company A accounting member can upload only under its existing expense row.
 -- A failed row-attachment can still clean up its own newly uploaded object:
