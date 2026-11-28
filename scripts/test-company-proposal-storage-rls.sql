@@ -47,7 +47,7 @@ INSERT INTO crm_company_memberships(company_id,user_id,role) VALUES
 INSERT INTO proposals(id,company_id) VALUES
  ('70000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000002');
 
-\ir ../drizzle/migrations/0060_company_scoped_proposal_storage.sql
+\ir ../drizzle/migrations/0061_company_scoped_proposal_storage.sql
 
 -- Seed both objects as database owner.
 INSERT INTO storage.objects(bucket_id,name) VALUES
