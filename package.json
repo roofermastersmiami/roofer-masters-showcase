@@ -15,9 +15,9 @@
     "check:migrations": "node scripts/check-migration-journal.mjs"
   },
   "overrides": {
-    "@babel/traverse": "7.29.7",
     "rolldown": "1.2.1",
-    "shell-quote": ">=1.11.0"
+    "shell-quote": ">=1.11.0",
+    "@babel/traverse": "7.29.7"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
@@ -69,6 +69,7 @@
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",
     "input-otp": "^1.4.2",
+    "jpeg-js": "^0.4.4",
     "lucide-react": "^0.575.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.5.438",
@@ -98,6 +99,7 @@
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
     "@types/earcut": "^3.0.0",
+    "@types/jpeg-js": "^0.3.0",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
