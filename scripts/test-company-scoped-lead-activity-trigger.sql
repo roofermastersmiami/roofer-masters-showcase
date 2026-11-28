@@ -13,7 +13,7 @@ CREATE TABLE public.crm_activity (
   body text NOT NULL
 );
 
-\i drizzle/migrations/0059_company_scoped_lead_activity_trigger.sql
+\i drizzle/migrations/0060_company_scoped_lead_activity_trigger.sql
 
 CREATE TRIGGER crm_lead_activity
 AFTER INSERT OR UPDATE OF pipeline_stage ON public.leads
