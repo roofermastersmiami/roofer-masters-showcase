@@ -20,7 +20,8 @@ BEGIN
     INTO drawing_property_id, drawing_company_id
   FROM public.roof_drawings d
   JOIN public.crm_properties p ON p.id = d.property_id
-  WHERE d.id = NEW.drawing_id;
+  WHERE d.id = NEW.drawing_id
+  FOR SHARE OF d, p;
 
   IF drawing_property_id IS NULL OR drawing_company_id IS NULL THEN
     RAISE EXCEPTION 'Drawing must belong to a company-owned property';
