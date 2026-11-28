@@ -176,11 +176,12 @@ export const sendChatMessage = createServerFn({ method: "POST" })
 export const getChatMessages = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => chatFetchSchema.parse(data))
   .handler(async ({ data }) => {
-    const { db } = await verifyChat(data.leadId, data.token);
+    const { db, companyId } = await verifyChat(data.leadId, data.token);
     const { data: rows, error } = await db
       .from("lead_messages")
       .select("id, sender, body, created_at")
       .eq("lead_id", data.leadId)
+      .eq("company_id", companyId)
       .order("created_at", { ascending: true })
       .limit(200);
     if (error) {
