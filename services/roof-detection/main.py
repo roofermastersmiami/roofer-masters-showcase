@@ -2122,6 +2122,7 @@ def _tidy_ring(polygon: Polygon) -> Polygon:
 
 def _condition_polygons_for_emission(
     polygons: list[Polygon],
+    exact_tiling: bool = False,
 ) -> list[Polygon]:
     """Rework fitted facet polygons into geometry the CRM drawing path
     accepts as-is (see the EMISSION_* constants): valid disjoint rings
@@ -2145,6 +2146,15 @@ def _condition_polygons_for_emission(
     fitted ring instead."""
     if not polygons:
         return polygons
+    if exact_tiling:
+        # The input is the surgery's exact tiling: condition it
+        # without breaking seam coincidence (see
+        # _condition_tiling_for_emission). If that cannot be done,
+        # fall through to the legacy passes below — today's behaviour
+        # for every house — rather than ship no drawing at all.
+        tiling = _condition_tiling_for_emission(polygons)
+        if tiling is not None:
+            return tiling
     originals = list(polygons)
     # A single pass, in a fixed order — deliberately NOT a loop.
     # Sparsify and conflate first (they only move or drop vertices),
@@ -3270,173 +3280,994 @@ def _partition_facets_to_outline(
     return resolved
 
 
-def _straighten_partition_boundaries(
+# ---------------------------------------------------------------------
+# Drawing surgery (Phase 2): rebuild the partition's seams from the
+# fitted planes themselves. Ports the validated Phase 1 prototype
+# (boundary-graph surgery) into the drawing path.
+#
+# Diagnosis in one paragraph: the fitter derives each facet's region
+# from the convex hull of its RANSAC inlier cluster, so neighbouring
+# facets own two different polylines for what is physically one edge.
+# The partition tiles those hulls to the outline, but the seams stay
+# hull traces — wobbly, doubled or orphan lines in the sketch. A hip,
+# valley or ridge IS the intersection line of the two fitted planes,
+# and an eave/rake is a fitted plane clipped by the outline: both are
+# exact geometry the pipeline already has.
+#
+# Construction: node the partition tiling into a planar boundary
+# graph; each maximal chain between two junctions separates either
+# two facets or a facet and the outside. A chain separating facets
+# i and j is replaced by the single segment of the pair's true
+# intersection line between its two junctions, and each junction
+# moves to the least-squares point of the lines meeting there
+# (clamped). Guards keep a chain's polyline when its junctions sit
+# more than 1.25 m from the pair's line or the chord deviates more
+# than 2.5 m from the drawn chain (that seam's planes disagree with
+# its territory — a segmentation symptom, not a geometry one). Faces
+# are recovered by polygonizing the rebuilt graph, so the tiling
+# stays exact and every shared edge is one straight segment on the
+# true line in both facets BY CONSTRUCTION. A guarded veto ladder
+# (worst chain vetoed, then smaller clamps) protects small facets
+# from amputation and the house from divergent-seam regressions;
+# on any structural doubt the whole house falls back to the plain
+# partition tiling. Micro-segment cleanup (< 0.15 m) runs on the
+# shared graph before emission — NEVER per ring: dropping vertices
+# ring-by-ring breaks seam coincidence (the two sides of one seam
+# simplify against different chords and drift apart, proven in
+# Phase 1). Perimeter edges are the outline's own straight segments.
+# ---------------------------------------------------------------------
+
+_SURGERY_ADJACENCY_M = 1.5        # hulls closer than this are data-adjacent
+_SURGERY_CHAIN_SNAP_MAX_M = 1.25  # a seam's junctions must sit this
+                                  # close to the pair's line to snap
+_SURGERY_JUNCTION_CLAMP_M = 1.5   # a junction never moves further
+_SURGERY_CHAIN_HAUSDORFF_MAX_M = 2.5
+_SURGERY_MICRO_SEGMENT_M = 0.15   # graph-level micro-segment cleanup
+_GRAPH_MIN_SEAM_M = 0.5           # shorter pair chains are corner noise
+_FT_PER_M = 3.280839895
+
+
+def _plane_intersection_line(
+    first: tuple[float, float, float],
+    second: tuple[float, float, float],
+) -> tuple[float, float, float] | None:
+    """(la, lb, lc) with la*x + lb*y + lc = 0 — the plan-view trace of
+    two planes' intersection line; None for parallel planes."""
+    la = first[0] - second[0]
+    lb = first[1] - second[1]
+    lc = first[2] - second[2]
+    if math.hypot(la, lb) <= 1e-9:
+        return None
+    return la, lb, lc
+
+
+def _graph_vertex(x: float, y: float) -> tuple[float, float]:
+    return (round(x, 7), round(y, 7))
+
+
+def _tiling_side_label(point: Point, labels: list[Polygon]) -> int:
+    """Index of the tiling polygon owning ``point`` (-1 = outside the
+    tiling). Hairline gaps between boolean-op neighbours resolve to
+    the nearest label within 6 cm."""
+    best, best_d = -1, 0.06
+    for i, geom in enumerate(labels):
+        if geom is None or geom.is_empty:
+            continue
+        if geom.covers(point):
+            return i
+        distance = geom.distance(point)
+        if distance < best_d:
+            best, best_d = i, distance
+    return best
+
+
+def _boundary_chains(
+    polygons: list[Polygon], outline: Polygon
+) -> dict[str, Any]:
+    """Node a facet tiling into a planar boundary graph and group its
+    atomic segments into maximal same-pair chains between junctions.
+
+    Every boundary (the facets' and the outline's) is noded together.
+    Each atomic segment is classified by what it separates — facet i
+    on one side, facet j (or -1, the outside) on the other — sampled
+    a few centimetres off its midpoint, while the segments still lie
+    exactly on the rings. Micro-segments shorter than
+    _SURGERY_MICRO_SEGMENT_M are then contracted on the SHARED graph
+    (both endpoints merge to their midpoint, identically for every
+    incident chain), so cleanup can never pull the two sides of a
+    seam apart; the pair labels are sampled BEFORE contraction and
+    carried through it by segment identity, because a contracted
+    segment can sit centimetres off the true ring — further than the
+    sampling offset — and would mislabel both its sides. A vertex is
+    a junction when the segments meeting there do not all separate
+    the same pair. Returns the chains (vertex lists with their pair),
+    the per-segment pairs, the vertex → segments index, and the
+    junction set."""
+    from shapely.ops import unary_union
+
+    noded = unary_union(
+        [outline.boundary]
+        + [geom.boundary for geom in polygons if not geom.is_empty]
+    )
+    segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for component in _line_components(noded):
+        coords = list(component.coords)
+        for a, b in zip(coords, coords[1:]):
+            ka, kb = _graph_vertex(*a), _graph_vertex(*b)
+            if ka != kb:
+                segments.append((ka, kb))
+
+    outline_boundary = outline.boundary
+
+    seg_pair: list[tuple[int, int]] = []
+    for a, b in segments:
+        mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        norm = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / norm * 0.01, dx / norm * 0.01
+        mid = Point(mx, my)
+        probes = (Point(mx + nx, my + ny), Point(mx - nx, my - ny))
+        if outline_boundary.distance(mid) <= 0.005:
+            # A segment lying ON the outline: the outside is -1 by
+            # definition (the tiling-union boundary IS the outline).
+            # The inside is the facet whose ring CONTAINS the segment
+            # — distance zero from the midpoint — which stays exact
+            # even when that facet is a centimetre-thin strip along
+            # the eave whose 1 cm probe would overshoot into the
+            # facet behind it (counting the strip's seam as that
+            # facet's perimeter and the strip's own perimeter as
+            # nobody's: the double-count trap Phase 1 documented on
+            # sw139's tiling, which carries ~130 ft of such seams).
+            inside = None
+            best_distance = 0.02
+            for idx, geom in enumerate(polygons):
+                if geom.is_empty:
+                    continue
+                distance = geom.distance(mid)
+                if distance < best_distance:
+                    best_distance, inside = distance, idx
+            pair = []
+            for probe in probes:
+                if not outline.covers(probe):
+                    pair.append(-1)
+                elif inside is not None:
+                    pair.append(inside)
+                else:
+                    pair.append(_tiling_side_label(probe, polygons))
+            seg_pair.append((pair[0], pair[1]))
+        else:
+            # An INTERIOR segment never borders the outside, even
+            # when a probe overshoots a hairline strip facet and the
+            # outline behind it: the nearest tiling label owns that
+            # side.
+            seg_pair.append((
+                _tiling_side_label(probes[0], polygons),
+                _tiling_side_label(probes[1], polygons),
+            ))
+
+    def pair_rank(pair: tuple[int, int]) -> int:
+        labels = set(pair)
+        if len(labels) == 2 and -1 not in labels:
+            return 3  # a true seam
+        if len(labels) == 2:
+            return 2  # perimeter
+        return 1 if -1 not in labels else 0
+
+    # Micro-segment contraction on the shared graph. Each contraction
+    # strictly reduces the vertex count, so the loop terminates.
+    while True:
+        deduped: list[tuple[tuple[float, float], tuple[float, float]]] = []
+        deduped_pairs: list[tuple[int, int]] = []
+        index_of: dict[Any, int] = {}
+        for (a, b), pair in zip(segments, seg_pair):
+            if a == b:
+                continue
+            key = (a, b) if a <= b else (b, a)
+            if key in index_of:
+                idx = index_of[key]
+                if pair_rank(pair) > pair_rank(deduped_pairs[idx]):
+                    deduped_pairs[idx] = pair
+                continue
+            index_of[key] = len(deduped)
+            deduped.append((a, b))
+            deduped_pairs.append(pair)
+        segments, seg_pair = deduped, deduped_pairs
+        target = None
+        for idx, (a, b) in enumerate(segments):
+            if math.hypot(a[0] - b[0], a[1] - b[1]) < _SURGERY_MICRO_SEGMENT_M:
+                target = idx
+                break
+        if target is None:
+            break
+        a, b = segments[target]
+        mid = _graph_vertex((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+        if mid == a or mid == b:
+            del segments[target]
+            del seg_pair[target]
+        else:
+            segments = [
+                (
+                    mid if seg[0] in (a, b) else seg[0],
+                    mid if seg[1] in (a, b) else seg[1],
+                )
+                for seg in segments
+            ]
+
+    at_vertex: dict[tuple[float, float], list[int]] = {}
+    for idx, (a, b) in enumerate(segments):
+        at_vertex.setdefault(a, []).append(idx)
+        at_vertex.setdefault(b, []).append(idx)
+
+    def is_junction(vertex: tuple[float, float]) -> bool:
+        segs = at_vertex[vertex]
+        if len(segs) != 2:
+            return True
+        return len({frozenset(seg_pair[s]) for s in segs}) > 1
+
+    seg_ends: dict[tuple[float, float], list[tuple[int, tuple[float, float]]]] = {}
+    for idx, (a, b) in enumerate(segments):
+        seg_ends.setdefault(a, []).append((idx, b))
+        seg_ends.setdefault(b, []).append((idx, a))
+    used: set[int] = set()
+    chains: list[dict[str, Any]] = []
+    for idx, (a, b) in enumerate(segments):
+        if idx in used:
+            continue
+        pair = frozenset(seg_pair[idx])
+        verts = [a, b]
+        used.add(idx)
+        for at_head in (True, False):
+            while True:
+                end_v = verts[0] if at_head else verts[-1]
+                if is_junction(end_v) and len(verts) > 2:
+                    break
+                nxt = None
+                for sidx, other in seg_ends[end_v]:
+                    if sidx not in used and frozenset(seg_pair[sidx]) == pair:
+                        nxt = (sidx, other)
+                        break
+                if nxt is None:
+                    break
+                used.add(nxt[0])
+                if at_head:
+                    verts.insert(0, nxt[1])
+                else:
+                    verts.append(nxt[1])
+                if verts[0] == verts[-1]:
+                    break  # closed loop (island facet ring)
+        chains.append({
+            "verts": verts, "pair": pair, "snap": False, "hausdorff": 0.0,
+        })
+    return {
+        "chains": chains,
+        "seg_pair": seg_pair,
+        "at_vertex": at_vertex,
+        "junctions": {v for v in at_vertex if is_junction(v)},
+    }
+
+
+def _divergent_seam_ft(
     polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
-) -> list[Polygon]:
-    """Straighten the partition's boundaries into a roofer's linework.
-
-    Two passes. First, each facet polygon is Douglas-Peucker
-    simplified (topology-preserving): hull wobble and dense sample
-    vertices along every edge collapse to the edge's true straight
-    runs, on seams and perimeter alike. Second, seam segments are
-    snapped onto the intersection line of the two facets' fitted
-    planes: wherever a segment in one facet's simplified ring matches
-    a segment in a neighbour's ring (same endpoints), both copies are
-    replaced by that segment's projection onto the pair's
-    plane-intersection line — so a ridge, hip or valley in the
-    drawing is literally the two planes' intersection, drawn once,
-    identically, for both facets. A junction point is placed by the
-    first pair that claims it; later pairs keep the placed point (the
-    centimetre-scale disagreement between two pairs' lines at a
-    triple junction is below drawing precision). Facets whose result
-    is invalid or drifts from the simplified area keep the simplified
-    polygon."""
-    simplified: list[Polygon] = []
-    for polygon in polygons:
-        if polygon.is_empty:
-            simplified.append(polygon)
+    outline: Polygon,
+) -> float:
+    """Feet of facet boundary that runs near a neighbour WITHOUT
+    coinciding with it — the doubled trace a roofer sees as two
+    almost-parallel lines. A boundary segment counts when its
+    midpoint sits within 0.75 m of the neighbour's polygon but more
+    than 5 cm from the neighbour's boundary (and it is not perimeter).
+    Ported from the Phase 1 prototype's diagnose()."""
+    polys = [p for p in polygons]
+    boundaries = [p.boundary if not p.is_empty else None for p in polys]
+    outline_boundary = outline.boundary
+    divergent_m = 0.0
+    for i in range(len(polys)):
+        if polys[i].is_empty:
             continue
-        candidate = _largest_polygon_part(
-            polygon.simplify(0.15, preserve_topology=True)
+        for j in range(i + 1, len(polys)):
+            if polys[j].is_empty or polys[i].distance(polys[j]) > 1.0:
+                continue
+            line = _plane_intersection_line(plane_models[i], plane_models[j])
+            if line is None or math.hypot(line[0], line[1]) < 0.02:
+                # Near-parallel planes: the intersection trace is
+                # numerically meaningless and must not pollute metrics.
+                continue
+            for mine, theirs in ((i, j), (j, i)):
+                coords = list(polys[mine].exterior.coords)
+                for (x0, y0), (x1, y1) in zip(coords, coords[1:]):
+                    mid = Point((x0 + x1) / 2, (y0 + y1) / 2)
+                    if outline_boundary.distance(mid) <= 0.05:
+                        continue  # perimeter, not a seam
+                    if boundaries[theirs] is not None and (
+                        boundaries[theirs].distance(mid) <= 0.05
+                    ):
+                        continue  # coincident seam
+                    if polys[theirs].distance(mid) <= 0.75:
+                        divergent_m += math.hypot(x1 - x0, y1 - y0)
+    return round(divergent_m * _FT_PER_M, 1)
+
+
+def _surgery_partition_violation(
+    regions: list[Polygon],
+    graph_pairs: set[tuple[int, int]],
+) -> str | None:
+    """Partition-validity guard for a rebuilt tiling (Phase 3
+    finding): the rebuilt rings must remain a clean partition of the
+    SAME adjacency graph the surgery started from. Two violations:
+
+    - overlap: two facets' regions overlap by more than a hairline
+      (1e-6 m²) — the rebuild is not a partition at all;
+    - phantom adjacency: two facets share a real edge (> 0.05 m of
+      coincident boundary) although the boundary graph has no chain
+      for that pair. Face recovery can manufacture such an edge —
+      Phase 3's sw139 case: a 49.6 ft coincident facet-2/facet-4 edge
+      in the rebuilt rings where the two facets never touch in the
+      tiling (a third facet sits between them). The phantom edge is
+      coincident in both rings, so the divergent-seam guard cannot
+      see it; only this adjacency check can.
+
+    Returns a short violation tag, or None when the rebuild is a
+    valid partition of the graph's adjacency."""
+    for i in range(len(regions)):
+        if regions[i].is_empty:
+            continue
+        for j in range(i + 1, len(regions)):
+            if regions[j].is_empty:
+                continue
+            if regions[i].intersection(regions[j]).area > 1e-6:
+                return f"overlap_{i}_{j}"
+            shared = regions[i].boundary.intersection(
+                regions[j].boundary
+            ).length
+            if shared > 0.05 and (i, j) not in graph_pairs:
+                return f"phantom_adjacency_{i}_{j}"
+    return None
+
+
+def _surgery_partition_boundaries(
+    partition: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    pitches: list[float],
+    outline: Polygon,
+) -> tuple[list[Polygon], dict[str, Any]]:
+    """Boundary-graph surgery on the partition tiling (see the block
+    comment above): shared seams become single straight segments of
+    the facet pairs' true plane-intersection lines. Returns the
+    rebuilt polygons (aligned with `partition`) and construction
+    stats. On any structural doubt the whole house falls back to the
+    input tiling, recorded in stats["fallback_reason"] — the surgery
+    may degrade to today's drawing, never below it. Facets the
+    partition erased (empty region) are excluded and stay empty, so
+    the caller's fitted-polygon fallback still applies to them."""
+    from shapely.ops import polygonize, unary_union
+
+    stats: dict[str, Any] = {}
+    active = [i for i, p in enumerate(partition) if not p.is_empty]
+    if len(active) < 2:
+        stats["fallback_reason"] = "fewer_than_two_partitioned_facets"
+        return list(partition), stats
+    labels = [partition[i] for i in active]
+    planes = [plane_models[i] for i in active]
+    count = len(active)
+
+    def fallback(reason: str) -> tuple[list[Polygon], dict[str, Any]]:
+        stats["fallback_reason"] = reason
+        return list(partition), stats
+
+    graph = _boundary_chains(labels, outline)
+    chains = graph["chains"]
+    if not chains:
+        return fallback("no_chains")
+    junctions = graph["junctions"]
+    # The adjacency the rebuild must preserve: facet pairs that share
+    # a chain in the tiling's own boundary graph (active indexing).
+    graph_pairs: set[tuple[int, int]] = {
+        tuple(sorted(chain["pair"]))
+        for chain in chains
+        if len(chain["pair"]) == 2 and -1 not in chain["pair"]
+    }
+
+    pair_lines: dict[frozenset, Any] = {}
+    for chain in chains:
+        pair = chain["pair"]
+        if len(pair) == 2 and -1 not in pair and pair not in pair_lines:
+            i, j = sorted(pair)
+            pair_lines[pair] = _plane_intersection_line(planes[i], planes[j])
+    pair_chains = 0
+    snapped = 0
+    for chain in chains:
+        pair = chain["pair"]
+        if len(pair) != 2 or -1 in pair:
+            continue
+        line = pair_lines.get(pair)
+        if line is None:
+            continue
+        pair_chains += 1
+        verts = chain["verts"]
+        if verts[0] == verts[-1] or len(verts) < 2:
+            continue  # a closed island ring is not one line segment
+        la, lb, lc = line
+        norm = math.hypot(la, lb)
+        d_end = max(
+            abs(la * x + lb * y + lc) / norm for x, y in (verts[0], verts[-1])
         )
-        if (
-            candidate is None
-            or not candidate.is_valid
-            or abs(candidate.area - polygon.area) > max(0.05 * polygon.area, 0.5)
-        ):
-            candidate = polygon
-        simplified.append(candidate)
-
-    rings: list[list[tuple[float, float]]] = [
-        _ring_coords(polygon) if not polygon.is_empty else []
-        for polygon in simplified
-    ]
-
-    def close(a: tuple[float, float], b: tuple[float, float]) -> bool:
-        return math.hypot(a[0] - b[0], a[1] - b[1]) <= 0.05
-
-    placed: dict[tuple[float, float], tuple[float, float]] = {}
-
-    def placed_key(point: tuple[float, float]) -> tuple[float, float]:
-        return (round(point[0], 2), round(point[1], 2))
-
-    # Collect segments: (facet, index) -> (a, b) with ring[index] = a.
-    segments: list[tuple[int, int, tuple[float, float], tuple[float, float]]] = []
-    for facet, ring in enumerate(rings):
-        for index in range(len(ring)):
-            segments.append(
-                (facet, index, ring[index], ring[(index + 1) % len(ring)])
-            )
-    replacements: dict[tuple[int, int], tuple[tuple[float, float], tuple[float, float]]] = {}
-    for left in range(len(segments)):
-        facet_a, index_a, a0, a1 = segments[left]
-        if (facet_a, index_a) in replacements:
+        if d_end > _SURGERY_CHAIN_SNAP_MAX_M:
             continue
-        for right in range(left + 1, len(segments)):
-            facet_b, index_b, b0, b1 = segments[right]
-            if facet_a == facet_b or (facet_b, index_b) in replacements:
-                continue
-            if not (
-                (close(a0, b0) and close(a1, b1))
-                or (close(a0, b1) and close(a1, b0))
-            ):
-                continue
-            # A matched seam segment: project onto the pair's
-            # plane-intersection line.
-            (aa, ba, ca), (ab, bb, cb) = (
-                plane_models[facet_a],
-                plane_models[facet_b],
-            )
-            la, lb, lc = aa - ab, ba - bb, ca - cb
-            norm = math.hypot(la, lb)
-            if norm <= 1e-6:
-                continue
-            norm_sq = la * la + lb * lb
+        chain["hausdorff"] = LineString(verts).hausdorff_distance(
+            LineString([verts[0], verts[-1]])
+        )
+        if chain["hausdorff"] > _SURGERY_CHAIN_HAUSDORFF_MAX_M:
+            continue
+        chain["snap"] = True
+        snapped += 1
+    stats["pair_chains"] = pair_chains
+    stats["chains_snapped"] = snapped
 
-            def project(
-                point: tuple[float, float],
-            ) -> tuple[float, float] | None:
-                key = placed_key(point)
-                if key in placed:
-                    return placed[key]
-                offset = (la * point[0] + lb * point[1] + lc) / norm_sq
-                if abs(offset) * norm > 0.9:
-                    return None
-                projected = (
-                    point[0] - offset * la,
-                    point[1] - offset * lb,
+    incident: dict[tuple[float, float], list[dict[str, Any]]] = {}
+    for chain in chains:
+        incident.setdefault(chain["verts"][0], []).append(chain)
+        if chain["verts"][-1] != chain["verts"][0]:
+            incident.setdefault(chain["verts"][-1], []).append(chain)
+
+    def solve_targets(clamp_m: float) -> tuple[dict, int]:
+        targets: dict[tuple[float, float], tuple[float, float]] = {}
+        moved = 0
+        for vertex, chs in incident.items():
+            if vertex not in junctions:
+                continue
+            lines: list[tuple[float, float, float]] = []
+            for chain in chs:
+                if chain["snap"]:
+                    lines.append(pair_lines[chain["pair"]])
+                elif len(chain["pair"]) == 2 and -1 in chain["pair"]:
+                    # Perimeter chain: constrain the junction to the
+                    # outline edge line of its own first segment.
+                    verts = chain["verts"]
+                    if verts[0] == vertex:
+                        (x1, y1), (x2, y2) = verts[0], verts[1]
+                    else:
+                        (x1, y1), (x2, y2) = verts[-1], verts[-2]
+                    la, lb = y2 - y1, x1 - x2
+                    lines.append((la, lb, -(la * x1 + lb * y1)))
+            if not lines:
+                targets[vertex] = vertex
+                continue
+            ata = [[0.0, 0.0], [0.0, 0.0]]
+            atb = [0.0, 0.0]
+            for la, lb, lc in lines:
+                n2 = la * la + lb * lb
+                if n2 < 1e-12:
+                    continue
+                w = 1.0 / math.sqrt(n2)
+                la, lb, lc = la * w, lb * w, lc * w
+                ata[0][0] += la * la
+                ata[0][1] += la * lb
+                ata[1][0] += la * lb
+                ata[1][1] += lb * lb
+                atb[0] += -la * lc
+                atb[1] += -lb * lc
+            det = ata[0][0] * ata[1][1] - ata[0][1] * ata[1][0]
+            if abs(det) < 1e-9:
+                la, lb, lc = lines[0]
+                t = -(la * vertex[0] + lb * vertex[1] + lc) / (la * la + lb * lb)
+                tx, ty = vertex[0] + la * t, vertex[1] + lb * t
+            else:
+                tx = (atb[0] * ata[1][1] - atb[1] * ata[0][1]) / det
+                ty = (ata[0][0] * atb[1] - ata[1][0] * atb[0]) / det
+            if math.hypot(tx - vertex[0], ty - vertex[1]) > clamp_m:
+                tx, ty = vertex
+            elif math.hypot(tx - vertex[0], ty - vertex[1]) > 0.01:
+                moved += 1
+            targets[vertex] = (tx, ty)
+        return targets, moved
+
+    def attempt(clamp_m: float):
+        """One rebuild at the current snap set. Returns (regions,
+        None) or (None, reason)."""
+        targets, moved = solve_targets(clamp_m)
+        rebuilt: list[LineString] = []
+        for chain in chains:
+            verts = chain["verts"]
+            if chain["snap"]:
+                a = targets.get(verts[0], verts[0])
+                b = targets.get(verts[-1], verts[-1])
+                if a != b:
+                    rebuilt.append(LineString([a, b]))
+            else:
+                mapped = [
+                    targets.get(v, v) if k in (0, len(verts) - 1) else v
+                    for k, v in enumerate(verts)
+                ]
+                rebuilt.append(LineString(mapped))
+        faces = [
+            face for face in polygonize(unary_union(rebuilt + [outline.boundary]))
+            if face.area > 1e-9 and outline.covers(face.representative_point())
+        ]
+        covered = sum(face.area for face in faces)
+        if covered < 0.99 * outline.area:
+            return None, f"faces_cover_{covered / outline.area:.3f}"
+        buckets: list[list[Polygon]] = [[] for _ in range(count)]
+        for face in faces:
+            owner = _tiling_side_label(face.representative_point(), labels)
+            if owner < 0:
+                return None, "unowned_face"
+            buckets[owner].append(face)
+        regions: list[Any] = [
+            unary_union(buckets[i]) if buckets[i] else Polygon()
+            for i in range(count)
+        ]
+        # A facet whose faces form disjoint parts cannot ship as one
+        # ring. Reassign each smaller part to the neighbour sharing
+        # its longest border (the union stays a single polygon and
+        # the tiling stays exact); if that is impossible the attempt
+        # fails and the veto ladder proceeds.
+        for i in range(count):
+            if regions[i].is_empty:
+                continue
+            parts = _polygon_parts(regions[i])
+            if len(parts) <= 1:
+                continue
+            parts.sort(key=lambda part: -part.area)
+            regions[i] = parts[0]
+            for part in parts[1:]:
+                best_k, best_len = -1, 0.0
+                for k in range(count):
+                    if k == i or regions[k].is_empty:
+                        continue
+                    shared_len = part.boundary.intersection(
+                        regions[k].boundary
+                    ).length
+                    if shared_len > best_len:
+                        best_len, best_k = shared_len, k
+                if best_k < 0 or best_len <= 1e-9:
+                    return None, "multipart_facet"
+                merged_parts = _polygon_parts(
+                    unary_union([regions[best_k], part])
                 )
-                placed[key] = projected
-                return projected
+                if len(merged_parts) != 1:
+                    return None, "multipart_facet"
+                regions[best_k] = merged_parts[0]
+                stats["parts_reassigned"] = stats.get("parts_reassigned", 0) + 1
+        ratios = [
+            round(regions[i].area / labels[i].area, 3) if regions[i] else 0.0
+            for i in range(count)
+        ]
+        stats["area_ratios"] = ratios
+        for i in range(count):
+            if regions[i].is_empty:
+                return None, f"facet_{active[i]}_lost_its_face"
+            if ratios[i] < 0.6 or ratios[i] > 1.5:
+                return None, f"facet_{active[i]}_area_drift"
+        stats["junctions_moved"] = moved
+        stats["clamp_used_m"] = clamp_m
+        # Partition-validity guard (Phase 3): the recovered faces —
+        # including any multi-part reassignment above — must not
+        # overlap and must not invent an adjacency the boundary graph
+        # does not have. A violation fails this attempt like any
+        # other, so the veto ladder proceeds and the house can still
+        # fall back to today's tiling.
+        violation = _surgery_partition_violation(regions, graph_pairs)
+        if violation is not None:
+            return None, violation
+        result: list[Polygon] = list(partition)
+        for i in range(count):
+            result[active[i]] = regions[i]
+        return result, None
 
-            mid = ((a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2)
-            if abs(la * mid[0] + lb * mid[1] + lc) / norm > 1.0:
-                continue
-            new_a0 = project(a0)
-            new_a1 = project(a1)
-            if new_a0 is None or new_a1 is None:
-                continue
-            replacements[(facet_a, index_a)] = (new_a0, new_a1)
-            replacements[(facet_b, index_b)] = (
-                (new_a0, new_a1) if close(a0, b0) else (new_a1, new_a0)
+    # Attempt order: full snap set at the standard clamp; then veto
+    # the most-deviant snapped chain one at a time (a straightened
+    # chord can amputate a small facet the chain bowed around, which
+    # no junction clamp can fix — the chord, not the move, does the
+    # damage); then smaller clamps. A rebuild that trades a true seam
+    # for a longer doubled trace elsewhere is likewise vetoed.
+    attempts: list[str] = []
+    vetoed: list[str] = []
+    result = None
+    divergent_before = _divergent_seam_ft(labels, planes, outline)
+    stats["divergent_before_ft"] = divergent_before
+    while True:
+        result, reason = attempt(_SURGERY_JUNCTION_CLAMP_M)
+        if result is not None:
+            result_active = [result[i] for i in active]
+            div_after = _divergent_seam_ft(result_active, planes, outline)
+            stats["divergent_after_ft"] = div_after
+            live = [ch for ch in chains if ch["snap"]]
+            if div_after <= divergent_before + 2.0 or not live:
+                break
+            attempts.append(
+                f"divergent_regressed {divergent_before} -> {div_after}"
             )
-            break
+            result = None
+        else:
+            attempts.append(reason)
+            live = [ch for ch in chains if ch["snap"]]
+            if not live:
+                break
+        worst = max(live, key=lambda ch: ch["hausdorff"])
+        worst["snap"] = False
+        stats["chains_snapped"] -= 1
+        vetoed.append("+".join(str(active[k]) for k in sorted(worst["pair"])))
+    if result is None:
+        for clamp_m in (
+            _SURGERY_JUNCTION_CLAMP_M / 2,
+            _SURGERY_JUNCTION_CLAMP_M / 4,
+        ):
+            result, reason = attempt(clamp_m)
+            if result is not None:
+                break
+            attempts.append(f"clamp {clamp_m}: {reason}")
+    if vetoed:
+        stats["chains_vetoed"] = vetoed
+    if attempts:
+        stats["earlier_attempts"] = attempts
+    if result is None:
+        return fallback("attempts_exhausted: " + "; ".join(attempts))
+    return [_dedupe_ring_points(polygon) for polygon in result], stats
 
-    # Junction consensus: a vertex moved by one pair's projection is
-    # moved identically in every ring that carries it, so a triple
-    # junction stays a single point across all its facets.
-    moves: list[tuple[tuple[float, float], tuple[float, float]]] = []
-    for (facet, index), (new_a, new_b) in replacements.items():
-        ring = rings[facet]
-        moves.append((ring[index], new_a))
-        moves.append((ring[(index + 1) % len(ring)], new_b))
 
-    result: list[Polygon] = []
-    for facet, ring in enumerate(rings):
-        if not ring:
-            result.append(simplified[facet])
+def _classify_pair_local_chord(
+    geom_i: Polygon,
+    plane_i: tuple[float, float, float],
+    pitch_i: float,
+    geom_j: Polygon,
+    plane_j: tuple[float, float, float],
+    pitch_j: float,
+) -> str | None:
+    """Classify a facet pair's shared edge with a LOCAL chord test
+    (the Phase 1 prototype's classify_pair_local): the seam itself
+    comes from _shared_edge_span, but the verdict is re-derived at
+    the seam midpoint by stepping 1 m perpendicular into each facet —
+    the side of the intersection line that facet actually occupies —
+    and comparing the planes' heights there against the seam height.
+    The verdict depends only on the two planes and the seam, not on
+    either polygon's representative point, so a pair keeps its class
+    when the polygons are rebuilt. (_shared_edge_span's own verdict
+    steps toward each polygon's representative point, which made the
+    same pair of planes flip class when a polygon changed shape:
+    measured on Miramar, the valley the fitter reported at 59.6 ft
+    classified as hip on the drawing partition.) The span's verdict
+    survives only where the local test cannot be evaluated (parallel
+    planes — a flat pair's pitch-change seam — or an indeterminate
+    side). Returns None when the pair shares no span at all."""
+    span = _shared_edge_span(
+        geom_i, plane_i[0], plane_i[1], plane_i[2], pitch_i,
+        geom_j, plane_j[0], plane_j[1], plane_j[2], pitch_j,
+    )
+    if span is None:
+        return None
+    _length_m, live_class, seam = span
+    line = _plane_intersection_line(plane_i, plane_j)
+    if line is None or seam is None or seam.is_empty:
+        return live_class
+    la, lb, lc = line
+    norm = math.hypot(la, lb)
+    nx, ny = la / norm, lb / norm
+    (x0, y0), (x1, y1) = seam.coords[0], seam.coords[-1]
+    mx, my = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    edge_z = plane_i[0] * mx + plane_i[1] * my + plane_i[2]
+    chord = 0.0
+    for geom, plane in ((geom_i, plane_i), (geom_j, plane_j)):
+        # Which side of the line does this facet occupy? Probe both
+        # sides: the occupied side's probe lands inside the facet.
+        # (A plain distance threshold cannot decide this — a probe
+        # 0.5 m across the seam is also within 0.5 m of THIS facet's
+        # boundary, which flips the chord test's sign on symmetric
+        # roofs.) Fall back to the nearer probe, then to the
+        # representative point's side.
+        probes = {}
+        for sign in (1.0, -1.0):
+            probe = Point(mx + sign * nx * 0.5, my + sign * ny * 0.5)
+            probes[sign] = (geom.covers(probe), geom.distance(probe))
+        covered = [sign for sign, (cov, _d) in probes.items() if cov]
+        if len(covered) == 1:
+            inside = covered[0]
+        elif abs(probes[1.0][1] - probes[-1.0][1]) > 1e-9:
+            inside = 1.0 if probes[1.0][1] < probes[-1.0][1] else -1.0
+        else:
+            rep = geom.representative_point()
+            side = (rep.x - mx) * nx + (rep.y - my) * ny
+            if abs(side) <= 1e-9:
+                return live_class
+            inside = 1.0 if side > 0 else -1.0
+        px, py = mx + inside * nx * 1.0, my + inside * ny * 1.0
+        chord += (plane[0] * px + plane[1] * py + plane[2]) / 2.0
+    flat_pair = pitch_i < 5.0 and pitch_j < 5.0
+    if flat_pair or abs(edge_z - chord) <= 0.03:
+        return "pitch_change"
+    if edge_z > chord:
+        dz = plane_i[0] * plane_j[1] - plane_j[0] * plane_i[1]
+        dx, dy = -plane_i[1] + plane_j[1], plane_i[0] - plane_j[0]
+        horizontal = math.hypot(dx, dy)
+        slope_along = abs(dz) / horizontal if horizontal > 1e-9 else 0.0
+        return "ridge" if slope_along <= 0.14 else "hip"
+    return "valley"
+
+
+def _graph_edge_totals(
+    polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    pitches: list[float],
+    outline: Polygon,
+) -> dict[str, float]:
+    """EagleView-style edge totals measured on the drawing's boundary
+    graph itself: for each facet pair, the summed 3D length of the
+    chains they share in the emitted tiling, classified once per pair
+    by the local chord test (_classify_pair_local_chord); perimeter
+    chains are split into eave/rake per segment by the facet's
+    gradient, as _compute_edge_lengths does. Measuring the graph —
+    instead of re-running the polygon-sensitive _shared_edge_span on
+    reshaped polygons — means the totals describe exactly the lines
+    the drawing ships, and a pair's class cannot drift when a polygon
+    is rebuilt. Chains shorter than _GRAPH_MIN_SEAM_M are corner
+    noise and do not count toward a pair's total."""
+    totals = {
+        "ridge": 0.0, "hip": 0.0, "valley": 0.0,
+        "eave": 0.0, "rake": 0.0, "pitch_change": 0.0,
+    }
+    graph = _boundary_chains(polygons, outline)
+    by_pair: dict[frozenset, list[dict[str, Any]]] = {}
+    for chain in graph["chains"]:
+        if len(chain["pair"]) == 2:
+            by_pair.setdefault(chain["pair"], []).append(chain)
+
+    def chain_plan_length(chain: dict[str, Any]) -> float:
+        verts = chain["verts"]
+        return sum(
+            math.hypot(x1 - x0, y1 - y0)
+            for (x0, y0), (x1, y1) in zip(verts, verts[1:])
+        )
+
+    for pair, pair_chains in by_pair.items():
+        if -1 not in pair:
+            i, j = sorted(pair)
+            classification = _classify_pair_local_chord(
+                polygons[i], plane_models[i], pitches[i],
+                polygons[j], plane_models[j], pitches[j],
+            )
+            if classification is None:
+                continue
+            a_i, b_i, _ = plane_models[i]
+            a_j, b_j, _ = plane_models[j]
+            length_m = 0.0
+            for chain in pair_chains:
+                if chain_plan_length(chain) < _GRAPH_MIN_SEAM_M:
+                    continue
+                verts = chain["verts"]
+                for (x0, y0), (x1, y1) in zip(verts, verts[1:]):
+                    dx, dy = x1 - x0, y1 - y0
+                    dz = ((a_i + a_j) / 2.0) * dx + ((b_i + b_j) / 2.0) * dy
+                    length_m += math.hypot(math.hypot(dx, dy), dz)
+            totals[classification] += length_m * _FT_PER_M
+        else:
+            i = next(k for k in pair if k != -1)
+            a, b, _c = plane_models[i]
+            gradient = math.hypot(a, b)
+            for chain in pair_chains:
+                verts = chain["verts"]
+                for (x0, y0), (x1, y1) in zip(verts, verts[1:]):
+                    span = math.hypot(x1 - x0, y1 - y0)
+                    if span < 0.3:
+                        continue
+                    ux, uy = (x1 - x0) / span, (y1 - y0) / span
+                    slope_along = a * ux + b * uy
+                    length_ft = (
+                        span * math.sqrt(1.0 + slope_along * slope_along)
+                        * _FT_PER_M
+                    )
+                    if gradient <= 1e-6:
+                        totals["eave"] += length_ft
+                        continue
+                    alignment = abs(
+                        ux * (-a / gradient) + uy * (-b / gradient)
+                    )
+                    totals["eave" if alignment < 0.5 else "rake"] += length_ft
+    return {key: round(value, 1) for key, value in totals.items()}
+
+
+def _dedupe_ring_points(polygon: Polygon) -> Polygon:
+    """Drop consecutive ring vertices that duplicate (within 0.1 mm)
+    the previous kept vertex, and a closing vertex that repeats the
+    first. Polygonized faces can carry a point twice in a row where
+    the boundary graph contracted a micro-segment, and noding leaves
+    hairline-apart vertex pairs (micrometres) at junctions; neither
+    carries geometry, but both trip the emission ring checks
+    (minimum consecutive-vertex distance) and the converter's
+    duplicate-point rejection. Returns the input unchanged when
+    nothing is dropped or the rebuild is not a faithful copy (same
+    validity, area within 0.1%)."""
+    if polygon.is_empty or polygon.geom_type != "Polygon":
+        return polygon
+    ring = _ring_coords(polygon)
+    deduped: list[tuple[float, float]] = []
+    for point in ring:
+        if deduped and math.hypot(
+            point[0] - deduped[-1][0], point[1] - deduped[-1][1]
+        ) <= 1e-4:
             continue
-        rebuilt = list(ring)
-        for index in range(len(ring)):
-            replacement = replacements.get((facet, index))
-            if replacement is not None:
-                rebuilt[index] = replacement[0]
-                rebuilt[(index + 1) % len(ring)] = replacement[1]
-        for index, point in enumerate(rebuilt):
-            for old, new in moves:
-                if math.hypot(point[0] - new[0], point[1] - new[1]) <= 0.01:
-                    break
-                if math.hypot(point[0] - old[0], point[1] - old[1]) <= 0.05:
-                    rebuilt[index] = new
-                    break
-        candidate = Polygon(rebuilt)
-        base = simplified[facet]
+        deduped.append(point)
+    while len(deduped) > 1 and math.hypot(
+        deduped[-1][0] - deduped[0][0], deduped[-1][1] - deduped[0][1]
+    ) <= 1e-4:
+        deduped.pop()
+    if len(deduped) == len(ring) or len(deduped) < 3:
+        return polygon
+    rebuilt = Polygon(deduped)
+    if (
+        rebuilt.is_empty
+        or rebuilt.is_valid != polygon.is_valid
+        or abs(rebuilt.area - polygon.area) > 0.001 * max(polygon.area, 1e-9)
+    ):
+        return polygon
+    return rebuilt
+
+
+def _condition_tiling_for_emission(
+    polygons: list[Polygon],
+) -> list[Polygon] | None:
+    """Coincidence-preserving conditioning for an exact facet tiling
+    (the surgery's output): the rings already tile exactly — shared
+    edges coincident, junctions single points — so the legacy
+    conditioning passes (per-ring sparsify, conflation, overlap
+    subtraction across an EMISSION_GAP_M hairline) must NOT run: each
+    of them moves or cuts one side of a seam without the other and
+    would re-introduce the divergent traces the surgery removed.
+    What remains is validity repair (a no-op on polygonized faces),
+    the same per-facet destruction guard the legacy path applies,
+    and — only if a ring exceeds the vertex cap — near-collinear
+    thinning of whole CHAINS on the shared graph (a chain vertex is
+    dropped for both facets at once, and only when it barely deviates
+    from its neighbours' chord). Returns None when the tiling cannot
+    be conditioned without breaking coincidence; the caller then
+    falls back to the legacy conditioning, today's behaviour."""
+    if not polygons:
+        return list(polygons)
+    originals = list(polygons)
+    repaired = [
+        _dedupe_ring_points(_repaired_polygon(polygon)) for polygon in originals
+    ]
+    for original, candidate in zip(originals, repaired):
         if (
             candidate.is_empty
             or not candidate.is_valid
-            or abs(candidate.area - base.area) > max(0.05 * base.area, 0.5)
+            or candidate.area
+            < MIN_FACET_REMAINING_FRACTION * original.area - 1e-9
+            or candidate.area > 1.10 * original.area + 1e-9
         ):
-            result.append(base)
-        else:
-            result.append(candidate)
-    return result
+            return None
+    # The premise of this path is an exact tiling: verify the rings
+    # really are pairwise disjoint before trusting them as one.
+    for i in range(len(repaired)):
+        for j in range(i + 1, len(repaired)):
+            if repaired[i].intersection(repaired[j]).area > 1e-6:
+                return None
+
+    def within_limits(rings: list[Polygon]) -> bool:
+        for polygon in rings:
+            ring = _ring_coords(polygon)
+            if len(ring) > EMISSION_MAX_RING_POINTS:
+                return False
+            for a, b in zip(ring, ring[1:] + ring[:1]):
+                # Only a literal zero-length segment is rejected
+                # here. Closer-than-a-centimetre vertex pairs are
+                # real tiling micro-geometry (junction pinches tens
+                # of micrometres apart, load-bearing for the ring's
+                # validity); moving them apart on one ring would
+                # break coincidence, and the converter-frame repair
+                # downstream already merges micro-clusters
+                # (<= 0.25 ft) identically across rings before the
+                # converter sees them — that sanitation exists for
+                # exactly this partition output.
+                if math.hypot(a[0] - b[0], a[1] - b[1]) == 0.0:
+                    return False
+        return True
+
+    if within_limits(repaired):
+        return repaired
+
+    from shapely.ops import polygonize, unary_union
+
+    outline = _largest_polygon_part(unary_union(repaired))
+    if outline is None:
+        return None
+    graph = _boundary_chains(repaired, outline)
+    changed = False
+    for chain in graph["chains"]:
+        verts = chain["verts"]
+        if len(verts) <= 2 or verts[0] == verts[-1]:
+            continue
+        idx = 1
+        while len(verts) > 2 and idx < len(verts) - 1:
+            prev, point, nxt = verts[idx - 1], verts[idx], verts[idx + 1]
+            chord = (nxt[0] - prev[0], nxt[1] - prev[1])
+            chord_len = math.hypot(*chord)
+            deviation = (
+                abs(chord[0] * (point[1] - prev[1])
+                    - chord[1] * (point[0] - prev[0])) / chord_len
+                if chord_len > 1e-9
+                else 0.0
+            )
+            if deviation <= EMISSION_SHORT_EDGE_DEVIATION_M:
+                verts.pop(idx)
+                changed = True
+            else:
+                idx += 1
+    # Even when no interior vertex was thinned, the rebuild below is
+    # worth attempting: the graph's own micro-segment contraction
+    # (segments under 0.15 m merged while the chains were built) can
+    # clear sub-centimetre junction pairs that vertex thinning cannot
+    # touch — the pair's endpoints are junctions, not interior
+    # points. The rebuild's guards (face coverage, owner assignment,
+    # per-facet area limits, final within_limits) decide whether the
+    # result is trustworthy; if nothing actually changed, the final
+    # check rejects it exactly as before.
+    _ = changed
+    linework = [
+        LineString(chain["verts"])
+        for chain in graph["chains"]
+        if len(chain["verts"]) >= 2
+    ]
+    faces = [
+        face for face in polygonize(unary_union(linework + [outline.boundary]))
+        if face.area > 1e-9 and outline.covers(face.representative_point())
+    ]
+    if sum(face.area for face in faces) < 0.99 * outline.area:
+        return None
+    buckets: list[list[Polygon]] = [[] for _ in repaired]
+    for face in faces:
+        owner = _tiling_side_label(face.representative_point(), repaired)
+        if owner < 0:
+            return None
+        buckets[owner].append(face)
+    thinned: list[Polygon] = []
+    for index, bucket in enumerate(buckets):
+        if not bucket:
+            return None
+        region = unary_union(bucket)
+        parts = _polygon_parts(region)
+        if len(parts) != 1:
+            return None
+        # The union of polygonized faces re-nodes shared junctions and
+        # can leave micrometre-apart vertex pairs along the seams;
+        # drop them (they carry no geometry) before the ring checks.
+        candidate = _dedupe_ring_points(parts[0])
+        original = originals[index]
+        if (
+            candidate.is_empty
+            or not candidate.is_valid
+            or candidate.area
+            < MIN_FACET_REMAINING_FRACTION * original.area - 1e-9
+            or candidate.area > 1.10 * original.area + 1e-9
+        ):
+            return None
+        thinned.append(candidate)
+    return thinned if within_limits(thinned) else None
+
+
 
 def _drawing_partition(
     fitted_polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
     footprint: Polygon,
     footprint_provider: str | None,
+    pitches: list[float] | None = None,
+    totals_out: dict[str, float] | None = None,
 ) -> tuple[list[Polygon], bool]:
     """The drawing's facet geometry: the fitted facets re-rendered as
-    an exact partition of the roof outline with straight shared
-    boundaries (see _drawing_outline, _partition_facets_to_outline,
-    _straighten_partition_boundaries). This is a RENDERING of the
-    fitted facets for the sketch — the service's reported areas,
-    pitches and edge totals are computed from the fitted polygons
-    themselves and never from this partition. Any failure or sanity
-    breach falls back to the fitted polygons unchanged, so the drawing
-    can degrade to hull geometry but never break the response.
+    an exact partition of the roof outline whose shared seams are the
+    fitted planes' own intersection lines (see _drawing_outline,
+    _partition_facets_to_outline, _surgery_partition_boundaries).
+    This is a RENDERING of the fitted facets for the sketch — the
+    service's reported areas and pitches are computed from the fitted
+    polygons themselves and never from this partition. Any failure or
+    sanity breach falls back to the fitted polygons unchanged, so the
+    drawing can degrade to hull geometry but never break the response.
+
+    When every facet's drawing polygon came from the partition, the
+    drawing's edge totals are measured on the partition's boundary
+    graph (_graph_edge_totals) and written into `totals_out` when the
+    caller provides it: the totals then describe exactly the lines
+    the drawing ships, classified by a chord test that depends only
+    on the two planes and their seam.
 
     The boolean reports whether EVERY facet's drawing polygon came
     from the partition (no fitted-polygon fallback anywhere): the
@@ -3459,19 +4290,22 @@ def _drawing_partition(
             > 0.10 * fitted_union.area
         ):
             return fitted_polygons, False
-        straightened = _straighten_partition_boundaries(partition, plane_models)
-        # Snapping seams onto plane-intersection lines can push a
-        # junction past the outline (the projection answers to the
-        # planes, not to the eave line), leaving a facet with a small
-        # overshoot flap outside the roof. Re-tile the straightened
-        # polygons against the outline: every input edge is already
-        # straight, and boolean ops on straight-edged polygons keep
-        # them straight, so the drawing keeps its clean seams and
-        # regains exact tiling.
-        straightened = _partition_facets_to_outline(straightened, outline)
+        if pitches is None:
+            pitches = [
+                math.degrees(math.atan(math.hypot(a, b)))
+                for a, b, _c in plane_models
+            ]
+        surgeried, _stats = _surgery_partition_boundaries(
+            partition, plane_models, pitches, outline
+        )
+        # The surgery's faces are recovered by polygonizing the
+        # rebuilt graph together with the outline boundary, so its
+        # output already tiles the outline exactly — no re-tiling
+        # pass is needed (the re-partition the old endpoint-matching
+        # snap required would re-introduce hull-traced boundaries).
         result: list[Polygon] = []
         fully_partitioned = True
-        for fitted, region in zip(fitted_polygons, straightened):
+        for fitted, region in zip(fitted_polygons, surgeried):
             # A facet the partition erased (fully covered by a larger
             # neighbour inside the outline) keeps its fitted polygon —
             # dropping a measured facet from the drawing would be worse
@@ -3481,6 +4315,10 @@ def _drawing_partition(
                 result.append(fitted)
             else:
                 result.append(region)
+        if fully_partitioned and totals_out is not None:
+            totals_out.update(
+                _graph_edge_totals(result, plane_models, pitches, outline)
+            )
         return result, fully_partitioned
     except Exception:  # noqa: BLE001 — drawing geometry must never break a response
         return fitted_polygons, False
@@ -3511,14 +4349,21 @@ def _facets_from_local_points(
     )
     # Serialize the boundary from drawing-conditioned copies of the
     # facet rings (see _condition_polygons_for_emission): the reported
-    # areas, pitches and edge totals above all come from the fitted
-    # geometry, and only the lat/lon rendering of the rings is
-    # conditioned, so the CRM drawing path accepts it as emitted. The
-    # rendering itself is the exact-shape partition of the roof
-    # outline (see _drawing_partition): the sketch shows the footprint
-    # outline tiled by the facets with straight plane-intersection
-    # seams, not LiDAR hull traces.
+    # areas and pitches above all come from the fitted geometry, and
+    # only the lat/lon rendering of the rings is conditioned, so the
+    # CRM drawing path accepts it as emitted. The rendering itself is
+    # the exact-shape partition of the roof outline (see
+    # _drawing_partition): the sketch shows the footprint outline
+    # tiled by the facets with straight plane-intersection seams, not
+    # LiDAR hull traces. When the partition covers every facet, the
+    # edge totals are re-measured on the drawing's boundary graph
+    # (the totals then describe the shipped lines, classified by the
+    # local chord test) and replace the fitted-geometry totals above;
+    # the reported AREA stays plane-based regardless — it is summed
+    # from the fitted facets in _structure_roof_payload and never
+    # derives from the drawing rings.
     fitted_polygons = [Polygon(facet["boundary_xy"]) for facet in raw_facets]
+    drawing_totals: dict[str, float] = {}
     drawing_polygons, drawing_ready = _drawing_partition(
         fitted_polygons,
         [
@@ -3527,8 +4372,14 @@ def _facets_from_local_points(
         ],
         footprint_local,
         footprint_provider,
+        pitches=[float(facet["pitch_degrees"]) for facet in raw_facets],
+        totals_out=drawing_totals,
     )
-    boundary_polygons = _condition_polygons_for_emission(drawing_polygons)
+    if drawing_ready and drawing_totals:
+        edge_lengths = drawing_totals
+    boundary_polygons = _condition_polygons_for_emission(
+        drawing_polygons, exact_tiling=drawing_ready
+    )
     all_facets: list[dict[str, Any]] = []
     for facet, boundary_polygon in zip(raw_facets, boundary_polygons):
         facet["id"] = f"facet-{len(all_facets) + 1}"
