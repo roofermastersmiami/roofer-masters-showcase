@@ -3315,6 +3315,26 @@ def _partition_facets_to_outline(
 # ring-by-ring breaks seam coincidence (the two sides of one seam
 # simplify against different chords and drift apart, proven in
 # Phase 1). Perimeter edges are the outline's own straight segments.
+#
+# Phase 5 (labelled tilings only): the DSM labelling's boundaries
+# are residual-competition raster paths, so the snap guards above —
+# calibrated on hull tilings, whose chains hug the pair's line by
+# construction — refuse most of them: the chain's junctions sit
+# metres off the pairwise line (residual boundaries meet where the
+# raster regions happen to touch, not at the planes' triple point;
+# near-parallel pairs extrapolate their line tens of metres away),
+# and parallel pairs have no line at all. The refused chains would
+# ship their raw raster staircases. So on the labelled path, a
+# refused seam chain is straightened on the same shared graph: it
+# is drawn as one segment between its junctions, with a
+# total-least-squares line through the chain's own vertices guiding
+# the junction solve — the segment follows the boundary the
+# evidence drew, minus the steps, instead of an extrapolated plane
+# line the territory never agreed with. The attempt guards and the
+# veto ladder arbitrate exactly as for snapped chains: a
+# straightened chain whose segment breaks the rebuild (lost facet,
+# area drift, phantom adjacency, divergent regression) is vetoed
+# back to its drawn trace, per chain, never per house.
 # ---------------------------------------------------------------------
 
 _SURGERY_ADJACENCY_M = 1.5        # hulls closer than this are data-adjacent
@@ -3323,6 +3343,22 @@ _SURGERY_CHAIN_SNAP_MAX_M = 1.25  # a seam's junctions must sit this
 _SURGERY_JUNCTION_CLAMP_M = 1.5   # a junction never moves further
 _SURGERY_CHAIN_HAUSDORFF_MAX_M = 2.5
 _SURGERY_MICRO_SEGMENT_M = 0.15   # graph-level micro-segment cleanup
+_SURGERY_STRAIGHTEN_MIN_CHORD_RATIO = 0.5  # a labelled chain whose
+                                  # chord spans less than half its
+                                  # traced length doubles back on
+                                  # itself and keeps its trace
+_SURGERY_STRAIGHTEN_SPLIT_MIN_DEV_M = 0.5  # a bend sharper than this
+                                  # is a real corner, not raster
+                                  # noise: split the chain there
+_SURGERY_STRAIGHTEN_MAX_DEV_M = 1.25      # a straightened piece may
+                                  # deviate from its chord by at
+                                  # most this (the snap guards'
+                                  # own endpoint tolerance): a
+                                  # longer bow is split, not chorded,
+                                  # so its segment cannot amputate
+                                  # the facet it bows around
+_SURGERY_STRAIGHTEN_MAX_SPLIT_DEPTH = 2    # at most 4 straightened
+                                  # pieces per labelled chain
 _GRAPH_MIN_SEAM_M = 0.5           # shorter pair chains are corner noise
 _FT_PER_M = 3.280839895
 
@@ -3339,6 +3375,139 @@ def _plane_intersection_line(
     if math.hypot(la, lb) <= 1e-9:
         return None
     return la, lb, lc
+
+
+def _tls_line(
+    verts: list[tuple[float, float]],
+) -> tuple[float, float, float] | None:
+    """Total-least-squares line through a chain's vertices, in the
+    (la, lb, lc) form of _plane_intersection_line: the line
+    minimising the sum of squared perpendicular distances to the
+    vertices. One trimming pass — vertices deviating more than
+    three times the median deviation are dropped and the line is
+    refit — keeps a single stray raster vertex from rotating the
+    fit. None when the vertices determine no line: fewer than two
+    distinct points, or a near-isotropic scatter (a blob loop or an
+    L-bend, whose principal axis is meaningless — such a chain has
+    no single trend to straighten onto)."""
+    pts = np.asarray(verts, dtype=float)
+    if len(pts) < 2:
+        return None
+
+    def fit(sample: np.ndarray) -> tuple[float, float, float] | None:
+        centre = sample.mean(axis=0)
+        centred = sample - centre
+        cov = centred.T @ centred
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        if eigvals[-1] <= 1e-12:
+            return None
+        if eigvals[0] > 0.25 * eigvals[-1]:
+            return None
+        nx, ny = eigvecs[:, 0]
+        return (
+            float(nx),
+            float(ny),
+            float(-(nx * centre[0] + ny * centre[1])),
+        )
+
+    line = fit(pts)
+    if line is None or len(pts) < 4:
+        return line
+    la, lb, lc = line
+    norm = math.hypot(la, lb)
+    devs = np.abs(la * pts[:, 0] + lb * pts[:, 1] + lc) / norm
+    median = float(np.median(devs))
+    keep = devs <= 3.0 * median
+    if keep.all() or int(keep.sum()) < 2:
+        return line
+    return fit(pts[keep]) or line
+
+
+def _straighten_chain_pieces(
+    chain: dict[str, Any],
+) -> list[dict[str, Any]] | None:
+    """Phase 5: break a snap-refused labelled seam chain into pieces
+    that can each ship as one straight segment on the shared graph,
+    or None when no piece can (the caller keeps the drawn chain).
+
+    A piece qualifies when its trace does not double back on itself
+    (chord at least _SURGERY_STRAIGHTEN_MIN_CHORD_RATIO of the traced
+    length), its vertices determine a TLS trend line, and it deviates
+    from its own chord by at most _SURGERY_STRAIGHTEN_MAX_DEV_M — a
+    longer bow chorded in one segment would hand the whole bow to
+    one side, which is how a straightened seam amputates the small
+    facet it bows around. A chain that fails as a whole — the arc
+    over a fragment blob, a boundary bending around a corner — is
+    split at the vertex deviating most from its chord, recursively
+    up to _SURGERY_STRAIGHTEN_MAX_SPLIT_DEPTH, but only while that
+    deviation exceeds _SURGERY_STRAIGHTEN_SPLIT_MIN_DEV_M (a real
+    corner, not raster noise). The split vertex is an ordinary graph
+    vertex shared by both facets, so the pieces still meet exactly;
+    it simply becomes the corner where the two straight segments
+    join. Unqualifying pieces keep their traced vertices — the
+    fallback is per piece, exactly as the veto ladder's is per
+    chain."""
+
+    def pieces_for(
+        verts: list[tuple[float, float]], depth: int
+    ) -> list[tuple[list[tuple[float, float]], Any]]:
+        if len(verts) <= 2:
+            return [(verts, None)]  # already a single segment
+        traced = LineString(verts).length
+        chord = math.hypot(
+            verts[-1][0] - verts[0][0], verts[-1][1] - verts[0][1]
+        )
+        (x0, y0), (x1, y1) = verts[0], verts[-1]
+        dx, dy = x1 - x0, y1 - y0
+        split_at, worst = -1, 0.0
+        for k in range(1, len(verts) - 1):
+            x, y = verts[k]
+            dev = (
+                abs(dx * (y - y0) - dy * (x - x0)) / chord
+                if chord > 1e-9
+                else 0.0
+            )
+            if dev > worst:
+                split_at, worst = k, dev
+        line = None
+        if traced > 0 and chord >= (
+            _SURGERY_STRAIGHTEN_MIN_CHORD_RATIO * traced
+        ):
+            line = _tls_line(verts)
+        if line is not None and worst <= _SURGERY_STRAIGHTEN_MAX_DEV_M:
+            return [(verts, line)]
+        if (
+            depth >= _SURGERY_STRAIGHTEN_MAX_SPLIT_DEPTH
+            or len(verts) < 4
+            or split_at < 0
+            or worst <= _SURGERY_STRAIGHTEN_SPLIT_MIN_DEV_M
+        ):
+            return [(verts, None)]
+        return (
+            pieces_for(verts[: split_at + 1], depth + 1)
+            + pieces_for(verts[split_at:], depth + 1)
+        )
+
+    pieces = pieces_for(chain["verts"], 0)
+    if not any(line is not None for _verts, line in pieces):
+        return None
+    result: list[dict[str, Any]] = []
+    for verts, line in pieces:
+        piece: dict[str, Any] = {
+            "verts": verts,
+            "pair": chain["pair"],
+            "snap": False,
+            "hausdorff": 0.0,
+        }
+        if line is not None:
+            piece["hausdorff"] = LineString(verts).hausdorff_distance(
+                LineString([verts[0], verts[-1]])
+            )
+            piece["line"] = line
+            piece["snap"] = True
+            piece["straightened"] = True
+        result.append(piece)
+    return result
 
 
 def _graph_vertex(x: float, y: float) -> tuple[float, float]:
@@ -3752,10 +3921,48 @@ def _surgery_partition_boundaries(
         )
         if chain["hausdorff"] > _SURGERY_CHAIN_HAUSDORFF_MAX_M:
             continue
+        chain["line"] = line
         chain["snap"] = True
         snapped += 1
     stats["pair_chains"] = pair_chains
     stats["chains_snapped"] = snapped
+    straightened = 0
+    chains_split = 0
+    if simplify_tol_m > 0:
+        # Phase 5 straightening, labelled (raster) tilings only —
+        # see the block comment above the surgery constants. A seam
+        # chain the snap guards refused would ship its raster
+        # staircase; instead it is broken into straightenable
+        # pieces on the shared graph (corners split, never moved),
+        # each piece marked for the same segment treatment as a
+        # snapped chain but guided by the TLS line through its own
+        # vertices. Hull tilings (tol 0) keep the Phase 2 behaviour
+        # exactly. The graph's adjacency is unchanged — pieces share
+        # their parent chain's pair — so graph_pairs above stands.
+        rebuilt_chains: list[dict[str, Any]] = []
+        for chain in chains:
+            pair = chain["pair"]
+            if (
+                chain["snap"]
+                or len(pair) != 2
+                or -1 in pair
+                or chain["verts"][0] == chain["verts"][-1]
+                or len(chain["verts"]) < 3
+            ):
+                rebuilt_chains.append(chain)
+                continue
+            pieces = _straighten_chain_pieces(chain)
+            if pieces is None:
+                rebuilt_chains.append(chain)
+                continue
+            if len(pieces) > 1:
+                chains_split += 1
+            straightened += sum(1 for p in pieces if p["snap"])
+            rebuilt_chains.extend(pieces)
+        chains = rebuilt_chains
+    stats["chains_straightened"] = straightened
+    if chains_split:
+        stats["chains_split"] = chains_split
 
     incident: dict[tuple[float, float], list[dict[str, Any]]] = {}
     for chain in chains:
@@ -3772,7 +3979,15 @@ def _surgery_partition_boundaries(
             lines: list[tuple[float, float, float]] = []
             for chain in chs:
                 if chain["snap"]:
-                    lines.append(pair_lines[chain["pair"]])
+                    # A snapped chain contributes its pair's plane
+                    # line; a straightened one (Phase 5) contributes
+                    # the TLS line through its own vertices — both
+                    # are recorded on the chain when it is marked.
+                    line = chain.get("line") or pair_lines.get(
+                        chain["pair"]
+                    )
+                    if line is not None:
+                        lines.append(line)
                 elif len(chain["pair"]) == 2 and -1 in chain["pair"]:
                     # Perimeter chain: constrain the junction to the
                     # outline edge line of its own first segment.
@@ -3953,7 +4168,10 @@ def _surgery_partition_boundaries(
                 break
         worst = max(live, key=lambda ch: ch["hausdorff"])
         worst["snap"] = False
-        stats["chains_snapped"] -= 1
+        if worst.get("straightened"):
+            stats["chains_straightened"] -= 1
+        else:
+            stats["chains_snapped"] -= 1
         vetoed.append("+".join(str(active[k]) for k in sorted(worst["pair"])))
     if result is None:
         for clamp_m in (

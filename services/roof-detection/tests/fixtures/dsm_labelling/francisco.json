@@ -2036,11 +2036,11 @@
     "n_discovered": 1
   },
   "expected_totals": {
-    "ridge": 130.0,
+    "ridge": 110.1,
     "hip": 0.0,
     "valley": 20.5,
-    "eave": 89.7,
-    "rake": 126.9,
+    "eave": 94.0,
+    "rake": 129.2,
     "pitch_change": 0.0
   }
 }
