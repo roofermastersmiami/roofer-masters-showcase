@@ -468,7 +468,7 @@ export function RoofMeasurementsTab({
                       onSelectReport(row.id);
                     }}
                   >
-                    <MapPin /> Open 2D / 3D workspace
+                    <MapPin /> Workspace
                   </Button>
                   <EditSketchButton report={row} drawingRow={savedDrawing ?? null} />
                   <DeleteRoofReportButton reportId={row.id} address={row.address} />
