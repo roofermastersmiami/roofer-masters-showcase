@@ -3714,7 +3714,9 @@ def _boundary_chains(
 
 
 def _simplify_boundary_chains(
-    chains: list[dict[str, Any]], tol_m: float
+    chains: list[dict[str, Any]],
+    tol_m: float,
+    protected: set[tuple[float, float]] | None = None,
 ) -> None:
     """Drop interior chain vertices that barely deviate from the
     chord between their kept neighbours (in place). Raster-derived
@@ -3745,7 +3747,9 @@ def _simplify_boundary_chains(
                 if chord_len > 1e-9
                 else 0.0
             )
-            if deviation > tol_m:
+            if deviation > tol_m or (
+                protected is not None and point in protected
+            ):
                 kept.append(point)
         kept.append(verts[-1])
         chain["verts"] = kept
@@ -3755,6 +3759,7 @@ def _divergent_seam_ft(
     polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
     outline: Polygon,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> float:
     """Feet of facet boundary that runs near a neighbour WITHOUT
     coinciding with it — the doubled trace a roofer sees as two
@@ -3776,7 +3781,11 @@ def _divergent_seam_ft(
             if line is None or math.hypot(line[0], line[1]) < 0.02:
                 # Near-parallel planes: the intersection trace is
                 # numerically meaningless and must not pollute metrics.
-                continue
+                # A pair involving a curved facet has no plane line
+                # at all — its seam is real geometry and is always
+                # measured.
+                if not (curved and (i in curved or j in curved)):
+                    continue
             for mine, theirs in ((i, j), (j, i)):
                 # A facet's region can be several disjoint parts
                 # (the DSM labelling legitimately assigns one plane
@@ -3844,6 +3853,7 @@ def _surgery_partition_boundaries(
     pitches: list[float],
     outline: Polygon,
     simplify_tol_m: float = 0.0,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> tuple[list[Polygon], dict[str, Any]]:
     """Boundary-graph surgery on the partition tiling (see the block
     comment above): shared seams become single straight segments of
@@ -3865,6 +3875,61 @@ def _surgery_partition_boundaries(
     planes = [plane_models[i] for i in active]
     count = len(active)
 
+    # Phase 5d: curved facets, translated into active indexing.
+    # A curved facet has no plane-intersection line with anything
+    # (its pair lines are voided below, so its chains never snap),
+    # and a cone's rim chains are protected end to end: no
+    # simplification, no straightening, and junction solutions
+    # that would move a rim vertex are projected back onto the
+    # fitted circle — the arc the tiling drew is the arc the
+    # drawing ships.
+    curved_active: dict[int, dict[str, Any]] = {}
+    if curved:
+        position = {orig: pos for pos, orig in enumerate(active)}
+        curved_active = {
+            position[i]: surf for i, surf in curved.items() if i in position
+        }
+    rim_circles: list[tuple[float, float, float]] = [
+        (
+            surf["centre"][0],
+            surf["centre"][1],
+            float(surf["rim_radius_m"]),
+        )
+        for surf in curved_active.values()
+        if surf.get("kind") == "cone" and surf.get("rim_radius_m")
+    ]
+
+    def _on_rim(x: float, y: float) -> bool:
+        return any(
+            abs(math.hypot(x - cx, y - cy) - radius) <= 0.12
+            for cx, cy, radius in rim_circles
+        )
+
+    def _is_rim_chain(chain: dict[str, Any]) -> bool:
+        if not rim_circles or len(chain["pair"]) != 2:
+            return False
+        verts = chain["verts"]
+        if not verts:
+            return False
+        for i in chain["pair"]:
+            surf = curved_active.get(i)
+            if (
+                not surf
+                or surf.get("kind") != "cone"
+                or not surf.get("rim_radius_m")
+            ):
+                continue
+            cx, cy = surf["centre"]
+            radius = float(surf["rim_radius_m"])
+            on = sum(
+                1
+                for x, y in verts
+                if abs(math.hypot(x - cx, y - cy) - radius) <= 0.12
+            )
+            if on >= 0.5 * len(verts):
+                return True
+        return False
+
     def fallback(reason: str) -> tuple[list[Polygon], dict[str, Any]]:
         stats["fallback_reason"] = reason
         return list(partition), stats
@@ -3877,7 +3942,22 @@ def _surgery_partition_boundaries(
         # Raster tilings only (Phase 4): thin the staircase chains
         # on the shared graph before snap evaluation. Hull tilings
         # keep the Phase 2 behaviour exactly (tol 0 = no thinning).
-        _simplify_boundary_chains(chains, simplify_tol_m)
+        protected: set[tuple[float, float]] | None = None
+        if rim_circles:
+            cone_idx = {
+                i
+                for i, surf in curved_active.items()
+                if surf.get("kind") == "cone"
+            }
+            protected = {
+                vert
+                for chain in chains
+                if len(chain["pair"]) == 2
+                and not chain["pair"].isdisjoint(cone_idx)
+                for vert in chain["verts"]
+                if _on_rim(vert[0], vert[1])
+            }
+        _simplify_boundary_chains(chains, simplify_tol_m, protected)
         stats["chains_simplified_tol_m"] = simplify_tol_m
     junctions = graph["junctions"]
     # The adjacency the rebuild must preserve: facet pairs that share
@@ -3894,6 +3974,15 @@ def _surgery_partition_boundaries(
         if len(pair) == 2 and -1 not in pair and pair not in pair_lines:
             i, j = sorted(pair)
             pair_lines[pair] = _plane_intersection_line(planes[i], planes[j])
+    if curved_active:
+        # No plane-intersection line exists against a curved
+        # surface; voiding the pair's line keeps its chains out of
+        # the snap phase (and out of junction line constraints) on
+        # exactly the terms parallel plane pairs already get.
+        for pair in pair_lines:
+            i, j = sorted(pair)
+            if i in curved_active or j in curved_active:
+                pair_lines[pair] = None
     pair_chains = 0
     snapped = 0
     for chain in chains:
@@ -3946,6 +4035,7 @@ def _surgery_partition_boundaries(
                 or -1 in pair
                 or chain["verts"][0] == chain["verts"][-1]
                 or len(chain["verts"]) < 3
+                or _is_rim_chain(chain)
             ):
                 rebuilt_chains.append(chain)
                 continue
@@ -4046,6 +4136,27 @@ def _surgery_partition_boundaries(
         """One rebuild at the current snap set. Returns (regions,
         None) or (None, reason)."""
         targets, moved = solve_targets(clamp_m)
+        if rim_circles:
+            # A junction solution may move a rim vertex (its other
+            # chains still carry line constraints); project the
+            # moved target radially back onto the fitted circle so
+            # the arc survives the solve.
+            for vertex, target in list(targets.items()):
+                if target == vertex:
+                    continue
+                for cx, cy, radius in rim_circles:
+                    if abs(
+                        math.hypot(vertex[0] - cx, vertex[1] - cy) - radius
+                    ) > 0.12:
+                        continue
+                    dx, dy = target[0] - cx, target[1] - cy
+                    norm = math.hypot(dx, dy)
+                    if norm > 1e-9:
+                        targets[vertex] = (
+                            cx + radius * dx / norm,
+                            cy + radius * dy / norm,
+                        )
+                    break
         rebuilt: list[LineString] = []
         for chain in chains:
             verts = chain["verts"]
@@ -4267,6 +4378,79 @@ def _classify_pair_local_chord(
     return "valley"
 
 
+def _classify_pair_curved_chord(
+    geom_c: Polygon,
+    surf: dict[str, Any],
+    plane_c: tuple[float, float, float],
+    pitch_c: float,
+    geom_o: Polygon,
+    plane_o: tuple[float, float, float],
+    pitch_o: float,
+) -> str | None:
+    """Classify a curved facet's shared edge with a plane facet.
+    _shared_edge_span (run on the tangent pseudo-plane) supplies
+    the seam geometry, but the verdict is re-derived from the
+    SURFACE: the chord test steps 1 m perpendicular from the seam
+    midpoint into each facet — surface height on the curved side,
+    plane height on the other — and the ridge/hip split reads the
+    slope along the seam from the two surfaces' own gradients at
+    the midpoint, averaged exactly as the plane path averages the
+    two planes' gradients. Mirrors _classify_pair_local_chord's
+    verdicts on the terms a curved surface can honestly offer."""
+    span = _shared_edge_span(
+        geom_c, plane_c[0], plane_c[1], plane_c[2], pitch_c,
+        geom_o, plane_o[0], plane_o[1], plane_o[2], pitch_o,
+    )
+    if span is None:
+        return None
+    _length_m, live_class, seam = span
+    if seam is None or seam.is_empty:
+        return live_class
+    (x0, y0), (x1, y1) = seam.coords[0], seam.coords[-1]
+    mx, my = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    seg_len = math.hypot(x1 - x0, y1 - y0)
+    if seg_len <= 1e-9:
+        return live_class
+    ux, uy = (x1 - x0) / seg_len, (y1 - y0) / seg_len
+    nx, ny = -uy, ux
+    edge_z = (
+        float(_curved_surface_z(surf, mx, my))
+        + (plane_o[0] * mx + plane_o[1] * my + plane_o[2])
+    ) / 2.0
+    chord = 0.0
+    for geom, is_curved in ((geom_c, True), (geom_o, False)):
+        probes = {}
+        for sign in (1.0, -1.0):
+            probe = Point(mx + sign * nx * 0.5, my + sign * ny * 0.5)
+            probes[sign] = (geom.covers(probe), geom.distance(probe))
+        covered = [sign for sign, (cov, _d) in probes.items() if cov]
+        if len(covered) == 1:
+            inside = covered[0]
+        elif abs(probes[1.0][1] - probes[-1.0][1]) > 1e-9:
+            inside = 1.0 if probes[1.0][1] < probes[-1.0][1] else -1.0
+        else:
+            rep = geom.representative_point()
+            side = (rep.x - mx) * nx + (rep.y - my) * ny
+            if abs(side) <= 1e-9:
+                return live_class
+            inside = 1.0 if side > 0 else -1.0
+        px, py = mx + inside * nx * 1.0, my + inside * ny * 1.0
+        if is_curved:
+            chord += float(_curved_surface_z(surf, px, py)) / 2.0
+        else:
+            chord += (plane_o[0] * px + plane_o[1] * py + plane_o[2]) / 2.0
+    flat_pair = pitch_c < 5.0 and pitch_o < 5.0
+    if flat_pair or abs(edge_z - chord) <= 0.03:
+        return "pitch_change"
+    if edge_z > chord:
+        ga, gb = _curved_surface_grad(surf, mx, my)
+        slope_along = abs(
+            ((ga * ux + gb * uy) + (plane_o[0] * ux + plane_o[1] * uy)) / 2.0
+        )
+        return "ridge" if slope_along <= 0.14 else "hip"
+    return "valley"
+
+
 # ---------------------------------------------------------------------
 # Perimeter totals (Phase 5b): single-counting + eave/rake classes.
 #
@@ -4351,6 +4535,7 @@ def _perimeter_totals(
     polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
     outline: Polygon,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, float]:
     """Eave/rake totals (feet) for the tiling's perimeter, each
     physical edge counted exactly once, measured ON THE OUTLINE.
@@ -4464,6 +4649,7 @@ def _perimeter_totals(
         if sum(end - start for start, end in spans) < 0.3:
             continue
         a, b, _c = plane_models[owner]
+        surf = curved.get(owner) if curved else None
         for start, end in spans:
             piece = substring(outline_line, start, end)
             for component in _line_components(piece):
@@ -4476,12 +4662,20 @@ def _perimeter_totals(
                     nx, ny = _outward_normal(
                         outline, (x0 + x1) / 2.0, (y0 + y1) / 2.0, ux, uy
                     )
-                    slope_along = a * ux + b * uy
+                    if surf is not None:
+                        # A curved owner's downslope is local: the
+                        # surface gradient at the segment midpoint.
+                        ga, gb = _curved_surface_grad(
+                            surf, (x0 + x1) / 2.0, (y0 + y1) / 2.0
+                        )
+                    else:
+                        ga, gb = a, b
+                    slope_along = ga * ux + gb * uy
                     length_ft = (
                         span * math.sqrt(1.0 + slope_along * slope_along)
                         * _FT_PER_M
                     )
-                    totals[_perimeter_edge_class(a, b, ux, uy, nx, ny)] += (
+                    totals[_perimeter_edge_class(ga, gb, ux, uy, nx, ny)] += (
                         length_ft
                     )
     return totals
@@ -4513,6 +4707,7 @@ def _graph_edge_totals(
     plane_models: list[tuple[float, float, float]],
     pitches: list[float],
     outline: Polygon,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, float]:
     """EagleView-style edge totals measured on the drawing's boundary
     graph itself: for each facet pair, the summed 3D length of the
@@ -4552,6 +4747,49 @@ def _graph_edge_totals(
             # outline's trace plus the ring's; see _perimeter_totals).
             continue
         i, j = sorted(pair)
+        surf_i = curved.get(i) if curved else None
+        surf_j = curved.get(j) if curved else None
+        if surf_i is not None or surf_j is not None:
+            # Phase 5d: a curved pair is classified on the surface
+            # (see _classify_pair_curved_chord), and each segment's
+            # rise is the average of the two sides' own rises —
+            # the surface's height difference on the curved side,
+            # the plane's on the other — the same averaging the
+            # plane path applies to the two gradients.
+            if surf_i is not None:
+                classification = _classify_pair_curved_chord(
+                    polygons[i], surf_i, plane_models[i], pitches[i],
+                    polygons[j], plane_models[j], pitches[j],
+                )
+            else:
+                classification = _classify_pair_curved_chord(
+                    polygons[j], surf_j, plane_models[j], pitches[j],
+                    polygons[i], plane_models[i], pitches[i],
+                )
+            if classification is None:
+                continue
+
+            def _dz(k: int, surf: Any, x0: float, y0: float, x1: float, y1: float) -> float:
+                if surf is not None:
+                    return float(
+                        _curved_surface_z(surf, x1, y1)
+                    ) - float(_curved_surface_z(surf, x0, y0))
+                a_k, b_k, _c_k = plane_models[k]
+                return a_k * (x1 - x0) + b_k * (y1 - y0)
+
+            length_m = 0.0
+            for chain in pair_chains:
+                if chain_plan_length(chain) < _GRAPH_MIN_SEAM_M:
+                    continue
+                verts = chain["verts"]
+                for (x0, y0), (x1, y1) in zip(verts, verts[1:]):
+                    dz = (
+                        _dz(i, surf_i, x0, y0, x1, y1)
+                        + _dz(j, surf_j, x0, y0, x1, y1)
+                    ) / 2.0
+                    length_m += math.hypot(math.hypot(x1 - x0, y1 - y0), dz)
+            totals[classification] += length_m * _FT_PER_M
+            continue
         classification = _classify_pair_local_chord(
             polygons[i], plane_models[i], pitches[i],
             polygons[j], plane_models[j], pitches[j],
@@ -4570,7 +4808,9 @@ def _graph_edge_totals(
                 dz = ((a_i + a_j) / 2.0) * dx + ((b_i + b_j) / 2.0) * dy
                 length_m += math.hypot(math.hypot(dx, dy), dz)
         totals[classification] += length_m * _FT_PER_M
-    perimeter = _perimeter_totals(by_pair, polygons, plane_models, outline)
+    perimeter = _perimeter_totals(
+        by_pair, polygons, plane_models, outline, curved=curved
+    )
     totals["eave"] = perimeter["eave"]
     totals["rake"] = perimeter["rake"]
     return {key: round(value, 1) for key, value in totals.items()}
@@ -4834,7 +5074,139 @@ _LAB_SPLIT_MAX_ACCEPTED = 3       # split-pass planes per house
 _LAB_BOUNDARY_TOL_M = 0.12        # boundary pass seeds above this...
 _LAB_BOUNDARY_MAX_ACCEPTED = 3    # boundary-pass planes per house
 _LAB_BOUNDARY_MIN_ANGLE_DEG = 8.0  # vs the planes it displaces
+# Phase 5d curved pass. Some real roof sections are not planes at
+# all — a turret's half-cone, a barrel vault — and the plane model
+# can only flatten them into ill-fitting pieces (Miramar's turret:
+# the labelling left its rim unexplained and the Phase 5c core
+# faces fragmented around it). After the boundary pass, components
+# still unexplained at the discovery seed tolerance are tested
+# against two curved surface families — a cone (height a linear
+# function of radial distance from one centre) and a cylinder
+# (height a function of distance from one axis line) — fitted by
+# least squares over the component's points. Acceptance is at
+# least as strict as discovery's, plus the two guards a curved
+# family needs because it has more freedom than a plane:
+#   * WIN MARGIN: the best plane refit on the same inlier points
+#     must itself FAIL discovery's rmse bar and be at least
+#     _LAB_CURVED_PLANE_WIN_FACTOR times worse than the surface —
+#     a curved fit that merely ties a plane is a plane.
+#   * INCUMBENT MEDIAN: the median incumbent residual over the
+#     claimed cells must clear _LAB_CURVED_MIN_INCUMBENT_MEDIAN_M —
+#     the territory must be genuinely poorly explained today, not
+#     a re-tiling of cells some plane already fits (the failure
+#     mode of fitting a shallow "cone" through the seam lines
+#     radiating from a valley convergence: those points ARE
+#     radial, but the planes own their cells at centimetre
+#     residuals, so the median test refuses the claim).
+# An accepted surface enters the labelling as one more facet: it
+# competes by its true surface residual (its plane slot holds the
+# tangent pseudo-plane at the claim centroid, for the consumers
+# that need coefficients), its reported area is the TRUE curved
+# area integrated over its region (the plane-scheme debits are
+# scaled so they sum to it — see _dsm_labelling_tiling), and a
+# cone's region rim is redrawn onto the fitted circle before the
+# surgery runs (see _lab_apply_cone_rims).
+_LAB_CURVED_SEED_TOL_M = 0.30        # seeds where discovery seeds
+_LAB_CURVED_CLAIM_TOL_M = _LAB_CLAIM_TOL_M      # 0.12, as discovery
+_LAB_CURVED_MAX_RMSE_M = _LAB_DISC_MAX_RMSE_M   # 0.08, as discovery
+_LAB_CURVED_MIN_INLIERS = _LAB_DISC_MIN_POINTS  # 40, as discovery
+_LAB_CURVED_MIN_CLAIM_SQM = _LAB_DISC_MIN_AREA_M2  # 2.0, as discovery
+_LAB_CURVED_MIN_CLAIM_MAIN_SHARE = _LAB_CLAIM_MAIN_SHARE  # 0.8
+_LAB_CURVED_MIN_PITCH_DEG = 12.0     # shallower is a plane's job
+_LAB_CURVED_MAX_PITCH_DEG = _LAB_DISC_MAX_PITCH_DEG  # 55, as discovery
+_LAB_CURVED_PLANE_WIN_FACTOR = 2.0
+_LAB_CURVED_MIN_INCUMBENT_MEDIAN_M = 0.15
+# Section-ness (judged on the claim): a curved SECTION contains
+# its own centre — a turret's claim wraps its apex, a barrel's
+# claim reaches its crown line. A tangent patch does not: two hip
+# planes meeting at a hip approximate a cone arbitrarily well in
+# an annulus sector around a centre metres away (measured on
+# Miramar: a "cone" centred on the ridge, radius 7 m, fitting the
+# north-east hip faces at rmse 0.06). So the claim's nearest cell
+# must sit within _LAB_CURVED_MAX_CENTRE_GAP_M of the centre (the
+# axis, for a cylinder), and a cone's explained territory must
+# wrap at least _LAB_CURVED_MIN_SPAN_DEG around its centre — a
+# section presents an arc, not a wedge sliver.
+_LAB_CURVED_MAX_CENTRE_GAP_M = 1.0
+_LAB_CURVED_MIN_SPAN_DEG = 100.0
+_LAB_CURVED_MAX_ACCEPTED = 2         # curved facets per house
+_LAB_CURVED_RIM_BAND_M = 0.7         # rim redraw band half-width
+_LAB_CURVED_MAX_SUPPORT_M = 7.0      # a section's fit is local: pool
+                                  # points farther than this from the
+                                  # centre (or axis) cannot belong to
+                                  # it — a turret or barrel is a local
+                                  # surface, and an unbounded fit lets
+                                  # the majority planes drag the scan
+                                  # onto a roof-wide compromise cone
 _SQFT_PER_SQM = 10.7639104167
+
+
+def _curved_surface_z(
+    surf: dict[str, Any], xs: Any, ys: Any
+) -> Any:
+    """Height of a fitted curved surface (Phase 5d) at plan
+    positions — vectorized over numpy arrays, scalar-friendly.
+    Cone: apex_z - slope * r about the centre. Cylinder: the upper
+    arc about the axis line (n . p = offset), axis_z + sqrt(R^2 -
+    d^2), clamped flat outside the arc's reach (residuals there
+    are large by construction — the clamp only keeps the function
+    total)."""
+    if surf["kind"] == "cone":
+        cx, cy = surf["centre"]
+        return surf["apex_z"] - surf["slope"] * np.hypot(
+            np.asarray(xs, dtype=float) - cx,
+            np.asarray(ys, dtype=float) - cy,
+        )
+    nx, ny = surf["normal"]
+    d = np.asarray(xs, dtype=float) * nx + np.asarray(ys, dtype=float) * ny - surf["offset"]
+    radius = surf["radius_m"]
+    return surf["axis_z"] + np.sqrt(
+        np.maximum(radius * radius - d * d, 0.0)
+    )
+
+
+def _curved_surface_grad(
+    surf: dict[str, Any], x: float, y: float
+) -> tuple[float, float]:
+    """Plan gradient (dz/dx, dz/dy) of a curved surface at a point:
+    a cone's points radially outward at its slope; a cylinder's
+    points across its axis, steepening toward the arc's edges."""
+    if surf["kind"] == "cone":
+        cx, cy = surf["centre"]
+        r = math.hypot(x - cx, y - cy)
+        if r <= 1e-9:
+            return 0.0, 0.0
+        return (
+            -surf["slope"] * (x - cx) / r,
+            -surf["slope"] * (y - cy) / r,
+        )
+    nx, ny = surf["normal"]
+    d = x * nx + y * ny - surf["offset"]
+    radius = surf["radius_m"]
+    rise = math.sqrt(max(radius * radius - d * d, 1e-6))
+    slope_across = -d / rise
+    return slope_across * nx, slope_across * ny
+
+
+def _curved_surface_factor(
+    surf: dict[str, Any], xs: Any, ys: Any
+) -> Any:
+    """Sloped-area factor sqrt(1 + |grad z|^2) of a curved surface
+    at plan positions: constant sqrt(1 + slope^2) for a cone (its
+    true area is exactly plan area times this), R / rise for a
+    cylinder."""
+    if surf["kind"] == "cone":
+        return np.full(
+            np.broadcast(
+                np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+            ).shape,
+            math.sqrt(1.0 + surf["slope"] ** 2),
+        )
+    nx, ny = surf["normal"]
+    d = np.asarray(xs, dtype=float) * nx + np.asarray(ys, dtype=float) * ny - surf["offset"]
+    radius = surf["radius_m"]
+    rise = np.sqrt(np.maximum(radius * radius - d * d, 1e-6))
+    return radius / rise
 
 
 def _fit_plane_lsq(
@@ -4928,10 +5300,39 @@ class _DsmGrid:
         return np.meshgrid(xs, ys)
 
 
+def _lab_resid_stack(
+    planes: list[tuple[float, float, float]],
+    grid: _DsmGrid,
+    masks: list[np.ndarray | None] | None = None,
+    curved: dict[int, dict[str, Any]] | None = None,
+) -> np.ndarray:
+    """Per-index absolute-residual layers over the DSM grid — the
+    shared currency of the labelling competition (label grid,
+    smoothing, cleanup all read residuals through here so they can
+    never disagree about what a facet explains). An index carrying
+    a mask competes only inside it. Phase 5d: an index present in
+    `curved` competes by its fitted SURFACE's residual, not its
+    tangent pseudo-plane's — the pseudo-plane exists only so
+    plane-shaped consumers have coefficients to hold; the
+    labelling itself must judge the true surface."""
+    xs, ys = grid.centres()
+    layers = []
+    for i, (a, b, c) in enumerate(planes):
+        if curved is not None and i in curved:
+            layer = np.abs(_curved_surface_z(curved[i], xs, ys) - grid.z)
+        else:
+            layer = np.abs(a * xs + b * ys + c - grid.z)
+        if masks is not None and masks[i] is not None:
+            layer = np.where(masks[i], layer, np.inf)
+        layers.append(layer)
+    return np.stack(layers)
+
+
 def _lab_label_grid(
     planes: list[tuple[float, float, float]],
     grid: _DsmGrid,
     masks: list[np.ndarray | None] | None = None,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """(labels, best_residual): each participating cell takes the
     plane with the smallest absolute residual at the cell centre
@@ -4939,20 +5340,12 @@ def _lab_label_grid(
     carrying a mask competes only inside it — a plane fitted to one
     component must not win scattered cells across the roof where it
     happens to pass near the surface."""
-    xs, ys = grid.centres()
     labels = np.full(grid.z.shape, -1, dtype=int)
     best = np.full(grid.z.shape, np.inf)
     valid = grid.inside & ~np.isnan(grid.z)
     if not planes or not valid.any():
         return labels, best
-    resid = np.stack([
-        np.where(
-            masks[i], np.abs(a * xs + b * ys + c - grid.z), np.inf
-        )
-        if masks is not None and masks[i] is not None
-        else np.abs(a * xs + b * ys + c - grid.z)
-        for i, (a, b, c) in enumerate(planes)
-    ])
+    resid = _lab_resid_stack(planes, grid, masks, curved)
     choice = np.argmin(resid, axis=0)
     best_vals = np.min(resid, axis=0)
     labels[valid] = choice[valid]
@@ -5548,6 +5941,852 @@ def _lab_boundary_planes(
     )
 
 
+def _cone_lsq(
+    xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, cx: float, cy: float
+) -> tuple[float, float] | None:
+    """Least-squares cone z = apex - slope * r about a FIXED centre
+    (two parameters, closed form)."""
+    u = -np.hypot(xs - cx, ys - cy)
+    um = float(u.mean())
+    zm = float(zs.mean())
+    var = float(((u - um) ** 2).sum())
+    if var <= 1e-12:
+        return None
+    slope = float(((u - um) * (zs - zm)).sum() / var)
+    return zm - slope * um, slope
+
+
+def _cone_trimmed_fit(
+    xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, cx: float, cy: float,
+    init: tuple[float, float] | None = None,
+) -> tuple[float, float, np.ndarray, float] | None:
+    """Iteratively trimmed cone fit about a fixed centre: refit on
+    the points within the claim tolerance until the inlier set is
+    stable. Returns (apex_z, slope, inlier_mask, inlier_rmse).
+    `init` seeds (apex, slope) directly — the RANSAC start below:
+    a whole-population least-squares start is dragged by the
+    neighbouring surfaces sharing the support disc (on Miramar
+    the main slope sits ABOVE the turret cone's extension and the
+    lower roof below it), and trimming from a dragged start
+    converges to a compromise, not the section."""
+    if init is not None:
+        apex, slope = init
+    else:
+        fit = _cone_lsq(xs, ys, zs, cx, cy)
+        if fit is None:
+            return None
+        apex, slope = fit
+    inliers: np.ndarray | None = None
+    for _ in range(3):
+        resid = np.abs(zs - (apex - slope * np.hypot(xs - cx, ys - cy)))
+        inliers = resid <= _LAB_CURVED_CLAIM_TOL_M
+        if int(inliers.sum()) < _LAB_CURVED_MIN_INLIERS:
+            return None
+        fit = _cone_lsq(xs[inliers], ys[inliers], zs[inliers], cx, cy)
+        if fit is None:
+            return None
+        apex, slope = fit
+    assert inliers is not None
+    resid = np.abs(
+        zs[inliers] - (apex - slope * np.hypot(xs[inliers] - cx, ys[inliers] - cy))
+    )
+    rmse = float(np.sqrt(np.mean(resid**2))) if len(resid) else math.inf
+    return apex, slope, inliers, rmse
+
+
+def _cone_ransac_start(
+    zs: np.ndarray, radii: np.ndarray
+) -> tuple[float, float] | None:
+    """A RANSAC (apex, slope) start for the trimmed cone fit about
+    a fixed centre: two points at well-separated radii define a
+    cone's parameters exactly, so deterministic pair sampling
+    (fixed-seed, like the split pass's RANSAC) finds the section's
+    own parameters even when its points are a minority of the
+    support disc. Scored by inliers over the whole disc."""
+    n = len(zs)
+    if n < _LAB_CURVED_MIN_INLIERS:
+        return None
+    min_slope = math.tan(math.radians(_LAB_CURVED_MIN_PITCH_DEG))
+    max_slope = math.tan(math.radians(_LAB_CURVED_MAX_PITCH_DEG))
+    rng = np.random.default_rng(20261128)
+    best: tuple[int, float, float] | None = None
+    for _ in range(150):
+        i, j = int(rng.integers(0, n)), int(rng.integers(0, n))
+        if abs(radii[j] - radii[i]) < 0.8:
+            continue
+        slope = (zs[i] - zs[j]) / (radii[j] - radii[i])
+        if not min_slope <= slope <= max_slope:
+            continue
+        apex = zs[i] + slope * radii[i]
+        resid = np.abs(zs - (apex - slope * radii))
+        count = int((resid <= _LAB_CURVED_CLAIM_TOL_M).sum())
+        if best is None or count > best[0]:
+            best = (count, apex, slope)
+    if best is None or best[0] < _LAB_CURVED_MIN_INLIERS:
+        return None
+    return best[1], best[2]
+
+
+def _cone_trimmed_at(
+    xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, cx: float, cy: float
+) -> tuple[int, float, float, float] | None:
+    """The trimmed cone fit about one centre, with the pitch and
+    rmse gates applied. Returns (inliers, apex, slope, rmse) or
+    None. The fit is tried at nested support radii, from both a
+    least-squares start and a RANSAC start, and the best passing
+    fit wins: a section is local — at the full support radius the
+    neighbouring planes outnumber its points — and a dragged
+    least-squares start converges to a compromise surface, while
+    the RANSAC start begins on the section itself."""
+    min_slope = math.tan(math.radians(_LAB_CURVED_MIN_PITCH_DEG))
+    max_slope = math.tan(math.radians(_LAB_CURVED_MAX_PITCH_DEG))
+    radii = np.hypot(xs - cx, ys - cy)
+    best: tuple[int, float, float, float] | None = None
+    for support in (4.0, 5.5, _LAB_CURVED_MAX_SUPPORT_M):
+        local = radii <= support
+        if int(local.sum()) < _LAB_CURVED_MIN_INLIERS:
+            continue
+        lx, ly, lz = xs[local], ys[local], zs[local]
+        starts: list[tuple[float, float] | None] = [None]
+        ransac = _cone_ransac_start(lz, radii[local])
+        if ransac is not None:
+            starts.append(ransac)
+        for init in starts:
+            result = _cone_trimmed_fit(lx, ly, lz, cx, cy, init=init)
+            if result is None:
+                continue
+            apex, slope, inliers, rmse = result
+            if not min_slope <= slope <= max_slope or rmse > _LAB_CURVED_MAX_RMSE_M:
+                continue
+            cand = (int(inliers.sum()), apex, slope, rmse)
+            if best is None or (cand[0], -cand[3]) > (best[0], -best[3]):
+                best = cand
+    return best
+
+
+def _cone_polish(
+    xs: np.ndarray, ys: np.ndarray, zs: np.ndarray, cx: float, cy: float
+) -> tuple[int, float, float, float, float, float, float] | None:
+    """Polish one proposed centre: trimmed fits on a 0.25 m
+    walking grid around it, keeping the best (inliers, rmse).
+    Returns (inliers, -rmse, cx, cy, apex, slope, rmse) or None."""
+    centre = (cx, cy)
+    best: tuple[int, float, float, float, float, float] | None = None
+    tried: set[tuple[float, float]] = set()
+    for _round in range(3):
+        improved = False
+        offsets = (0.0,) if _round == 0 else (-0.25, 0.0, 0.25)
+        for dx in offsets:
+            for dy in offsets:
+                key = (round(centre[0] + dx, 3), round(centre[1] + dy, 3))
+                if key in tried:
+                    continue
+                tried.add(key)
+                result = _cone_trimmed_at(xs, ys, zs, key[0], key[1])
+                if result is None:
+                    continue
+                n_in, apex, slope, rmse = result
+                if best is None or (n_in, -rmse) > (best[0], -best[5]):
+                    best = (n_in, key[0], key[1], apex, slope, rmse)
+                    centre = key
+                    improved = True
+        if not improved:
+            break
+    if best is None:
+        return None
+    n_in, bx, by, apex, slope, rmse = best
+    return n_in, -rmse, bx, by, apex, slope, rmse
+
+
+def _cone_scan_centres(
+    xs: np.ndarray, ys: np.ndarray, zs: np.ndarray
+) -> list[tuple[float, float]]:
+    """Coarse centre proposals from a plain least-squares scan:
+    centres on a 0.5 m grid over the points' extent (plus a metre
+    of margin — a turret's apex can sit just outside the
+    unexplained cells that seeded the search), ranked by
+    single-fit inliers. Only a proposal mechanism: on a merged
+    component the scan's winners are compromise centres, which is
+    why the gradient vote below exists and why every proposal is
+    polished and judged before it can ship."""
+    min_slope = math.tan(math.radians(_LAB_CURVED_MIN_PITCH_DEG))
+    max_slope = math.tan(math.radians(_LAB_CURVED_MAX_PITCH_DEG))
+    scored: list[tuple[int, float, float]] = []
+    for cx in np.arange(xs.min() - 1.0, xs.max() + 1.0 + 1e-9, 0.5):
+        for cy in np.arange(ys.min() - 1.0, ys.max() + 1.0 + 1e-9, 0.5):
+            radii = np.hypot(xs - cx, ys - cy)
+            local = radii <= _LAB_CURVED_MAX_SUPPORT_M
+            if int(local.sum()) < _LAB_CURVED_MIN_INLIERS:
+                continue
+            fit = _cone_lsq(xs[local], ys[local], zs[local], float(cx), float(cy))
+            if fit is None:
+                continue
+            apex, slope = fit
+            if not min_slope <= slope <= max_slope:
+                continue
+            resid = np.abs(zs[local] - (apex - slope * radii[local]))
+            scored.append(
+                (int((resid <= _LAB_CURVED_CLAIM_TOL_M).sum()), float(cx), float(cy))
+            )
+    scored.sort(key=lambda item: -item[0])
+    return [(cx, cy) for _n, cx, cy in scored]
+
+
+def _cone_centre_votes(
+    grid: _DsmGrid, region_cells: np.ndarray
+) -> list[tuple[float, float]]:
+    """Centre proposals by gradient convergence (a Hough vote):
+    on a cone, every surface cell's uphill direction points at
+    the centre, so rays cast uphill from the component's measured
+    DSM cells accumulate at the true centre even when the cone's
+    points are a minority of the pool. Plane faces vote with
+    parallel rays that disperse (their crossings are broad and
+    weak next to a radial surface's focus). Returns up to six
+    peak centres, strongest first."""
+    xs_g, ys_g = grid.centres()
+    grad_y, grad_x = np.gradient(grid.z, grid.cell, grid.cell)
+    mag = np.hypot(grad_x, grad_y)
+    voters = (
+        region_cells
+        & (grid.counts > 0)
+        & np.isfinite(grid.z)
+        & (mag >= 0.15)
+        & (mag <= 1.8)
+    )
+    ys_c, xs_c = np.where(voters)
+    if len(ys_c) < 10:
+        return []
+    # Uphill IS the gradient direction (the gradient points at
+    # increasing height): on a cone z = apex - slope * r, the
+    # gradient is -slope * r_hat — it aims at the centre.
+    ux = grad_x[voters] / mag[voters]
+    uy = grad_y[voters] / mag[voters]
+    px = xs_g[voters]
+    py = ys_g[voters]
+    bin_m = 0.25
+    origin_x, origin_y = grid.x0 - 1.0, grid.y0 - 1.0
+    width = int((grid.nx * grid.cell + 2.0) / bin_m) + 1
+    height = int((grid.ny * grid.cell + 2.0) / bin_m) + 1
+    hist = np.zeros((height, width))
+    for t in np.arange(0.25, _LAB_CURVED_MAX_SUPPORT_M, 0.25):
+        vx = px + ux * t
+        vy = py + uy * t
+        ix = ((vx - origin_x) / bin_m).astype(int)
+        iy = ((vy - origin_y) / bin_m).astype(int)
+        ok = (ix >= 0) & (ix < width) & (iy >= 0) & (iy < height)
+        np.add.at(hist, (iy[ok], ix[ok]), 1.0)
+    centres: list[tuple[float, float]] = []
+    work = hist.copy()
+    suppress = int(1.0 / bin_m)
+    for _ in range(6):
+        flat = int(np.argmax(work))
+        if work.flat[flat] < 5.0:
+            break
+        iy, ix = np.unravel_index(flat, work.shape)
+        centres.append(
+            (origin_x + (ix + 0.5) * bin_m, origin_y + (iy + 0.5) * bin_m)
+        )
+        work[
+            max(0, iy - suppress): iy + suppress + 1,
+            max(0, ix - suppress): ix + suppress + 1,
+        ] = 0.0
+    return centres
+
+
+def _lab_fit_cone_candidates(
+    pool: np.ndarray,
+    grid: _DsmGrid | None = None,
+    pool_cells: np.ndarray | None = None,
+) -> list[dict[str, Any]]:
+    """Cone hypotheses for a candidate component's point pool, best
+    first: up to six mutually distinct candidates (centres at
+    least 2 m apart). Centres are PROPOSED two ways — the gradient
+    convergence vote over the component's DSM cells (the robust
+    channel: it finds a radial surface's centre even when the
+    surface is a minority of a merged component) and the top of a
+    plain least-squares centre scan — then each proposal is
+    polished by trimmed refits on the full pool. Proposals only
+    propose: every candidate is judged against the full component
+    (see _lab_judge_curved). A component can hold both a
+    tangent-patch mirage and the real section — the judge, not
+    the fit, decides which ships. Ranking is by inlier count,
+    which systematically favours wide mirage cones over a compact
+    real section; the candidate cap is therefore generous and the
+    judge's section-ness gates do the actual sorting."""
+    xs, ys, zs = pool[:, 0], pool[:, 1], pool[:, 2]
+    seeds: list[tuple[float, float]] = []
+    if grid is not None and pool_cells is not None:
+        seeds.extend(_cone_centre_votes(grid, pool_cells))
+    seeds.extend(_cone_scan_centres(xs, ys, zs)[:3])
+    refined: list[tuple[int, float, float, float, float, float, float]] = []
+    tried: list[tuple[float, float]] = []
+    for cx, cy in seeds:
+        if any(math.hypot(cx - tx, cy - ty) < 0.5 for tx, ty in tried):
+            continue
+        tried.append((cx, cy))
+        result = _cone_polish(xs, ys, zs, cx, cy)
+        if result is not None:
+            refined.append(result)
+    refined.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    candidates: list[dict[str, Any]] = []
+    for n_in, _neg, cx, cy, apex, slope, rmse in refined:
+        if any(
+            math.hypot(cx - c["centre"][0], cy - c["centre"][1]) < 2.0
+            for c in candidates
+        ):
+            continue
+        radii = np.hypot(xs - cx, ys - cy)
+        local = radii <= _LAB_CURVED_MAX_SUPPORT_M
+        resid = np.abs(zs[local] - (apex - slope * radii[local]))
+        inliers = resid <= _LAB_CURVED_CLAIM_TOL_M
+        candidates.append({
+            "kind": "cone",
+            "centre": (float(cx), float(cy)),
+            "apex_z": float(apex),
+            "slope": float(slope),
+            "radius_m": (
+                float(radii[local][inliers].max()) if inliers.any() else 0.0
+            ),
+            "point_count": int(n_in),
+            "fit_rmse_m": float(rmse),
+        })
+        if len(candidates) >= 6:
+            break
+    return candidates
+
+
+def _cylinder_lsq(
+    zs: np.ndarray, d: np.ndarray
+) -> tuple[float, float] | None:
+    """Linearized least-squares cylinder about a FIXED axis line:
+    with d the signed distance from the axis, the arc satisfies
+    (z - axis_z)^2 + d^2 = R^2, i.e. z^2 + d^2 = 2*axis_z*z +
+    (R^2 - axis_z^2) — linear in (axis_z, R^2 - axis_z^2)."""
+    design = np.column_stack((2.0 * zs, np.ones_like(zs)))
+    target = zs * zs + d * d
+    coef, *_ = np.linalg.lstsq(design, target, rcond=None)
+    axis_z = float(coef[0])
+    radius_sq = float(coef[1]) + axis_z * axis_z
+    if radius_sq <= 0.25:
+        return None
+    return axis_z, math.sqrt(radius_sq)
+
+
+def _cylinder_trimmed_fit(
+    xs: np.ndarray, ys: np.ndarray, zs: np.ndarray,
+    nx: float, ny: float, offset: float,
+) -> tuple[float, float, np.ndarray, float] | None:
+    """Trimmed cylinder fit about a fixed axis line, mirroring
+    _cone_trimmed_fit. Returns (axis_z, radius, inliers, rmse,
+    inlier_d) with the mask and distances over the near-axis
+    subset the fit actually used."""
+    d = xs * nx + ys * ny - offset
+    # Locality, as for the cone: points farther across the axis
+    # than a section can span do not belong to this barrel and
+    # must not drag its fit.
+    near = np.abs(d) <= _LAB_CURVED_MAX_SUPPORT_M
+    if int(near.sum()) < _LAB_CURVED_MIN_INLIERS:
+        return None
+    xs, ys, zs, d = xs[near], ys[near], zs[near], d[near]
+    fit = _cylinder_lsq(zs, d)
+    if fit is None:
+        return None
+    axis_z, radius = fit
+    inliers: np.ndarray | None = None
+    for _ in range(3):
+        z_hat = axis_z + np.sqrt(np.maximum(radius * radius - d * d, 0.0))
+        inliers = (np.abs(d) < radius) & (np.abs(zs - z_hat) <= _LAB_CURVED_CLAIM_TOL_M)
+        if int(inliers.sum()) < _LAB_CURVED_MIN_INLIERS:
+            return None
+        fit = _cylinder_lsq(zs[inliers], d[inliers])
+        if fit is None:
+            return None
+        axis_z, radius = fit
+    assert inliers is not None
+    z_hat = axis_z + np.sqrt(
+        np.maximum(radius * radius - d[inliers] * d[inliers], 0.0)
+    )
+    resid = np.abs(zs[inliers] - z_hat)
+    rmse = float(np.sqrt(np.mean(resid**2))) if len(resid) else math.inf
+    return axis_z, radius, inliers, rmse, d[inliers]
+
+
+def _lab_fit_cylinder(pool: np.ndarray) -> dict[str, Any] | None:
+    """Fit a barrel (cylinder) section: scan axis directions every
+    15 degrees and axis offsets across the pool's across-axis
+    extent, trimmed-refit each, keep the best by inliers then
+    rmse. The pitch gate reads the arc's slope at the inliers'
+    outer support — a barrel's crown is flat by nature, so the
+    gate is on the slope the section actually reaches, not the
+    crown's."""
+    xs, ys, zs = pool[:, 0], pool[:, 1], pool[:, 2]
+    best: tuple[int, float, dict[str, Any]] | None = None
+    for theta_deg in range(0, 180, 15):
+        theta = math.radians(theta_deg)
+        nx, ny = -math.sin(theta), math.cos(theta)
+        d0 = xs * nx + ys * ny
+        for offset in np.quantile(d0, [0.15, 0.3, 0.45, 0.6, 0.75]):
+            result = _cylinder_trimmed_fit(xs, ys, zs, nx, ny, float(offset))
+            if result is None:
+                continue
+            axis_z, radius, inliers, rmse, d_inliers = result
+            if radius < 0.8 or rmse > _LAB_CURVED_MAX_RMSE_M:
+                continue
+            d_in = np.abs(d_inliers)
+            outer = float(np.quantile(d_in, 0.9)) if len(d_in) else 0.0
+            outer = min(outer, radius * 0.999)
+            edge_slope = outer / math.sqrt(radius * radius - outer * outer)
+            edge_pitch = math.degrees(math.atan(edge_slope))
+            if not _LAB_CURVED_MIN_PITCH_DEG <= edge_pitch <= _LAB_CURVED_MAX_PITCH_DEG:
+                continue
+            cand = (int(inliers.sum()), -rmse, {
+                "kind": "cylinder",
+                "normal": (float(nx), float(ny)),
+                "offset": float(offset),
+                "axis_z": float(axis_z),
+                "radius_m": float(radius),
+                "point_count": int(inliers.sum()),
+                "fit_rmse_m": float(rmse),
+            })
+            if best is None or cand[:2] > best[:2]:
+                best = cand
+    return best[2] if best is not None else None
+
+
+def _lab_judge_curved(
+    surf: dict[str, Any],
+    pool: np.ndarray,
+    grid: _DsmGrid,
+    pool_cells: np.ndarray,
+    best: np.ndarray,
+) -> np.ndarray | None:
+    """Judge a fitted curved surface on the territory it would
+    actually claim — the discovery discipline, plus the curved
+    guards documented at the Phase 5d constants. Returns the claim
+    (a boolean grid mask, restricted to its largest connected
+    component) or None.
+
+    * win margin: the best plane refit on the surface's own
+      inlier points must fail discovery's rmse bar AND be at
+      least _LAB_CURVED_PLANE_WIN_FACTOR times the surface's
+      inlier rmse;
+    * claim: cells in the component's dilated mask where the
+      surface fits within the claim tolerance AND strictly beats
+      the incumbent residual; at least the discovery minimum
+      area, one coherent territory (largest component at least
+      _LAB_CURVED_MIN_CLAIM_MAIN_SHARE of the raw claim);
+    * incumbent median: the median incumbent residual over the
+      claim must clear _LAB_CURVED_MIN_INCUMBENT_MEDIAN_M;
+    * section-ness: the claim must contain the surface's centre
+      (see the constants block): nearest claim cell within
+      _LAB_CURVED_MAX_CENTRE_GAP_M of the cone's centre (the
+      cylinder's axis), and the cone's explained territory — the
+      cells the surface fits within the claim tolerance,
+      contiguous with the claim — must wrap at least
+      _LAB_CURVED_MIN_SPAN_DEG around the centre. (The territory,
+      not just the claim: a section's interior can already be
+      claimed, badly, by a plane, leaving the curved pass only
+      its rim to win — the arc the surface explains is the honest
+      span.)"""
+    from scipy import ndimage
+
+    px, py, pz = pool[:, 0], pool[:, 1], pool[:, 2]
+    p_resid = np.abs(pz - _curved_surface_z(surf, px, py))
+    inliers = p_resid <= _LAB_CURVED_CLAIM_TOL_M
+    if int(inliers.sum()) < _LAB_CURVED_MIN_INLIERS:
+        return None
+    surf_rmse = float(np.sqrt(np.mean(p_resid[inliers] ** 2)))
+    _a, _b, _c, plane_rmse = _fit_plane_lsq(pool[inliers])
+    if not (
+        plane_rmse > _LAB_CURVED_MAX_RMSE_M
+        and plane_rmse >= _LAB_CURVED_PLANE_WIN_FACTOR * surf_rmse
+    ):
+        return None
+    xs_g, ys_g = grid.centres()
+    surf_resid = np.abs(_curved_surface_z(surf, xs_g, ys_g) - grid.z)
+    claim = (
+        pool_cells
+        & np.isfinite(grid.z)
+        & (surf_resid <= _LAB_CURVED_CLAIM_TOL_M)
+        & (surf_resid < best)
+    )
+    if surf["kind"] == "cone":
+        cx, cy = surf["centre"]
+        claim &= (
+            np.hypot(xs_g - cx, ys_g - cy)
+            <= surf["radius_m"] + grid.cell
+        )
+    if not claim.any():
+        return None
+    structure = np.ones((3, 3), dtype=int)
+    comps, n = ndimage.label(claim, structure=structure)
+    if n == 0:
+        return None
+    sizes = ndimage.sum(claim, comps, index=np.arange(1, n + 1))
+    core = int(np.argmax(sizes)) + 1
+    if float(sizes[core - 1]) / float(claim.sum()) < _LAB_CURVED_MIN_CLAIM_MAIN_SHARE:
+        return None
+    claim = comps == core
+    if float(claim.sum()) * grid.cell**2 < _LAB_CURVED_MIN_CLAIM_SQM:
+        return None
+    if float(np.median(best[claim])) < _LAB_CURVED_MIN_INCUMBENT_MEDIAN_M:
+        return None
+    # Section-ness: the claim must contain the surface's centre
+    # (a tangent patch on a hip roof's convergence fails both
+    # tests; a turret's claim wraps its own apex).
+    ys_c, xs_c = np.where(claim)
+    cell_x = xs_g[ys_c, xs_c]
+    cell_y = ys_g[ys_c, xs_c]
+    if surf["kind"] == "cone":
+        cx, cy = surf["centre"]
+        dists = np.hypot(cell_x - cx, cell_y - cy)
+        if float(dists.min()) > _LAB_CURVED_MAX_CENTRE_GAP_M:
+            return None
+        explained = (
+            np.isfinite(grid.z)
+            & (surf_resid <= _LAB_CURVED_CLAIM_TOL_M)
+            & (
+                np.hypot(xs_g - cx, ys_g - cy)
+                <= surf["radius_m"] + grid.cell
+            )
+        )
+        sup_comps, _n = ndimage.label(explained, structure=structure)
+        claim_ids = {
+            int(v) for v in np.unique(sup_comps[claim]) if v > 0
+        }
+        territory = (
+            np.isin(sup_comps, list(claim_ids))
+            if claim_ids
+            else claim
+        )
+        tys, txs = np.where(territory)
+        angs = np.sort(
+            np.arctan2(ys_g[tys, txs] - cy, xs_g[tys, txs] - cx)
+        )
+        if len(angs) > 1:
+            gaps = np.diff(np.concatenate([angs, angs[:1] + 2.0 * math.pi]))
+            span = 2.0 * math.pi - float(gaps.max())
+        else:
+            span = 0.0
+        if span < math.radians(_LAB_CURVED_MIN_SPAN_DEG):
+            return None
+    else:
+        nx, ny = surf["normal"]
+        d_claim = np.abs(cell_x * nx + cell_y * ny - surf["offset"])
+        if float(d_claim.min()) > _LAB_CURVED_MAX_CENTRE_GAP_M:
+            return None
+    return claim
+
+
+def _lab_curved_pass(
+    planes: list[tuple[float, float, float]],
+    discovered: list[dict[str, Any]],
+    labels: np.ndarray,
+    best: np.ndarray,
+    masks: list[np.ndarray | None],
+    grid: _DsmGrid,
+    points: np.ndarray,
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[dict[str, Any]],
+    np.ndarray,
+    np.ndarray,
+    list[np.ndarray | None],
+    dict[int, dict[str, Any]],
+]:
+    """Phase 5d curved pass: after the boundary pass, seed from
+    the components still unexplained at the discovery seed
+    tolerance and test each (largest first) against the cone and
+    cylinder families. An accepted surface is appended exactly
+    like a discovered plane — (pseudo-plane, competition mask,
+    descriptor) — except its labelling residual is the surface's
+    own (the returned curved map, keyed by plane index, is how
+    every downstream residual read knows). Mirrors the other
+    stages' loop shape: one acceptance per pass, relabel, repeat,
+    at most _LAB_CURVED_MAX_ACCEPTED per house.
+
+    Seeding differs from the plane stages in one principled way:
+    a seed cell must carry fit-pool points (grid.counts > 0). A
+    surface fit is a claim about points; the DSM's interpolated
+    cells (nearest-measured fills, up to 1.5 m away) carry no
+    evidence of their own, and left in the seed they bridge
+    separate unexplained areas — a turret, a valley band, an
+    eave-margin strip the outline overhangs — into one giant
+    component whose point pool no single surface explains
+    (measured on Miramar: a 33 m^2 bridged component). The claim
+    and judging still read the full DSM grid; only the seed is
+    restricted to evidenced cells."""
+    from scipy import ndimage
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    planes = list(planes)
+    discovered = list(discovered)
+    masks = list(masks)
+    labels = labels.copy()
+    best = best.copy()
+    curved: dict[int, dict[str, Any]] = {}
+    structure = np.ones((3, 3), dtype=int)
+    ix, iy, ok = grid.point_cell
+    point_flat = np.where(ok, iy * grid.nx + ix, -1)
+    accepted = 0
+    while accepted < _LAB_CURVED_MAX_ACCEPTED:
+        seed = (
+            grid.inside
+            & (labels >= 0)
+            & (best > _LAB_CURVED_SEED_TOL_M)
+            & (grid.counts > 0)
+        )
+        if not seed.any():
+            break
+        comps, n = ndimage.label(seed, structure=structure)
+        sizes = (
+            ndimage.sum(seed, comps, index=np.arange(1, n + 1))
+            * grid.cell**2
+        )
+        first_cell = np.full(n, np.inf)
+        flat_idx = np.arange(comps.size)
+        for idx in range(n):
+            cells = flat_idx[comps.ravel() == idx + 1]
+            if len(cells):
+                first_cell[idx] = cells.min()
+        order = sorted(range(n), key=lambda i: (-sizes[i], first_cell[i]))
+        progressed = False
+        for comp_idx in order:
+            if float(sizes[comp_idx]) < _LAB_DISC_MIN_AREA_M2:
+                break
+            comp = comps == (comp_idx + 1)
+            pool_cells = (
+                ndimage.binary_dilation(comp, structure=structure, iterations=2)
+                & grid.inside
+            )
+            cell_ids = set(np.where(pool_cells.ravel())[0].tolist())
+            sel = np.array([f in cell_ids for f in point_flat])
+            pool = points[sel & (point_flat >= 0)]
+            if len(pool) < _LAB_CURVED_MIN_INLIERS:
+                continue
+            # Judge each distinct hypothesis in turn: a component
+            # can hold both a tangent-patch mirage and the real
+            # section, and only the judge can tell them apart.
+            surf: dict[str, Any] | None = None
+            claim: np.ndarray | None = None
+            hypotheses = _lab_fit_cone_candidates(pool, grid, pool_cells)
+            cylinder = _lab_fit_cylinder(pool)
+            if cylinder is not None:
+                hypotheses.append(cylinder)
+            for cand in hypotheses:
+                judged_claim = _lab_judge_curved(
+                    cand, pool, grid, pool_cells, best
+                )
+                if judged_claim is not None:
+                    surf, claim = cand, judged_claim
+                    break
+            if surf is None or claim is None:
+                continue
+            # The pseudo-plane: tangent to the surface at the
+            # claim's centroid. It is what plane-shaped consumers
+            # (serialization, pitch/azimuth fields, the converter)
+            # hold; the labelling never judges it.
+            xs_g, ys_g = grid.centres()
+            cen_x = float(xs_g[claim].mean())
+            cen_y = float(ys_g[claim].mean())
+            ga, gb = _curved_surface_grad(surf, cen_x, cen_y)
+            cen_z = float(_curved_surface_z(surf, cen_x, cen_y))
+            pseudo = (ga, gb, cen_z - ga * cen_x - gb * cen_y)
+            pitch = math.degrees(math.atan(math.hypot(ga, gb)))
+            ys_c, xs_c = np.where(claim)
+            region = unary_union([
+                box(
+                    grid.x0 + gx * grid.cell,
+                    grid.y0 + gy * grid.cell,
+                    grid.x0 + (gx + 1) * grid.cell,
+                    grid.y0 + (gy + 1) * grid.cell,
+                )
+                for gy, gx in zip(ys_c, xs_c)
+            ])
+            index = len(planes)
+            planes.append(pseudo)
+            masks.append(
+                ndimage.binary_dilation(claim, structure=structure)
+                & grid.inside
+            )
+            discovered.append({
+                "plane": pseudo,
+                "pitch_degrees": pitch,
+                "point_count": int(surf["point_count"]),
+                "fit_rmse_m": float(surf["fit_rmse_m"]),
+                "region": region,
+                "curved": surf,
+                "_claim_rc": (ys_c, xs_c),
+            })
+            curved[index] = surf
+            labels, best = _lab_label_grid(planes, grid, masks, curved)
+            accepted += 1
+            progressed = True
+            break
+        if not progressed:
+            break
+    return planes, discovered, labels, best, masks, curved
+
+
+def _curved_region_true_area_sqft(
+    region: Any, surf: dict[str, Any], cell_m: float
+) -> float:
+    """A curved facet's TRUE surface area: the integral of
+    sqrt(1 + |grad z|^2) over its region, sampled on a half-cell
+    grid (the region is small; the sampling error is far below
+    the measurement noise). For a cone the factor is constant, so
+    this is exactly plan area x sqrt(1 + slope^2) up to the
+    sampling of the region's edge."""
+    if region is None or region.is_empty:
+        return 0.0
+    step = max(cell_m / 2.0, 0.05)
+    minx, miny, maxx, maxy = region.bounds
+    xs = np.arange(minx + step / 2.0, maxx, step)
+    ys = np.arange(miny + step / 2.0, maxy, step)
+    if len(xs) == 0 or len(ys) == 0:
+        rep = region.representative_point()
+        factor = float(_curved_surface_factor(surf, rep.x, rep.y))
+        return region.area * factor * _SQFT_PER_SQM
+    gx, gy = np.meshgrid(xs, ys)
+    flat_x, flat_y = gx.ravel(), gy.ravel()
+    try:
+        import shapely
+
+        inside = shapely.contains(region, flat_x, flat_y)
+    except Exception:  # noqa: BLE001 — older shapely: point loop
+        inside = np.array(
+            [region.contains(Point(x, y)) for x, y in zip(flat_x, flat_y)]
+        )
+    if not inside.any():
+        rep = region.representative_point()
+        factor = float(_curved_surface_factor(surf, rep.x, rep.y))
+        return region.area * factor * _SQFT_PER_SQM
+    factors = _curved_surface_factor(surf, flat_x[inside], flat_y[inside])
+    return float(step * step * float(factors.sum()) * _SQFT_PER_SQM)
+
+
+def _lab_apply_cone_rims(
+    regions: list[Any],
+    discovered: list[dict[str, Any]],
+    n_fitted: int,
+    outline: Polygon,
+    grid: _DsmGrid,
+) -> list[Any]:
+    """Redraw each accepted cone facet's rim onto its fitted
+    circle, on the tiling itself (so every neighbour moves
+    complementarily and the tiling stays exact).
+
+    The polygonized region's outer boundary is a raster staircase
+    around the true rim. Within a band of +/- _LAB_CURVED_RIM_BAND_M
+    around the rim radius — restricted to the claim's angular
+    span, so only the arc the evidence supports is redrawn —
+    territory is reassigned by the fitted circle: inside the disc
+    belongs to the cone, outside it to whichever neighbour shares
+    the longest border with each outside piece (the codebase's
+    remainder rule). The disc is a 64-gon: at turret radii its
+    chords run ~0.3 m with a sagitta of millimetres — the drawing
+    reads as a smooth arc, every vertex sits on the circle within
+    the chord error, and the chords stay above the surgery's
+    micro-segment contraction. The fitted rim radius (robust
+    per-direction outer claim radius + half a cell) is recorded
+    on the surface descriptor for the surgery's rim
+    protections."""
+    from shapely.geometry import Point as _Point
+    from shapely.ops import unary_union
+
+    regions = list(regions)
+    xs_g, ys_g = grid.centres()
+    for di, desc in enumerate(discovered):
+        surf = desc.get("curved")
+        claim_rc = desc.get("_claim_rc")
+        if not surf or surf.get("kind") != "cone" or claim_rc is None:
+            continue
+        index = n_fitted + di
+        region = regions[index]
+        if region is None or region.is_empty:
+            continue
+        ys_c, xs_c = claim_rc
+        px = xs_g[ys_c, xs_c]
+        py = ys_g[ys_c, xs_c]
+        cx, cy = surf["centre"]
+        radii = np.hypot(px - cx, py - cy)
+        angles = np.arctan2(py - cy, px - cx)
+        # Robust rim radius: the outermost claim radius per
+        # 15-degree direction bin, median across bins, plus half
+        # a cell. A single far claim cell — where a neighbouring
+        # plane crosses the cone's extension and also fits within
+        # tolerance — must not drag the drawn arc off the
+        # surface's true edge (Miramar: the z-profile steps down
+        # at r ~3.25 m while one crossing cell sits at 3.8 m).
+        bins = np.floor(
+            (angles + math.pi) / math.radians(15.0)
+        ).astype(int) % 24
+        outer = np.full(24, -np.inf)
+        np.maximum.at(outer, bins, radii)
+        seen = outer[np.isfinite(outer)]
+        if len(seen) >= 3:
+            rim = float(np.median(seen)) + 0.5 * grid.cell
+        else:
+            rim = float(radii.max()) + 0.5 * grid.cell
+        mean_dir = math.atan2(
+            float(np.sin(angles).mean()), float(np.cos(angles).mean())
+        )
+        rel = (angles - mean_dir + math.pi) % (2.0 * math.pi) - math.pi
+        pad = math.atan2(0.5 * grid.cell, max(rim, 0.5)) + 0.02
+        a0 = mean_dir + float(rel.min()) - pad
+        a1 = mean_dir + float(rel.max()) + pad
+        surf["rim_radius_m"] = rim
+        band_r = _LAB_CURVED_RIM_BAND_M
+        disc = _Point(cx, cy).buffer(rim, resolution=16)
+        outer = _Point(cx, cy).buffer(rim + band_r, resolution=16)
+        inner = _Point(cx, cy).buffer(max(rim - band_r, 0.05), resolution=16)
+        steps = max(2, int(math.ceil((a1 - a0) / math.radians(5.0))))
+        fan = [(cx, cy)] + [
+            (
+                cx + (rim + band_r) * math.cos(a0 + (a1 - a0) * k / steps),
+                cy + (rim + band_r) * math.sin(a0 + (a1 - a0) * k / steps),
+            )
+            for k in range(steps + 1)
+        ]
+        band = (
+            outer.difference(inner)
+            .intersection(Polygon(fan))
+            .intersection(outline)
+        )
+        if band.is_empty or band.area <= 1e-9:
+            continue
+        inside_disc = disc.intersection(band)
+        outside = band.difference(disc)
+        adjusted = [
+            r.difference(band)
+            if r is not None and not r.is_empty
+            else r
+            for r in regions
+        ]
+        if adjusted[index].is_empty:
+            adjusted[index] = inside_disc
+        elif not inside_disc.is_empty:
+            adjusted[index] = unary_union([adjusted[index], inside_disc])
+        for piece in _polygon_parts(outside):
+            best_k, best_key = -1, None
+            for k, orig in enumerate(regions):
+                if k == index or orig is None or orig.is_empty:
+                    continue
+                shared = orig.boundary.intersection(piece.boundary).length
+                key = (shared, -orig.distance(piece))
+                if best_key is None or key > best_key:
+                    best_k, best_key = k, key
+            if best_k < 0:
+                adjusted[index] = unary_union([adjusted[index], piece])
+            elif adjusted[best_k].is_empty:
+                adjusted[best_k] = piece
+            else:
+                adjusted[best_k] = unary_union([adjusted[best_k], piece])
+        regions = adjusted
+    return regions
+
+
 def _lab_evidence_masks(
     labels: np.ndarray,
     best: np.ndarray,
@@ -5589,6 +6828,7 @@ def _lab_smooth_labels(
     labels: np.ndarray,
     grid: _DsmGrid,
     masks: list[np.ndarray | None] | None = None,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> np.ndarray:
     """One Potts-style smoothing round: each cell's cost becomes its
     plane residual plus _LAB_POTTS_LAMBDA times the fraction of its
@@ -5598,15 +6838,7 @@ def _lab_smooth_labels(
     override a real residual gap); cells in noisy tie zones settle
     onto the locally dominant plane, which removes isolated flips
     and straightens seams before polygonizing."""
-    xs, ys = grid.centres()
-    resid = np.stack([
-        np.where(
-            masks[i], np.abs(a * xs + b * ys + c - grid.z), np.inf
-        )
-        if masks is not None and masks[i] is not None
-        else np.abs(a * xs + b * ys + c - grid.z)
-        for i, (a, b, c) in enumerate(planes)
-    ])
+    resid = _lab_resid_stack(planes, grid, masks, curved)
     padded = np.pad(labels, 1, constant_values=-2)
     disagree = np.zeros_like(resid)
     for i in range(len(planes)):
@@ -5654,6 +6886,7 @@ def _lab_cleanup_labels(
     grid: _DsmGrid,
     fallback_labels: np.ndarray,
     masks: list[np.ndarray | None] | None = None,
+    curved: dict[int, dict[str, Any]] | None = None,
 ) -> np.ndarray:
     """Deterministic label hygiene (Phase 3's, unchanged): fill
     unfilled cells from the prior tiling (or the nearest label),
@@ -5680,16 +6913,8 @@ def _lab_cleanup_labels(
             for row, n in zip(still, near):
                 src = known[n]
                 labels[row[0], row[1]] = labels[src[0], src[1]]
-    xs, ys = grid.centres()
-
-    def resid_of(i: int) -> np.ndarray:
-        a, b, c = planes[i]
-        r = np.abs(a * xs + b * ys + c - grid.z)
-        if masks is not None and masks[i] is not None:
-            r = np.where(masks[i], r, np.inf)
-        return r
-
-    resid = {i: resid_of(i) for i in range(len(planes))}
+    stack = _lab_resid_stack(planes, grid, masks, curved)
+    resid = {i: stack[i] for i in range(len(planes))}
     # Isolated-cell flip: at least 6 of 8 neighbours share one other
     # label and that label's residual is nearly as good here.
     for _pass in range(2):
@@ -5880,6 +7105,18 @@ def _dsm_labelling_tiling(
         planes_all, discovered, labels, best, masks, grid, points
     )
     n_boundary = len(discovered) - n_discovery - n_split
+    # Phase 5d curved pass: sections no plane can express (a
+    # turret's cone, a barrel vault) fitted as surfaces over the
+    # still-unexplained components. Appended last, so arbitration
+    # truncation withdraws a curved facet before any Phase 5c
+    # admission, and the ladder can still try every suffix down to
+    # the Phase 4 set.
+    planes_all, discovered, labels, best, masks, curved_map = (
+        _lab_curved_pass(
+            planes_all, discovered, labels, best, masks, grid, points
+        )
+    )
+    n_curved = len(discovered) - n_discovery - n_split - n_boundary
     if max_discovered is not None and len(discovered) > max_discovered:
         # Facet-admission arbitration (see _labelled_drawing_attempt):
         # rebuild the tiling as if the most recently accepted
@@ -5903,11 +7140,19 @@ def _dsm_labelling_tiling(
         labels, best = _lab_label_grid(planes_all, grid, masks)
         n_split = min(n_split, max(0, max_discovered - n_discovery))
         n_boundary = max(0, max_discovered - n_discovery - n_split)
+        # A truncated curved facet is simply gone (it sits last in
+        # the discovered order); a surviving one keeps its surface.
+        curved_map = {
+            i: surf for i, surf in curved_map.items() if i < keep
+        }
+        n_curved = len(discovered) - n_discovery - n_split - n_boundary
     masks = _lab_evidence_masks(labels, best, grid, masks)
-    labels, best = _lab_label_grid(planes_all, grid, masks)
-    labels = _lab_smooth_labels(planes_all, labels, grid, masks)
+    labels, best = _lab_label_grid(planes_all, grid, masks, curved_map)
+    labels = _lab_smooth_labels(planes_all, labels, grid, masks, curved_map)
     fallback = _lab_fallback_grid(group_prior, grid)
-    labels = _lab_cleanup_labels(labels, planes_all, grid, fallback, masks)
+    labels = _lab_cleanup_labels(
+        labels, planes_all, grid, fallback, masks, curved_map
+    )
     regions = _lab_polygonize(
         _lab_complete_labels(labels, grid), grid, outline, len(planes_all)
     )
@@ -5938,6 +7183,17 @@ def _dsm_labelling_tiling(
                         return math.inf
                     if not np.isfinite(grid.z[gy, gx]):
                         return 0.0
+                    if s in curved_map:
+                        return abs(
+                            float(
+                                _curved_surface_z(
+                                    curved_map[s],
+                                    xs_g[gy, gx],
+                                    ys_g[gy, gx],
+                                )
+                            )
+                            - grid.z[gy, gx]
+                        )
                     a, b, c = planes_all[s]
                     return abs(
                         a * xs_g[gy, gx] + b * ys_g[gy, gx] + c
@@ -5958,6 +7214,11 @@ def _dsm_labelling_tiling(
             for s in survivors
             if s >= n_groups
         ]
+        curved_map = {
+            new_index[s]: surf
+            for s, surf in curved_map.items()
+            if s in new_index
+        }
         regions = _lab_polygonize(
             _lab_complete_labels(labels_final, grid),
             grid,
@@ -6009,6 +7270,13 @@ def _dsm_labelling_tiling(
             for i, region in zip(g, sub):
                 raw_regions[i] = region
     regions_ext = raw_regions + disc_regions
+    # Phase 5d: redraw accepted cones' rims onto their fitted
+    # circles, on the tiling (neighbours move complementarily).
+    regions_ext = _lab_apply_cone_rims(
+        regions_ext, discovered, len(fitted_polygons), outline, grid
+    )
+    for desc in discovered:
+        desc.pop("_claim_rc", None)
     planes_ext = list(plane_models) + [d["plane"] for d in discovered]
     pitches_ext = list(pitches) + [
         d["pitch_degrees"] for d in discovered
@@ -6029,7 +7297,42 @@ def _dsm_labelling_tiling(
     # fitted polygon at all — territory no hull ever claimed — is
     # credited at its own pitch: there is nothing to debit.
     areas_ext = list(facet_areas_sqft)
-    for desc, region in zip(discovered, disc_regions):
+    ext_disc_regions = regions_ext[len(fitted_polygons):]
+    for desc, region in zip(discovered, ext_disc_regions):
+        if desc.get("curved"):
+            # Phase 5d: the curved facet is credited its TRUE
+            # surface area (integrated over its region), and the
+            # plane-scheme debits — the overlaps measured at each
+            # source facet's pitch, exactly as for a discovery —
+            # are scaled so they sum to that credit. The bookkeeping
+            # stays total-preserving (the house's reported area
+            # moves only by the difference between the curved
+            # surface's true area and the flat accounting of the
+            # same territory, which is the measurement the surface
+            # fit exists to make), and a region overlapping no
+            # fitted polygon is credited its true area outright,
+            # mirroring the discovery fallback.
+            true_area = _curved_region_true_area_sqft(
+                region, desc["curved"], grid.cell
+            )
+            debits: list[tuple[int, float]] = []
+            debited = 0.0
+            for i, fitted in enumerate(fitted_polygons):
+                if fitted.is_empty or region.is_empty:
+                    continue
+                overlap = region.intersection(fitted).area
+                if overlap > 1e-9:
+                    cos_i = max(math.cos(math.radians(pitches[i])), 1e-6)
+                    debit = overlap / cos_i * _SQFT_PER_SQM
+                    debits.append((i, debit))
+                    debited += debit
+            if debited > 0:
+                scale = true_area / debited
+                for i, debit in debits:
+                    areas_ext[i] -= debit * scale
+            desc["area_sqft"] = true_area
+            areas_ext.append(true_area)
+            continue
         debited = 0.0
         for i, fitted in enumerate(fitted_polygons):
             if fitted.is_empty or region.is_empty:
@@ -6061,6 +7364,7 @@ def _dsm_labelling_tiling(
             "discovered": len(discovered),
             "split": n_split,
             "boundary": n_boundary,
+            "curved": n_curved,
             "interpolated_cells": int(
                 (grid.inside & grid.interpolated).sum()
             ),
@@ -6297,6 +7601,12 @@ def _labelled_attempt_once(
     ext_fitted = list(fitted_polygons) + [
         desc["region"] for desc in labelled["discovered"]
     ]
+    # Phase 5d: curved facets (index space of the regions list)
+    # for the surgery's and totals' surface-aware paths.
+    curved_map: dict[int, dict[str, Any]] = {}
+    for di, desc in enumerate(labelled["discovered"]):
+        if desc.get("curved"):
+            curved_map[len(fitted_polygons) + di] = desc["curved"]
     resolved_regions, parts_moved = _resolve_multipart_regions(
         labelled["regions"]
     )
@@ -6306,6 +7616,7 @@ def _labelled_attempt_once(
         ext_pitches,
         outline,
         simplify_tol_m=_LAB_CHAIN_SIMPLIFY_TOL_M,
+        curved=curved_map or None,
     )
     result: list[Polygon] = []
     for fitted, region in zip(ext_fitted, surgeried):
@@ -6317,7 +7628,9 @@ def _labelled_attempt_once(
             # different facet set than the areas do.
             return None
         result.append(region)
-    totals = _graph_edge_totals(result, ext_planes, ext_pitches, outline)
+    totals = _graph_edge_totals(
+        result, ext_planes, ext_pitches, outline, curved=curved_map or None
+    )
     extension = {
         "areas_sqft": labelled["areas_sqft"],
         "discovered": labelled["discovered"],
@@ -6326,7 +7639,9 @@ def _labelled_attempt_once(
             "multipart_parts_reassigned": parts_moved,
         },
     }
-    divergent = _divergent_seam_ft(result, ext_planes, outline)
+    divergent = _divergent_seam_ft(
+        result, ext_planes, outline, curved=curved_map or None
+    )
     return result, totals, extension, divergent
 
 
@@ -6370,7 +7685,14 @@ def _labelled_drawing_attempt(
             return None
         stats = full[2]["stats"]
         n_total = int(stats.get("discovered", 0))
-        n_phase5c = int(stats.get("split", 0)) + int(stats.get("boundary", 0))
+        # The arbitrated admissions: Phase 5c's split/boundary
+        # facets plus Phase 5d's curved facets (appended last, so
+        # the suffix ladder withdraws a curved facet first).
+        n_phase5c = (
+            int(stats.get("split", 0))
+            + int(stats.get("boundary", 0))
+            + int(stats.get("curved", 0))
+        )
         if n_phase5c == 0 or full[3] <= 0.0:
             return full
         best = full
@@ -6489,6 +7811,24 @@ def _facets_from_local_points(
                     for x, y in ring_source.exterior.coords
                 ],
             })
+            if desc.get("curved"):
+                # Phase 5d: the facet ships its arc-chord polygon
+                # (shape-correct in the segment-based drawing) plus
+                # a compact curved descriptor. The drawing model
+                # has no curved flag today; a future one would let
+                # the CRM render the rim as a true arc and label
+                # the facet's pitch as a cone's constant slope
+                # rather than the tangent pseudo-plane's azimuth.
+                surf = desc["curved"]
+                public: dict[str, Any] = {"kind": surf["kind"]}
+                if surf["kind"] == "cone":
+                    clon, clat = from_local.transform(*surf["centre"])
+                    public["centre_lat"] = round(float(clat), 7)
+                    public["centre_lon"] = round(float(clon), 7)
+                    public["slope"] = round(float(surf["slope"]), 3)
+                public["radius_m"] = round(float(surf["radius_m"]), 2)
+                raw_facets[-1]["curved"] = public
+                raw_facets[-1]["_surface"] = surf
     boundary_polygons = _condition_polygons_for_emission(
         drawing_polygons, exact_tiling=drawing_ready
     )
@@ -6496,6 +7836,7 @@ def _facets_from_local_points(
     for facet, boundary_polygon in zip(raw_facets, boundary_polygons):
         facet["id"] = f"facet-{len(all_facets) + 1}"
         model_a, model_b, model_c = facet["plane_model"]["z_equals_ax_plus_by_plus_c"]
+        surface = facet.pop("_surface", None)
         fitted_ring = facet.pop("boundary_xy")
         ring = _ring_coords(boundary_polygon) if not boundary_polygon.is_empty else []
         if len(ring) < 3:
@@ -6521,7 +7862,12 @@ def _facets_from_local_points(
             facet["boundary_latlon"].append([
                 rounded_lat,
                 rounded_lon,
-                round(model_a * xy[0] + model_b * xy[1] + model_c, 3),
+                round(
+                    float(_curved_surface_z(surface, xy[0], xy[1]))
+                    if surface is not None
+                    else model_a * xy[0] + model_b * xy[1] + model_c,
+                    3,
+                ),
             ])
         # The schema's ring is closed: repeat the first point at the end.
         if facet["boundary_latlon"]:
