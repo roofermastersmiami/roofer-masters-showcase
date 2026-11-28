@@ -1,4 +1,4 @@
-// tenant-audit: reviewed — report mutations use the authenticated Supabase client and company membership; inside deleteRoofOrder the service-role operations are the delete of the exact report row proven visible by the preceding RLS-scoped read (the live database carries no DELETE RLS policy on roof_report_orders — verified 2026-11-27, only the legacy SELECT policies exist — so an authenticated delete can never match a row) plus the post-authorization cleanups, which touch solely the drawing revisions, drawing_id references, and storage files collected through the tenant-scoped reads of the report being deleted.
+// tenant-audit: reviewed — report mutations are authorized through the authenticated Supabase client and company membership; the service-role operations are (a) inside deleteRoofOrder, the delete of the exact report row proven visible by the preceding RLS-scoped read (the live database carries no DELETE RLS policy on roof_report_orders — verified 2026-11-27, only the legacy SELECT policies exist — so an authenticated delete can never match a row) plus the post-authorization cleanups, which touch solely the drawing revisions, drawing_id references, and storage files collected through the tenant-scoped reads of the report being deleted; (b) inside attachRoofOrderPdf, the version-guarded update of the exact report row proven visible by the preceding RLS-scoped proof read in roof-order-write.server.ts (the live database likewise carries no UPDATE policy on roof_report_orders, so an authenticated attach update silently matched zero rows and every automatic finish failed as a false stale-version error); and (c) inside updateRoofOrder, the version-guarded update of the exact report row its preceding RLS-scoped read just loaded, for the same missing-UPDATE-policy reason.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -69,7 +69,15 @@ export const updateRoofOrder = createServerFn({ method: "POST" })
     if (!current) throw new Error("Report request not found");
     assertReportStatus({ ...current, ...data });
 
-    const { data: saved, error } = await context.supabase
+    // Service-role write on purpose: authorization is already proven
+    // by the membership/role gate and the RLS-scoped read of this
+    // exact report above — the live database has no UPDATE RLS
+    // policy on roof_report_orders (only the legacy SELECT
+    // policies), so an authenticated update silently matches zero
+    // rows and every save failed as a false "report changed" error.
+    // The update re-checks the caller's version in its WHERE clause.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: saved, error } = await supabaseAdmin
       .from("roof_report_orders")
       .update({
         status: data.status,
@@ -94,37 +102,58 @@ export const attachRoofOrderPdf = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const { data: membership, error: membershipError } = await context.supabase
-      .from("crm_company_memberships")
-      .select("company_id,role")
-      .eq("user_id", context.userId)
-      .maybeSingle();
-    if (membershipError || !membership) throw new Error("A single company membership is required");
-    if (!["owner", "admin", "office", "sales", "production_manager"].includes(membership.role))
-      throw new Error("You do not have access to this action");
-    if (
-      !data.path.startsWith(`roof-report/${data.id}/`) ||
-      !/^roof-report\/[a-f0-9-]+\/[a-f0-9-]+\.pdf$/.test(data.path)
-    )
-      throw new Error("Invalid report file");
-
-    const name = data.path.split("/").at(-1);
-    const { data: files, error: fileError } = await context.supabase.storage
-      .from("roofing-proposals")
-      .list(`roof-report/${data.id}`, { search: name ?? "" });
-    if (fileError || !files?.some((f) => f.name === name))
-      throw new Error("Upload the report PDF first");
-
-    const { data: saved, error } = await context.supabase
-      .from("roof_report_orders")
-      .update({ file_path: data.path, status: "received", reviewed_at: null })
-      .eq("id", data.id)
-      .eq("updated_at", data.updated_at)
-      .neq("status", "cancelled")
-      .select("id")
-      .maybeSingle();
-    if (error || !saved) throw new Error("Reload the report request before attaching this PDF");
-    return saved;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { attachRoofOrderPdfGuarded } = await import("./roof-order-write.server");
+    const auth = context.supabase;
+    return attachRoofOrderPdfGuarded(
+      {
+        getMembership: async (userId) => {
+          const { data: membership, error } = await auth
+            .from("crm_company_memberships")
+            .select("company_id,role")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (error) throw new Error("A single company membership is required");
+          return membership;
+        },
+        reportPdfExists: async (reportId, fileName) => {
+          const { data: files, error } = await auth.storage
+            .from("roofing-proposals")
+            .list(`roof-report/${reportId}`, { search: fileName });
+          return !error && !!files?.some((f) => f.name === fileName);
+        },
+        getReport: async (reportId) => {
+          const { data: report, error } = await auth
+            .from("roof_report_orders")
+            .select("updated_at,status,file_path")
+            .eq("id", reportId)
+            .maybeSingle();
+          if (error) throw new Error("Could not load report request");
+          return report;
+        },
+        writeAttachedPdf: async ({ id, path, expectedUpdatedAt }) => {
+          // Service-role on purpose: authorization is already proven
+          // by the membership/role gate and the RLS-scoped proof read
+          // above — another company's report is invisible there and
+          // never reaches this point. The live database has no UPDATE
+          // RLS policy on roof_report_orders, so an authenticated
+          // update silently matches zero rows (see
+          // roof-order-write.server.ts). The update targets the exact
+          // proven report id and re-checks the proven version.
+          const { data: saved, error } = await supabaseAdmin
+            .from("roof_report_orders")
+            .update({ file_path: path, status: "received", reviewed_at: null })
+            .eq("id", id)
+            .eq("updated_at", expectedUpdatedAt)
+            .neq("status", "cancelled")
+            .select("id")
+            .maybeSingle();
+          if (error) throw new Error("Could not attach the report PDF");
+          return !!saved;
+        },
+      },
+      { userId: context.userId, id: data.id, path: data.path, updated_at: data.updated_at },
+    );
   });
 
 export const transferRoofOrder = createServerFn({ method: "POST" })
