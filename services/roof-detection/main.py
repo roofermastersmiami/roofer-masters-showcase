@@ -3546,6 +3546,44 @@ def _boundary_chains(
     }
 
 
+def _simplify_boundary_chains(
+    chains: list[dict[str, Any]], tol_m: float
+) -> None:
+    """Drop interior chain vertices that barely deviate from the
+    chord between their kept neighbours (in place). Raster-derived
+    tilings (Phase 4's DSM labelling) arrive with hundreds of
+    per-cell staircase vertices; the staircase carries no
+    information beyond the raster's own resolution, and the vertex
+    flood starves the snap guards (every vertex is a potential
+    junction sample) and the emission ring cap. The thinning runs
+    on the SHARED graph — a chain is one object seen identically by
+    both facets it separates — so it can never pull the two sides
+    of a seam apart the way per-ring simplification provably does
+    (Phase 1). Chain endpoints (junctions) never move."""
+    for chain in chains:
+        verts = chain["verts"]
+        if len(verts) <= 2:
+            continue
+        kept = [verts[0]]
+        for idx in range(1, len(verts) - 1):
+            prev, point, nxt = kept[-1], verts[idx], verts[idx + 1]
+            chord = (nxt[0] - prev[0], nxt[1] - prev[1])
+            chord_len = math.hypot(*chord)
+            deviation = (
+                abs(
+                    chord[0] * (point[1] - prev[1])
+                    - chord[1] * (point[0] - prev[0])
+                )
+                / chord_len
+                if chord_len > 1e-9
+                else 0.0
+            )
+            if deviation > tol_m:
+                kept.append(point)
+        kept.append(verts[-1])
+        chain["verts"] = kept
+
+
 def _divergent_seam_ft(
     polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
@@ -3573,17 +3611,26 @@ def _divergent_seam_ft(
                 # numerically meaningless and must not pollute metrics.
                 continue
             for mine, theirs in ((i, j), (j, i)):
-                coords = list(polys[mine].exterior.coords)
-                for (x0, y0), (x1, y1) in zip(coords, coords[1:]):
-                    mid = Point((x0 + x1) / 2, (y0 + y1) / 2)
-                    if outline_boundary.distance(mid) <= 0.05:
-                        continue  # perimeter, not a seam
-                    if boundaries[theirs] is not None and (
-                        boundaries[theirs].distance(mid) <= 0.05
-                    ):
-                        continue  # coincident seam
-                    if polys[theirs].distance(mid) <= 0.75:
-                        divergent_m += math.hypot(x1 - x0, y1 - y0)
+                # A facet's region can be several disjoint parts
+                # (the DSM labelling legitimately assigns one plane
+                # two separated patches); every part's ring carries
+                # seams. Single-polygon facets iterate exactly as
+                # before.
+                rings = [
+                    list(part.exterior.coords)
+                    for part in _polygon_parts(polys[mine])
+                ]
+                for coords in rings:
+                    for (x0, y0), (x1, y1) in zip(coords, coords[1:]):
+                        mid = Point((x0 + x1) / 2, (y0 + y1) / 2)
+                        if outline_boundary.distance(mid) <= 0.05:
+                            continue  # perimeter, not a seam
+                        if boundaries[theirs] is not None and (
+                            boundaries[theirs].distance(mid) <= 0.05
+                        ):
+                            continue  # coincident seam
+                        if polys[theirs].distance(mid) <= 0.75:
+                            divergent_m += math.hypot(x1 - x0, y1 - y0)
     return round(divergent_m * _FT_PER_M, 1)
 
 
@@ -3629,6 +3676,7 @@ def _surgery_partition_boundaries(
     plane_models: list[tuple[float, float, float]],
     pitches: list[float],
     outline: Polygon,
+    simplify_tol_m: float = 0.0,
 ) -> tuple[list[Polygon], dict[str, Any]]:
     """Boundary-graph surgery on the partition tiling (see the block
     comment above): shared seams become single straight segments of
@@ -3658,6 +3706,12 @@ def _surgery_partition_boundaries(
     chains = graph["chains"]
     if not chains:
         return fallback("no_chains")
+    if simplify_tol_m > 0:
+        # Raster tilings only (Phase 4): thin the staircase chains
+        # on the shared graph before snap evaluation. Hull tilings
+        # keep the Phase 2 behaviour exactly (tol 0 = no thinning).
+        _simplify_boundary_chains(chains, simplify_tol_m)
+        stats["chains_simplified_tol_m"] = simplify_tol_m
     junctions = graph["junctions"]
     # The adjacency the rebuild must preserve: facet pairs that share
     # a chain in the tiling's own boundary graph (active indexing).
@@ -3748,7 +3802,21 @@ def _surgery_partition_boundaries(
                 atb[1] += -lb * lc
             det = ata[0][0] * ata[1][1] - ata[0][1] * ata[1][0]
             if abs(det) < 1e-9:
-                la, lb, lc = lines[0]
+                # Project onto the first line with a usable normal.
+                # A perimeter chain can carry a degenerate first
+                # segment (zero-length, from graph contraction on
+                # raster-derived tilings), whose "line" is (0, 0, c):
+                # projecting onto it divided by zero and sank the
+                # whole surgery. Lines with no normal carry no
+                # constraint — the loop above already skips them.
+                usable = [
+                    line for line in lines
+                    if line[0] * line[0] + line[1] * line[1] >= 1e-12
+                ]
+                if not usable:
+                    targets[vertex] = vertex
+                    continue
+                la, lb, lc = usable[0]
                 t = -(la * vertex[0] + lb * vertex[1] + lc) / (la * la + lb * lb)
                 tx, ty = vertex[0] + la * t, vertex[1] + lb * t
             else:
@@ -4244,6 +4312,778 @@ def _condition_tiling_for_emission(
 
 
 
+# ---------------------------------------------------------------------
+# DSM-residual labelling (Phase 4): build the drawing tiling from the
+# LiDAR point cloud's own evidence instead of the fitted facets'
+# convex hulls. Phase 1 proved the worst sketches are wrong because
+# the hull tiling asserts contacts the fitted planes themselves
+# disown (invented adjacencies: pairs whose intersection line sits
+# metres from their drawn seam). Phase 3 validated the fix offline:
+# rasterize the drawing outline at the point cloud's density, take
+# the median pool height per cell as a DSM, and assign every cell to
+# the plane with the smallest absolute residual — territory follows
+# point-cloud evidence, so a seam can only appear where the two
+# planes actually compete for the surface. Cells no plane explains
+# (best residual > 0.30 m) form connected components; a component
+# with enough raw points earns a NEW plane (bounded discovery, gates
+# below) and the labelling repeats — that is what segments a face
+# the RANSAC stage folded into a neighbour. The labelled tiling then
+# feeds the Phase 2 boundary-graph surgery unchanged, and edge
+# totals come from the graph as before.
+#
+# The discovery gates are the Phase 3 prototype's, byte-identical:
+# every one of them exists because a looser variant produced a
+# visible failure during Phase 3 validation (unmasked discovery
+# stealing distant patches, a 0.20 m seeding tolerance diluting
+# components into rejection). They are constants here, not knobs.
+# The near-parallel fragment merge from the same prototype is
+# deliberately NOT ported: it never fired legitimately on the
+# seven-house validation set (fragments are either exactly identical
+# — already merged — or genuinely different faces), so only the
+# exact-equality collapse it generalised is applied, and only to
+# group identical planes for labelling (their members split the
+# group's region afterwards through the hull partition).
+#
+# Reported area stays plane-based: production facets keep their
+# fitted areas, except that territory a discovered plane wins is
+# transferred — each source facet is debited the sloped area of its
+# overlap with the discovered region at its own pitch, and the
+# discovered facet is credited exactly the debited total — so a
+# discovery never moves the house's reported area, and the total is
+# never re-faced from the rings.
+# ---------------------------------------------------------------------
+
+_LAB_UNEXPLAINED_TOL_M = 0.30     # best residual above this: no plane fits
+_LAB_DISC_SEED_TOL_M = 0.30       # discovery seeding tolerance
+_LAB_DISC_MIN_AREA_M2 = 2.0       # smallest component that can earn a plane
+_LAB_DISC_MIN_POINTS = 40         # smallest point pool for a discovered plane
+_LAB_DISC_MAX_RMSE_M = 0.08       # discovered plane must fit this well
+_LAB_DISC_MAX_PITCH_DEG = 55.0
+_LAB_DISC_MAX_ROUNDS = 3
+_LAB_EVIDENCE_RESID_M = 0.20      # a plane's evidence: cells won this well
+_LAB_EVIDENCE_DILATE_CELLS = 3
+_LAB_POTTS_LAMBDA = 0.05          # label-smoothing prior (metres)
+_LAB_DEAD_FACET_AREA_M2 = 0.5     # a label owning less is not a facet
+_LAB_SLIVER_COMPONENT_M2 = 0.75   # label components smaller dissolve
+_LAB_DSM_FILL_RADIUS_M = 1.5      # nearest-measured fill for empty cells
+_LAB_CHAIN_SIMPLIFY_TOL_M = 0.15  # graph chain thinning for raster tilings
+_SQFT_PER_SQM = 10.7639104167
+
+
+def _fit_plane_lsq(
+    points: np.ndarray,
+) -> tuple[float, float, float, float]:
+    """Least-squares z = a x + b y + c over xyz points; (a, b, c, rmse)."""
+    design = np.column_stack(
+        (points[:, 0], points[:, 1], np.ones(len(points)))
+    )
+    coef, *_ = np.linalg.lstsq(design, points[:, 2], rcond=None)
+    resid = points[:, 2] - design @ coef
+    return (
+        float(coef[0]),
+        float(coef[1]),
+        float(coef[2]),
+        float(np.sqrt(np.mean(resid**2))),
+    )
+
+
+class _DsmGrid:
+    """Raster over the outline bbox: DSM height = median fit-pool
+    height per cell; participating cells with no points are filled
+    from the nearest measured cell within _LAB_DSM_FILL_RADIUS_M
+    (flagged interpolated). Cell size follows point density
+    (0.30–0.50 m), as in the Phase 3 prototype."""
+
+    def __init__(self, points: np.ndarray, outline: Polygon):
+        area = max(outline.area, 1.0)
+        density = len(points) / area
+        self.cell = float(min(0.50, max(0.30, math.sqrt(1.44 / density))))
+        minx, miny, maxx, maxy = outline.bounds
+        self.x0, self.y0 = minx, miny
+        self.nx = int(math.ceil((maxx - minx) / self.cell)) + 1
+        self.ny = int(math.ceil((maxy - miny) / self.cell)) + 1
+        z = np.full((self.ny, self.nx), np.nan)
+        counts = np.zeros((self.ny, self.nx), dtype=int)
+        ix = np.floor((points[:, 0] - self.x0) / self.cell).astype(int)
+        iy = np.floor((points[:, 1] - self.y0) / self.cell).astype(int)
+        ok = (ix >= 0) & (ix < self.nx) & (iy >= 0) & (iy < self.ny)
+        self.point_cell = (ix, iy, ok)
+        flat = iy[ok] * self.nx + ix[ok]
+        order = np.lexsort((points[ok][:, 2], flat))
+        keys = flat[order]
+        zs = points[ok][:, 2][order]
+        bounds = np.searchsorted(keys, np.arange(self.nx * self.ny + 1))
+        for k in range(self.nx * self.ny):
+            lo, hi = bounds[k], bounds[k + 1]
+            if hi > lo:
+                z.flat[k] = float(np.median(zs[lo:hi]))
+                counts.flat[k] = hi - lo
+        self.z_measured = z
+        self.counts = counts
+        # Participating cells: the cell square intersects the outline.
+        from shapely.geometry import box
+        from shapely.prepared import prep
+
+        prepared = prep(outline)
+        inside = np.zeros((self.ny, self.nx), dtype=bool)
+        for gy in range(self.ny):
+            for gx in range(self.nx):
+                cell_box = box(
+                    self.x0 + gx * self.cell,
+                    self.y0 + gy * self.cell,
+                    self.x0 + (gx + 1) * self.cell,
+                    self.y0 + (gy + 1) * self.cell,
+                )
+                if prepared.intersects(cell_box):
+                    inside[gy, gx] = True
+        self.inside = inside
+        filled = z.copy()
+        interpolated = np.zeros_like(inside)
+        measured_idx = np.argwhere(~np.isnan(z))
+        if len(measured_idx):
+            from scipy.spatial import cKDTree
+
+            tree = cKDTree(measured_idx[:, ::-1].astype(float))
+            empty = np.argwhere(inside & np.isnan(z))
+            if len(empty):
+                dist, near = tree.query(empty[:, ::-1].astype(float), k=1)
+                for row, d, n in zip(empty, dist, near):
+                    if d * self.cell <= _LAB_DSM_FILL_RADIUS_M:
+                        src = measured_idx[n]
+                        filled[row[0], row[1]] = z[src[0], src[1]]
+                        interpolated[row[0], row[1]] = True
+        self.z = filled
+        self.interpolated = interpolated
+
+    def centres(self) -> tuple[np.ndarray, np.ndarray]:
+        xs = self.x0 + (np.arange(self.nx) + 0.5) * self.cell
+        ys = self.y0 + (np.arange(self.ny) + 0.5) * self.cell
+        return np.meshgrid(xs, ys)
+
+
+def _lab_label_grid(
+    planes: list[tuple[float, float, float]],
+    grid: _DsmGrid,
+    masks: list[np.ndarray | None] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """(labels, best_residual): each participating cell takes the
+    plane with the smallest absolute residual at the cell centre
+    against the DSM height; -1 where no DSM height exists. A plane
+    carrying a mask competes only inside it — a plane fitted to one
+    component must not win scattered cells across the roof where it
+    happens to pass near the surface."""
+    xs, ys = grid.centres()
+    labels = np.full(grid.z.shape, -1, dtype=int)
+    best = np.full(grid.z.shape, np.inf)
+    valid = grid.inside & ~np.isnan(grid.z)
+    if not planes or not valid.any():
+        return labels, best
+    resid = np.stack([
+        np.where(
+            masks[i], np.abs(a * xs + b * ys + c - grid.z), np.inf
+        )
+        if masks is not None and masks[i] is not None
+        else np.abs(a * xs + b * ys + c - grid.z)
+        for i, (a, b, c) in enumerate(planes)
+    ])
+    choice = np.argmin(resid, axis=0)
+    best_vals = np.min(resid, axis=0)
+    labels[valid] = choice[valid]
+    best[valid] = best_vals[valid]
+    return labels, best
+
+
+def _lab_discover_planes(
+    planes: list[tuple[float, float, float]],
+    grid: _DsmGrid,
+    points: np.ndarray,
+    labels: np.ndarray,
+    best: np.ndarray,
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[dict[str, Any]],
+    np.ndarray,
+    np.ndarray,
+    list[np.ndarray | None],
+]:
+    """Grow the plane set from unexplained territory: connected
+    components of cells whose best residual exceeds the tolerance,
+    large enough to matter, get a trimmed-LSQ plane fitted to the
+    raw fit-pool points inside them. Accepted planes join the set
+    and the labelling repeats (at most _LAB_DISC_MAX_ROUNDS rounds).
+    Each accepted plane carries a competition mask (its component,
+    dilated by one cell) so it can only win territory near the
+    evidence that created it. Returns (planes, discovered, labels,
+    best, masks) — masks aligned with planes, None for the planes
+    the caller started with. The acceptance gates are Phase 3's,
+    unchanged."""
+    from scipy import ndimage
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    planes = list(planes)
+    masks: list[np.ndarray | None] = [None] * len(planes)
+    discovered: list[dict[str, Any]] = []
+    ix, iy, ok = grid.point_cell
+    point_flat = np.where(ok, iy * grid.nx + ix, -1)
+    structure = np.ones((3, 3), dtype=int)
+    for _round in range(_LAB_DISC_MAX_ROUNDS):
+        unexplained = grid.inside & (labels >= 0) & (best > _LAB_DISC_SEED_TOL_M)
+        if not unexplained.any():
+            break
+        comps, n = ndimage.label(unexplained, structure=structure)
+        sizes = (
+            ndimage.sum(unexplained, comps, index=np.arange(1, n + 1))
+            * grid.cell**2
+        )
+        order = np.argsort(-sizes)
+        accepted_any = False
+        for comp_idx in order:
+            area_m2 = float(sizes[comp_idx])
+            if area_m2 < _LAB_DISC_MIN_AREA_M2:
+                break
+            comp = comps == (comp_idx + 1)
+            cell_ids = set(np.where(comp.ravel())[0].tolist())
+            sel = np.array([f in cell_ids for f in point_flat])
+            pool = points[sel & (point_flat >= 0)]
+            if len(pool) < _LAB_DISC_MIN_POINTS:
+                continue
+            keep = pool
+            a = b = c = float("nan")
+            for _trim in range(3):
+                a, b, c, _rmse = _fit_plane_lsq(keep)
+                resid = np.abs(
+                    a * pool[:, 0] + b * pool[:, 1] + c - pool[:, 2]
+                )
+                keep = pool[resid <= 0.12]
+                if len(keep) < _LAB_DISC_MIN_POINTS:
+                    break
+            if len(keep) < _LAB_DISC_MIN_POINTS:
+                continue
+            a2, b2, c2, rmse2 = _fit_plane_lsq(keep)
+            if rmse2 > _LAB_DISC_MAX_RMSE_M:
+                continue
+            pitch = math.degrees(math.atan(math.hypot(a2, b2)))
+            if pitch > _LAB_DISC_MAX_PITCH_DEG:
+                continue
+            # The new plane must actually explain the component: it
+            # has to at least halve the component's mean residual.
+            xs_g, ys_g = grid.centres()
+            new_resid = np.abs(
+                a2 * xs_g[comp] + b2 * ys_g[comp] + c2 - grid.z[comp]
+            )
+            if float(np.mean(new_resid)) > 0.5 * float(np.mean(best[comp])):
+                continue
+            ys_c, xs_c = np.where(comp)
+            region = unary_union([
+                box(
+                    grid.x0 + gx * grid.cell,
+                    grid.y0 + gy * grid.cell,
+                    grid.x0 + (gx + 1) * grid.cell,
+                    grid.y0 + (gy + 1) * grid.cell,
+                )
+                for gy, gx in zip(ys_c, xs_c)
+            ])
+            planes.append((a2, b2, c2))
+            masks.append(
+                ndimage.binary_dilation(comp, structure=structure)
+                & grid.inside
+            )
+            discovered.append({
+                "plane": (a2, b2, c2),
+                "pitch_degrees": pitch,
+                "point_count": int(len(keep)),
+                "fit_rmse_m": float(rmse2),
+                "region": region,
+            })
+            accepted_any = True
+            break  # relabel before judging the next component
+        labels, best = _lab_label_grid(planes, grid, masks)
+        if not accepted_any:
+            break
+    return planes, discovered, labels, best, masks
+
+
+def _lab_evidence_masks(
+    labels: np.ndarray,
+    best: np.ndarray,
+    grid: _DsmGrid,
+    masks: list[np.ndarray | None],
+) -> list[np.ndarray | None]:
+    """Competition masks for every plane: a plane may only claim
+    territory near its own point evidence (cells it wins with a
+    residual <= _LAB_EVIDENCE_RESID_M, dilated by three cells).
+    Without this, a plane extended across the map wins strips where
+    its height merely coincides with another surface (Phase 3's type
+    case: a flat patio plane claiming the eave strip whose edge
+    height matches it). Discovered planes keep their tighter
+    component masks; a plane with no evidence cells stays unmasked."""
+    from scipy import ndimage
+
+    out: list[np.ndarray | None] = []
+    for i in range(len(masks)):
+        if masks[i] is not None:
+            out.append(masks[i])
+            continue
+        ev = (labels == i) & (best <= _LAB_EVIDENCE_RESID_M)
+        if ev.any():
+            out.append(
+                ndimage.binary_dilation(
+                    ev,
+                    structure=np.ones((3, 3), int),
+                    iterations=_LAB_EVIDENCE_DILATE_CELLS,
+                )
+                & grid.inside
+            )
+        else:
+            out.append(None)
+    return out
+
+
+def _lab_smooth_labels(
+    planes: list[tuple[float, float, float]],
+    labels: np.ndarray,
+    grid: _DsmGrid,
+    masks: list[np.ndarray | None] | None = None,
+) -> np.ndarray:
+    """One Potts-style smoothing round: each cell's cost becomes its
+    plane residual plus _LAB_POTTS_LAMBDA times the fraction of its
+    8 neighbours carrying a different label, and the cell is
+    relabelled by the new argmin. Cells where the point-cloud
+    evidence is strong keep their label (a 0.05 m prior cannot
+    override a real residual gap); cells in noisy tie zones settle
+    onto the locally dominant plane, which removes isolated flips
+    and straightens seams before polygonizing."""
+    xs, ys = grid.centres()
+    resid = np.stack([
+        np.where(
+            masks[i], np.abs(a * xs + b * ys + c - grid.z), np.inf
+        )
+        if masks is not None and masks[i] is not None
+        else np.abs(a * xs + b * ys + c - grid.z)
+        for i, (a, b, c) in enumerate(planes)
+    ])
+    padded = np.pad(labels, 1, constant_values=-2)
+    disagree = np.zeros_like(resid)
+    for i in range(len(planes)):
+        neigh = np.stack([
+            padded[dy:dy + labels.shape[0], dx:dx + labels.shape[1]]
+            for dy in (0, 1, 2)
+            for dx in (0, 1, 2)
+            if not (dy == 1 and dx == 1)
+        ])
+        disagree[i] = np.mean((neigh != i) & (neigh >= 0), axis=0)
+    cost = resid + _LAB_POTTS_LAMBDA * disagree
+    choice = np.argmin(cost, axis=0)
+    out = labels.copy()
+    valid = grid.inside & (labels >= 0)
+    out[valid] = choice[valid]
+    return out
+
+
+def _lab_fallback_grid(
+    prior_regions: list[Polygon], grid: _DsmGrid
+) -> np.ndarray:
+    """Rasterize the prior (hull partition) tiling onto the grid —
+    only used for cells the DSM cannot speak for."""
+    out = np.full(grid.z.shape, -1, dtype=int)
+    xs, ys = grid.centres()
+    for gy in range(grid.ny):
+        for gx in range(grid.nx):
+            if not grid.inside[gy, gx]:
+                continue
+            pt = Point(xs[gy, gx], ys[gy, gx])
+            for i, geom in enumerate(prior_regions):
+                if (
+                    geom is not None
+                    and not geom.is_empty
+                    and geom.covers(pt)
+                ):
+                    out[gy, gx] = i
+                    break
+    return out
+
+
+def _lab_cleanup_labels(
+    labels: np.ndarray,
+    planes: list[tuple[float, float, float]],
+    grid: _DsmGrid,
+    fallback_labels: np.ndarray,
+    masks: list[np.ndarray | None] | None = None,
+) -> np.ndarray:
+    """Deterministic label hygiene (Phase 3's, unchanged): fill
+    unfilled cells from the prior tiling (or the nearest label),
+    flip isolated cells (two passes, so noisy boundaries settle),
+    and dissolve small components into their best neighbouring
+    label: any component under _LAB_SLIVER_COMPONENT_M2, and any
+    non-core component under the discovery minimum area (a facet's
+    largest component is its core and is never dissolved here — the
+    facet-death rule judges it later). Masked facets never receive
+    cells outside their mask."""
+    from scipy import ndimage
+    from scipy.spatial import cKDTree
+
+    labels = labels.copy()
+    inside = grid.inside
+    missing = inside & (labels < 0)
+    if missing.any():
+        labels[missing] = fallback_labels[missing]
+        still = np.argwhere(inside & (labels < 0))
+        if len(still):
+            known = np.argwhere(inside & (labels >= 0))
+            tree = cKDTree(known[:, ::-1].astype(float))
+            _d, near = tree.query(still[:, ::-1].astype(float), k=1)
+            for row, n in zip(still, near):
+                src = known[n]
+                labels[row[0], row[1]] = labels[src[0], src[1]]
+    xs, ys = grid.centres()
+
+    def resid_of(i: int) -> np.ndarray:
+        a, b, c = planes[i]
+        r = np.abs(a * xs + b * ys + c - grid.z)
+        if masks is not None and masks[i] is not None:
+            r = np.where(masks[i], r, np.inf)
+        return r
+
+    resid = {i: resid_of(i) for i in range(len(planes))}
+    # Isolated-cell flip: at least 6 of 8 neighbours share one other
+    # label and that label's residual is nearly as good here.
+    for _pass in range(2):
+        padded = np.pad(labels, 1, constant_values=-2)
+        own = labels.copy()
+        for gy in range(labels.shape[0]):
+            for gx in range(labels.shape[1]):
+                if not inside[gy, gx] or own[gy, gx] < 0:
+                    continue
+                neigh = np.delete(padded[gy:gy + 3, gx:gx + 3].ravel(), 4)
+                neigh = neigh[neigh >= 0]
+                others = neigh[neigh != own[gy, gx]]
+                if len(others) >= 6 and len(set(others.tolist())) == 1:
+                    cand = int(others[0])
+                    if resid[cand][gy, gx] <= resid[own[gy, gx]][gy, gx] + 0.05:
+                        labels[gy, gx] = cand
+    # Dissolve small components.
+    structure = np.ones((3, 3), dtype=int)
+    for li in range(len(planes)):
+        mask = labels == li
+        if not mask.any():
+            continue
+        comps, n = ndimage.label(mask, structure=structure)
+        sizes = (
+            ndimage.sum(mask, comps, index=np.arange(1, n + 1))
+            * grid.cell**2
+        )
+        core = int(np.argmax(sizes)) + 1 if n else -1
+        for comp in range(1, n + 1):
+            cells = comps == comp
+            area_m2 = float(sizes[comp - 1])
+            if area_m2 >= _LAB_DISC_MIN_AREA_M2 or (
+                comp == core and area_m2 >= _LAB_SLIVER_COMPONENT_M2
+            ):
+                continue
+            dilated = ndimage.binary_dilation(cells, structure=structure)
+            ring = labels[dilated & ~cells & inside]
+            ring = ring[ring >= 0]
+            if len(ring) == 0:
+                continue
+            cands_all = [int(v) for v in set(ring.tolist()) if v != li]
+            if not cands_all:
+                continue
+            ys_c, xs_c = np.where(cells)
+            for gy, gx in zip(ys_c, xs_c):
+                labels[gy, gx] = min(
+                    cands_all, key=lambda cand: resid[cand][gy, gx]
+                )
+    return labels
+
+
+def _lab_polygonize(
+    labels: np.ndarray, grid: _DsmGrid, outline: Polygon, n_planes: int
+) -> list[Any]:
+    """Per-plane region = union of its cells' squares, clipped to
+    the outline (so the regions tile the outline exactly)."""
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    regions: list[Polygon] = []
+    for li in range(n_planes):
+        ys_c, xs_c = np.where(labels == li)
+        if len(ys_c) == 0:
+            regions.append(Polygon())
+            continue
+        squares = [
+            box(
+                grid.x0 + gx * grid.cell,
+                grid.y0 + gy * grid.cell,
+                grid.x0 + (gx + 1) * grid.cell,
+                grid.y0 + (gy + 1) * grid.cell,
+            )
+            for gy, gx in zip(ys_c, xs_c)
+        ]
+        region = unary_union(squares).intersection(outline)
+        regions.append(region)
+    return regions
+
+
+def _exact_plane_groups(
+    plane_models: list[tuple[float, float, float]],
+) -> list[list[int]]:
+    """Group facet indices carrying the identical fitted plane
+    (RANSAC fragments of one physical face). Identical planes are
+    indistinguishable to a residual labelling — their cells would
+    all land on the first — so they label as one group and split
+    the group's region afterwards. Greedy first-match, the Phase 1
+    prototype's criterion (coefficients equal within 1e-9)."""
+    groups: list[list[int]] = []
+    representatives: list[tuple[float, float, float]] = []
+    for index, plane in enumerate(plane_models):
+        match = None
+        for gi, rep in enumerate(representatives):
+            if (
+                abs(rep[0] - plane[0]) < 1e-9
+                and abs(rep[1] - plane[1]) < 1e-9
+                and abs(rep[2] - plane[2]) < 1e-9
+            ):
+                match = gi
+                break
+        if match is None:
+            representatives.append(plane)
+            groups.append([index])
+        else:
+            groups[match].append(index)
+    return groups
+
+
+def _lab_complete_labels(labels: np.ndarray, grid: _DsmGrid) -> np.ndarray:
+    """Fill any still-unlabelled participating cell from its nearest
+    labelled cell. Rim cells the DSM cannot speak for (no measured
+    or filled height — the scan stops at the wall) and whose centres
+    fall outside the outline defeat both the residual labelling and
+    the centre-based fallback grid; left unlabelled, their squares
+    leave sub-cell gaps along the perimeter, the regions no longer
+    tile the outline, and the surgery's face recovery meets faces
+    no region owns (its unowned_face veto). Completion is purely
+    geometric — a rim cell joins its nearest labelled neighbour,
+    exactly what any exact tiling does with such slivers — and it
+    runs after cleanup, so it cannot affect discovery, smoothing,
+    or facet survival."""
+    from scipy import ndimage
+
+    missing = grid.inside & (labels < 0)
+    if not missing.any() or not (labels >= 0).any():
+        return labels
+    out = labels.copy()
+    _, indices = ndimage.distance_transform_edt(
+        out < 0, return_indices=True
+    )
+    rows, cols = np.where(missing)
+    out[rows, cols] = out[indices[0][rows, cols], indices[1][rows, cols]]
+    return out
+
+
+def _dsm_labelling_tiling(
+    fitted_polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    pitches: list[float],
+    facet_areas_sqft: list[float],
+    points: np.ndarray,
+    outline: Polygon,
+    prior_partition: list[Polygon],
+) -> dict[str, Any] | None:
+    """The Phase 4 tiling: DSM-residual labelling + bounded
+    discovery over the fitted planes, as validated in Phase 3.
+    Returns the extended facet geometry — regions aligned with
+    `plane_models` plus one entry per discovered plane, the
+    extended planes/pitches, the plane-based areas with discovery
+    transfers applied, and the discovered facets' descriptors — or
+    None when the labelling cannot be trusted for this house (a
+    production facet's label died: the fitter measured a face the
+    point cloud assigns almost no territory, a contradiction this
+    path must not silently resolve by erasing a measured facet).
+    Any exception is the caller's signal to fall back as well."""
+    from shapely.ops import unary_union
+
+    groups = _exact_plane_groups(plane_models)
+    group_planes = [plane_models[g[0]] for g in groups]
+    group_prior: list[Polygon] = []
+    for g in groups:
+        members = [
+            prior_partition[i]
+            for i in g
+            if not prior_partition[i].is_empty
+        ]
+        group_prior.append(
+            unary_union(members) if members else Polygon()
+        )
+
+    grid = _DsmGrid(points, outline)
+    labels, best = _lab_label_grid(group_planes, grid)
+    planes_all, discovered, labels, best, masks = _lab_discover_planes(
+        group_planes, grid, points, labels, best
+    )
+    masks = _lab_evidence_masks(labels, best, grid, masks)
+    labels, best = _lab_label_grid(planes_all, grid, masks)
+    labels = _lab_smooth_labels(planes_all, labels, grid, masks)
+    fallback = _lab_fallback_grid(group_prior, grid)
+    labels = _lab_cleanup_labels(labels, planes_all, grid, fallback, masks)
+    regions = _lab_polygonize(
+        _lab_complete_labels(labels, grid), grid, outline, len(planes_all)
+    )
+
+    n_groups = len(groups)
+    # Facet death: a label owning less than _LAB_DEAD_FACET_AREA_M2
+    # of the outline is not a facet. A dead PRODUCTION group fails
+    # the whole attempt (see the docstring); a dead discovered plane
+    # is simply dropped, its cells remapped to the best surviving
+    # plane exactly as Phase 3 remapped them.
+    for k in range(n_groups):
+        if regions[k].area < _LAB_DEAD_FACET_AREA_M2:
+            return None
+    dead = [
+        k
+        for k in range(n_groups, len(planes_all))
+        if regions[k].area < _LAB_DEAD_FACET_AREA_M2
+    ]
+    if dead:
+        survivors = [k for k in range(len(planes_all)) if k not in dead]
+        xs_g, ys_g = grid.centres()
+        remapped = labels.copy()
+        for k in dead:
+            ys_c, xs_c = np.where(labels == k)
+            for gy, gx in zip(ys_c, xs_c):
+                def death_resid(s: int) -> float:
+                    if masks[s] is not None and not masks[s][gy, gx]:
+                        return math.inf
+                    if not np.isfinite(grid.z[gy, gx]):
+                        return 0.0
+                    a, b, c = planes_all[s]
+                    return abs(
+                        a * xs_g[gy, gx] + b * ys_g[gy, gx] + c
+                        - grid.z[gy, gx]
+                    )
+
+                remapped[gy, gx] = min(survivors, key=death_resid)
+        new_index = {old: k for k, old in enumerate(survivors)}
+        labels_final = np.full(labels.shape, -1, dtype=int)
+        for gy in range(labels.shape[0]):
+            for gx in range(labels.shape[1]):
+                v = remapped[gy, gx]
+                if v in new_index:
+                    labels_final[gy, gx] = new_index[v]
+        planes_all = [planes_all[s] for s in survivors]
+        discovered = [
+            discovered[s - n_groups]
+            for s in survivors
+            if s >= n_groups
+        ]
+        regions = _lab_polygonize(
+            _lab_complete_labels(labels_final, grid),
+            grid,
+            outline,
+            len(planes_all),
+        )
+        for k in range(n_groups):
+            if regions[k].area < _LAB_DEAD_FACET_AREA_M2:
+                return None
+
+    group_regions = regions[:n_groups]
+    disc_regions = regions[n_groups:]
+
+    # Expand identical-plane groups back to their member facets: the
+    # members split the group's region through the hull partition
+    # (their seams are pitch changes on one physical plane — the
+    # hull traces there are what production ships today).
+    raw_regions: list[Polygon] = [Polygon()] * len(fitted_polygons)
+    for g, group_region in zip(groups, group_regions):
+        if len(g) == 1:
+            raw_regions[g[0]] = group_region
+        else:
+            sub = _partition_facets_to_outline(
+                [fitted_polygons[i] for i in g], group_region
+            )
+            # The hull partition's own gap handling can drop a
+            # disjoint piece of the group region (its largest-part
+            # reduction): territory the labelling assigned to this
+            # plane but no member's hull reaches. The labelled
+            # tiling must stay exact, so any uncovered remainder
+            # goes to the member sharing its longest border (the
+            # nearest member when it touches none).
+            covered = unary_union([s for s in sub if not s.is_empty])
+            gap = group_region.difference(covered)
+            if not gap.is_empty and gap.area > 1e-9:
+                for piece in _polygon_parts(gap):
+                    best_i, best_key = 0, None
+                    for k, region in enumerate(sub):
+                        if region.is_empty:
+                            key = (0.0, -1e18)
+                        else:
+                            shared = region.boundary.intersection(
+                                piece.boundary
+                            ).length
+                            key = (shared, -region.distance(piece))
+                        if best_key is None or key > best_key:
+                            best_i, best_key = k, key
+                    sub[best_i] = unary_union([sub[best_i], piece])
+            for i, region in zip(g, sub):
+                raw_regions[i] = region
+    regions_ext = raw_regions + disc_regions
+    planes_ext = list(plane_models) + [d["plane"] for d in discovered]
+    pitches_ext = list(pitches) + [
+        d["pitch_degrees"] for d in discovered
+    ]
+
+    # Plane-based areas with discovery transfers (see the block
+    # comment): every production facet whose fitted polygon
+    # overlaps a discovered facet's region is debited the overlap's
+    # sloped area at ITS pitch — the territory was inside its
+    # hull — and the discovered facet is credited exactly the
+    # debited total, so discovery never moves the house's reported
+    # area: the measurement stays the fitted facets' own, and the
+    # discovered facet's area is the carved territory measured in
+    # the same accounting. (Crediting the region at the discovered
+    # plane's own pitch instead would let the pitch-factor spread
+    # between the two planes drift the total by fractions of a
+    # percent for no measured reason.) A region overlapping no
+    # fitted polygon at all — territory no hull ever claimed — is
+    # credited at its own pitch: there is nothing to debit.
+    areas_ext = list(facet_areas_sqft)
+    for desc, region in zip(discovered, disc_regions):
+        debited = 0.0
+        for i, fitted in enumerate(fitted_polygons):
+            if fitted.is_empty or region.is_empty:
+                continue
+            overlap = region.intersection(fitted).area
+            if overlap > 1e-9:
+                cos_i = max(math.cos(math.radians(pitches[i])), 1e-6)
+                debit = overlap / cos_i * _SQFT_PER_SQM
+                areas_ext[i] -= debit
+                debited += debit
+        if debited > 0:
+            desc_area = debited
+        else:
+            pitch_d = desc["pitch_degrees"]
+            cos_d = max(math.cos(math.radians(pitch_d)), 1e-6)
+            desc_area = region.area / cos_d * _SQFT_PER_SQM
+        desc["area_sqft"] = desc_area
+        areas_ext.append(desc_area)
+
+    return {
+        "regions": regions_ext,
+        "planes": planes_ext,
+        "pitches": pitches_ext,
+        "areas_sqft": areas_ext,
+        "discovered": discovered,
+        "stats": {
+            "cell_m": round(grid.cell, 3),
+            "groups": len(groups),
+            "discovered": len(discovered),
+            "interpolated_cells": int(
+                (grid.inside & grid.interpolated).sum()
+            ),
+        },
+    }
+
+
 def _drawing_partition(
     fitted_polygons: list[Polygon],
     plane_models: list[tuple[float, float, float]],
@@ -4251,6 +5091,9 @@ def _drawing_partition(
     footprint_provider: str | None,
     pitches: list[float] | None = None,
     totals_out: dict[str, float] | None = None,
+    points: np.ndarray | None = None,
+    facet_areas_sqft: list[float] | None = None,
+    extension_out: dict[str, Any] | None = None,
 ) -> tuple[list[Polygon], bool]:
     """The drawing's facet geometry: the fitted facets re-rendered as
     an exact partition of the roof outline whose shared seams are the
@@ -4274,7 +5117,25 @@ def _drawing_partition(
     response advertises it as `drawing_ready`, and the CRM converter
     trusts flagged geometry enough to skip its own snap/trim surgery,
     which would otherwise introduce micro-defects (junction spikes,
-    sliver overlaps) into an already exact tiling."""
+    sliver overlaps) into an already exact tiling.
+
+    Phase 4: when the caller supplies the fit pool (`points`) and
+    the fitted areas, a fully-partitioned hull drawing is upgraded
+    to the DSM-residual labelling tiling (_dsm_labelling_tiling):
+    territory assigned by point-cloud evidence instead of hulls,
+    plus any planes bounded discovery recovered. The upgrade is
+    accepted only when it too partitions every facet (including the
+    discovered ones) AND its shipped-ring divergent seam is no
+    worse than the hull drawing's under the same ruler — a
+    per-house fallback expressed as a relative comparison, with no
+    house-specific constants. The extended facet set's
+    planes/pitches/areas and the discovered facets' descriptors
+    are then written into `extension_out` for the caller to
+    serialize. Houses the hull path cannot fully partition never
+    engage the labelling — the readiness gate is exactly the hull
+    path's, untouched — and any labelling failure keeps the hull
+    drawing, so the response can degrade to Phase 2 behaviour but
+    never below it."""
     try:
         outline = _drawing_outline(footprint, fitted_polygons, footprint_provider)
         partition = _partition_facets_to_outline(fitted_polygons, outline)
@@ -4319,9 +5180,162 @@ def _drawing_partition(
             totals_out.update(
                 _graph_edge_totals(result, plane_models, pitches, outline)
             )
+        if (
+            fully_partitioned
+            and points is not None
+            and facet_areas_sqft is not None
+        ):
+            labelled = _labelled_drawing_attempt(
+                fitted_polygons,
+                plane_models,
+                pitches,
+                facet_areas_sqft,
+                points,
+                outline,
+                partition,
+            )
+            if labelled is not None:
+                lab_result, lab_totals, extension, lab_divergent = labelled
+                # Per-house fallback, the Phase 4 gate in general
+                # form: the labelled drawing ships only when its
+                # shipped-ring divergent seam is no worse than the
+                # hull drawing it would replace — same ruler, both
+                # geometries, no house-specific constants. A house
+                # whose evidence-based tiling rebuilds worse keeps
+                # the hull drawing (and its production facet set:
+                # the extension is discarded with the drawing).
+                hull_divergent = _divergent_seam_ft(
+                    result, plane_models, outline
+                )
+                if lab_divergent <= hull_divergent:
+                    if totals_out is not None:
+                        totals_out.clear()
+                        totals_out.update(lab_totals)
+                    if extension_out is not None:
+                        extension_out.update(extension)
+                    return lab_result, True
         return result, fully_partitioned
     except Exception:  # noqa: BLE001 — drawing geometry must never break a response
         return fitted_polygons, False
+
+
+def _resolve_multipart_regions(
+    regions: list[Any],
+) -> tuple[list[Any], int]:
+    """Make every facet's region a single polygon before the
+    surgery, using the surgery's own reassignment rule: a facet
+    keeps its largest part; each smaller part goes to the neighbour
+    sharing its longest border. Raster labellings legitimately
+    assign one plane several disjoint patches (a fragmented slope,
+    the same face on both sides of a crossing gable), but the
+    drawing schema ships one ring per facet, and the surgery's
+    in-attempt reassignment cannot merge a part into a neighbour
+    that is itself still multi-part — a case hull tilings never
+    produce. Resolving on the input tiling keeps the boundary
+    graph the phantom guard checks against identical to the tiling
+    the surgery actually receives. Reported areas are plane-based
+    and unaffected; only drawing territory moves. A part with no
+    edge-sharing neighbour stays with its facet (the surgery's own
+    reassignment, working on rebuilt faces, gets the final say).
+    Returns (regions, parts_reassigned)."""
+    from shapely.ops import unary_union
+
+    regions = list(regions)
+    reassigned = 0
+    while True:
+        moved = False
+        for i, region in enumerate(regions):
+            parts = _polygon_parts(region)
+            if len(parts) <= 1:
+                continue
+            parts.sort(key=lambda part: -part.area)
+            regions[i] = parts[0]
+            for part in parts[1:]:
+                best_k, best_len = -1, 0.0
+                for k, other in enumerate(regions):
+                    if k == i or other.is_empty:
+                        continue
+                    shared = part.boundary.intersection(other.boundary).length
+                    if shared > best_len:
+                        best_len, best_k = shared, k
+                if best_k < 0 or best_len <= 1e-9:
+                    regions[i] = unary_union([regions[i], part])
+                else:
+                    regions[best_k] = unary_union([regions[best_k], part])
+                    reassigned += 1
+                    moved = True
+        if not moved:
+            return regions, reassigned
+
+
+def _labelled_drawing_attempt(
+    fitted_polygons: list[Polygon],
+    plane_models: list[tuple[float, float, float]],
+    pitches: list[float],
+    facet_areas_sqft: list[float],
+    points: np.ndarray,
+    outline: Polygon,
+    partition: list[Polygon],
+) -> tuple[list[Polygon], dict[str, float], dict[str, Any], float] | None:
+    """One Phase 4 attempt: label the outline from the point cloud,
+    run the boundary-graph surgery over the labelled tiling, and
+    accept only a fully-partitioned, single-polygon-per-facet
+    result. Returns (polygons, graph totals, extension,
+    divergent_seam_ft) or None — any doubt at all keeps the hull
+    drawing the caller already has. The surgery runs with
+    graph-level chain simplification: raster tilings carry per-cell
+    staircase chains that hull tilings never produce (see
+    _simplify_boundary_chains)."""
+    try:
+        labelled = _dsm_labelling_tiling(
+            fitted_polygons,
+            plane_models,
+            pitches,
+            facet_areas_sqft,
+            points,
+            outline,
+            partition,
+        )
+        if labelled is None:
+            return None
+        ext_planes = labelled["planes"]
+        ext_pitches = labelled["pitches"]
+        ext_fitted = list(fitted_polygons) + [
+            desc["region"] for desc in labelled["discovered"]
+        ]
+        resolved_regions, parts_moved = _resolve_multipart_regions(
+            labelled["regions"]
+        )
+        surgeried, _stats = _surgery_partition_boundaries(
+            resolved_regions,
+            ext_planes,
+            ext_pitches,
+            outline,
+            simplify_tol_m=_LAB_CHAIN_SIMPLIFY_TOL_M,
+        )
+        result: list[Polygon] = []
+        for fitted, region in zip(ext_fitted, surgeried):
+            if region.is_empty or region.geom_type != "Polygon":
+                # A facet the rebuild erased (or left as fragments)
+                # voids the upgrade: the discovered facets have no
+                # hull to fall back to, and a production facet
+                # falling back would leave the totals describing a
+                # different facet set than the areas do.
+                return None
+            result.append(region)
+        totals = _graph_edge_totals(result, ext_planes, ext_pitches, outline)
+        extension = {
+            "areas_sqft": labelled["areas_sqft"],
+            "discovered": labelled["discovered"],
+            "stats": {
+                **labelled["stats"],
+                "multipart_parts_reassigned": parts_moved,
+            },
+        }
+        divergent = _divergent_seam_ft(result, ext_planes, outline)
+        return result, totals, extension, divergent
+    except Exception:  # noqa: BLE001 — the upgrade must never break a drawing
+        return None
 
 
 def _facets_from_local_points(
@@ -4364,6 +5378,7 @@ def _facets_from_local_points(
     # derives from the drawing rings.
     fitted_polygons = [Polygon(facet["boundary_xy"]) for facet in raw_facets]
     drawing_totals: dict[str, float] = {}
+    drawing_extension: dict[str, Any] = {}
     drawing_polygons, drawing_ready = _drawing_partition(
         fitted_polygons,
         [
@@ -4374,9 +5389,50 @@ def _facets_from_local_points(
         footprint_provider,
         pitches=[float(facet["pitch_degrees"]) for facet in raw_facets],
         totals_out=drawing_totals,
+        points=unique_points,
+        facet_areas_sqft=[float(facet["area_sqft"]) for facet in raw_facets],
+        extension_out=drawing_extension,
     )
     if drawing_ready and drawing_totals:
         edge_lengths = drawing_totals
+    if drawing_extension:
+        # Phase 4 upgrade accepted: apply the discovery area
+        # transfers to the carved facets and serialize the
+        # discovered planes as facets in their own right (same
+        # schema the fitter emits; their boundary_xy is the
+        # labelling region, used only as the conditioning fallback
+        # ring — the drawing polygon itself is the surgeried one).
+        for index, area in enumerate(
+            drawing_extension["areas_sqft"][: len(raw_facets)]
+        ):
+            if abs(area - raw_facets[index]["area_sqft"]) > 1e-9:
+                raw_facets[index]["area_sqft"] = round(float(area), 1)
+                raw_facets[index]["squares"] = round(float(area) / 100.0, 3)
+        for desc in drawing_extension["discovered"]:
+            a, b, c = desc["plane"]
+            region_part = _largest_polygon_part(desc["region"])
+            ring_source = region_part if region_part is not None else desc["region"]
+            raw_facets.append({
+                "id": "facet-disc",
+                "point_count": desc["point_count"],
+                "fit_rmse_m": round(float(desc["fit_rmse_m"]), 4),
+                "pitch_degrees": round(float(desc["pitch_degrees"]), 2),
+                "pitch_rise_per_12": round(math.hypot(a, b) * 12.0, 2),
+                "azimuth_degrees": round(
+                    (math.degrees(math.atan2(-a, -b)) + 360.0) % 360.0, 1
+                ),
+                "area_sqft": round(float(desc["area_sqft"]), 1),
+                "squares": round(float(desc["area_sqft"]) / 100.0, 3),
+                "plane_model": {
+                    "z_equals_ax_plus_by_plus_c": [
+                        float(a), float(b), float(c)
+                    ]
+                },
+                "boundary_xy": [
+                    [round(float(x), 3), round(float(y), 3)]
+                    for x, y in ring_source.exterior.coords
+                ],
+            })
     boundary_polygons = _condition_polygons_for_emission(
         drawing_polygons, exact_tiling=drawing_ready
     )
