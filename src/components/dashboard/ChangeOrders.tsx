@@ -32,7 +32,6 @@ export function ChangeOrders({ jobId, email }: { jobId: string; email: string })
   const [amount, setAmount] = useState("0");
   const [days, setDays] = useState("0");
   const [status, setStatus] = useState("draft");
-  const [signer, setSigner] = useState("");
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
@@ -44,7 +43,6 @@ export function ChangeOrders({ jobId, email }: { jobId: string; email: string })
         amount_cents: Math.round(Number(amount) * 100),
         days_added: Number(days),
         status,
-        approved_by: signer,
       });
       await saveFn({ data });
       await qc.invalidateQueries({ queryKey: ["change-orders", jobId] });
@@ -54,7 +52,6 @@ export function ChangeOrders({ jobId, email }: { jobId: string; email: string })
       setAmount("0");
       setDays("0");
       setStatus("draft");
-      setSigner("");
       toast.success("Change order saved");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save change order");
@@ -87,7 +84,7 @@ export function ChangeOrders({ jobId, email }: { jobId: string; email: string })
             label="Approval status"
             value={status}
             onChange={setStatus}
-            options={["draft", "pending", "approved", "rejected"].map((v) => ({
+            options={["draft", "pending", "rejected"].map((v) => ({
               value: v,
               label: v[0]?.toUpperCase() + v.slice(1),
             }))}
@@ -115,11 +112,6 @@ export function ChangeOrders({ jobId, email }: { jobId: string; email: string })
               onChange={(e) => setDays(e.target.value)}
             />
           </Field>
-          {status === "approved" && (
-            <Field label="Customer who approved (recorded manually)">
-              <Input value={signer} onChange={(e) => setSigner(e.target.value)} />
-            </Field>
-          )}
           <Button disabled={busy} onClick={() => void save()}>
             <Save />
             Save change order
