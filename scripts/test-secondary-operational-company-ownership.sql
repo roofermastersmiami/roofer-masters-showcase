@@ -1,6 +1,13 @@
 \set ON_ERROR_STOP on
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA auth;
+DO $ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $;
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+LANGUAGE sql STABLE AS $
+  SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+$;
+GRANT USAGE ON SCHEMA auth TO authenticated;
+GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 CREATE TABLE auth.users(id uuid PRIMARY KEY);
 INSERT INTO auth.users VALUES('00000000-0000-0000-0000-000000000001');
 CREATE TABLE crm_companies(id uuid PRIMARY KEY,name text,slug text UNIQUE,created_by uuid REFERENCES auth.users(id),created_at timestamptz DEFAULT now());
@@ -22,7 +29,7 @@ CREATE TABLE invoice_checkouts(id uuid PRIMARY KEY,invoice_id uuid);
 CREATE TABLE invoice_payments(id uuid PRIMARY KEY,invoice_id uuid);
 CREATE TABLE invoice_project_links(invoice_id uuid,job_id uuid);
 CREATE TABLE job_change_orders(id uuid PRIMARY KEY,job_id uuid);
-CREATE TABLE lead_messages(id uuid PRIMARY KEY,lead_id uuid);
+CREATE TABLE lead_messages(id uuid PRIMARY KEY,lead_id uuid,sender text NOT NULL DEFAULT 'customer');
 CREATE TABLE proposal_shares(id uuid PRIMARY KEY,proposal_id uuid);
 CREATE TABLE roof_estimates(id uuid PRIMARY KEY,lead_id uuid,property_id uuid,drawing_id uuid,report_order_id uuid);
 INSERT INTO leads VALUES('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001');
